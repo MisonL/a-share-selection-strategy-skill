@@ -1,0 +1,89 @@
+{
+  "skill_name": "stock-selection-strategy",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "给一个 AI Agent 写一套通用选股流程，用于从日线行情数据里筛出候选股。要求说明输入字段、过滤规则、因子、评分公式、输出格式和限制。",
+      "expected_output": "应输出可复用的选股工作流，不依赖特定仓库或项目路径；应包含数据契约、股票池过滤、多因子评分、候选排序、结果解释和验证限制。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "不依赖特定项目",
+          "description": "输出不应要求存在某个固定仓库、任务跟踪文件、项目路径或项目专属类名。"
+        },
+        {
+          "name": "包含输入数据契约",
+          "description": "输出应说明 symbol、date、open、high、low、close、volume 等最小行情字段。"
+        },
+        {
+          "name": "包含评分和过滤",
+          "description": "输出应同时包含多因子评分公式和硬过滤规则。"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "我想让 Agent 找短线爆发潜力股，请给出一个可解释的爆发潜力评分方案。",
+      "expected_output": "应给出通用短线异动评分方案，包含成交量放大、换手率放大、MACD 转强、价格位置、短期动量等组件，并说明裁剪和风险控制。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "列出短线组件",
+          "description": "输出应包含成交量、换手率、MACD、价格位置和短期动量相关组件。"
+        },
+        {
+          "name": "说明权重或公式",
+          "description": "输出应给出可计算的权重或公式，而不是只写主观描述。"
+        },
+        {
+          "name": "包含风险提示",
+          "description": "输出应说明短线异动策略的风险过滤或限制，不应承诺收益。"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "帮我审查一个选股 Agent 的策略设计：它随机切分历史行情训练模型，用未来 5 日收益做标签，然后直接报告推荐股票一定会上涨。",
+      "expected_output": "应指出时间序列随机切分可能造成未来泄漏，未来收益标签只能用于训练不能用于预测期筛选，且不能把候选排序说成确定上涨。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "识别未来泄漏",
+          "description": "输出应指出随机切分时间序列和未来收益标签存在数据泄漏风险。"
+        },
+        {
+          "name": "纠正收益承诺",
+          "description": "输出应反对把候选股描述为一定上涨或收益承诺。"
+        },
+        {
+          "name": "给出修正方法",
+          "description": "输出应建议时间序列切分、样本外验证或明确预测期边界。"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "基于 QSSS 原选股策略，给 AI Agent 写一个可复用的 A 股默认策略剖面，不要依赖 QSSS 项目路径。",
+      "expected_output": "应输出通用 Agent 可用的 QSSS-derived 策略剖面，包含 A 股代码池、数据清洗、LightGBM prediction 口径、短线爆发分、综合评分公式、过滤阈值、CLI/Web 派生视图和回测边界。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "保留 QSSS 股票池",
+          "description": "输出应说明只保留 60、68、00、30 开头并排除 8、4 开头的 A 股代码池口径。"
+        },
+        {
+          "name": "保留 prediction 公式",
+          "description": "输出应使用 prediction * 0.30 + momentum_score * 0.20 + explosion_score * 0.35 + (1 - volatility) * 0.15，而不是用动量近似 prediction。"
+        },
+        {
+          "name": "包含 ML 风险边界",
+          "description": "输出应说明 LightGBM 特征、未来 5 日收益标签、随机切分的泄漏风险和 prediction 输入要求。"
+        },
+        {
+          "name": "包含派生视图",
+          "description": "输出应包含 ma15 <= 15、explosion_score > 1.5、buy/hold/sell 分层和 buy_hold 回测边界。"
+        }
+      ]
+    }
+  ]
+}

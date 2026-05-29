@@ -29,8 +29,11 @@ stock-selection-strategy-skill/
 |   `-- evals.json
 |-- requirements.txt
 |-- requirements-parquet.txt
+|-- requirements-ml.txt
 |-- tests/
 |   |-- helpers.py
+|   |-- test_buy_hold_backtest_cli.py
+|   |-- test_lightgbm_prediction_cli.py
 |   |-- test_stock_selection_config.py
 |   |-- test_stock_selection_parquet_cli.py
 |   |-- test_stock_selection_profile_gates.py
@@ -38,7 +41,9 @@ stock-selection-strategy-skill/
 |   `-- test_stock_selection_scripts.py
 `-- scripts/
     |-- example_config.json
+    |-- backtest_buy_hold.py
     |-- create_demo_data.py
+    |-- generate_lightgbm_predictions.py
     |-- qsss_profile_config.json
     |-- score_candidates.py
     |-- stock_selection_config.py
@@ -61,7 +66,7 @@ python3 -m venv /tmp/stock-selection-skill-venv
 ```
 
 使用备用虚拟环境时，将下文 `uv run --with ... python` 替换为 `/tmp/stock-selection-skill-venv/bin/python`。
-读取 Parquet 输入还需要安装 `pyarrow` 或 `fastparquet`；只处理 CSV 时不需要额外 Parquet 引擎。无 `uv` 且需要 Parquet 时，使用 `/tmp/stock-selection-skill-venv/bin/python -m pip install -r requirements-parquet.txt`。
+读取 Parquet 输入还需要安装 `pyarrow` 或 `fastparquet`；只处理 CSV 时不需要额外 Parquet 引擎。无 `uv` 且需要 Parquet 时，使用 `/tmp/stock-selection-skill-venv/bin/python -m pip install -r requirements-parquet.txt`。运行真实 LightGBM 预测生成器时，还需要安装 `requirements-ml.txt`。
 
 本仓库以 CLI 脚本为稳定入口。若在 Python 代码中复用脚本，请将 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`；仓库当前不提供可安装 Python package。
 
@@ -160,6 +165,25 @@ Skill is valid!
 
 QSSS-derived 配置要求输入包含 `market` 列，且 A 股记录使用 `A-share`；同时必须包含 `prediction` 或 `prediction_score` 列，取值范围为 0 到 1。该列表示上游模型已经生成的上涨概率；评分脚本不会训练 LightGBM，也不会用动量分伪造机器学习预测。
 
+如果需要真实生成 `prediction_score`，可使用可选脚本 `generate_lightgbm_predictions.py`。该脚本使用时间序列切分，只在训练切分上拟合 `StandardScaler`，并在缺少 `lightgbm` 或 `scikit-learn` 时显式失败：
+
+```bash
+uv run --with pandas --with numpy --with scikit-learn --with lightgbm \
+  python scripts/generate_lightgbm_predictions.py \
+  --input /tmp/stock-selection-demo/prices.csv \
+  --output /tmp/stock-selection-demo/prices_generated_prediction.csv
+```
+
+如果需要最小 buy-hold 基线回测，可使用 `backtest_buy_hold.py`。它只做信号日收盘价到未来第 N 个可用交易行收盘价的 close-to-close 基线，不扣交易成本、不模拟滑点、不判断涨跌停或停牌可交易性：
+
+```bash
+uv run --with pandas --with numpy python scripts/backtest_buy_hold.py \
+  --prices /tmp/stock-selection-demo/prices.csv \
+  --candidates /tmp/stock-selection-demo/candidates.csv \
+  --output /tmp/stock-selection-demo/buy_hold_backtest.csv \
+  --hold-days 5
+```
+
 输入约定：`symbol` 必须按文本保存以保留前导零；校验脚本会拒绝 1 到 3 位纯数字代码，避免把 `000001` 这类 A 股代码被表格软件损坏后的值当作有效输入。`date` 支持 `YYYY-MM-DD` 或 `YYYYMMDD`；`volume` 单位必须在同一文件内保持一致，脚本只能校验数值和非负，无法从纯数值可靠判断“股/手/张/成交额”是否混用。QSSS-derived 的 `market` 只接受精确值 `A-share`，不会自动归一化 `A股`、`China` 等别名。
 
 常见字段映射：akshare 中文列需映射为 `股票代码 -> symbol`、`日期 -> date`、`成交量 -> volume`、`成交额 -> amount`、`换手率 -> turn`，其中 `成交额` 不得映射为 `volume`；tushare 需将 `ts_code` 去掉 `.SZ`/`.SH` 后写入 `symbol`，`trade_date -> date`，`vol -> volume`，`amount -> amount`，`turnover_rate -> turn`；yfinance 需将 `Date/Symbol/Open/High/Low/Close/Volume` 映射为小写标准字段。yfinance 映射后只满足通用 OHLCV；若用于 QSSS-derived，还必须外部补齐 `market=A-share`、真实上游 `prediction_score`、以及 `turn` 或 `turnover`，不能从 yfinance OHLCV 自动推断。不要把 `Adj Close` 静默替换为 `close`；使用复权价时要记录复权口径。多源合并时统一保留一个预测列，推荐先生成 `prediction_score = coalesce(prediction_score, prediction)`。
@@ -246,7 +270,7 @@ import yaml
 from pathlib import Path
 assert yaml.safe_load(Path("agents/openai.yaml").read_text())["interface"]["display_name"]
 PY
-PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/create_demo_data.py scripts/validate_ohlcv.py scripts/score_candidates.py scripts/stock_selection_config.py scripts/stock_selection_data.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_profile.py scripts/stock_selection_universe.py scripts/stock_selection_diagnostics.py
+PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/create_demo_data.py scripts/validate_ohlcv.py scripts/score_candidates.py scripts/generate_lightgbm_predictions.py scripts/backtest_buy_hold.py scripts/stock_selection_config.py scripts/stock_selection_data.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_profile.py scripts/stock_selection_universe.py scripts/stock_selection_diagnostics.py
 PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy --with pyarrow python -m unittest discover -s tests -v
 # 或使用备用虚拟环境:
 PYTHONDONTWRITEBYTECODE=1 /tmp/stock-selection-skill-venv/bin/python -m unittest discover -s tests -v

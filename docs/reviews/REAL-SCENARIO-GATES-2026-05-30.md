@@ -53,6 +53,40 @@
 - 本场景不能证明 yfinance 单票或多票 MultiIndex、Date reset、Adj Close 与 Close 口径、symbol 写入或缺 `turn`/`turnover` warning 的真实端到端表现。
 - 网络可用后应保留同一复验路径: 先落地本地 CSV 或 Parquet，再运行 `validate_ohlcv.py` 和 `score_candidates.py`。
 
+## 场景 L: LightGBM prediction 生成
+
+状态: 本地契约门禁已建立，真实行情训练门禁仍未完成。
+
+证据:
+
+- 本轮新增 `scripts/generate_lightgbm_predictions.py`，独立生成 `prediction_score`，并在缺少 `lightgbm` 或 `scikit-learn` 时非 0 退出。
+- 生成器使用时间序列切分，不使用随机 `train_test_split`。
+- `StandardScaler` 只在训练切分上 `fit`。
+- 标签口径为 `close.shift(-horizon) / close - 1`，训练标签阈值只来自训练切分。
+- 本轮新增 `tests/test_lightgbm_prediction_cli.py`，覆盖训练切分、输出概率范围、依赖缺失失败，以及生成结果可继续进入 QSSS-derived 评分消费层。
+
+边界:
+
+- 单元测试使用受控假模型验证契约，不等同于真实 LightGBM 在真实 A 股行情上的训练结果。
+- 真实通过仍需要安装 `requirements-ml.txt`，用真实行情文件运行生成器，并把输出接入 `validate_ohlcv.py --config scripts/qsss_profile_config.json` 和 `score_candidates.py`。
+
+## 场景 M: buy-hold 基线回测
+
+状态: 本地契约门禁已建立，真实候选和真实行情回测仍未完成。
+
+证据:
+
+- 本轮新增 `scripts/backtest_buy_hold.py`。
+- 脚本只做信号日收盘价到未来第 N 个可用交易行收盘价的 close-to-close buy-hold 基线。
+- 候选日期必须精确匹配 OHLCV 日期，不自动滚动到下一交易日。
+- 输出显式标记 `cost_model=excluded`、`slippage_model=excluded`、`tradability_model=not_modeled`。
+- 本轮新增 `tests/test_buy_hold_backtest_cli.py`，覆盖正常收益、缺入场日不回退、严格模式遇到缺数据非 0 且不写输出。
+
+边界:
+
+- 该脚本不覆盖交易成本、滑点、涨跌停、停牌可交易性或组合资金曲线。
+- 真实通过仍需要用真实候选 CSV 和真实 OHLCV 文件运行，并记录退出码、输出和缺数据数量。
+
 ## 当前结论
 
 已证明:
@@ -61,10 +95,12 @@
 - 本地 Parquet 读取、校验和评分链路。
 - QSSS-derived 对 A 股字段、market、symbol、prediction、turn 的门禁。
 - akshare A 股真实源在本次环境可拉取并映射到本地文件后进入校验和评分。
+- LightGBM prediction 生成器的本地契约和失败边界。
+- buy-hold 基线回测脚本的本地契约和失败边界。
 
 仍未证明:
 
 - yfinance/Yahoo 在当前环境可稳定取数。
-- 真实 LightGBM prediction 生成链路。
-- 真实策略回测。
+- 真实 LightGBM 在真实行情上的 prediction 生成链路。
+- 真实候选和真实行情上的 buy-hold 回测结果。
 - 完整 CI 远端运行结果。

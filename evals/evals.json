@@ -125,7 +125,7 @@
         },
         {
           "name": "解释摘要",
-          "description": "输出应解释 candidates、effective_empty_result、failed_symbols、threshold_failed_symbols 和 turnover_assumption 等通用摘要字段；同时说明预设脚本会把历史不足作为显式失败，只有自行实现批量跳过时才应统计 insufficient_history_symbols。"
+          "description": "输出应解释 candidates、effective_empty_result、empty_result_reason、failed_symbols、insufficient_history_symbols、threshold_failed_symbols 和 turnover_assumption 等通用摘要字段；同时说明历史不足在混合批次中会进入摘要，若没有任何股票可评分则脚本显式失败。"
         },
         {
           "name": "不伪造真实验证",

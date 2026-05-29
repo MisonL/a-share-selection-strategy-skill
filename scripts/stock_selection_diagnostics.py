@@ -113,7 +113,24 @@ def complete_summary(summary: dict[str, Any], candidates: int) -> dict[str, Any]
         **summary,
         "candidates": int(candidates),
         "effective_empty_result": candidates == 0,
+        "empty_result_reason": empty_result_reason(summary, candidates),
     }
+
+
+def empty_result_reason(summary: dict[str, Any], candidates: int) -> str:
+    if candidates:
+        return "none"
+    if summary.get("input_symbols", 0) == 0:
+        return "universe_filtered_all"
+    if summary.get("scored_symbols", 0) == 0:
+        if summary.get("failed_symbols", 0):
+            return "all_failed"
+        if summary.get("insufficient_history_symbols", 0):
+            return "all_short"
+        return "no_scored_symbols"
+    if summary.get("threshold_failed_symbols", 0) == summary.get("scored_symbols", 0):
+        return "threshold_filtered_all"
+    return "none"
 
 
 def print_summary(summary: dict[str, Any], output: str) -> None:
@@ -133,6 +150,8 @@ def print_summary(summary: dict[str, Any], output: str) -> None:
     ]
     if summary.get("effective_empty_result") is not None:
         parts.append(f"effective_empty_result={str(summary['effective_empty_result']).lower()}")
+    if summary.get("empty_result_reason"):
+        parts.append(f"empty_result_reason={summary['empty_result_reason']}")
     if summary.get("input"):
         parts.append(f"input={summary['input']}")
     if summary.get("turnover_assumption"):

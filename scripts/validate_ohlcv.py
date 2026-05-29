@@ -12,7 +12,7 @@ import pandas as pd
 
 from stock_selection_config import load_config
 from stock_selection_data import parse_dates
-from stock_selection_metrics import is_qsss_mode
+from stock_selection_profile import profile_column_errors, qsss_value_errors
 
 
 REQUIRED_COLUMNS = ["symbol", "date", "open", "high", "low", "close", "volume"]
@@ -151,16 +151,10 @@ def validate_history(frame: pd.DataFrame, min_history_rows: int) -> Iterable[str
 def validate_profile_columns(
     frame: pd.DataFrame, config: dict
 ) -> Iterable[str]:
-    if not is_qsss_mode(config):
-        return []
-    errors = []
-    if config.get("universe", {}).get("market") and "market" not in frame.columns:
-        errors.append("qsss-derived profile requires market column")
-    if not any(column in frame.columns for column in ["prediction", "prediction_score"]):
-        errors.append("qsss-derived profile requires prediction or prediction_score column")
-    if not any(column in frame.columns for column in ["turn", "turnover"]):
-        errors.append("qsss-derived profile requires turn or turnover column")
-    return errors
+    errors = profile_column_errors(frame, config)
+    if errors:
+        return errors
+    return qsss_value_errors(frame, config)
 
 
 if __name__ == "__main__":

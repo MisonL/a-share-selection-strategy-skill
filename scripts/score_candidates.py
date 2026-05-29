@@ -22,6 +22,7 @@ from stock_selection_diagnostics import (
     threshold_masks,
 )
 from stock_selection_metrics import is_qsss_mode, score_symbol
+from stock_selection_profile import profile_column_errors, qsss_value_errors
 from stock_selection_universe import apply_universe_filter
 from validate_ohlcv import validate_frame
 
@@ -185,34 +186,15 @@ def validate_prediction_values(frame: pd.DataFrame) -> None:
 
 
 def validate_profile_requirements(frame: pd.DataFrame, config: dict[str, Any]) -> None:
-    if not is_qsss_mode(config):
-        return
-    if config.get("universe", {}).get("market") and "market" not in frame.columns:
-        raise ValueError("qsss-derived score mode requires market column")
-    prediction_column = next(
-        (column for column in ["prediction", "prediction_score"] if column in frame.columns),
-        None,
-    )
-    if prediction_column is None:
-        raise ValueError("qsss-derived score mode requires prediction or prediction_score")
-    if not any(column in frame.columns for column in ["turn", "turnover"]):
-        raise ValueError("qsss-derived score mode requires turn or turnover column")
+    errors = profile_column_errors(frame, config)
+    if errors:
+        raise ValueError("; ".join(errors))
 
 
 def validate_qsss_symbols(frame: pd.DataFrame, config: dict[str, Any]) -> None:
-    if not is_qsss_mode(config) or "market" not in frame.columns:
-        return
-    market = str(config.get("universe", {}).get("market", ""))
-    if not market:
-        return
-    market_frame = frame[frame["market"].astype(str) == market]
-    invalid = ~market_frame["symbol"].astype(str).str.fullmatch(r"\d{6}")
-    invalid_count = int(invalid.sum())
-    if invalid_count:
-        raise ValueError(
-            f"qsss-derived A-share symbols must be six digits; "
-            f"invalid_symbols={invalid_count}"
-        )
+    errors = qsss_value_errors(frame, config)
+    if errors:
+        raise ValueError("; ".join(errors))
 
 
 def prepare_frame(frame: pd.DataFrame) -> pd.DataFrame:

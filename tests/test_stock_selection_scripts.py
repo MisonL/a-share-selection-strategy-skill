@@ -144,6 +144,7 @@ class StockSelectionScriptTests(unittest.TestCase):
         self.assertEqual(0, summary["input_symbols"])
         self.assertEqual(2, summary["universe_filtered_symbols"])
         self.assertEqual(0, summary["candidates"])
+        self.assertEqual("universe_filtered_all", summary["empty_result_reason"])
 
     def test_explosion_score_is_zero_below_volume_window(self) -> None:
         config = load_config("example_config.json")
@@ -210,9 +211,8 @@ class StockSelectionScriptTests(unittest.TestCase):
         config = load_config("qsss_profile_config.json")
         frame = build_frame(include_prediction=True, include_turn=True)
         frame["market"] = "HK"
-        _, summary = scorer.score_candidates(frame, config)
-        self.assertEqual(0, summary["input_symbols"])
-        self.assertEqual(2, summary["universe_filtered_symbols"])
+        with self.assertRaisesRegex(ValueError, "requires at least one A-share row"):
+            scorer.score_candidates(frame, config)
 
     def test_cli_success_writes_candidates_csv(self) -> None:
         frame = build_frame(include_turn=False)
@@ -259,6 +259,7 @@ class StockSelectionScriptTests(unittest.TestCase):
             self.assertEqual(0, code, stderr)
             self.assertTrue(output_path.exists())
             self.assertIn("effective_empty_result=true", stdout)
+            self.assertIn("empty_result_reason=threshold_filtered_all", stdout)
             self.assertIn("candidates=0", stdout)
             self.assertIn("prediction_source=external_unverified", stdout)
 

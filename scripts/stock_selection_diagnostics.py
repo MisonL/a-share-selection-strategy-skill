@@ -66,18 +66,27 @@ def build_summary(
     failed_symbols: list[str],
     short_symbols: list[str],
     config: dict[str, Any],
+    universe_summary: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     raw_symbols = int(raw["symbol"].astype(str).nunique())
     prepared_symbols = int(prepared["symbol"].nunique())
     input_symbols = int(input_frame["symbol"].nunique())
+    universe_counts = universe_summary or {}
     return {
         "raw_symbols": raw_symbols,
         "input_symbols": input_symbols,
         "invalid_or_dropped_symbols": max(raw_symbols - prepared_symbols, 0),
         "universe_filtered_symbols": max(prepared_symbols - input_symbols, 0),
+        "market_filtered_symbols": universe_counts.get("market_filtered_symbols", 0),
+        "prefix_allow_filtered_symbols": universe_counts.get(
+            "prefix_allow_filtered_symbols", 0
+        ),
+        "prefix_excluded_symbols": universe_counts.get("prefix_excluded_symbols", 0),
         "scored_symbols": len(scored),
         "failed_symbols": len(failed_symbols),
         "insufficient_history_symbols": len(short_symbols),
+        "failed_symbol_examples": failed_symbols[:10],
+        "insufficient_history_symbol_examples": short_symbols[:10],
         "threshold_failed_symbols": 0,
         "threshold_failures": {},
         "turnover_assumption": turnover_assumption_for(raw, config),
@@ -113,6 +122,9 @@ def print_summary(summary: dict[str, Any], output: str) -> None:
         f"input_symbols={summary['input_symbols']}",
         f"invalid_or_dropped_symbols={summary['invalid_or_dropped_symbols']}",
         f"universe_filtered_symbols={summary['universe_filtered_symbols']}",
+        f"market_filtered_symbols={summary['market_filtered_symbols']}",
+        f"prefix_allow_filtered_symbols={summary['prefix_allow_filtered_symbols']}",
+        f"prefix_excluded_symbols={summary['prefix_excluded_symbols']}",
         f"insufficient_history_symbols={summary['insufficient_history_symbols']}",
         f"scored_symbols={summary['scored_symbols']}",
         f"failed_symbols={summary.get('failed_symbols', 0)}",
@@ -129,6 +141,16 @@ def print_summary(summary: dict[str, Any], output: str) -> None:
     print("OK: " + " ".join(parts))
     if summary.get("threshold_failures"):
         print(f"INFO: threshold_failures={format_counts(summary['threshold_failures'])}")
+    if summary.get("failed_symbol_examples"):
+        print(
+            "INFO: failed_symbol_examples="
+            f"{','.join(summary['failed_symbol_examples'])}"
+        )
+    if summary.get("insufficient_history_symbol_examples"):
+        print(
+            "INFO: insufficient_history_symbol_examples="
+            f"{','.join(summary['insufficient_history_symbol_examples'])}"
+        )
     if summary.get("turnover_assumption"):
         print(
             "WARNING: turn/turnover missing; turnover_ratio used a neutral series",
@@ -154,10 +176,14 @@ def print_skipped_history_warning(
 
 
 def no_scored_symbols_message(summary: dict[str, Any]) -> str:
+    short_examples = ",".join(summary.get("insufficient_history_symbol_examples", []))
+    failed_examples = ",".join(summary.get("failed_symbol_examples", []))
     return (
         "no symbols could be scored; "
         f"insufficient_history_symbols={summary['insufficient_history_symbols']} "
-        f"failed_symbols={summary['failed_symbols']}"
+        f"failed_symbols={summary['failed_symbols']} "
+        f"insufficient_history_symbol_examples={short_examples} "
+        f"failed_symbol_examples={failed_examples}"
     )
 
 

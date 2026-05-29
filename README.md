@@ -31,6 +31,7 @@ stock-selection-strategy-skill/
 |   `-- test_stock_selection_scripts.py
 `-- scripts/
     |-- example_config.json
+    |-- create_demo_data.py
     |-- qsss_profile_config.json
     |-- score_candidates.py
     |-- stock_selection_config.py
@@ -38,6 +39,7 @@ stock-selection-strategy-skill/
     |-- stock_selection_diagnostics.py
     |-- stock_selection_metrics.py
     |-- stock_selection_output.py
+    |-- stock_selection_universe.py
     `-- validate_ohlcv.py
 ```
 
@@ -55,7 +57,51 @@ python3 -m venv /tmp/stock-selection-skill-venv
 
 本仓库以 CLI 脚本为稳定入口。若在 Python 代码中复用脚本，请将 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`；仓库当前不提供可安装 Python package。
 
-### 1. 校验 Skill 结构
+### 1. 生成可运行 demo 数据
+
+```bash
+python3 scripts/create_demo_data.py --output /tmp/stock-selection-demo
+```
+
+生成文件：
+
+- `/tmp/stock-selection-demo/prices.csv`
+- `/tmp/stock-selection-demo/prices_with_prediction.csv`
+
+### 2. 校验行情文件
+
+```bash
+uv run --with pandas --with numpy python scripts/validate_ohlcv.py \
+  --input /tmp/stock-selection-demo/prices.csv
+```
+
+如需按某个评分配置同步检查 profile 专属字段，可传入 `--config`。例如 QSSS-derived 会额外检查 `market`、`prediction` 或 `prediction_score`、`turn` 或 `turnover`：
+
+```bash
+uv run --with pandas --with numpy python scripts/validate_ohlcv.py \
+  --input /tmp/stock-selection-demo/prices_with_prediction.csv \
+  --config scripts/qsss_profile_config.json
+```
+
+### 3. 使用通用配置评分
+
+```bash
+uv run --with pandas --with numpy python scripts/score_candidates.py \
+  --input /tmp/stock-selection-demo/prices.csv \
+  --config scripts/example_config.json \
+  --output /tmp/stock-selection-demo/candidates.csv
+```
+
+### 4. 使用 QSSS-derived 配置评分
+
+```bash
+uv run --with pandas --with numpy python scripts/score_candidates.py \
+  --input /tmp/stock-selection-demo/prices_with_prediction.csv \
+  --config scripts/qsss_profile_config.json \
+  --output /tmp/stock-selection-demo/qsss_candidates.csv
+```
+
+### 5. 校验 Skill 结构
 
 `quick_validate.py` 来自本机安装的 skill-creator 工具，不随本仓库发布。把下面的 `QUICK_VALIDATE` 替换为你机器上的校验器路径：
 
@@ -70,20 +116,6 @@ uv run --with pyyaml python "$QUICK_VALIDATE" "$(pwd)"
 Skill is valid!
 ```
 
-### 2. 校验行情文件
-
-```bash
-uv run --with pandas --with numpy python scripts/validate_ohlcv.py --input prices.csv
-```
-
-如需按某个评分配置同步检查 profile 专属字段，可传入 `--config`。例如 QSSS-derived 会额外检查 `market`、`prediction` 或 `prediction_score`、`turn` 或 `turnover`：
-
-```bash
-uv run --with pandas --with numpy python scripts/validate_ohlcv.py \
-  --input prices_with_prediction.csv \
-  --config scripts/qsss_profile_config.json
-```
-
 最小字段要求：
 
 | 字段 | 含义 |
@@ -96,31 +128,13 @@ uv run --with pandas --with numpy python scripts/validate_ohlcv.py \
 | `close` | 收盘价 |
 | `volume` | 成交量 |
 
-### 3. 使用通用配置评分
-
-```bash
-uv run --with pandas --with numpy python scripts/score_candidates.py \
-  --input prices.csv \
-  --config scripts/example_config.json \
-  --output candidates.csv
-```
-
-### 4. 使用 QSSS-derived 配置评分
-
-```bash
-uv run --with pandas --with numpy python scripts/score_candidates.py \
-  --input prices_with_prediction.csv \
-  --config scripts/qsss_profile_config.json \
-  --output qsss_candidates.csv
-```
-
 QSSS-derived 配置要求输入包含 `market` 列，且 A 股记录使用 `A-share`；同时必须包含 `prediction` 或 `prediction_score` 列，取值范围为 0 到 1。该列表示上游模型已经生成的上涨概率；评分脚本不会训练 LightGBM，也不会用动量分伪造机器学习预测。
 
 输入约定：`symbol` 必须按文本保存以保留前导零；校验脚本会拒绝 1 到 3 位纯数字代码，避免把 `000001` 这类 A 股代码被表格软件损坏后的值当作有效输入。`date` 支持 `YYYY-MM-DD` 或 `YYYYMMDD`；`volume` 单位必须在同一文件内保持一致，脚本只能校验数值和非负，无法从纯数值可靠判断“股/手/张/成交额”是否混用。QSSS-derived 的 `market` 只接受精确值 `A-share`，不会自动归一化 `A股`、`China` 等别名。
 
-`score_candidates.py` 的 CLI 摘要会报告输入文件名、股票池过滤、历史不足、输入异常、单股失败、阈值过滤、`turnover_assumption`、`effective_empty_result` 和最终候选数量。QSSS-derived 路径还会标记 `prediction_source=external_unverified`，表示脚本只消费上游预测，不验证该列是否由真实 LightGBM 链路生成。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。
+`score_candidates.py` 的 CLI 摘要会报告输入文件名、`input_symbols`、股票池过滤、历史不足、输入异常、单股失败、阈值过滤、`turnover_assumption`、`effective_empty_result` 和最终候选数量。股票池过滤包含 `market_filtered_symbols`、`prefix_allow_filtered_symbols`、`prefix_excluded_symbols` 分项。`threshold_failures` 是各阈值独立失败计数，不是互斥分类，不能和 `threshold_failed_symbols` 相加对账。QSSS-derived 路径还会标记 `prediction_source=external_unverified`，表示脚本只消费上游预测，不验证该列是否由真实 LightGBM 链路生成。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。
 
-自动化流水线应把 `failed_symbols=0` 作为成功门槛之一；`failed_symbols>0` 表示存在单股运行期异常，即使脚本仍输出了其他候选，也应进入人工复核或失败处理。
+自动化流水线应把 `failed_symbols=0` 作为成功门槛之一；`failed_symbols>0` 表示存在单股运行期异常，即使脚本仍输出了其他候选，也应进入人工复核或失败处理。成功摘要会输出截断样例，例如 `failed_symbol_examples`、`insufficient_history_symbol_examples`，用于定位需要复核的标的。
 
 配置中的 `output.max_candidates` 大于 0 时限制输出数量；设为 0 表示不截断候选结果。
 
@@ -189,19 +203,25 @@ import yaml
 from pathlib import Path
 assert yaml.safe_load(Path("agents/openai.yaml").read_text())["interface"]["display_name"]
 PY
-PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/validate_ohlcv.py scripts/score_candidates.py scripts/stock_selection_config.py scripts/stock_selection_data.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_diagnostics.py
+PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/create_demo_data.py scripts/validate_ohlcv.py scripts/score_candidates.py scripts/stock_selection_config.py scripts/stock_selection_data.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_universe.py scripts/stock_selection_diagnostics.py
 PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy python -m unittest discover -s tests -v
 ```
 
-如需 smoke test，可准备本地行情 CSV 后运行：
+没有 `uv` 时，可使用前文的备用虚拟环境运行单测：
+
+```bash
+/tmp/stock-selection-skill-venv/bin/python -m unittest discover -s tests -v
+```
+
+如需 smoke test，可使用 demo 数据运行：
 
 该 smoke 只验证本地文件读取、评分和输出流程，不代表真实行情接入、真实 LightGBM prediction 生成链路或真实回测已经通过。
 
 ```bash
 uv run --with pandas --with numpy python scripts/score_candidates.py \
-  --input prices.csv \
+  --input /tmp/stock-selection-demo/prices.csv \
   --config scripts/example_config.json \
-  --output candidates.csv
+  --output /tmp/stock-selection-demo/candidates.csv
 ```
 
 ## 重要边界
@@ -211,6 +231,10 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
 - 没有真实回测时，不得声称策略收益已经验证。
 - 使用机器学习预测时，必须明确训练窗口、预测窗口、标签定义和未来数据泄漏风险。
 - QSSS-derived 配置只复刻评分消费层；真实 LightGBM prediction 生成需要在上游单独实现和验证。
+
+## 授权
+
+当前仓库未声明开源许可证。除 GitHub 平台允许的浏览和 clone 能力外，本仓库暂未授予复制、修改、分发或商用授权。若需要公开复用，应先由维护者选择并添加明确的 `LICENSE` 文件。
 
 ## 适合的使用方式
 

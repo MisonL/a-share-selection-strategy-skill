@@ -10,6 +10,7 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import score_candidates as scorer  # noqa: E402
+import create_demo_data  # noqa: E402
 import stock_selection_config  # noqa: E402
 from helpers import build_frame, load_config  # noqa: E402
 
@@ -39,6 +40,18 @@ class StockSelectionConfigTests(unittest.TestCase):
         self.assertIn('display_name: "Stock Selection Strategy"', text)
         self.assertIn("short_description:", text)
         self.assertIn("default_prompt:", text)
+
+    def test_create_demo_data_generates_expected_files(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            code = create_demo_data.main(["--output", tmpdir])
+            self.assertEqual(0, code)
+            prices = Path(tmpdir) / "prices.csv"
+            qsss = Path(tmpdir) / "prices_with_prediction.csv"
+            self.assertTrue(prices.exists())
+            self.assertTrue(qsss.exists())
+            self.assertIn("prediction_score", qsss.read_text(encoding="utf-8").splitlines()[0])
 
 
 if __name__ == "__main__":

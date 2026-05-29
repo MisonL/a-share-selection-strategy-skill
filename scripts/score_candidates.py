@@ -22,7 +22,8 @@ from stock_selection_diagnostics import (
     threshold_masks,
 )
 from stock_selection_metrics import is_qsss_mode, score_symbol
-from validate_ohlcv import validate_frame, validate_history
+from stock_selection_universe import apply_universe_filter
+from validate_ohlcv import validate_frame
 
 
 BASE_COLUMNS = ["symbol", "date", "open", "high", "low", "close", "volume"]
@@ -96,9 +97,8 @@ def score_candidates(
     if prepared.empty and raw_symbols:
         raise ValueError("no valid rows after basic data cleaning")
     validate_qsss_symbols(prepared, config)
-    input_frame = apply_universe_filter(prepared, config)
+    input_frame, universe_summary = apply_universe_filter(prepared, config)
     validate_prediction_values(input_frame)
-    validate_filtered_history(input_frame, config)
     scored_rows, failed_symbols, short_symbols = score_groups(input_frame, config)
     scored = pd.DataFrame(scored_rows)
     summary = build_summary(
@@ -109,6 +109,7 @@ def score_candidates(
         failed_symbols=failed_symbols,
         short_symbols=short_symbols,
         config=config,
+        universe_summary=universe_summary,
     )
     if short_symbols:
         print_skipped_history_warning(short_symbols, config)
@@ -164,13 +165,6 @@ def score_groups(
 
 def validate_input_frame(frame: pd.DataFrame, config: dict[str, Any]) -> None:
     errors = validate_frame(frame, min_history_rows=0)
-    if errors:
-        raise ValueError("; ".join(errors))
-
-
-def validate_filtered_history(frame: pd.DataFrame, config: dict[str, Any]) -> None:
-    min_history = int(config["thresholds"].get("min_history_rows", 120))
-    errors = list(validate_history(frame, min_history_rows=min_history))
     if errors:
         raise ValueError("; ".join(errors))
 
@@ -243,21 +237,6 @@ def prepare_frame(frame: pd.DataFrame) -> pd.DataFrame:
     price_mask = (result[["open", "high", "low", "close"]] > 0).all(axis=1)
     result = result[price_mask & (result["volume"] >= 0)]
     return result.sort_values(["symbol", "date"]).reset_index(drop=True)
-
-
-def apply_universe_filter(frame: pd.DataFrame, config: dict[str, Any]) -> pd.DataFrame:
-    universe = config.get("universe", {})
-    result = frame.copy()
-    market = universe.get("market")
-    if market and "market" in result.columns:
-        result = result[result["market"].astype(str) == str(market)]
-    allow_regex = universe.get("symbol_prefix_allow_regex")
-    if allow_regex:
-        result = result[result["symbol"].str.match(str(allow_regex))]
-    exclude = tuple(str(value) for value in universe.get("symbol_prefix_exclude", []))
-    if exclude:
-        result = result[~result["symbol"].str.startswith(exclude)]
-    return result.reset_index(drop=True)
 
 
 def rank_and_limit(frame: pd.DataFrame, config: dict[str, Any]) -> pd.DataFrame:

@@ -113,7 +113,7 @@ class StockSelectionScriptTests(unittest.TestCase):
     def test_short_history_is_error_when_nothing_can_score(self) -> None:
         config = load_config("example_config.json")
         frame = build_frame(days=119)
-        with self.assertRaisesRegex(ValueError, "fewer than 120 rows"):
+        with self.assertRaisesRegex(ValueError, "insufficient_history_symbols=2"):
             scorer.score_candidates(frame, config)
 
     def test_missing_turn_in_generic_mode_is_reported(self) -> None:

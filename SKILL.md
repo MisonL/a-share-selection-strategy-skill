@@ -52,25 +52,29 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 本 Skill 提供以下可复用资源，位于 Skill 目录的 `scripts/` 下：
 
 - `scripts/example_config.json`：通用权重、窗口和阈值示例。
+- `scripts/create_demo_data.py`：生成可复制运行的本地 demo CSV，用于快速 smoke test。
 - `scripts/qsss_profile_config.json`：从 QSSS 原策略提炼的 A 股默认剖面示例。
 - `scripts/validate_ohlcv.py`：校验本地 CSV/Parquet 行情文件是否满足最小字段和数据质量要求。
 - `scripts/score_candidates.py`：读取本地行情文件，按示例配置计算因子、过滤和排序，输出候选股 CSV。
-- `scripts/stock_selection_config.py`、`scripts/stock_selection_data.py`、`scripts/stock_selection_metrics.py`、`scripts/stock_selection_output.py`、`scripts/stock_selection_diagnostics.py`：评分脚本使用的配置校验、数据解析、指标、输出和诊断辅助函数。
+- `scripts/stock_selection_config.py`、`scripts/stock_selection_data.py`、`scripts/stock_selection_metrics.py`、`scripts/stock_selection_output.py`、`scripts/stock_selection_universe.py`、`scripts/stock_selection_diagnostics.py`：评分脚本使用的配置校验、数据解析、指标、输出、股票池过滤和诊断辅助函数。
 
 使用方式：
 
 ```bash
-python3 scripts/validate_ohlcv.py --input prices.csv
-python3 scripts/validate_ohlcv.py --input prices_with_prediction.csv --config scripts/qsss_profile_config.json
-python3 scripts/score_candidates.py --input prices.csv --config scripts/example_config.json --output candidates.csv
-python3 scripts/score_candidates.py --input prices_with_prediction.csv --config scripts/qsss_profile_config.json --output qsss_candidates.csv
+python3 scripts/create_demo_data.py --output /tmp/stock-selection-demo
+python3 scripts/validate_ohlcv.py --input /tmp/stock-selection-demo/prices.csv
+python3 scripts/validate_ohlcv.py --input /tmp/stock-selection-demo/prices_with_prediction.csv --config scripts/qsss_profile_config.json
+python3 scripts/score_candidates.py --input /tmp/stock-selection-demo/prices.csv --config scripts/example_config.json --output /tmp/stock-selection-demo/candidates.csv
+python3 scripts/score_candidates.py --input /tmp/stock-selection-demo/prices_with_prediction.csv --config scripts/qsss_profile_config.json --output /tmp/stock-selection-demo/qsss_candidates.csv
 ```
 
 脚本只处理本地文件，不联网取数，不调用券商接口，不生成交易指令。运行脚本需要当前 Python 环境已安装 `pandas` 和 `numpy`。若输入是 Parquet 文件，还需要可用的 Parquet 引擎，例如 `pyarrow` 或 `fastparquet`。`validate_ohlcv.py --config` 会在基础 OHLCV 校验之外检查 profile 专属字段。
 
 使用 `qsss_profile_config.json` 时，输入必须包含 `market` 列，且 A 股记录使用 `A-share`；同时必须包含 `prediction` 或 `prediction_score` 列，且取值在 0 到 1 之间。该列表示上游模型已经算好的上涨概率；脚本不会用动量分伪造机器学习预测。脚本只复刻评分消费层；若要复刻 QSSS 的 ML prediction 生成器，需要在上游按本节 ML 口径处理 `0 -> NaN`、特征标准化和 LightGBM 训练。
 
-`score_candidates.py` 的 CLI 摘要会输出 `input`、`universe_filtered_symbols`、`insufficient_history_symbols`、`failed_symbols`、`threshold_failed_symbols`、`turnover_assumption`、`effective_empty_result` 和 `candidates`。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。脚本是 CLI-first 资源；若在 Python 代码中复用，需要将 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`。`effective_empty_result=true` 表示脚本成功运行但阈值或股票池过滤后没有候选；如果所有股票都因历史不足或输入数据异常无法评分，脚本会显式失败。通用配置缺少 `turn`/`turnover` 时会告警，并用中性换手率序列计算 `turnover_ratio`；QSSS-derived 模式仍强制要求 `turn` 或 `turnover`。
+`score_candidates.py` 的 CLI 摘要会输出 `input`、`input_symbols`、`universe_filtered_symbols`、`market_filtered_symbols`、`prefix_allow_filtered_symbols`、`prefix_excluded_symbols`、`insufficient_history_symbols`、`failed_symbols`、`threshold_failed_symbols`、`turnover_assumption`、`effective_empty_result` 和 `candidates`。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。脚本是 CLI-first 资源；若在 Python 代码中复用，需要将 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`。`effective_empty_result=true` 表示脚本成功运行但阈值或股票池过滤后没有候选；如果所有股票都因历史不足或输入数据异常无法评分，脚本会显式失败。`threshold_failures` 是各阈值独立失败计数，不是互斥分类；不要把这些计数相加解释为失败股票总数。成功摘要还可能输出 `failed_symbol_examples` 和 `insufficient_history_symbol_examples`，用于定位需要复核的标的。通用配置缺少 `turn`/`turnover` 时会告警，并用中性换手率序列计算 `turnover_ratio`；QSSS-derived 模式仍强制要求 `turn` 或 `turnover`。
+
+QSSS-derived 输出中的 `prediction_source=external_unverified` 表示当前脚本只消费外部 `prediction` 或 `prediction_score`，不验证 LightGBM 上游生成链路。解释该字段时，应要求单独核验训练窗口、标签定义、特征、标准化和未来数据泄漏风险。
 
 配置中的 `output.max_candidates` 大于 0 时限制输出数量；设为 0 表示不截断候选结果。
 
@@ -456,9 +460,10 @@ QSSS 还存在优化策略、交互界面和数据库辅助查询。这些属于
 - 脚本已成功运行，但没有股票通过当前股票池和阈值。
 - 主要原因：
   - `input_symbols=0`：股票池配置和输入市场或代码不匹配。
-  - `universe_filtered_symbols>0`：股票池过滤剔除了标的。
-  - `threshold_failed_symbols>0`：评分后被阈值过滤。
+  - `universe_filtered_symbols>0`：股票池过滤剔除了标的，可继续查看 `market_filtered_symbols`、`prefix_allow_filtered_symbols`、`prefix_excluded_symbols`。
+  - `threshold_failed_symbols>0`：评分后被阈值过滤；`threshold_failures` 是非互斥独立计数。
   - `failed_symbols>0`：存在单股运行期异常，需要复核。
+- 如果 `failed_symbols>0`，应进入复核或失败处理；`effective_empty_result=true` 只说明脚本完成并无候选。
 - 0 候选不是错误退出，也不是收益或策略有效性验证。
 ```
 

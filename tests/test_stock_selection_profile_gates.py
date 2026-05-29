@@ -44,7 +44,21 @@ class StockSelectionProfileGateTests(unittest.TestCase):
         self.assertEqual(3, summary["raw_symbols"])
         self.assertEqual(2, summary["input_symbols"])
         self.assertEqual(1, summary["universe_filtered_symbols"])
+        self.assertEqual(1, summary["market_filtered_symbols"])
         self.assertEqual(0, summary["insufficient_history_symbols"])
+
+    def test_qsss_reports_in_universe_short_history_in_summary(self) -> None:
+        config = load_config("qsss_profile_config.json")
+        frame = build_frame(include_prediction=True, include_turn=True)
+        short = build_frame(days=10, include_prediction=True, include_turn=True)
+        short = short[short["symbol"] == "000002"].copy()
+        short["symbol"] = "300001"
+        frame = pd.concat([frame, short], ignore_index=True)
+        candidates, summary = scorer.score_candidates(frame, config)
+        self.assertEqual(3, summary["input_symbols"])
+        self.assertEqual(1, summary["insufficient_history_symbols"])
+        self.assertEqual(["300001"], summary["insufficient_history_symbol_examples"])
+        self.assertGreater(len(candidates), 0)
 
     def test_validate_cli_with_qsss_config_checks_profile_columns(self) -> None:
         frame = build_frame(include_turn=True)
@@ -64,6 +78,33 @@ class StockSelectionProfileGateTests(unittest.TestCase):
                 )
         self.assertEqual(1, code)
         self.assertIn("prediction or prediction_score", stderr.getvalue())
+
+    def test_cli_reports_in_universe_short_history_examples(self) -> None:
+        frame = build_frame(include_prediction=True, include_turn=True)
+        short = build_frame(days=10, include_prediction=True, include_turn=True)
+        short = short[short["symbol"] == "000002"].copy()
+        short["symbol"] = "300001"
+        frame = pd.concat([frame, short], ignore_index=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            output_path = Path(tmpdir) / "qsss.csv"
+            frame.to_csv(input_path, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = scorer.main(
+                    [
+                        "--input",
+                        str(input_path),
+                        "--config",
+                        str(SCRIPTS / "qsss_profile_config.json"),
+                        "--output",
+                        str(output_path),
+                    ]
+                )
+        self.assertEqual(0, code)
+        self.assertIn("insufficient_history_symbols=1", stdout.getvalue())
+        self.assertIn("insufficient_history_symbol_examples=300001", stdout.getvalue())
 
 
 if __name__ == "__main__":

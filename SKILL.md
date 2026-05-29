@@ -39,6 +39,14 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 
 当任务只是“基于已有数据选股”时，不要主动加入数据源库。先用本地文件完成可复现分析。
 
+当用户明确要求联网取数时，Agent 必须把联网结果转换成可复现的本地行情文件后再评分：
+
+1. 选择数据源并说明 token、额度、限流和字段口径风险。
+2. 明确市场、周期、复权口径、时间范围和交易日历。
+3. 将数据映射为本 Skill 的字段：`symbol`、`date`、`open`、`high`、`low`、`close`、`volume`，可选 `name`、`market`、`turn` 或 `turnover`。
+4. 保存为本地 CSV 或 Parquet，并先运行 `validate_ohlcv.py`。
+5. 只有校验通过后，才运行 `score_candidates.py`；不得把在线 API 响应直接解释成已验证候选。
+
 ## 预设脚本
 
 本 Skill 提供以下可复用资源，位于 Skill 目录的 `scripts/` 下：
@@ -59,7 +67,7 @@ python3 scripts/score_candidates.py --input prices_with_prediction.csv --config 
 
 脚本只处理本地文件，不联网取数，不调用券商接口，不生成交易指令。运行脚本需要当前 Python 环境已安装 `pandas` 和 `numpy`。若输入是 Parquet 文件，还需要可用的 Parquet 引擎，例如 `pyarrow` 或 `fastparquet`。
 
-使用 `qsss_profile_config.json` 时，输入必须包含 `prediction` 或 `prediction_score` 列，且取值在 0 到 1 之间。该列表示上游模型已经算好的上涨概率；脚本不会用动量分伪造机器学习预测。脚本只复刻评分消费层；若要复刻 QSSS 的 ML prediction 生成器，需要在上游按本节 ML 口径处理 `0 -> NaN`、特征标准化和 LightGBM 训练。
+使用 `qsss_profile_config.json` 时，输入必须包含 `market` 列，且 A 股记录使用 `A-share`；同时必须包含 `prediction` 或 `prediction_score` 列，且取值在 0 到 1 之间。该列表示上游模型已经算好的上涨概率；脚本不会用动量分伪造机器学习预测。脚本只复刻评分消费层；若要复刻 QSSS 的 ML prediction 生成器，需要在上游按本节 ML 口径处理 `0 -> NaN`、特征标准化和 LightGBM 训练。
 
 `score_candidates.py` 的 CLI 摘要会输出 `input`、`universe_filtered_symbols`、`insufficient_history_symbols`、`failed_symbols`、`threshold_failed_symbols`、`turnover_assumption`、`effective_empty_result` 和 `candidates`。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。`effective_empty_result=true` 表示脚本成功运行但阈值或股票池过滤后没有候选；如果所有股票都因历史不足或输入数据异常无法评分，脚本会显式失败。通用配置缺少 `turn`/`turnover` 时会告警，并用中性换手率序列计算 `turnover_ratio`；QSSS-derived 模式仍强制要求 `turn` 或 `turnover`。
 
@@ -213,6 +221,7 @@ total_score =
 ### 股票池和运行边界
 
 - 默认市场为 A 股日线。
+- 输入必须带 `market` 列，A 股记录使用 `A-share`；缺少该列时预设脚本会失败，避免跨市场混合数据仅靠代码前缀误纳入港股或其他市场代码。
 - 股票代码只保留 `60`、`68`、`00`、`30` 开头的标的，分别覆盖上交所主板、科创板、深交所主板和创业板常见代码段。
 - 排除 `8`、`4` 开头的标的，用于避开北交所和新三板口径。
 - 默认历史起点可使用 `20220101`，每只股票至少需要 120 条日线记录。
@@ -421,6 +430,30 @@ QSSS 还存在优化策略、交互界面和数据库辅助查询。这些属于
 不能运行真实验证时，明确说明“未验证真实行情结果”，不要用理论推导冒充已通过。
 
 ## 简短输出模板
+
+如果用户没有提供可验证行情数据，使用澄清模板，不要输出候选表：
+
+```markdown
+## 无法直接选股
+- 缺少本地行情文件或明确数据源，不能生成候选股。
+- 需要补充：市场、周期、时间范围、目标风格、CSV/Parquet 路径或联网取数授权。
+- 可验证后再执行：先校验数据，再评分和解释结果。
+```
+
+如果脚本返回 `effective_empty_result=true`，使用 0 候选解释模板：
+
+```markdown
+## 0 候选解释
+- 脚本已成功运行，但没有股票通过当前股票池和阈值。
+- 主要原因：
+  - `input_symbols=0`：股票池配置和输入市场或代码不匹配。
+  - `universe_filtered_symbols>0`：股票池过滤剔除了标的。
+  - `threshold_failed_symbols>0`：评分后被阈值过滤。
+  - `failed_symbols>0`：存在单股运行期异常，需要复核。
+- 0 候选不是错误退出，也不是收益或策略有效性验证。
+```
+
+有可验证数据并成功评分时，使用结果模板：
 
 ```markdown
 ## 策略口径

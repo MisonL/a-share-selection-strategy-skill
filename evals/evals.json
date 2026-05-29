@@ -88,7 +88,7 @@
     {
       "id": 5,
       "prompt": "帮我选股",
-      "expected_output": "应触发本 Skill，并先要求或确认市场、周期、输入数据和目标风格；不得伪造行情、候选股或收益结论。",
+      "expected_output": "应触发本 Skill，并先要求或确认市场、周期、输入数据和目标风格；没有可验证行情数据时应使用无法直接选股的澄清口径，不得伪造行情、候选股或收益结论。",
       "files": [],
       "assertions": [
         {
@@ -102,6 +102,10 @@
         {
           "name": "不承诺收益",
           "description": "输出应明确候选排序不是投资建议或确定收益。"
+        },
+        {
+          "name": "无数据时不输出候选表",
+          "description": "如果用户没有提供本地行情文件或明确数据源，输出应说明无法直接选股，并列出所需数据，而不是填充候选结果表。"
         }
       ]
     },
@@ -190,6 +194,46 @@
         {
           "name": "说明上游 gate",
           "description": "输出应要求单独验证 prediction_score 的训练窗口、标签、特征和数据泄漏风险。"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "请联网抓取 A 股日线数据并用这个 Skill 选股。",
+      "expected_output": "应说明必须选择数据源并处理 token、限流、复权、字段口径和交易日历；联网数据要先落地为本地 CSV 或 Parquet，映射到 OHLCV 字段并通过 validate_ohlcv.py 后，才能运行 score_candidates.py。不得只给库名，也不得把在线 API 响应直接说成已验证候选。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "联网取数落地",
+          "description": "输出应要求把联网取数结果保存为本地 CSV 或 Parquet，再走校验和评分脚本。"
+        },
+        {
+          "name": "说明数据源风险",
+          "description": "输出应说明 token、限流、复权、字段口径和交易日历等风险。"
+        },
+        {
+          "name": "不跳过校验",
+          "description": "输出应先运行 validate_ohlcv.py，再运行 score_candidates.py。"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "score_candidates.py 输出 effective_empty_result=true 且 candidates=0，帮我解释为什么没有候选。",
+      "expected_output": "应说明脚本成功运行但没有股票通过当前股票池或阈值，并区分 input_symbols=0、universe_filtered_symbols、threshold_failed_symbols、failed_symbols 等原因；不得把 0 候选解释为错误退出、收益验证或策略失效结论。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "区分 0 候选原因",
+          "description": "输出应分别解释股票池不匹配、股票池过滤、阈值过滤和单股失败这些路径。"
+        },
+        {
+          "name": "明确有效空结果",
+          "description": "输出应说明 effective_empty_result=true 是成功运行后的有效空结果。"
+        },
+        {
+          "name": "不夸大结论",
+          "description": "输出不得把 0 候选说成收益验证、策略失效证明或错误退出。"
         }
       ]
     }

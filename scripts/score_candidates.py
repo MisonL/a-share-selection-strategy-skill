@@ -184,6 +184,8 @@ def validate_prediction_values(frame: pd.DataFrame) -> None:
 def validate_profile_requirements(frame: pd.DataFrame, config: dict[str, Any]) -> None:
     if not is_qsss_mode(config):
         return
+    if config.get("universe", {}).get("market") and "market" not in frame.columns:
+        raise ValueError("qsss-derived score mode requires market column")
     prediction_column = next(
         (column for column in ["prediction", "prediction_score"] if column in frame.columns),
         None,

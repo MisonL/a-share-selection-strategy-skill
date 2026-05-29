@@ -198,6 +198,13 @@ class StockSelectionScriptTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "prediction or prediction_score"):
             scorer.score_candidates(frame, config)
 
+    def test_qsss_requires_market_column(self) -> None:
+        config = load_config("qsss_profile_config.json")
+        frame = build_frame(include_prediction=True, include_turn=True)
+        frame = frame.drop(columns=["market"])
+        with self.assertRaisesRegex(ValueError, "requires market column"):
+            scorer.score_candidates(frame, config)
+
     def test_qsss_rejects_invalid_prediction_range(self) -> None:
         config = load_config("qsss_profile_config.json")
         frame = build_frame(

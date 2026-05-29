@@ -25,6 +25,7 @@ stock-selection-strategy-skill/
 |-- evals/
 |   `-- evals.json
 |-- tests/
+|   |-- helpers.py
 |   |-- test_stock_selection_config.py
 |   `-- test_stock_selection_scripts.py
 `-- scripts/
@@ -32,6 +33,7 @@ stock-selection-strategy-skill/
     |-- qsss_profile_config.json
     |-- score_candidates.py
     |-- stock_selection_config.py
+    |-- stock_selection_data.py
     |-- stock_selection_diagnostics.py
     |-- stock_selection_metrics.py
     |-- stock_selection_output.py
@@ -50,10 +52,15 @@ python3 -m venv /tmp/stock-selection-skill-venv
 使用备用虚拟环境时，将下文 `uv run --with ... python` 替换为 `/tmp/stock-selection-skill-venv/bin/python`。
 读取 Parquet 输入还需要安装 `pyarrow` 或 `fastparquet`；只处理 CSV 时不需要额外 Parquet 引擎。
 
+本仓库以 CLI 脚本为稳定入口。若在 Python 代码中复用脚本，请将 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`；仓库当前不提供可安装 Python package。
+
 ### 1. 校验 Skill 结构
 
+`quick_validate.py` 来自本机安装的 skill-creator 工具，不随本仓库发布。把下面的 `QUICK_VALIDATE` 替换为你机器上的校验器路径：
+
 ```bash
-uv run --with pyyaml python /Users/mison/.codex/skills/.system/skill-creator/scripts/quick_validate.py /Volumes/Work/code/stock-selection-strategy-skill
+QUICK_VALIDATE=/path/to/skill-creator/scripts/quick_validate.py
+uv run --with pyyaml python "$QUICK_VALIDATE" "$(pwd)"
 ```
 
 期望输出：
@@ -99,6 +106,8 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
 ```
 
 QSSS-derived 配置要求输入包含 `market` 列，且 A 股记录使用 `A-share`；同时必须包含 `prediction` 或 `prediction_score` 列，取值范围为 0 到 1。该列表示上游模型已经生成的上涨概率；评分脚本不会训练 LightGBM，也不会用动量分伪造机器学习预测。
+
+输入约定：`symbol` 必须按文本保存以保留前导零；`date` 支持 `YYYY-MM-DD` 或 `YYYYMMDD`；`volume` 单位必须在同一文件内保持一致；QSSS-derived 的 `market` 只接受精确值 `A-share`，不会自动归一化 `A股`、`China` 等别名。
 
 `score_candidates.py` 的 CLI 摘要会报告输入文件名、股票池过滤、历史不足、输入异常、单股失败、阈值过滤、`turnover_assumption`、`effective_empty_result` 和最终候选数量。QSSS-derived 路径还会标记 `prediction_source=external_unverified`，表示脚本只消费上游预测，不验证该列是否由真实 LightGBM 链路生成。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。
 
@@ -161,11 +170,12 @@ total_score =
 修改 Skill 或脚本后建议执行：
 
 ```bash
-uv run --with pyyaml python /Users/mison/.codex/skills/.system/skill-creator/scripts/quick_validate.py /Volumes/Work/code/stock-selection-strategy-skill
+QUICK_VALIDATE=/path/to/skill-creator/scripts/quick_validate.py
+uv run --with pyyaml python "$QUICK_VALIDATE" "$(pwd)"
 python3 -m json.tool evals/evals.json >/tmp/stock-selection-evals.json
 python3 -m json.tool scripts/example_config.json >/tmp/stock-selection-example-config.json
 python3 -m json.tool scripts/qsss_profile_config.json >/tmp/stock-selection-qsss-config.json
-PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/validate_ohlcv.py scripts/score_candidates.py scripts/stock_selection_config.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_diagnostics.py
+PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/validate_ohlcv.py scripts/score_candidates.py scripts/stock_selection_config.py scripts/stock_selection_data.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_diagnostics.py
 PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy python -m unittest discover -s tests -v
 ```
 

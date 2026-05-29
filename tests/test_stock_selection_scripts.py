@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sys
 import tempfile
 import unittest
@@ -8,7 +7,6 @@ from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 
@@ -18,57 +16,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import score_candidates as scorer  # noqa: E402
 import validate_ohlcv  # noqa: E402
-
-
-def load_config(name: str) -> dict:
-    return json.loads((SCRIPTS / name).read_text(encoding="utf-8"))
-
-
-def build_frame(
-    *,
-    days: int = 130,
-    include_prediction: bool = False,
-    prediction_value: float = 0.72,
-    prediction_column: str = "prediction_score",
-    include_turn: bool = True,
-) -> pd.DataFrame:
-    rows = []
-    dates = pd.bdate_range("2025-01-02", periods=days)
-    symbols = [("000002", "Zero Prefix", 8.0), ("600001", "Shanghai", 10.0)]
-    for symbol, name, base in symbols:
-        for index, date in enumerate(dates):
-            close = base + index * 0.018 + np.sin(index / 9) * 0.08
-            row = {
-                "symbol": symbol,
-                "name": name,
-                "market": "A-share",
-                "date": date.date().isoformat(),
-                "open": close * 0.997,
-                "high": close * 1.012,
-                "low": close * 0.988,
-                "close": close,
-                "volume": 120000 + index * 30,
-            }
-            if include_turn:
-                row["turn"] = 1.1 + np.cos(index / 11) * 0.03
-            if include_prediction:
-                row[prediction_column] = prediction_value
-            rows.append(row)
-    return pd.DataFrame(rows)
-
-
-def permissive_thresholds(min_history_rows: int) -> dict:
-    return {
-        "min_total_score": -10.0,
-        "min_trend_score": -10.0,
-        "min_momentum_score": -10.0,
-        "min_rsi": 0.0,
-        "max_rsi": 100.0,
-        "max_volatility": 10.0,
-        "min_volume": 0.0,
-        "min_close": 0.0,
-        "min_history_rows": min_history_rows,
-    }
+from helpers import build_frame, load_config, permissive_thresholds  # noqa: E402
 
 
 def run_score_cli(
@@ -109,6 +57,14 @@ class StockSelectionScriptTests(unittest.TestCase):
             frame.to_csv(path, index=False)
             loaded = validate_ohlcv.read_table(path)
         self.assertEqual("000002", loaded["symbol"].iloc[0])
+
+    def test_yyyymmdd_dates_are_parsed_as_calendar_dates(self) -> None:
+        config = load_config("example_config.json")
+        frame = build_frame()
+        frame["date"] = pd.to_datetime(frame["date"]).dt.strftime("%Y%m%d")
+        candidates, summary = scorer.score_candidates(frame, config)
+        self.assertEqual(2, summary["scored_symbols"])
+        self.assertTrue(candidates["data_window"].str.startswith("2025-").all())
 
     def test_empty_input_is_error(self) -> None:
         config = load_config("example_config.json")
@@ -218,7 +174,7 @@ class StockSelectionScriptTests(unittest.TestCase):
     def test_qsss_rejects_missing_prediction_values(self) -> None:
         config = load_config("qsss_profile_config.json")
         frame = build_frame(include_prediction=True, include_turn=True)
-        frame["prediction_score"] = np.nan
+        frame["prediction_score"] = float("nan")
         with self.assertRaisesRegex(ValueError, "prediction_score has"):
             scorer.score_candidates(frame, config)
 

@@ -55,7 +55,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `scripts/qsss_profile_config.json`：从 QSSS 原策略提炼的 A 股默认剖面示例。
 - `scripts/validate_ohlcv.py`：校验本地 CSV/Parquet 行情文件是否满足最小字段和数据质量要求。
 - `scripts/score_candidates.py`：读取本地行情文件，按示例配置计算因子、过滤和排序，输出候选股 CSV。
-- `scripts/stock_selection_config.py`、`scripts/stock_selection_metrics.py`、`scripts/stock_selection_output.py`、`scripts/stock_selection_diagnostics.py`：评分脚本使用的配置校验、指标、输出和诊断辅助函数。
+- `scripts/stock_selection_config.py`、`scripts/stock_selection_data.py`、`scripts/stock_selection_metrics.py`、`scripts/stock_selection_output.py`、`scripts/stock_selection_diagnostics.py`：评分脚本使用的配置校验、数据解析、指标、输出和诊断辅助函数。
 
 使用方式：
 
@@ -69,7 +69,7 @@ python3 scripts/score_candidates.py --input prices_with_prediction.csv --config 
 
 使用 `qsss_profile_config.json` 时，输入必须包含 `market` 列，且 A 股记录使用 `A-share`；同时必须包含 `prediction` 或 `prediction_score` 列，且取值在 0 到 1 之间。该列表示上游模型已经算好的上涨概率；脚本不会用动量分伪造机器学习预测。脚本只复刻评分消费层；若要复刻 QSSS 的 ML prediction 生成器，需要在上游按本节 ML 口径处理 `0 -> NaN`、特征标准化和 LightGBM 训练。
 
-`score_candidates.py` 的 CLI 摘要会输出 `input`、`universe_filtered_symbols`、`insufficient_history_symbols`、`failed_symbols`、`threshold_failed_symbols`、`turnover_assumption`、`effective_empty_result` 和 `candidates`。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。`effective_empty_result=true` 表示脚本成功运行但阈值或股票池过滤后没有候选；如果所有股票都因历史不足或输入数据异常无法评分，脚本会显式失败。通用配置缺少 `turn`/`turnover` 时会告警，并用中性换手率序列计算 `turnover_ratio`；QSSS-derived 模式仍强制要求 `turn` 或 `turnover`。
+`score_candidates.py` 的 CLI 摘要会输出 `input`、`universe_filtered_symbols`、`insufficient_history_symbols`、`failed_symbols`、`threshold_failed_symbols`、`turnover_assumption`、`effective_empty_result` 和 `candidates`。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。脚本是 CLI-first 资源；若在 Python 代码中复用，需要将 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`。`effective_empty_result=true` 表示脚本成功运行但阈值或股票池过滤后没有候选；如果所有股票都因历史不足或输入数据异常无法评分，脚本会显式失败。通用配置缺少 `turn`/`turnover` 时会告警，并用中性换手率序列计算 `turnover_ratio`；QSSS-derived 模式仍强制要求 `turn` 或 `turnover`。
 
 配置中的 `output.max_candidates` 大于 0 时限制输出数量；设为 0 表示不截断候选结果。
 
@@ -88,6 +88,13 @@ python3 scripts/score_candidates.py --input prices_with_prediction.csv --config 
 - `volume`：成交量。
 - `amount`：成交额，可选。
 - `turnover` 或 `turn`：换手率，可选。
+
+字段口径：
+
+- `symbol` 必须按文本保存，避免 Excel 或 CSV 推断把 `000002` 变成 `2`。
+- `date` 支持 `YYYY-MM-DD` 或 `YYYYMMDD`，其他格式需要先标准化。
+- `volume` 单位必须在同一文件内一致；不要混用股、手、张或成交额。
+- QSSS-derived 的 `market` 必须使用精确值 `A-share`；不会自动归一化 `A股`、`China` 等别名。
 
 ### 可选增强字段
 

@@ -10,6 +10,8 @@ from typing import Iterable
 
 import pandas as pd
 
+from stock_selection_data import parse_dates
+
 
 REQUIRED_COLUMNS = ["symbol", "date", "open", "high", "low", "close", "volume"]
 PRICE_COLUMNS = ["open", "high", "low", "close"]
@@ -96,7 +98,7 @@ def validate_numeric_values(frame: pd.DataFrame) -> Iterable[str]:
 
 
 def validate_dates(frame: pd.DataFrame) -> Iterable[str]:
-    dates = pd.to_datetime(frame["date"], errors="coerce")
+    dates = parse_dates(frame["date"])
     invalid_count = int(dates.isna().sum())
     if invalid_count:
         yield f"column date has {invalid_count} invalid values"

@@ -11,6 +11,7 @@ from typing import Any
 import pandas as pd
 
 from stock_selection_config import load_config
+from stock_selection_data import parse_dates
 from stock_selection_diagnostics import (
     add_threshold_summary,
     build_summary,
@@ -199,7 +200,7 @@ def validate_profile_requirements(frame: pd.DataFrame, config: dict[str, Any]) -
 def prepare_frame(frame: pd.DataFrame) -> pd.DataFrame:
     result = frame.copy()
     result["symbol"] = result["symbol"].astype(str)
-    result["date"] = pd.to_datetime(result["date"], errors="coerce")
+    result["date"] = parse_dates(result["date"])
     numeric_columns = [
         "open",
         "high",

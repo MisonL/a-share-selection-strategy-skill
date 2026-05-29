@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sys
 import unittest
 from pathlib import Path
@@ -12,11 +11,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import score_candidates as scorer  # noqa: E402
 import stock_selection_config  # noqa: E402
-from test_stock_selection_scripts import build_frame  # noqa: E402
-
-
-def load_config(name: str) -> dict:
-    return json.loads((SCRIPTS / name).read_text(encoding="utf-8"))
+from helpers import build_frame, load_config  # noqa: E402
 
 
 class StockSelectionConfigTests(unittest.TestCase):

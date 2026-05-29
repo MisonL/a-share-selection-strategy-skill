@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: python -m pip install -r requirements-parquet.txt
+      - name: Validate JSON files
+        run: |
+          python -m json.tool evals/evals.json >/tmp/stock-selection-evals.json
+          python -m json.tool scripts/example_config.json >/tmp/stock-selection-example-config.json
+          python -m json.tool scripts/qsss_profile_config.json >/tmp/stock-selection-qsss-config.json
+      - name: Validate agent manifest
+        run: |
+          python - <<'PY'
+          import yaml
+          from pathlib import Path
+          assert yaml.safe_load(Path("agents/openai.yaml").read_text())["interface"]["display_name"]
+          PY
+      - name: Compile scripts
+        run: |
+          PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python -m py_compile \
+            scripts/create_demo_data.py \
+            scripts/validate_ohlcv.py \
+            scripts/score_candidates.py \
+            scripts/stock_selection_config.py \
+            scripts/stock_selection_data.py \
+            scripts/stock_selection_metrics.py \
+            scripts/stock_selection_output.py \
+            scripts/stock_selection_profile.py \
+            scripts/stock_selection_universe.py \
+            scripts/stock_selection_diagnostics.py
+      - name: Run tests
+        run: PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s tests -v

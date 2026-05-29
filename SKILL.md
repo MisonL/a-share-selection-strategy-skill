@@ -51,9 +51,11 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 
 | 数据源 | 常见原字段 | 映射到本 Skill |
 |--------|------------|----------------|
-| akshare A 股中文列 | `日期`、`股票代码`、`开盘`、`最高`、`最低`、`收盘`、`成交量`、`换手率` | `date`、`symbol`、`open`、`high`、`low`、`close`、`volume`、`turn` |
-| tushare | `ts_code`、`trade_date`、`open`、`high`、`low`、`close`、`vol`、`turnover_rate` | 去掉 `.SZ`/`.SH` 后写入 `symbol`，`trade_date` 写入 `date`，`vol` 写入 `volume`，`turnover_rate` 写入 `turn` |
+| akshare A 股中文列 | `日期`、`股票代码`、`开盘`、`最高`、`最低`、`收盘`、`成交量`、`成交额`、`换手率` | `date`、`symbol`、`open`、`high`、`low`、`close`、`volume`、`amount`、`turn` |
+| tushare | `ts_code`、`trade_date`、`open`、`high`、`low`、`close`、`vol`、`amount`、`turnover_rate` | 去掉 `.SZ`/`.SH` 后写入 `symbol`，`trade_date` 写入 `date`，`vol` 写入 `volume`，`amount` 写入 `amount`，`turnover_rate` 写入 `turn` |
 | yfinance | `Date`、`Symbol`、`Open`、`High`、`Low`、`Close`、`Volume` | `date`、`symbol`、`open`、`high`、`low`、`close`、`volume` |
+
+akshare 的 `成交量` 才能映射为 `volume`；`成交额` 只能映射为可选字段 `amount`，不得映射为 `volume`。
 
 yfinance 映射后只满足通用 OHLCV；若用于 QSSS-derived，还必须外部补齐 `market=A-share`、真实上游 `prediction_score`、以及 `turn` 或 `turnover`，不能从 yfinance OHLCV 自动推断。不要把 `Adj Close` 静默替换为 `close`；如使用复权价，必须在数据说明或旁路元数据中记录复权口径。多源合并时只能保留一个预测列；若同时出现 `prediction` 和 `prediction_score`，先生成统一的 `prediction_score = coalesce(prediction_score, prediction)` 后再运行脚本。
 
@@ -78,7 +80,25 @@ uv run --with pandas --with numpy python scripts/score_candidates.py --input /tm
 uv run --with pandas --with numpy python scripts/score_candidates.py --input /tmp/stock-selection-demo/prices_with_prediction.csv --config scripts/qsss_profile_config.json --output /tmp/stock-selection-demo/qsss_candidates.csv
 ```
 
-脚本只处理本地文件，不联网取数，不调用券商接口，不生成交易指令。运行脚本需要当前 Python 环境已安装 `pandas` 和 `numpy`；没有 `uv` 时先创建虚拟环境并安装这两个依赖。若输入是 Parquet 文件，还需要可用的 Parquet 引擎，例如 `pyarrow` 或 `fastparquet`。`validate_ohlcv.py --config` 会在基础 OHLCV 校验之外检查 profile 专属字段。
+`create_demo_data.py` 只依赖标准库，可以直接用裸 `python3` 运行；`validate_ohlcv.py`、`score_candidates.py` 和测试需要 `uv --with pandas --with numpy`，或使用已安装依赖的虚拟环境。没有 `uv` 时可运行 `python3 -m venv /tmp/stock-selection-skill-venv`，再用 `/tmp/stock-selection-skill-venv/bin/python -m pip install -r requirements.txt` 安装基础依赖。若输入是 Parquet 文件，还需要可用的 Parquet 引擎，例如 `pyarrow` 或 `fastparquet`；可安装 `requirements-parquet.txt`。
+
+Parquet smoke 示例：
+
+```bash
+uv run --with pandas --with numpy --with pyarrow python - <<'PY'
+from pathlib import Path
+import pandas as pd
+base = Path("/tmp/stock-selection-demo")
+pd.read_csv(base / "prices.csv", dtype={"symbol": str}).to_parquet(
+    base / "prices.parquet",
+    index=False,
+)
+PY
+uv run --with pandas --with numpy --with pyarrow python scripts/validate_ohlcv.py --input /tmp/stock-selection-demo/prices.parquet
+uv run --with pandas --with numpy --with pyarrow python scripts/score_candidates.py --input /tmp/stock-selection-demo/prices.parquet --config scripts/example_config.json --output /tmp/stock-selection-demo/candidates_parquet.csv
+```
+
+脚本只处理本地文件，不联网取数，不调用券商接口，不生成交易指令。`validate_ohlcv.py --config` 会在基础 OHLCV 校验之外检查 profile 专属字段。
 
 使用 `qsss_profile_config.json` 时，输入必须包含 `market` 列，且 A 股记录使用 `A-share`；同时必须包含 `prediction` 或 `prediction_score` 列，且取值在 0 到 1 之间。该列表示上游模型已经算好的上涨概率；脚本不会用动量分伪造机器学习预测。脚本只复刻评分消费层；若要复刻 QSSS 的 ML prediction 生成器，需要在上游按本节 ML 口径处理 `0 -> NaN`、特征标准化和 LightGBM 训练。
 

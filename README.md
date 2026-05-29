@@ -18,16 +18,23 @@
 
 ```text
 stock-selection-strategy-skill/
+|-- .github/
+|   `-- workflows/
+|       `-- ci.yml
 |-- agents/
 |   `-- openai.yaml
 |-- SKILL.md
 |-- README.md
 |-- evals/
 |   `-- evals.json
+|-- requirements.txt
+|-- requirements-parquet.txt
 |-- tests/
 |   |-- helpers.py
 |   |-- test_stock_selection_config.py
+|   |-- test_stock_selection_parquet_cli.py
 |   |-- test_stock_selection_profile_gates.py
+|   |-- test_stock_selection_strict_cli.py
 |   `-- test_stock_selection_scripts.py
 `-- scripts/
     |-- example_config.json
@@ -50,11 +57,11 @@ stock-selection-strategy-skill/
 
 ```bash
 python3 -m venv /tmp/stock-selection-skill-venv
-/tmp/stock-selection-skill-venv/bin/python -m pip install pandas numpy pyyaml
+/tmp/stock-selection-skill-venv/bin/python -m pip install -r requirements.txt
 ```
 
 使用备用虚拟环境时，将下文 `uv run --with ... python` 替换为 `/tmp/stock-selection-skill-venv/bin/python`。
-读取 Parquet 输入还需要安装 `pyarrow` 或 `fastparquet`；只处理 CSV 时不需要额外 Parquet 引擎。
+读取 Parquet 输入还需要安装 `pyarrow` 或 `fastparquet`；只处理 CSV 时不需要额外 Parquet 引擎。无 `uv` 且需要 Parquet 时，使用 `/tmp/stock-selection-skill-venv/bin/python -m pip install -r requirements-parquet.txt`。
 
 本仓库以 CLI 脚本为稳定入口。若在 Python 代码中复用脚本，请将 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`；仓库当前不提供可安装 Python package。
 
@@ -102,7 +109,27 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
   --output /tmp/stock-selection-demo/qsss_candidates.csv
 ```
 
-### 5. 可选：校验 Skill 结构
+### 5. 可选：读取 Parquet 输入
+
+```bash
+uv run --with pandas --with numpy --with pyarrow python - <<'PY'
+from pathlib import Path
+import pandas as pd
+base = Path("/tmp/stock-selection-demo")
+pd.read_csv(base / "prices.csv", dtype={"symbol": str}).to_parquet(
+    base / "prices.parquet",
+    index=False,
+)
+PY
+uv run --with pandas --with numpy --with pyarrow python scripts/validate_ohlcv.py \
+  --input /tmp/stock-selection-demo/prices.parquet
+uv run --with pandas --with numpy --with pyarrow python scripts/score_candidates.py \
+  --input /tmp/stock-selection-demo/prices.parquet \
+  --config scripts/example_config.json \
+  --output /tmp/stock-selection-demo/candidates_parquet.csv
+```
+
+### 6. 可选：校验 Skill 结构
 
 `quick_validate.py` 来自本机安装的 skill-creator 工具，不随本仓库发布。维护者或 Skill 开发者可运行该检查；第三方环境没有校验器时可跳过。把下面的 `QUICK_VALIDATE` 替换为你机器上的校验器路径：
 
@@ -135,7 +162,7 @@ QSSS-derived 配置要求输入包含 `market` 列，且 A 股记录使用 `A-sh
 
 输入约定：`symbol` 必须按文本保存以保留前导零；校验脚本会拒绝 1 到 3 位纯数字代码，避免把 `000001` 这类 A 股代码被表格软件损坏后的值当作有效输入。`date` 支持 `YYYY-MM-DD` 或 `YYYYMMDD`；`volume` 单位必须在同一文件内保持一致，脚本只能校验数值和非负，无法从纯数值可靠判断“股/手/张/成交额”是否混用。QSSS-derived 的 `market` 只接受精确值 `A-share`，不会自动归一化 `A股`、`China` 等别名。
 
-常见字段映射：akshare 中文列需映射为 `股票代码 -> symbol`、`日期 -> date`、`成交量 -> volume`、`换手率 -> turn`；tushare 需将 `ts_code` 去掉 `.SZ`/`.SH` 后写入 `symbol`，`trade_date -> date`，`vol -> volume`，`turnover_rate -> turn`；yfinance 需将 `Date/Symbol/Open/High/Low/Close/Volume` 映射为小写标准字段。yfinance 映射后只满足通用 OHLCV；若用于 QSSS-derived，还必须外部补齐 `market=A-share`、真实上游 `prediction_score`、以及 `turn` 或 `turnover`，不能从 yfinance OHLCV 自动推断。不要把 `Adj Close` 静默替换为 `close`；使用复权价时要记录复权口径。多源合并时统一保留一个预测列，推荐先生成 `prediction_score = coalesce(prediction_score, prediction)`。
+常见字段映射：akshare 中文列需映射为 `股票代码 -> symbol`、`日期 -> date`、`成交量 -> volume`、`成交额 -> amount`、`换手率 -> turn`，其中 `成交额` 不得映射为 `volume`；tushare 需将 `ts_code` 去掉 `.SZ`/`.SH` 后写入 `symbol`，`trade_date -> date`，`vol -> volume`，`amount -> amount`，`turnover_rate -> turn`；yfinance 需将 `Date/Symbol/Open/High/Low/Close/Volume` 映射为小写标准字段。yfinance 映射后只满足通用 OHLCV；若用于 QSSS-derived，还必须外部补齐 `market=A-share`、真实上游 `prediction_score`、以及 `turn` 或 `turnover`，不能从 yfinance OHLCV 自动推断。不要把 `Adj Close` 静默替换为 `close`；使用复权价时要记录复权口径。多源合并时统一保留一个预测列，推荐先生成 `prediction_score = coalesce(prediction_score, prediction)`。
 
 `score_candidates.py` 的 CLI 摘要会报告输入文件名、`input_symbols`、股票池过滤、历史不足、输入异常、单股失败、阈值过滤、`turnover_assumption`、`effective_empty_result`、`empty_result_reason` 和最终候选数量。股票池过滤包含 `market_filtered_symbols`、`prefix_allow_filtered_symbols`、`prefix_excluded_symbols` 分项。`threshold_failures` 是各阈值独立失败计数，不是互斥分类，不能和 `threshold_failed_symbols` 相加对账。QSSS-derived 路径还会标记 `prediction_source=external_unverified`，表示脚本只消费上游预测，不验证该列是否由真实 LightGBM 链路生成。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。
 
@@ -220,7 +247,7 @@ from pathlib import Path
 assert yaml.safe_load(Path("agents/openai.yaml").read_text())["interface"]["display_name"]
 PY
 PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/create_demo_data.py scripts/validate_ohlcv.py scripts/score_candidates.py scripts/stock_selection_config.py scripts/stock_selection_data.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_profile.py scripts/stock_selection_universe.py scripts/stock_selection_diagnostics.py
-PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy python -m unittest discover -s tests -v
+PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy --with pyarrow python -m unittest discover -s tests -v
 # 或使用备用虚拟环境:
 PYTHONDONTWRITEBYTECODE=1 /tmp/stock-selection-skill-venv/bin/python -m unittest discover -s tests -v
 ```

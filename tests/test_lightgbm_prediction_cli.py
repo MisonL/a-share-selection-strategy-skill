@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr
 from io import StringIO
+import json
 from pathlib import Path
 
 import numpy as np
@@ -80,6 +81,13 @@ class LightgbmPredictionCliTests(unittest.TestCase):
             load_config("qsss_profile_config.json"),
         )
         self.assertEqual(2, score_summary["scored_symbols"])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            summary_path = Path(tmpdir) / "summary.json"
+            generator.write_json_summary(summary, summary_path)
+            saved = json.loads(summary_path.read_text(encoding="utf-8"))
+        self.assertEqual(2, len(saved["symbols"]))
+        self.assertEqual("predicted", saved["symbols"][0]["status"])
+        self.assertGreater(saved["symbols"][0]["train_rows"], 0)
 
     def test_cli_reports_missing_lightgbm_dependency_without_output(self) -> None:
         frame = build_frame(days=180, include_turn=True)

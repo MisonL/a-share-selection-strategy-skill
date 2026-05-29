@@ -32,8 +32,10 @@ stock-selection-strategy-skill/
 |-- requirements-ml.txt
 |-- tests/
 |   |-- helpers.py
+|   |-- test_fetch_baostock_a_share.py
 |   |-- test_buy_hold_backtest_cli.py
 |   |-- test_lightgbm_prediction_cli.py
+|   |-- test_slice_prices_as_of.py
 |   |-- test_stock_selection_config.py
 |   |-- test_stock_selection_parquet_cli.py
 |   |-- test_stock_selection_profile_gates.py
@@ -43,12 +45,15 @@ stock-selection-strategy-skill/
     |-- example_config.json
     |-- backtest_buy_hold.py
     |-- create_demo_data.py
+    |-- fetch_baostock_a_share.py
     |-- generate_lightgbm_predictions.py
+    |-- slice_prices_as_of.py
     |-- qsss_profile_config.json
     |-- score_candidates.py
     |-- stock_selection_config.py
     |-- stock_selection_data.py
     |-- stock_selection_diagnostics.py
+    |-- lightgbm_prediction_summary.py
     |-- stock_selection_metrics.py
     |-- stock_selection_output.py
     |-- stock_selection_profile.py
@@ -175,6 +180,46 @@ uv run --with pandas --with numpy --with scikit-learn --with lightgbm \
   --output /tmp/stock-selection-ml-demo/prices_generated_prediction.csv
 ```
 
+真实 A 股行情可先落地为本地文件，再进入同一链路。下面示例使用 baostock，输出行情 CSV 和元数据 JSON；真实环境失败时命令会非 0，不应改用 mock 数据：
+
+```bash
+uv run --with pandas --with numpy --with baostock python scripts/fetch_baostock_a_share.py \
+  --symbols 000001,600000 \
+  --start-date 2024-01-01 \
+  --end-date 2026-05-29 \
+  --output /tmp/stock-selection-a-share/prices.csv \
+  --metadata-output /tmp/stock-selection-a-share/metadata.json \
+  --fail-on-fetch-error
+```
+
+真实回测必须先按信号日截断评分输入，避免用未来行情生成候选；回测价格文件可以保留信号日之后的真实行用于出场：
+
+```bash
+uv run --with pandas --with numpy python scripts/slice_prices_as_of.py \
+  --input /tmp/stock-selection-a-share/prices.csv \
+  --output /tmp/stock-selection-a-share/prices_signal_window.csv \
+  --as-of-date 2026-05-20
+uv run --with-requirements requirements-ml.txt python scripts/generate_lightgbm_predictions.py \
+  --input /tmp/stock-selection-a-share/prices_signal_window.csv \
+  --output /tmp/stock-selection-a-share/predictions_signal_window.csv \
+  --summary-output /tmp/stock-selection-a-share/prediction_summary.json
+uv run --with pandas --with numpy python scripts/validate_ohlcv.py \
+  --input /tmp/stock-selection-a-share/predictions_signal_window.csv \
+  --config scripts/qsss_profile_config.json
+uv run --with pandas --with numpy python scripts/score_candidates.py \
+  --input /tmp/stock-selection-a-share/predictions_signal_window.csv \
+  --config scripts/qsss_profile_config.json \
+  --output /tmp/stock-selection-a-share/qsss_candidates.csv \
+  --fail-on-skipped \
+  --fail-on-empty-result
+uv run --with pandas --with numpy python scripts/backtest_buy_hold.py \
+  --prices /tmp/stock-selection-a-share/prices.csv \
+  --candidates /tmp/stock-selection-a-share/qsss_candidates.csv \
+  --output /tmp/stock-selection-a-share/qsss_backtest.csv \
+  --hold-days 5 \
+  --fail-on-incomplete
+```
+
 如果需要最小 buy-hold 基线回测，可使用 `backtest_buy_hold.py`。它只做信号日收盘价到未来第 N 个可用交易行收盘价的 close-to-close 基线，不扣交易成本、不模拟滑点、不判断涨跌停或停牌可交易性：
 
 ```bash
@@ -285,7 +330,7 @@ import yaml
 from pathlib import Path
 assert yaml.safe_load(Path("agents/openai.yaml").read_text())["interface"]["display_name"]
 PY
-PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/create_demo_data.py scripts/validate_ohlcv.py scripts/score_candidates.py scripts/generate_lightgbm_predictions.py scripts/backtest_buy_hold.py scripts/stock_selection_config.py scripts/stock_selection_data.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_profile.py scripts/stock_selection_universe.py scripts/stock_selection_diagnostics.py
+PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/create_demo_data.py scripts/validate_ohlcv.py scripts/score_candidates.py scripts/generate_lightgbm_predictions.py scripts/backtest_buy_hold.py scripts/fetch_baostock_a_share.py scripts/slice_prices_as_of.py scripts/stock_selection_config.py scripts/stock_selection_data.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_profile.py scripts/stock_selection_universe.py scripts/stock_selection_diagnostics.py scripts/lightgbm_prediction_summary.py
 PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy --with pyarrow python -m unittest discover -s tests -v
 # 或使用备用虚拟环境:
 PYTHONDONTWRITEBYTECODE=1 /tmp/stock-selection-skill-venv/bin/python -m unittest discover -s tests -v

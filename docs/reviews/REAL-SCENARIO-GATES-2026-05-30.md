@@ -92,6 +92,28 @@
 - 该脚本不覆盖交易成本、滑点、涨跌停、停牌可交易性或组合资金曲线。
 - 真实通过仍需要用真实候选 CSV 和真实 OHLCV 文件运行，并记录退出码、输出和缺数据数量。
 
+## 场景 U: baostock A 股全链路
+
+状态: 真实行情取数、LightGBM 生成、QSSS 最新日评分已通过；信号日防泄漏 strict 评分门禁正确失败。
+
+证据:
+
+- `fetch_baostock_a_share.py --symbols 000001,600000 --start-date 2024-01-01 --end-date 2026-05-29 --adjust 3` 返回 0。
+- 输出 `/tmp/stock-selection-baostock-script-local/prices.csv` 共 1160 行、2 个 symbol；每只股票 580 行，日期范围为 `2024-01-02` 到 `2026-05-29`。
+- 原始行情直接跑 `validate_ohlcv.py --config scripts/qsss_profile_config.json` 返回 1，错误为缺少 `prediction` 或 `prediction_score`，符合 QSSS-derived 门禁预期。
+- `generate_lightgbm_predictions.py --summary-output /tmp/stock-selection-baostock-script-local/prediction_summary.json` 返回 0，`predicted_symbols=2`、`skipped_symbols=0`，stderr 为空。
+- 真实 baostock 行情生成的 `prediction_score` 范围为 `0.3380476516805921` 到 `0.7682771131802957`；summary 记录 `000001` 和 `600000` 的 `train_rows=364`。
+- 生成结果通过 `validate_ohlcv.py --config scripts/qsss_profile_config.json`，再进入 QSSS-derived 评分，输出 `scored_symbols=2`、`candidates=1`、`threshold_failures=min_prediction_score:1`。
+- 使用 `slice_prices_as_of.py --as-of-date 2026-05-20` 截断信号窗口后重新生成 prediction 和评分，strict QSSS 评分返回 3，`effective_empty_result=true`，原因是 `threshold_filtered_all`。这说明信号日防泄漏协议生效，且当前真实两票在该信号日没有可进入回测的 QSSS 候选。
+- 为单独验证回测脚本与真实 OHLCV 的兼容性，人工构造 `2026-05-20` 候选后运行 `backtest_buy_hold.py --hold-days 5 --fail-on-incomplete` 返回 0，`completed_trades=2`、`incomplete_trades=0`，收益范围为 `-0.0009285051067781` 到 `0.0548098434004473`。
+
+边界:
+
+- 最新日 QSSS 评分产生 1 个候选，但没有未来价格，不能用于同日 buy-hold 完成路径。
+- 信号日截断后的 strict QSSS 评分无候选，因此真实策略候选回测仍未产生收益结果。
+- 人工候选回测只证明 `backtest_buy_hold.py` 能消费真实 A 股 OHLCV，不证明策略候选收益。
+- baostock 复权口径为 `adjustflag=3`，后续报告必须继续记录复权口径。
+
 ## 当前结论
 
 已证明:
@@ -102,10 +124,12 @@
 - akshare A 股真实源在本次环境可拉取并映射到本地文件后进入校验和评分。
 - LightGBM prediction 生成器的本地契约、失败边界和合成 demo 真模型运行链路。
 - buy-hold 基线回测脚本的本地契约和失败边界。
+- baostock A 股真实行情落地、真实 LightGBM prediction 生成、QSSS 最新日评分链路。
+- 信号日截断防未来泄漏门禁。
 
 仍未证明:
 
 - yfinance/Yahoo 在当前环境可稳定取数。
-- 真实 LightGBM 在真实行情上的 prediction 生成链路。
-- 真实候选和真实行情上的 buy-hold 回测结果。
+- 信号日截断后产生可回测的真实 QSSS 候选。
+- 真实 QSSS 候选和真实行情上的 buy-hold 收益结果。
 - 完整 CI 远端运行结果。

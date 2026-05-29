@@ -13,6 +13,12 @@ import numpy as np
 import pandas as pd
 
 from stock_selection_data import parse_dates, read_table
+from lightgbm_prediction_summary import (
+    build_summary,
+    skipped_summary,
+    symbol_summary,
+    write_json_summary,
+)
 from stock_selection_metrics import calculate_macd, calculate_rsi
 from validate_ohlcv import validate_frame
 
@@ -48,6 +54,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--horizon", type=int, default=5, help="Forward return horizon.")
     parser.add_argument("--train-ratio", type=float, default=0.8)
     parser.add_argument("--min-history-rows", type=int, default=150)
+    parser.add_argument("--summary-output", help="Optional JSON summary output path.")
     parser.add_argument("--fail-on-skipped", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -66,6 +73,8 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 3
         write_output(result, Path(args.output))
+        if args.summary_output:
+            write_json_summary(summary, Path(args.summary_output))
     except Exception as exc:  # noqa: BLE001
         print(
             "ERROR: code=bad_input "
@@ -93,18 +102,31 @@ def generate_predictions(
     prepared = prepare_frame(frame)
     outputs = []
     skipped = []
+    symbol_summaries = []
     for symbol, group in prepared.groupby("symbol", sort=False):
         if len(group) < min_history_rows:
+            reason = "insufficient_history"
             skipped.append(str(symbol))
+            symbol_summaries.append(skipped_summary(group, reason))
             continue
         try:
-            outputs.append(predict_symbol(group, horizon, train_ratio, model_deps))
+            output, symbol_summary = predict_symbol(group, horizon, train_ratio, model_deps)
+            outputs.append(output)
+            symbol_summaries.append(symbol_summary)
         except Exception as exc:  # noqa: BLE001
             skipped.append(f"{symbol}:{exc}")
+            symbol_summaries.append(skipped_summary(group, str(exc)))
     if not outputs:
         raise ValueError(f"no symbols predicted; skipped_symbols={','.join(skipped)}")
     result = pd.concat(outputs, ignore_index=True)
-    return result, build_summary(prepared, result, skipped, horizon, train_ratio)
+    return result, build_summary(
+        prepared,
+        result,
+        skipped,
+        horizon,
+        train_ratio,
+        symbol_summaries,
+    )
 
 
 def validate_options(horizon: int, train_ratio: float, min_history_rows: int) -> None:
@@ -146,7 +168,7 @@ def predict_symbol(
     horizon: int,
     train_ratio: float,
     model_deps: dict[str, Any],
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, dict[str, Any]]:
     features = build_feature_frame(group, horizon)
     trainable = features.dropna(subset=[*FEATURE_COLUMNS, "target_return"])
     if len(trainable) < 50:
@@ -163,7 +185,13 @@ def predict_symbol(
     latest = features.dropna(subset=FEATURE_COLUMNS).iloc[[-1]]
     x_latest = scaled_frame(scaler.transform(latest[FEATURE_COLUMNS]), latest.index)
     probability = float(model.predict_proba(x_latest)[0][1])
-    return with_prediction(group, probability, horizon)
+    return with_prediction(group, probability, horizon), symbol_summary(
+        group,
+        trainable,
+        train_size,
+        probability,
+        horizon,
+    )
 
 
 def scaled_frame(values: Any, index: pd.Index) -> pd.DataFrame:
@@ -207,23 +235,6 @@ def with_prediction(group: pd.DataFrame, probability: float, horizon: int) -> pd
     output["prediction_model"] = "lightgbm"
     output["prediction_scope"] = "latest_probability_repeated_for_scoring"
     return output
-
-
-def build_summary(
-    prepared: pd.DataFrame,
-    result: pd.DataFrame,
-    skipped: list[str],
-    horizon: int,
-    train_ratio: float,
-) -> dict[str, Any]:
-    return {
-        "raw_symbols": int(prepared["symbol"].nunique()),
-        "predicted_symbols": int(result["symbol"].nunique()),
-        "skipped_symbols": len(skipped),
-        "skipped_symbol_examples": skipped[:10],
-        "horizon": horizon,
-        "train_ratio": train_ratio,
-    }
 
 
 def write_output(frame: pd.DataFrame, path: Path) -> None:

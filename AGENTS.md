@@ -12,7 +12,7 @@
 
 - `symbol` 必须按文本保存，避免前导零丢失。
 - `date` 支持 `YYYY-MM-DD` 或 `YYYYMMDD`。
-- `volume` 单位必须在同一文件内一致。
+- `volume` 单位必须在同一文件内一致；脚本无法从纯数值可靠识别股、手、张或成交额混用。
 - QSSS-derived 输入必须包含 `market=A-share`、`prediction` 或 `prediction_score`，以及 `turn` 或 `turnover`。
 
 ## 验证命令
@@ -21,6 +21,11 @@
 python3 -m json.tool evals/evals.json >/tmp/stock-selection-evals.json
 python3 -m json.tool scripts/example_config.json >/tmp/stock-selection-example-config.json
 python3 -m json.tool scripts/qsss_profile_config.json >/tmp/stock-selection-qsss-config.json
+uv run --with pyyaml python - <<'PY'
+import yaml
+from pathlib import Path
+assert yaml.safe_load(Path("agents/openai.yaml").read_text())["interface"]["display_name"]
+PY
 PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/validate_ohlcv.py scripts/score_candidates.py scripts/stock_selection_config.py scripts/stock_selection_data.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_diagnostics.py
 PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy python -m unittest discover -s tests -v
 ```

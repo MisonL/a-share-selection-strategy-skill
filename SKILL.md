@@ -61,11 +61,12 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 
 ```bash
 python3 scripts/validate_ohlcv.py --input prices.csv
+python3 scripts/validate_ohlcv.py --input prices_with_prediction.csv --config scripts/qsss_profile_config.json
 python3 scripts/score_candidates.py --input prices.csv --config scripts/example_config.json --output candidates.csv
 python3 scripts/score_candidates.py --input prices_with_prediction.csv --config scripts/qsss_profile_config.json --output qsss_candidates.csv
 ```
 
-脚本只处理本地文件，不联网取数，不调用券商接口，不生成交易指令。运行脚本需要当前 Python 环境已安装 `pandas` 和 `numpy`。若输入是 Parquet 文件，还需要可用的 Parquet 引擎，例如 `pyarrow` 或 `fastparquet`。
+脚本只处理本地文件，不联网取数，不调用券商接口，不生成交易指令。运行脚本需要当前 Python 环境已安装 `pandas` 和 `numpy`。若输入是 Parquet 文件，还需要可用的 Parquet 引擎，例如 `pyarrow` 或 `fastparquet`。`validate_ohlcv.py --config` 会在基础 OHLCV 校验之外检查 profile 专属字段。
 
 使用 `qsss_profile_config.json` 时，输入必须包含 `market` 列，且 A 股记录使用 `A-share`；同时必须包含 `prediction` 或 `prediction_score` 列，且取值在 0 到 1 之间。该列表示上游模型已经算好的上涨概率；脚本不会用动量分伪造机器学习预测。脚本只复刻评分消费层；若要复刻 QSSS 的 ML prediction 生成器，需要在上游按本节 ML 口径处理 `0 -> NaN`、特征标准化和 LightGBM 训练。
 
@@ -92,8 +93,9 @@ python3 scripts/score_candidates.py --input prices_with_prediction.csv --config 
 字段口径：
 
 - `symbol` 必须按文本保存，避免 Excel 或 CSV 推断把 `000002` 变成 `2`。
+- 校验脚本会拒绝 1 到 3 位纯数字 `symbol`，用于捕获常见前导零损坏；其他市场代码仍需按对应市场规则人工确认。
 - `date` 支持 `YYYY-MM-DD` 或 `YYYYMMDD`，其他格式需要先标准化。
-- `volume` 单位必须在同一文件内一致；不要混用股、手、张或成交额。
+- `volume` 单位必须在同一文件内一致；不要混用股、手、张或成交额。脚本只能校验数值和非负，无法从纯数值可靠判断单位是否混用。
 - QSSS-derived 的 `market` 必须使用精确值 `A-share`；不会自动归一化 `A股`、`China` 等别名。
 
 ### 可选增强字段

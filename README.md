@@ -27,6 +27,7 @@ stock-selection-strategy-skill/
 |-- tests/
 |   |-- helpers.py
 |   |-- test_stock_selection_config.py
+|   |-- test_stock_selection_profile_gates.py
 |   `-- test_stock_selection_scripts.py
 `-- scripts/
     |-- example_config.json
@@ -75,6 +76,14 @@ Skill is valid!
 uv run --with pandas --with numpy python scripts/validate_ohlcv.py --input prices.csv
 ```
 
+如需按某个评分配置同步检查 profile 专属字段，可传入 `--config`。例如 QSSS-derived 会额外检查 `market`、`prediction` 或 `prediction_score`、`turn` 或 `turnover`：
+
+```bash
+uv run --with pandas --with numpy python scripts/validate_ohlcv.py \
+  --input prices_with_prediction.csv \
+  --config scripts/qsss_profile_config.json
+```
+
 最小字段要求：
 
 | 字段 | 含义 |
@@ -107,7 +116,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
 
 QSSS-derived 配置要求输入包含 `market` 列，且 A 股记录使用 `A-share`；同时必须包含 `prediction` 或 `prediction_score` 列，取值范围为 0 到 1。该列表示上游模型已经生成的上涨概率；评分脚本不会训练 LightGBM，也不会用动量分伪造机器学习预测。
 
-输入约定：`symbol` 必须按文本保存以保留前导零；`date` 支持 `YYYY-MM-DD` 或 `YYYYMMDD`；`volume` 单位必须在同一文件内保持一致；QSSS-derived 的 `market` 只接受精确值 `A-share`，不会自动归一化 `A股`、`China` 等别名。
+输入约定：`symbol` 必须按文本保存以保留前导零；校验脚本会拒绝 1 到 3 位纯数字代码，避免把 `000001` 这类 A 股代码被表格软件损坏后的值当作有效输入。`date` 支持 `YYYY-MM-DD` 或 `YYYYMMDD`；`volume` 单位必须在同一文件内保持一致，脚本只能校验数值和非负，无法从纯数值可靠判断“股/手/张/成交额”是否混用。QSSS-derived 的 `market` 只接受精确值 `A-share`，不会自动归一化 `A股`、`China` 等别名。
 
 `score_candidates.py` 的 CLI 摘要会报告输入文件名、股票池过滤、历史不足、输入异常、单股失败、阈值过滤、`turnover_assumption`、`effective_empty_result` 和最终候选数量。QSSS-derived 路径还会标记 `prediction_source=external_unverified`，表示脚本只消费上游预测，不验证该列是否由真实 LightGBM 链路生成。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。
 
@@ -175,6 +184,11 @@ uv run --with pyyaml python "$QUICK_VALIDATE" "$(pwd)"
 python3 -m json.tool evals/evals.json >/tmp/stock-selection-evals.json
 python3 -m json.tool scripts/example_config.json >/tmp/stock-selection-example-config.json
 python3 -m json.tool scripts/qsss_profile_config.json >/tmp/stock-selection-qsss-config.json
+uv run --with pyyaml python - <<'PY'
+import yaml
+from pathlib import Path
+assert yaml.safe_load(Path("agents/openai.yaml").read_text())["interface"]["display_name"]
+PY
 PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/validate_ohlcv.py scripts/score_candidates.py scripts/stock_selection_config.py scripts/stock_selection_data.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_diagnostics.py
 PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy python -m unittest discover -s tests -v
 ```

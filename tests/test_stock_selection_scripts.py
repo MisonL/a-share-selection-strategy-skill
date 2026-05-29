@@ -58,6 +58,12 @@ class StockSelectionScriptTests(unittest.TestCase):
             loaded = validate_ohlcv.read_table(path)
         self.assertEqual("000002", loaded["symbol"].iloc[0])
 
+    def test_validate_rejects_numeric_damaged_symbol(self) -> None:
+        frame = build_frame()
+        frame["symbol"] = "1"
+        errors = validate_ohlcv.validate_frame(frame, min_history_rows=120)
+        self.assertIn("preserve leading zeros as text", "; ".join(errors))
+
     def test_yyyymmdd_dates_are_parsed_as_calendar_dates(self) -> None:
         config = load_config("example_config.json")
         frame = build_frame()
@@ -92,6 +98,15 @@ class StockSelectionScriptTests(unittest.TestCase):
         config = load_config("example_config.json")
         frame = build_frame()
         frame = pd.concat([frame, frame.iloc[[0]]], ignore_index=True)
+        with self.assertRaisesRegex(ValueError, "duplicate symbol/date rows"):
+            scorer.score_candidates(frame, config)
+
+    def test_score_rejects_duplicate_calendar_date_formats(self) -> None:
+        config = load_config("example_config.json")
+        frame = build_frame()
+        duplicate = frame.iloc[[0]].copy()
+        duplicate["date"] = pd.to_datetime(duplicate["date"]).dt.strftime("%Y%m%d")
+        frame = pd.concat([frame, duplicate], ignore_index=True)
         with self.assertRaisesRegex(ValueError, "duplicate symbol/date rows"):
             scorer.score_candidates(frame, config)
 

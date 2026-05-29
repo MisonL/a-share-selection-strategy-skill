@@ -22,7 +22,7 @@ from stock_selection_diagnostics import (
     threshold_masks,
 )
 from stock_selection_metrics import is_qsss_mode, score_symbol
-from validate_ohlcv import validate_frame
+from validate_ohlcv import validate_frame, validate_history
 
 
 BASE_COLUMNS = ["symbol", "date", "open", "high", "low", "close", "volume"]
@@ -90,13 +90,15 @@ def score_candidates(
     frame: pd.DataFrame, config: dict[str, Any]
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     validate_input_frame(frame, config)
-    validate_prediction_values(frame)
     validate_profile_requirements(frame, config)
     prepared = prepare_frame(frame)
     raw_symbols = int(frame["symbol"].astype(str).nunique())
     if prepared.empty and raw_symbols:
         raise ValueError("no valid rows after basic data cleaning")
+    validate_qsss_symbols(prepared, config)
     input_frame = apply_universe_filter(prepared, config)
+    validate_prediction_values(input_frame)
+    validate_filtered_history(input_frame, config)
     scored_rows, failed_symbols, short_symbols = score_groups(input_frame, config)
     scored = pd.DataFrame(scored_rows)
     summary = build_summary(
@@ -161,8 +163,14 @@ def score_groups(
 
 
 def validate_input_frame(frame: pd.DataFrame, config: dict[str, Any]) -> None:
+    errors = validate_frame(frame, min_history_rows=0)
+    if errors:
+        raise ValueError("; ".join(errors))
+
+
+def validate_filtered_history(frame: pd.DataFrame, config: dict[str, Any]) -> None:
     min_history = int(config["thresholds"].get("min_history_rows", 120))
-    errors = validate_frame(frame, min_history_rows=min_history)
+    errors = list(validate_history(frame, min_history_rows=min_history))
     if errors:
         raise ValueError("; ".join(errors))
 
@@ -197,6 +205,22 @@ def validate_profile_requirements(frame: pd.DataFrame, config: dict[str, Any]) -
         raise ValueError("qsss-derived score mode requires turn or turnover column")
 
 
+def validate_qsss_symbols(frame: pd.DataFrame, config: dict[str, Any]) -> None:
+    if not is_qsss_mode(config) or "market" not in frame.columns:
+        return
+    market = str(config.get("universe", {}).get("market", ""))
+    if not market:
+        return
+    market_frame = frame[frame["market"].astype(str) == market]
+    invalid = ~market_frame["symbol"].astype(str).str.fullmatch(r"\d{6}")
+    invalid_count = int(invalid.sum())
+    if invalid_count:
+        raise ValueError(
+            f"qsss-derived A-share symbols must be six digits; "
+            f"invalid_symbols={invalid_count}"
+        )
+
+
 def prepare_frame(frame: pd.DataFrame) -> pd.DataFrame:
     result = frame.copy()
     result["symbol"] = result["symbol"].astype(str)
@@ -218,7 +242,6 @@ def prepare_frame(frame: pd.DataFrame) -> pd.DataFrame:
     result = result.dropna(subset=BASE_COLUMNS)
     price_mask = (result[["open", "high", "low", "close"]] > 0).all(axis=1)
     result = result[price_mask & (result["volume"] >= 0)]
-    result = result.drop_duplicates(subset=["symbol", "date"], keep="last")
     return result.sort_values(["symbol", "date"]).reset_index(drop=True)
 
 

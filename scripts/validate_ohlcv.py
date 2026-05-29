@@ -10,7 +10,9 @@ from typing import Iterable
 
 import pandas as pd
 
+from stock_selection_config import load_config
 from stock_selection_data import parse_dates
+from stock_selection_metrics import is_qsss_mode
 
 
 REQUIRED_COLUMNS = ["symbol", "date", "open", "high", "low", "close", "volume"]
@@ -28,11 +30,18 @@ def main(argv: list[str] | None = None) -> int:
         default=120,
         help="Minimum rows required for each symbol. Default: 120.",
     )
+    parser.add_argument(
+        "--config",
+        help="Optional scoring config used to validate profile-specific input columns.",
+    )
     args = parser.parse_args(argv)
 
     try:
         frame = read_table(Path(args.input))
+        config = load_config(Path(args.config)) if args.config else None
         errors = validate_frame(frame, min_history_rows=args.min_history_rows)
+        if config is not None:
+            errors.extend(validate_profile_columns(frame, config))
     except Exception as exc:  # noqa: BLE001
         print(f"ERROR: {exc} [input={Path(args.input).name}]", file=sys.stderr)
         return 2
@@ -67,6 +76,7 @@ def validate_frame(frame: pd.DataFrame, min_history_rows: int) -> list[str]:
         return ["input data is empty"]
 
     errors.extend(validate_required_values(frame))
+    errors.extend(validate_symbols(frame))
     errors.extend(validate_numeric_values(frame))
     errors.extend(validate_dates(frame))
     errors.extend(validate_duplicates(frame))
@@ -79,6 +89,20 @@ def validate_required_values(frame: pd.DataFrame) -> Iterable[str]:
         missing_count = int(frame[column].isna().sum())
         if missing_count:
             yield f"column {column} has {missing_count} missing values"
+
+
+def validate_symbols(frame: pd.DataFrame) -> Iterable[str]:
+    symbols = frame["symbol"].astype(str).str.strip()
+    empty_count = int((symbols == "").sum())
+    if empty_count:
+        yield f"column symbol has {empty_count} empty values"
+    damaged = symbols.str.fullmatch(r"\d{1,3}", na=False)
+    damaged_count = int(damaged.sum())
+    if damaged_count:
+        yield (
+            f"column symbol has {damaged_count} values that look numeric-damaged; "
+            "preserve leading zeros as text"
+        )
 
 
 def validate_numeric_values(frame: pd.DataFrame) -> Iterable[str]:
@@ -105,7 +129,10 @@ def validate_dates(frame: pd.DataFrame) -> Iterable[str]:
 
 
 def validate_duplicates(frame: pd.DataFrame) -> Iterable[str]:
-    duplicate_count = int(frame.duplicated(subset=["symbol", "date"]).sum())
+    checked = frame[["symbol"]].copy()
+    checked["date"] = parse_dates(frame["date"])
+    checked = checked.dropna(subset=["date"])
+    duplicate_count = int(checked.duplicated(subset=["symbol", "date"]).sum())
     if duplicate_count:
         yield f"found {duplicate_count} duplicate symbol/date rows"
 
@@ -119,6 +146,21 @@ def validate_history(frame: pd.DataFrame, min_history_rows: int) -> Iterable[str
             f"{len(short)} symbols have fewer than {min_history_rows} rows"
             f" ({examples})"
         )
+
+
+def validate_profile_columns(
+    frame: pd.DataFrame, config: dict
+) -> Iterable[str]:
+    if not is_qsss_mode(config):
+        return []
+    errors = []
+    if config.get("universe", {}).get("market") and "market" not in frame.columns:
+        errors.append("qsss-derived profile requires market column")
+    if not any(column in frame.columns for column in ["prediction", "prediction_score"]):
+        errors.append("qsss-derived profile requires prediction or prediction_score column")
+    if not any(column in frame.columns for column in ["turn", "turnover"]):
+        errors.append("qsss-derived profile requires turn or turnover column")
+    return errors
 
 
 if __name__ == "__main__":

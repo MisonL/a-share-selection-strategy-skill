@@ -34,6 +34,12 @@ class StockSelectionConfigTests(unittest.TestCase):
         self.assertEqual(2, summary["candidates"])
         self.assertEqual(2, len(candidates))
 
+    def test_openai_agent_manifest_has_required_interface_fields(self) -> None:
+        text = (ROOT / "agents/openai.yaml").read_text(encoding="utf-8")
+        self.assertIn('display_name: "Stock Selection Strategy"', text)
+        self.assertIn("short_description:", text)
+        self.assertIn("default_prompt:", text)
+
 
 if __name__ == "__main__":
     unittest.main()

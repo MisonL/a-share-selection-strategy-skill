@@ -133,7 +133,7 @@ def empty_result_reason(summary: dict[str, Any], candidates: int) -> str:
     return "none"
 
 
-def print_summary(summary: dict[str, Any], output: str) -> None:
+def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> None:
     parts = [
         f"raw_symbols={summary['raw_symbols']}",
         f"input_symbols={summary['input_symbols']}",
@@ -157,7 +157,7 @@ def print_summary(summary: dict[str, Any], output: str) -> None:
     if summary.get("turnover_assumption"):
         parts.append(f"turnover_assumption={summary['turnover_assumption']}")
     parts.append(f"output={output}")
-    print("OK: " + " ".join(parts))
+    print(f"{prefix}: " + " ".join(parts))
     if summary.get("threshold_failures"):
         print(f"INFO: threshold_failures={format_counts(summary['threshold_failures'])}")
     if summary.get("failed_symbol_examples"):

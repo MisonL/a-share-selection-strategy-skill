@@ -24,20 +24,22 @@ def run_score_cli(
     output_path: Path,
     *,
     config_name: str = "example_config.json",
+    extra_args: list[str] | None = None,
 ) -> tuple[int, str, str]:
     stdout = StringIO()
     stderr = StringIO()
     with redirect_stdout(stdout), redirect_stderr(stderr):
-        code = scorer.main(
-            [
-                "--input",
-                str(input_path),
-                "--config",
-                str(SCRIPTS / config_name),
-                "--output",
-                str(output_path),
-            ]
-        )
+        args = [
+            "--input",
+            str(input_path),
+            "--config",
+            str(SCRIPTS / config_name),
+            "--output",
+            str(output_path),
+        ]
+        if extra_args:
+            args.extend(extra_args)
+        code = scorer.main(args)
     return code, stdout.getvalue(), stderr.getvalue()
 
 
@@ -154,6 +156,11 @@ class StockSelectionScriptTests(unittest.TestCase):
         self.assertEqual(2, summary["scored_symbols"])
         self.assertGreater(len(candidates), 0)
         self.assertTrue((candidates["explosion_score"] == 0).all())
+        self.assertTrue(
+            set(candidates["recommendation"]).issubset(
+                {"high_signal", "medium_signal", "low_signal"}
+            )
+        )
 
     def test_max_candidates_does_not_count_as_threshold_failure(self) -> None:
         config = load_config("example_config.json")

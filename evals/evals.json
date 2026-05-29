@@ -81,7 +81,7 @@
         },
         {
           "name": "包含派生视图",
-          "description": "输出应包含 ma15 <= 15、explosion_score > 1.5、buy/hold/sell 分层和 buy_hold 回测边界。"
+          "description": "输出应包含 ma15 <= 15、explosion_score > 1.5、high_signal/medium_signal/low_signal 展示分层和 buy_hold 回测边界。"
         }
       ]
     },

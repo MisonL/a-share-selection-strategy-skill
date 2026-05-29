@@ -98,6 +98,28 @@ class StockSelectionProfileGateTests(unittest.TestCase):
                 )
         self.assertEqual(1, code)
         self.assertIn("requires at least one A-share row", stderr.getvalue())
+        self.assertIn("invalid_market_values=A股", stderr.getvalue())
+
+    def test_validate_cli_with_qsss_config_rejects_mixed_market_alias(self) -> None:
+        frame = build_frame(include_prediction=True, include_turn=True)
+        frame.loc[frame["symbol"] == "000002", "market"] = "A股"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            frame.to_csv(input_path, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = validate_ohlcv.main(
+                    [
+                        "--input",
+                        str(input_path),
+                        "--config",
+                        str(SCRIPTS / "qsss_profile_config.json"),
+                    ]
+                )
+        self.assertEqual(1, code)
+        self.assertIn("A-share rows must use market=A-share", stderr.getvalue())
+        self.assertIn("invalid_market_values=A股", stderr.getvalue())
 
     def test_validate_cli_with_qsss_config_rejects_suffixed_ashare_symbol(self) -> None:
         frame = build_frame(include_prediction=True, include_turn=True)

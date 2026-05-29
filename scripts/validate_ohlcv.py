@@ -11,7 +11,7 @@ from typing import Iterable
 import pandas as pd
 
 from stock_selection_config import load_config
-from stock_selection_data import parse_dates
+from stock_selection_data import parse_dates, read_table
 from stock_selection_profile import profile_column_errors, qsss_value_errors
 
 
@@ -54,17 +54,6 @@ def main(argv: list[str] | None = None) -> int:
     symbols = frame["symbol"].nunique()
     print(f"OK: validated {len(frame)} rows across {symbols} symbols")
     return 0
-
-
-def read_table(path: Path) -> pd.DataFrame:
-    if not path.exists():
-        raise FileNotFoundError(f"input file not found: {path}")
-    suffix = path.suffix.lower()
-    if suffix == ".csv":
-        return pd.read_csv(path, dtype={"symbol": str})
-    if suffix in {".parquet", ".pq"}:
-        return pd.read_parquet(path)
-    raise ValueError("unsupported input format; use .csv, .parquet, or .pq")
 
 
 def validate_frame(frame: pd.DataFrame, min_history_rows: int) -> list[str]:

@@ -2,7 +2,20 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
+
+
+def read_table(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        raise FileNotFoundError(f"input file not found: {path}")
+    suffix = path.suffix.lower()
+    if suffix == ".csv":
+        return pd.read_csv(path, dtype={"symbol": str})
+    if suffix in {".parquet", ".pq"}:
+        return pd.read_parquet(path)
+    raise ValueError("unsupported input format; use .csv, .parquet, or .pq")
 
 
 def parse_dates(series: pd.Series) -> pd.Series:

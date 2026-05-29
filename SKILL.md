@@ -55,7 +55,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 | tushare | `ts_code`、`trade_date`、`open`、`high`、`low`、`close`、`vol`、`turnover_rate` | 去掉 `.SZ`/`.SH` 后写入 `symbol`，`trade_date` 写入 `date`，`vol` 写入 `volume`，`turnover_rate` 写入 `turn` |
 | yfinance | `Date`、`Symbol`、`Open`、`High`、`Low`、`Close`、`Volume` | `date`、`symbol`、`open`、`high`、`low`、`close`、`volume` |
 
-不要把 `Adj Close` 静默替换为 `close`；如使用复权价，必须在数据说明或旁路元数据中记录复权口径。多源合并时只能保留一个预测列；若同时出现 `prediction` 和 `prediction_score`，先生成统一的 `prediction_score = coalesce(prediction_score, prediction)` 后再运行脚本。
+yfinance 映射后只满足通用 OHLCV；若用于 QSSS-derived，还必须外部补齐 `market=A-share`、真实上游 `prediction_score`、以及 `turn` 或 `turnover`，不能从 yfinance OHLCV 自动推断。不要把 `Adj Close` 静默替换为 `close`；如使用复权价，必须在数据说明或旁路元数据中记录复权口径。多源合并时只能保留一个预测列；若同时出现 `prediction` 和 `prediction_score`，先生成统一的 `prediction_score = coalesce(prediction_score, prediction)` 后再运行脚本。
 
 ## 预设脚本
 
@@ -66,23 +66,23 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `scripts/qsss_profile_config.json`：从 QSSS 原策略提炼的 A 股默认剖面示例。
 - `scripts/validate_ohlcv.py`：校验本地 CSV/Parquet 行情文件是否满足最小字段和数据质量要求。
 - `scripts/score_candidates.py`：读取本地行情文件，按示例配置计算因子、过滤和排序，输出候选股 CSV。
-- `scripts/stock_selection_config.py`、`scripts/stock_selection_data.py`、`scripts/stock_selection_metrics.py`、`scripts/stock_selection_output.py`、`scripts/stock_selection_profile.py`、`scripts/stock_selection_universe.py`、`scripts/stock_selection_diagnostics.py`：评分脚本使用的配置校验、数据解析、指标、输出、profile 门禁、股票池过滤和诊断辅助函数。
+- `scripts/stock_selection_config.py`、`scripts/stock_selection_data.py`、`scripts/stock_selection_metrics.py`、`scripts/stock_selection_output.py`、`scripts/stock_selection_profile.py`、`scripts/stock_selection_universe.py`、`scripts/stock_selection_diagnostics.py`：评分脚本使用的配置校验、数据读取和日期解析、指标、输出、profile 门禁、股票池过滤和诊断辅助函数。
 
 使用方式：
 
 ```bash
 python3 scripts/create_demo_data.py --output /tmp/stock-selection-demo
-python3 scripts/validate_ohlcv.py --input /tmp/stock-selection-demo/prices.csv
-python3 scripts/validate_ohlcv.py --input /tmp/stock-selection-demo/prices_with_prediction.csv --config scripts/qsss_profile_config.json
-python3 scripts/score_candidates.py --input /tmp/stock-selection-demo/prices.csv --config scripts/example_config.json --output /tmp/stock-selection-demo/candidates.csv
-python3 scripts/score_candidates.py --input /tmp/stock-selection-demo/prices_with_prediction.csv --config scripts/qsss_profile_config.json --output /tmp/stock-selection-demo/qsss_candidates.csv
+uv run --with pandas --with numpy python scripts/validate_ohlcv.py --input /tmp/stock-selection-demo/prices.csv
+uv run --with pandas --with numpy python scripts/validate_ohlcv.py --input /tmp/stock-selection-demo/prices_with_prediction.csv --config scripts/qsss_profile_config.json
+uv run --with pandas --with numpy python scripts/score_candidates.py --input /tmp/stock-selection-demo/prices.csv --config scripts/example_config.json --output /tmp/stock-selection-demo/candidates.csv
+uv run --with pandas --with numpy python scripts/score_candidates.py --input /tmp/stock-selection-demo/prices_with_prediction.csv --config scripts/qsss_profile_config.json --output /tmp/stock-selection-demo/qsss_candidates.csv
 ```
 
-脚本只处理本地文件，不联网取数，不调用券商接口，不生成交易指令。运行脚本需要当前 Python 环境已安装 `pandas` 和 `numpy`。若输入是 Parquet 文件，还需要可用的 Parquet 引擎，例如 `pyarrow` 或 `fastparquet`。`validate_ohlcv.py --config` 会在基础 OHLCV 校验之外检查 profile 专属字段。
+脚本只处理本地文件，不联网取数，不调用券商接口，不生成交易指令。运行脚本需要当前 Python 环境已安装 `pandas` 和 `numpy`；没有 `uv` 时先创建虚拟环境并安装这两个依赖。若输入是 Parquet 文件，还需要可用的 Parquet 引擎，例如 `pyarrow` 或 `fastparquet`。`validate_ohlcv.py --config` 会在基础 OHLCV 校验之外检查 profile 专属字段。
 
 使用 `qsss_profile_config.json` 时，输入必须包含 `market` 列，且 A 股记录使用 `A-share`；同时必须包含 `prediction` 或 `prediction_score` 列，且取值在 0 到 1 之间。该列表示上游模型已经算好的上涨概率；脚本不会用动量分伪造机器学习预测。脚本只复刻评分消费层；若要复刻 QSSS 的 ML prediction 生成器，需要在上游按本节 ML 口径处理 `0 -> NaN`、特征标准化和 LightGBM 训练。
 
-`score_candidates.py` 的 CLI 摘要会输出 `input`、`input_symbols`、`universe_filtered_symbols`、`market_filtered_symbols`、`prefix_allow_filtered_symbols`、`prefix_excluded_symbols`、`insufficient_history_symbols`、`failed_symbols`、`threshold_failed_symbols`、`turnover_assumption`、`effective_empty_result`、`empty_result_reason` 和 `candidates`。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。脚本是 CLI-first 资源；若在 Python 代码中复用，需要将 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`。`effective_empty_result=true` 表示脚本成功运行但阈值或股票池过滤后没有候选；`empty_result_reason` 会区分 `universe_filtered_all`、`threshold_filtered_all`、`all_failed`、`all_short` 等原因。如果所有股票都因历史不足或输入数据异常无法评分，脚本会显式失败；如果混合批次里仍有可评分标的，短历史或单股失败会进入摘要和 warning。`threshold_failures` 是各阈值独立失败计数，不是互斥分类；不要把这些计数相加解释为失败股票总数。成功摘要还可能输出 `failed_symbol_examples` 和 `insufficient_history_symbol_examples`，用于定位需要复核的标的。通用配置缺少 `turn`/`turnover` 时会告警，并用中性换手率序列计算 `turnover_ratio`；QSSS-derived 模式仍强制要求 `turn` 或 `turnover`。
+`score_candidates.py` 的 CLI 摘要会输出 `input`、`input_symbols`、`universe_filtered_symbols`、`market_filtered_symbols`、`prefix_allow_filtered_symbols`、`prefix_excluded_symbols`、`insufficient_history_symbols`、`failed_symbols`、`threshold_failed_symbols`、`turnover_assumption`、`effective_empty_result`、`empty_result_reason` 和 `candidates`。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。脚本是 CLI-first 资源；若在 Python 代码中复用，需要将 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`。`effective_empty_result=true` 表示脚本成功运行但阈值或股票池过滤后没有候选；`empty_result_reason` 会区分 `universe_filtered_all`、`threshold_filtered_all` 等成功空结果原因。如果所有股票都因历史不足或输入数据异常无法评分，脚本会显式失败而不是输出 OK 摘要；如果混合批次里仍有可评分标的，短历史或单股失败会进入摘要和 warning。自动化门禁可传入 `--fail-on-skipped` 和 `--fail-on-empty-result`，让跳过标的或 0 候选以非 0 退出。`threshold_failures` 是各阈值独立失败计数，不是互斥分类；不要把这些计数相加解释为失败股票总数。成功摘要还可能输出 `failed_symbol_examples` 和 `insufficient_history_symbol_examples`，用于定位需要复核的标的。通用配置缺少 `turn`/`turnover` 时会告警，并用中性换手率序列计算 `turnover_ratio`；QSSS-derived 模式仍强制要求 `turn` 或 `turnover`。
 
 QSSS-derived 输出中的 `prediction_source=external_unverified` 表示当前脚本只消费外部 `prediction` 或 `prediction_score`，不验证 LightGBM 上游生成链路。解释该字段时，应要求单独核验训练窗口、标签定义、特征、标准化和未来数据泄漏风险。
 
@@ -344,11 +344,11 @@ total_score =
 - `explosion_score > 1.5` 的超短线爆发潜力标的。
 - 同时满足 `ma15 <= 15` 和 `explosion_score > 1.5` 的低价爆发标的。
 
-Web 推荐标签只作为展示分层：
+Web 历史推荐字段只作为展示分层，不是买卖建议：
 
-- `total_score >= 0.8`：`buy`
-- `0.6 <= total_score < 0.8`：`hold`
-- `total_score < 0.6`：`sell`
+- `total_score >= 0.8`：`high_signal`
+- `0.6 <= total_score < 0.8`：`medium_signal`
+- `total_score < 0.6`：`low_signal`
 
 回测边界：原 Web 回测只支持真实日线收盘价上的 `buy_hold` 基线。没有交易成本、滑点、涨跌停和不可交易状态时，不要把结果表述为完整策略回测。
 
@@ -472,7 +472,7 @@ QSSS 还存在优化策略、交互界面和数据库辅助查询。这些属于
   - `input_symbols=0`：股票池配置和输入市场或代码不匹配。
   - `universe_filtered_symbols>0`：股票池过滤剔除了标的，可继续查看 `market_filtered_symbols`、`prefix_allow_filtered_symbols`、`prefix_excluded_symbols`。
   - `threshold_failed_symbols>0`：评分后被阈值过滤；`threshold_failures` 是非互斥独立计数。
-  - `empty_result_reason`：区分 `universe_filtered_all`、`threshold_filtered_all`、`all_failed`、`all_short` 等空结果原因。
+  - `empty_result_reason`：区分 `universe_filtered_all`、`threshold_filtered_all` 等成功空结果原因；全失败或全短历史会显式失败。
   - `failed_symbols>0`：存在单股运行期异常，需要复核。
 - 如果 `failed_symbols>0`，应进入复核或失败处理；`effective_empty_result=true` 只说明脚本完成并无候选。
 - 0 候选不是错误退出，也不是收益或策略有效性验证。

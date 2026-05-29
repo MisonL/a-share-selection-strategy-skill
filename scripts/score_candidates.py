@@ -11,7 +11,7 @@ from typing import Any
 import pandas as pd
 
 from stock_selection_config import load_config
-from stock_selection_data import parse_dates
+from stock_selection_data import parse_dates, read_table
 from stock_selection_diagnostics import (
     add_threshold_summary,
     build_summary,
@@ -65,27 +65,40 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--input", required=True, help="Path to CSV or Parquet file.")
     parser.add_argument("--config", required=True, help="Path to JSON config file.")
     parser.add_argument("--output", required=True, help="Path to output CSV file.")
+    parser.add_argument(
+        "--fail-on-skipped",
+        action="store_true",
+        help="Return a non-zero exit code if any symbol is skipped.",
+    )
+    parser.add_argument(
+        "--fail-on-empty-result",
+        action="store_true",
+        help="Return a non-zero exit code if scoring produces zero candidates.",
+    )
     args = parser.parse_args(argv)
     try:
         config = load_config(Path(args.config))
         candidates, summary = score_candidates(read_table(Path(args.input)), config)
         summary["input"] = Path(args.input).name
+        strict_errors = strict_gate_errors(
+            summary,
+            fail_on_skipped=args.fail_on_skipped,
+            fail_on_empty_result=args.fail_on_empty_result,
+        )
+        if strict_errors:
+            print_summary(summary, args.output, prefix="ERROR_SUMMARY")
+            print(
+                "ERROR: strict gate failed; "
+                f"{'; '.join(strict_errors)} output_not_written=true",
+                file=sys.stderr,
+            )
+            return 3
         write_output(candidates, Path(args.output))
     except Exception as exc:  # noqa: BLE001
         print(f"ERROR: {exc} [input={Path(args.input).name}]", file=sys.stderr)
         return 2
     print_summary(summary, args.output)
     return 0
-
-
-def read_table(path: Path) -> pd.DataFrame:
-    if not path.exists():
-        raise FileNotFoundError(f"input file not found: {path}")
-    if path.suffix.lower() == ".csv":
-        return pd.read_csv(path, dtype={"symbol": str})
-    if path.suffix.lower() in {".parquet", ".pq"}:
-        return pd.read_parquet(path)
-    raise ValueError("unsupported input format; use .csv, .parquet, or .pq")
 
 
 def score_candidates(
@@ -195,6 +208,25 @@ def validate_qsss_symbols(frame: pd.DataFrame, config: dict[str, Any]) -> None:
     errors = qsss_value_errors(frame, config)
     if errors:
         raise ValueError("; ".join(errors))
+
+
+def strict_gate_errors(
+    summary: dict[str, Any],
+    *,
+    fail_on_skipped: bool,
+    fail_on_empty_result: bool,
+) -> list[str]:
+    errors = []
+    if fail_on_skipped and summary.get("failed_symbols", 0):
+        errors.append(f"failed_symbols={summary['failed_symbols']}")
+    if fail_on_skipped and summary.get("insufficient_history_symbols", 0):
+        errors.append(
+            f"insufficient_history_symbols={summary['insufficient_history_symbols']}"
+        )
+    if fail_on_empty_result and summary.get("effective_empty_result"):
+        reason = summary.get("empty_result_reason", "unknown")
+        errors.append(f"effective_empty_result=true empty_result_reason={reason}")
+    return errors
 
 
 def prepare_frame(frame: pd.DataFrame) -> pd.DataFrame:

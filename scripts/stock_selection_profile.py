@@ -27,9 +27,8 @@ def qsss_value_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list[str]:
         return []
     errors = []
     market = str(config.get("universe", {}).get("market", ""))
+    errors.extend(qsss_market_errors(frame, market))
     market_frame = qsss_market_frame(frame, market)
-    if market and "market" in frame.columns and market_frame.empty:
-        errors.append(f"qsss-derived profile requires at least one {market} row")
     if not market_frame.empty:
         invalid_symbols = ~market_frame["symbol"].astype(str).str.fullmatch(r"\d{6}")
         invalid_count = int(invalid_symbols.sum())
@@ -42,6 +41,24 @@ def qsss_value_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list[str]:
     prediction_error = prediction_value_error(prediction_frame)
     if prediction_error:
         errors.append(prediction_error)
+    return errors
+
+
+def qsss_market_errors(frame: pd.DataFrame, market: str) -> list[str]:
+    if not market or "market" not in frame.columns:
+        return []
+    values = frame["market"].astype(str)
+    symbols = frame["symbol"].astype(str)
+    a_share_like = symbols.str.fullmatch(r"\d{6}|\d{6}\.(SZ|SH|SS|BJ)")
+    invalid = (values != market) & a_share_like
+    errors = []
+    if invalid.any():
+        errors.append(
+            f"qsss-derived A-share rows must use market={market}; "
+            f"invalid_market_values={format_value_counts(values[invalid])}"
+        )
+    if (values == market).sum() == 0:
+        errors.append(f"qsss-derived profile requires at least one {market} row")
     return errors
 
 
@@ -63,3 +80,8 @@ def prediction_value_error(frame: pd.DataFrame) -> str:
                 "prediction values must be numbers between 0 and 1"
             )
     return ""
+
+
+def format_value_counts(values: pd.Series) -> str:
+    counts = values.value_counts(dropna=False).head(10)
+    return ",".join(f"{value}:{count}" for value, count in counts.items())

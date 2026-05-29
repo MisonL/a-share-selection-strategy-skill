@@ -45,12 +45,13 @@ class StockSelectionConfigTests(unittest.TestCase):
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            code = create_demo_data.main(["--output", tmpdir])
+            code = create_demo_data.main(["--output", tmpdir, "--days", "160"])
             self.assertEqual(0, code)
             prices = Path(tmpdir) / "prices.csv"
             qsss = Path(tmpdir) / "prices_with_prediction.csv"
             self.assertTrue(prices.exists())
             self.assertTrue(qsss.exists())
+            self.assertEqual(321, len(prices.read_text(encoding="utf-8").splitlines()))
             self.assertIn("prediction_score", qsss.read_text(encoding="utf-8").splitlines()[0])
 
 

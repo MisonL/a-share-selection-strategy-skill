@@ -165,10 +165,11 @@ def base_row(symbol: str, signal_date: Any) -> dict[str, Any]:
         "cost_model": "excluded",
         "slippage_model": "excluded",
         "tradability_model": "not_modeled",
+        "limit_rules_model": "not_modeled",
     }
 
 
-def build_summary(result: pd.DataFrame, holding_days: int) -> dict[str, int]:
+def build_summary(result: pd.DataFrame, holding_days: int) -> dict[str, Any]:
     completed = int((result["missing_data"] == False).sum())
     total = int(len(result))
     return {
@@ -176,6 +177,7 @@ def build_summary(result: pd.DataFrame, holding_days: int) -> dict[str, int]:
         "completed_trades": completed,
         "incomplete_trades": total - completed,
         "hold_days": int(holding_days),
+        "missing_reason_counts": missing_reason_counts(result),
     }
 
 
@@ -184,17 +186,28 @@ def write_output(frame: pd.DataFrame, path: Path) -> None:
     frame.to_csv(path, index=False)
 
 
-def print_summary(summary: dict[str, int], output: str, prefix: str = "OK") -> None:
+def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> None:
     print(
         f"{prefix}: candidates={summary['candidates']} "
         f"completed_trades={summary['completed_trades']} "
         f"incomplete_trades={summary['incomplete_trades']} "
         f"hold_days={summary['hold_days']} output={output}"
     )
+    if summary["missing_reason_counts"]:
+        print(f"INFO: missing_reason_counts={summary['missing_reason_counts']}")
     print(
         "INFO: baseline=buy_hold_close_to_close costs=excluded "
-        "slippage=excluded limit_rules=not_modeled suspension=missing_future_price"
+        "slippage=excluded tradability_model=not_modeled "
+        "suspension=missing_future_price"
     )
+
+
+def missing_reason_counts(result: pd.DataFrame) -> str:
+    missing = result[result["missing_data"] == True]
+    if missing.empty:
+        return ""
+    counts = missing["missing_reason"].value_counts().sort_index()
+    return ",".join(f"{reason}:{count}" for reason, count in counts.items())
 
 
 if __name__ == "__main__":

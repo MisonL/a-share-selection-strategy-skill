@@ -55,7 +55,7 @@
 
 ## 场景 L: LightGBM prediction 生成
 
-状态: 本地契约门禁已建立，真实行情训练门禁仍未完成。
+状态: 合成 demo 真模型链路通过，真实行情训练门禁仍未完成。
 
 证据:
 
@@ -64,10 +64,13 @@
 - `StandardScaler` 只在训练切分上 `fit`。
 - 标签口径为 `close.shift(-horizon) / close - 1`，训练标签阈值只来自训练切分。
 - 本轮新增 `tests/test_lightgbm_prediction_cli.py`，覆盖训练切分、输出概率范围、依赖缺失失败，以及生成结果可继续进入 QSSS-derived 评分消费层。
+- 本地真实依赖复验已通过: `uv run --with-requirements requirements-ml.txt python scripts/generate_lightgbm_predictions.py --input /tmp/stock-selection-ml-local/prices.csv --output /tmp/stock-selection-ml-local/prices_generated_prediction.csv` 返回 0。
+- 生成结果继续通过 `validate_ohlcv.py --config scripts/qsss_profile_config.json`，再进入 `score_candidates.py --config scripts/qsss_profile_config.json`，最终 `scored_symbols=2`、`candidates=1`。
+- 本次合成 demo 的 `prediction_score` 范围为 `0.0107376151670856` 到 `0.9479974705646024`，生成器 stderr 为空。
 
 边界:
 
-- 单元测试使用受控假模型验证契约，不等同于真实 LightGBM 在真实 A 股行情上的训练结果。
+- 单元测试使用受控假模型验证契约；合成 demo 使用真实 LightGBM 依赖验证运行链路，但仍不等同于真实 A 股行情上的训练结果。
 - 真实通过仍需要安装 `requirements-ml.txt`，用真实行情文件运行生成器，并把输出接入 `validate_ohlcv.py --config scripts/qsss_profile_config.json` 和 `score_candidates.py`。
 
 ## 场景 M: buy-hold 基线回测
@@ -81,6 +84,8 @@
 - 候选日期必须精确匹配 OHLCV 日期，不自动滚动到下一交易日。
 - 输出显式标记 `cost_model=excluded`、`slippage_model=excluded`、`tradability_model=not_modeled`。
 - 本轮新增 `tests/test_buy_hold_backtest_cli.py`，覆盖正常收益、缺入场日不回退、严格模式遇到缺数据非 0 且不写输出。
+- 本地合成 demo 完成路径已通过: 先用 180 日行情切出截至 `2025-07-31` 的信号窗口生成候选，再用完整行情运行 `backtest_buy_hold.py --hold-days 5`，输出 `completed_trades=2`、`incomplete_trades=0`。
+- 本次合成 demo 的回测收益范围为 `0.0059836162887334` 到 `0.0071089378908271`。
 
 边界:
 
@@ -95,7 +100,7 @@
 - 本地 Parquet 读取、校验和评分链路。
 - QSSS-derived 对 A 股字段、market、symbol、prediction、turn 的门禁。
 - akshare A 股真实源在本次环境可拉取并映射到本地文件后进入校验和评分。
-- LightGBM prediction 生成器的本地契约和失败边界。
+- LightGBM prediction 生成器的本地契约、失败边界和合成 demo 真模型运行链路。
 - buy-hold 基线回测脚本的本地契约和失败边界。
 
 仍未证明:

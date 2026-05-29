@@ -157,12 +157,17 @@ def predict_symbol(
     if target_label.nunique() < 2:
         raise ValueError("training target has fewer than two classes")
     scaler = model_deps["scaler"]()
-    x_train = scaler.fit_transform(train[FEATURE_COLUMNS])
+    x_train = scaled_frame(scaler.fit_transform(train[FEATURE_COLUMNS]), train.index)
     model = model_deps["classifier"](**QSSS_MODEL_PARAMS)
     model.fit(x_train, target_label.astype(int))
     latest = features.dropna(subset=FEATURE_COLUMNS).iloc[[-1]]
-    probability = float(model.predict_proba(scaler.transform(latest[FEATURE_COLUMNS]))[0][1])
+    x_latest = scaled_frame(scaler.transform(latest[FEATURE_COLUMNS]), latest.index)
+    probability = float(model.predict_proba(x_latest)[0][1])
     return with_prediction(group, probability, horizon)
+
+
+def scaled_frame(values: Any, index: pd.Index) -> pd.DataFrame:
+    return pd.DataFrame(values, columns=FEATURE_COLUMNS, index=index)
 
 
 def build_feature_frame(group: pd.DataFrame, horizon: int) -> pd.DataFrame:

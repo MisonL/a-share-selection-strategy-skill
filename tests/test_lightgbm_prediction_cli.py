@@ -36,6 +36,7 @@ class RecordingScaler:
 class RecordingClassifier:
     last_fit_rows = 0
     last_labels: list[int] = []
+    saw_feature_columns = False
 
     def __init__(self, **_: object) -> None:
         pass
@@ -43,8 +44,13 @@ class RecordingClassifier:
     def fit(self, features, labels) -> None:
         type(self).last_fit_rows = len(features)
         type(self).last_labels = list(labels)
+        type(self).saw_feature_columns = list(features.columns) == generator.FEATURE_COLUMNS
 
     def predict_proba(self, features):
+        type(self).saw_feature_columns = (
+            type(self).saw_feature_columns
+            and list(features.columns) == generator.FEATURE_COLUMNS
+        )
         return np.array([[0.27, 0.73] for _ in range(len(features))])
 
 
@@ -68,6 +74,7 @@ class LightgbmPredictionCliTests(unittest.TestCase):
         self.assertGreater(RecordingClassifier.last_fit_rows, 0)
         self.assertLess(RecordingClassifier.last_fit_rows, len(frame))
         self.assertEqual({0, 1}, set(RecordingClassifier.last_labels))
+        self.assertTrue(RecordingClassifier.saw_feature_columns)
         _, score_summary = scorer.score_candidates(
             result,
             load_config("qsss_profile_config.json"),

@@ -168,19 +168,34 @@ QSSS-derived 配置要求输入包含 `market` 列，且 A 股记录使用 `A-sh
 如果需要真实生成 `prediction_score`，可使用可选脚本 `generate_lightgbm_predictions.py`。该脚本使用时间序列切分，只在训练切分上拟合 `StandardScaler`，并在缺少 `lightgbm` 或 `scikit-learn` 时显式失败：
 
 ```bash
+python3 scripts/create_demo_data.py --output /tmp/stock-selection-ml-demo --days 220
 uv run --with pandas --with numpy --with scikit-learn --with lightgbm \
   python scripts/generate_lightgbm_predictions.py \
-  --input /tmp/stock-selection-demo/prices.csv \
-  --output /tmp/stock-selection-demo/prices_generated_prediction.csv
+  --input /tmp/stock-selection-ml-demo/prices.csv \
+  --output /tmp/stock-selection-ml-demo/prices_generated_prediction.csv
 ```
 
 如果需要最小 buy-hold 基线回测，可使用 `backtest_buy_hold.py`。它只做信号日收盘价到未来第 N 个可用交易行收盘价的 close-to-close 基线，不扣交易成本、不模拟滑点、不判断涨跌停或停牌可交易性：
 
 ```bash
+python3 scripts/create_demo_data.py --output /tmp/stock-selection-backtest-demo --days 180
+uv run --with pandas --with numpy python - <<'PY'
+import pandas as pd
+frame = pd.read_csv("/tmp/stock-selection-backtest-demo/prices.csv", dtype={"symbol": str})
+cutoff = sorted(frame["date"].unique())[150]
+frame[frame["date"] <= cutoff].to_csv(
+    "/tmp/stock-selection-backtest-demo/prices_signal_window.csv",
+    index=False,
+)
+PY
+uv run --with pandas --with numpy python scripts/score_candidates.py \
+  --input /tmp/stock-selection-backtest-demo/prices_signal_window.csv \
+  --config scripts/example_config.json \
+  --output /tmp/stock-selection-backtest-demo/candidates.csv
 uv run --with pandas --with numpy python scripts/backtest_buy_hold.py \
-  --prices /tmp/stock-selection-demo/prices.csv \
-  --candidates /tmp/stock-selection-demo/candidates.csv \
-  --output /tmp/stock-selection-demo/buy_hold_backtest.csv \
+  --prices /tmp/stock-selection-backtest-demo/prices.csv \
+  --candidates /tmp/stock-selection-backtest-demo/candidates.csv \
+  --output /tmp/stock-selection-backtest-demo/buy_hold_backtest.csv \
   --hold-days 5
 ```
 

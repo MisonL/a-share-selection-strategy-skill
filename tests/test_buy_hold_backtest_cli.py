@@ -36,6 +36,7 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         self.assertEqual("excluded", result["cost_model"].iloc[0])
         self.assertEqual("excluded", result["slippage_model"].iloc[0])
         self.assertEqual("not_modeled", result["tradability_model"].iloc[0])
+        self.assertEqual("not_modeled", result["limit_rules_model"].iloc[0])
 
     def test_missing_entry_date_is_not_rolled_forward(self) -> None:
         prices = build_frame(days=130)
@@ -71,6 +72,8 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertFalse(output_path.exists())
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
+        self.assertIn("missing_reason_counts=missing_entry_price:1", stdout.getvalue())
+        self.assertIn("tradability_model=not_modeled", stdout.getvalue())
         self.assertIn("incomplete_trades=1", stderr.getvalue())
 
 

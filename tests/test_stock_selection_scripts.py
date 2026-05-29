@@ -15,6 +15,7 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import score_candidates as scorer  # noqa: E402
+from stock_selection_data import read_table  # noqa: E402
 import validate_ohlcv  # noqa: E402
 from helpers import build_frame, load_config, permissive_thresholds  # noqa: E402
 
@@ -57,7 +58,7 @@ class StockSelectionScriptTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "prices.csv"
             frame.to_csv(path, index=False)
-            loaded = validate_ohlcv.read_table(path)
+            loaded = read_table(path)
         self.assertEqual("000002", loaded["symbol"].iloc[0])
 
     def test_validate_rejects_numeric_damaged_symbol(self) -> None:
@@ -161,6 +162,10 @@ class StockSelectionScriptTests(unittest.TestCase):
                 {"high_signal", "medium_signal", "low_signal"}
             )
         )
+        self.assertEqual(
+            candidates["signal_tier"].tolist(),
+            candidates["recommendation"].tolist(),
+        )
 
     def test_max_candidates_does_not_count_as_threshold_failure(self) -> None:
         config = load_config("example_config.json")
@@ -233,7 +238,8 @@ class StockSelectionScriptTests(unittest.TestCase):
             self.assertIn("raw_symbols=2", stdout)
             self.assertIn(f"input={input_path.name}", stdout)
             self.assertIn("turnover_assumption=neutral_series_missing_turnover", stdout)
-            self.assertIn("turn/turnover missing", stderr)
+            self.assertIn("generic mode: turn/turnover missing", stderr)
+            self.assertIn("no QSSS turnover gate is applied", stderr)
 
     def test_cli_missing_qsss_prediction_returns_error(self) -> None:
         frame = build_frame(include_turn=True)
@@ -250,6 +256,7 @@ class StockSelectionScriptTests(unittest.TestCase):
             self.assertFalse(output_path.exists())
             self.assertIn("prediction or prediction_score", stderr)
             self.assertIn(f"input={input_path.name}", stderr)
+            self.assertIn("code=bad_input", stderr)
 
     def test_cli_low_prediction_reports_effective_empty_result(self) -> None:
         config = load_config("qsss_profile_config.json")

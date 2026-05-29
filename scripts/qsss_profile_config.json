@@ -52,8 +52,8 @@
   "derived_views": {
     "low_ma15_max": 15.0,
     "explosion_score_min": 1.5,
-    "recommendation_buy_min": 0.8,
-    "recommendation_hold_min": 0.6
+    "high_signal_min": 0.8,
+    "medium_signal_min": 0.6
   },
   "output": {
     "max_candidates": 50

@@ -51,6 +51,7 @@ OUTPUT_COLUMNS = [
     "low_ma15_flag",
     "explosion_focus_flag",
     "low_price_explosion_flag",
+    "signal_tier",
     "recommendation",
     "key_reasons",
     "risk_notes",
@@ -95,7 +96,11 @@ def main(argv: list[str] | None = None) -> int:
             return 3
         write_output(candidates, Path(args.output))
     except Exception as exc:  # noqa: BLE001
-        print(f"ERROR: {exc} [input={Path(args.input).name}]", file=sys.stderr)
+        print(
+            "ERROR: code=bad_input "
+            f"input={Path(args.input).name} output_written=false message={exc}",
+            file=sys.stderr,
+        )
         return 2
     print_summary(summary, args.output)
     return 0

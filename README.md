@@ -188,10 +188,13 @@ total_score =
 | `momentum_score` | 动量得分 |
 | `explosion_score` | 短线异动得分 |
 | `risk_score` | 风险得分 |
-| `recommendation` | 历史兼容字段，值为 `high_signal`、`medium_signal` 或 `low_signal` 的信号分层，非交易建议 |
+| `signal_tier` | 信号分层，值为 `high_signal`、`medium_signal` 或 `low_signal`，非交易建议 |
+| `recommendation` | 历史兼容字段，与 `signal_tier` 同值，非交易建议 |
 | `key_reasons` | 主要入选原因 |
 | `risk_notes` | 风险提示 |
 | `data_window` | 使用的数据区间 |
+
+实际 CSV 还会包含行情快照和诊断字段；上表列出核心解释字段。
 
 ## 验证清单
 
@@ -200,6 +203,8 @@ total_score =
 ```bash
 QUICK_VALIDATE=/path/to/skill-creator/scripts/quick_validate.py
 uv run --with pyyaml python "$QUICK_VALIDATE" "$(pwd)"
+# 或使用备用虚拟环境:
+/tmp/stock-selection-skill-venv/bin/python "$QUICK_VALIDATE" "$(pwd)"
 python3 -m json.tool evals/evals.json >/tmp/stock-selection-evals.json
 python3 -m json.tool scripts/example_config.json >/tmp/stock-selection-example-config.json
 python3 -m json.tool scripts/qsss_profile_config.json >/tmp/stock-selection-qsss-config.json
@@ -208,8 +213,16 @@ import yaml
 from pathlib import Path
 assert yaml.safe_load(Path("agents/openai.yaml").read_text())["interface"]["display_name"]
 PY
+# 或使用备用虚拟环境:
+/tmp/stock-selection-skill-venv/bin/python - <<'PY'
+import yaml
+from pathlib import Path
+assert yaml.safe_load(Path("agents/openai.yaml").read_text())["interface"]["display_name"]
+PY
 PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/create_demo_data.py scripts/validate_ohlcv.py scripts/score_candidates.py scripts/stock_selection_config.py scripts/stock_selection_data.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_profile.py scripts/stock_selection_universe.py scripts/stock_selection_diagnostics.py
 PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy python -m unittest discover -s tests -v
+# 或使用备用虚拟环境:
+PYTHONDONTWRITEBYTECODE=1 /tmp/stock-selection-skill-venv/bin/python -m unittest discover -s tests -v
 ```
 
 没有 `uv` 时，可使用前文的备用虚拟环境运行单测：
@@ -224,6 +237,11 @@ PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy python -m unittest d
 
 ```bash
 uv run --with pandas --with numpy python scripts/score_candidates.py \
+  --input /tmp/stock-selection-demo/prices.csv \
+  --config scripts/example_config.json \
+  --output /tmp/stock-selection-demo/candidates.csv
+# 或使用备用虚拟环境:
+/tmp/stock-selection-skill-venv/bin/python scripts/score_candidates.py \
   --input /tmp/stock-selection-demo/prices.csv \
   --config scripts/example_config.json \
   --output /tmp/stock-selection-demo/candidates.csv

@@ -15,6 +15,7 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import score_candidates as scorer  # noqa: E402
+import validate_ohlcv  # noqa: E402
 from helpers import build_frame  # noqa: E402
 
 
@@ -40,6 +41,21 @@ def run_score_cli(
 
 
 class StockSelectionStrictCliTests(unittest.TestCase):
+    def test_cli_help_lists_strict_gate_arguments(self) -> None:
+        stdout = StringIO()
+        with redirect_stdout(stdout), self.assertRaises(SystemExit) as caught:
+            scorer.main(["--help"])
+        self.assertEqual(0, caught.exception.code)
+        self.assertIn("--fail-on-skipped", stdout.getvalue())
+        self.assertIn("--fail-on-empty-result", stdout.getvalue())
+
+    def test_validate_help_lists_profile_config_argument(self) -> None:
+        stdout = StringIO()
+        with redirect_stdout(stdout), self.assertRaises(SystemExit) as caught:
+            validate_ohlcv.main(["--help"])
+        self.assertEqual(0, caught.exception.code)
+        self.assertIn("--config", stdout.getvalue())
+
     def test_cli_strict_skipped_symbols_returns_error_without_output(self) -> None:
         frame = build_frame(include_prediction=True, include_turn=True)
         short = build_frame(days=10, include_prediction=True, include_turn=True)

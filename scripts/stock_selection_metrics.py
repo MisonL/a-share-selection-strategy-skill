@@ -27,6 +27,7 @@ def score_symbol(group: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any]:
     ma15_line = config.get("derived_views", {}).get("low_ma15_max", 15.0)
     low_ma15 = bool(ma15 <= float(ma15_line))
     explosion_focus = bool(metrics["explosion_score"] > float(explosion_line))
+    signal_tier = recommendation_for(metrics["total_score"], config)
     return {
         "symbol": str(latest["symbol"]),
         "name": str(latest.get("name", latest["symbol"])),
@@ -49,12 +50,11 @@ def score_symbol(group: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any]:
         "low_ma15_flag": low_ma15,
         "explosion_focus_flag": explosion_focus,
         "low_price_explosion_flag": bool(low_ma15 and explosion_focus),
-        "recommendation": recommendation_for(metrics["total_score"], config),
+        "signal_tier": signal_tier,
+        "recommendation": signal_tier,
         "key_reasons": build_reasons(metrics),
         "risk_notes": build_risk_notes(metrics, float(latest["volume"])),
-        "data_window": (
-            f"{group['date'].iloc[0].date()} to {group['date'].iloc[-1].date()}"
-        ),
+        "data_window": f"{group['date'].iloc[0].date()} to {group['date'].iloc[-1].date()}",
     }
 
 

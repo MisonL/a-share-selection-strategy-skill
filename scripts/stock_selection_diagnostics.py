@@ -123,10 +123,6 @@ def empty_result_reason(summary: dict[str, Any], candidates: int) -> str:
     if summary.get("input_symbols", 0) == 0:
         return "universe_filtered_all"
     if summary.get("scored_symbols", 0) == 0:
-        if summary.get("failed_symbols", 0):
-            return "all_failed"
-        if summary.get("insufficient_history_symbols", 0):
-            return "all_short"
         return "no_scored_symbols"
     if summary.get("threshold_failed_symbols", 0) == summary.get("scored_symbols", 0):
         return "threshold_filtered_all"
@@ -172,7 +168,8 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
         )
     if summary.get("turnover_assumption"):
         print(
-            "WARNING: turn/turnover missing; turnover_ratio used a neutral series",
+            "WARNING: generic mode: turn/turnover missing; turnover_ratio "
+            "component uses a neutral series and no QSSS turnover gate is applied",
             file=sys.stderr,
         )
     if summary.get("prediction_source"):

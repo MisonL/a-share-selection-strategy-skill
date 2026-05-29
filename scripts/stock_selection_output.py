@@ -17,8 +17,10 @@ def latest_turnover_value(latest: pd.Series) -> float:
 
 def recommendation_for(total_score: float, config: dict[str, Any]) -> str:
     views = config.get("derived_views", {})
-    high_min = float(views.get("recommendation_buy_min", 0.8))
-    medium_min = float(views.get("recommendation_hold_min", 0.6))
+    high_min = float(views.get("high_signal_min", views.get("recommendation_buy_min", 0.8)))
+    medium_min = float(
+        views.get("medium_signal_min", views.get("recommendation_hold_min", 0.6))
+    )
     if total_score >= high_min:
         return "high_signal"
     if total_score >= medium_min:

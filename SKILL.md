@@ -350,6 +350,8 @@ Web 历史推荐字段只作为展示分层，不是买卖建议：
 - `0.6 <= total_score < 0.8`：`medium_signal`
 - `total_score < 0.6`：`low_signal`
 
+CSV 中优先读取 `signal_tier`；`recommendation` 是历史兼容字段，与 `signal_tier` 同值。
+
 回测边界：原 Web 回测只支持真实日线收盘价上的 `buy_hold` 基线。没有交易成本、滑点、涨跌停和不可交易状态时，不要把结果表述为完整策略回测。
 
 ### 工程派生路径边界
@@ -391,6 +393,8 @@ QSSS 还存在优化策略、交互界面和数据库辅助查询。这些属于
 - `explosion_score`：短线异动得分。
 - `risk_score`：风险得分。
 - `ma15`：15 日均线，可选；用于低价均线派生视图。
+- `signal_tier`：信号分层，非交易建议。
+- `recommendation`：历史兼容字段，与 `signal_tier` 同值。
 - `key_reasons`：入选原因，列出最重要的 2 到 4 条。
 - `risk_notes`：主要风险或数据不足说明。
 - `data_window`：使用的数据区间。

@@ -100,10 +100,8 @@ def compute_metrics(
         "total_score": total,
     }
 
-
 def is_qsss_mode(config: dict[str, Any]) -> bool:
     return str(config.get("score_mode", "")).lower() == "qsss-derived"
-
 
 def risk_score(volatility: float, config: dict[str, Any]) -> float:
     score = 1.0 - max(volatility, 0.0)
@@ -111,13 +109,11 @@ def risk_score(volatility: float, config: dict[str, Any]) -> float:
         return score
     return clamp01(score)
 
-
 def iso_date(value: Any) -> str:
     parsed = pd.to_datetime(value, errors="coerce")
     if pd.isna(parsed):
         raise ValueError("date must be parseable")
     return parsed.date().isoformat()
-
 
 def apply_cleaning(data: pd.DataFrame, config: dict[str, Any]) -> pd.DataFrame:
     cleaning = config.get("cleaning", {})
@@ -136,7 +132,6 @@ def apply_cleaning(data: pd.DataFrame, config: dict[str, Any]) -> pd.DataFrame:
         data[fill_columns] = data[fill_columns].ffill().bfill()
     return data
 
-
 def resolve_prediction(data: pd.DataFrame, config: dict[str, Any]) -> float:
     columns = ["prediction_score", "prediction"]
     available = [column for column in columns if column in data.columns]
@@ -151,11 +146,9 @@ def resolve_prediction(data: pd.DataFrame, config: dict[str, Any]) -> float:
         raise ValueError("prediction score must be a number between 0 and 1")
     return value
 
-
 def latest_numeric(series: pd.Series) -> float:
     value = pd.to_numeric(series, errors="coerce").iloc[-1]
     return float(value) if pd.notna(value) else math.nan
-
 
 def calculate_rsi(close: pd.Series, period: int) -> pd.Series:
     delta = close.diff()
@@ -163,7 +156,6 @@ def calculate_rsi(close: pd.Series, period: int) -> pd.Series:
     loss = (-delta.where(delta < 0, 0)).rolling(period, min_periods=1).mean()
     rs = gain / loss.replace(0, np.nan)
     return (100 - (100 / (1 + rs))).fillna(50).clip(0, 100)
-
 
 def calculate_macd(
     close: pd.Series, fast: int, slow: int, signal_window: int
@@ -179,7 +171,6 @@ def calculate_volatility(close: pd.Series, window: int) -> float:
     series = close.pct_change().rolling(window, min_periods=5).std() * math.sqrt(252)
     return min(max(latest_filled(series), 0.0), 2.0)
 
-
 def momentum_score(
     close: pd.Series, windows: dict[str, Any], config: dict[str, Any]
 ) -> float:
@@ -191,7 +182,6 @@ def momentum_score(
         pct_change_at(close, int(windows["momentum_long"])),
     ]
     return float(np.nanmean(values))
-
 
 def pct_change_at(series: pd.Series, window: int) -> float:
     if len(series) <= window:
@@ -212,6 +202,8 @@ def calculate_explosion_score(
 ) -> float:
     volume_window = int(windows["volume_ratio"])
     short_window = int(windows["short_momentum"])
+    if len(close) < volume_window:
+        return 0.0
     return float(
         ratio_score(volume, volume_window) * float(weights["volume_ratio"])
         + ratio_score(turnover, volume_window) * float(weights["turnover_ratio"])

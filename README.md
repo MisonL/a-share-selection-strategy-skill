@@ -18,20 +18,37 @@
 
 ```text
 stock-selection-strategy-skill/
+|-- agents/
+|   `-- openai.yaml
 |-- SKILL.md
 |-- README.md
 |-- evals/
 |   `-- evals.json
+|-- tests/
+|   |-- test_stock_selection_config.py
+|   `-- test_stock_selection_scripts.py
 `-- scripts/
     |-- example_config.json
     |-- qsss_profile_config.json
     |-- score_candidates.py
+    |-- stock_selection_config.py
+    |-- stock_selection_diagnostics.py
     |-- stock_selection_metrics.py
     |-- stock_selection_output.py
     `-- validate_ohlcv.py
 ```
 
 ## 快速开始
+
+以下命令假设 `uv` 已安装并在 `PATH` 中。若当前环境没有 `uv`，可先创建临时虚拟环境：
+
+```bash
+python3 -m venv /tmp/stock-selection-skill-venv
+/tmp/stock-selection-skill-venv/bin/python -m pip install pandas numpy pyyaml
+```
+
+使用备用虚拟环境时，将下文 `uv run --with ... python` 替换为 `/tmp/stock-selection-skill-venv/bin/python`。
+读取 Parquet 输入还需要安装 `pyarrow` 或 `fastparquet`；只处理 CSV 时不需要额外 Parquet 引擎。
 
 ### 1. 校验 Skill 结构
 
@@ -82,6 +99,12 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
 ```
 
 QSSS-derived 配置要求输入包含 `prediction` 或 `prediction_score` 列，取值范围为 0 到 1。该列表示上游模型已经生成的上涨概率；评分脚本不会训练 LightGBM，也不会用动量分伪造机器学习预测。
+
+`score_candidates.py` 的 CLI 摘要会报告输入文件名、股票池过滤、历史不足、输入异常、单股失败、阈值过滤、`turnover_assumption`、`effective_empty_result` 和最终候选数量。QSSS-derived 路径还会标记 `prediction_source=external_unverified`，表示脚本只消费上游预测，不验证该列是否由真实 LightGBM 链路生成。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。
+
+自动化流水线应把 `failed_symbols=0` 作为成功门槛之一；`failed_symbols>0` 表示存在单股运行期异常，即使脚本仍输出了其他候选，也应进入人工复核或失败处理。
+
+配置中的 `output.max_candidates` 大于 0 时限制输出数量；设为 0 表示不截断候选结果。
 
 ## 策略框架
 
@@ -142,10 +165,13 @@ uv run --with pyyaml python /Users/mison/.codex/skills/.system/skill-creator/scr
 python3 -m json.tool evals/evals.json >/tmp/stock-selection-evals.json
 python3 -m json.tool scripts/example_config.json >/tmp/stock-selection-example-config.json
 python3 -m json.tool scripts/qsss_profile_config.json >/tmp/stock-selection-qsss-config.json
-python3 -m py_compile scripts/validate_ohlcv.py scripts/score_candidates.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py
+PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/validate_ohlcv.py scripts/score_candidates.py scripts/stock_selection_config.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_diagnostics.py
+PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy python -m unittest discover -s tests -v
 ```
 
 如需 smoke test，可准备本地行情 CSV 后运行：
+
+该 smoke 只验证本地文件读取、评分和输出流程，不代表真实行情接入、真实 LightGBM prediction 生成链路或真实回测已经通过。
 
 ```bash
 uv run --with pandas --with numpy python scripts/score_candidates.py \

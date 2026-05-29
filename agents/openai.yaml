@@ -1,0 +1,4 @@
+interface:
+  display_name: "Stock Selection Strategy"
+  short_description: "Design, implement, run, score, explain, and review stock screens"
+  default_prompt: "Use $stock-selection-strategy to design, implement, run, score, explain, or audit a verifiable stock selection workflow from local market data."

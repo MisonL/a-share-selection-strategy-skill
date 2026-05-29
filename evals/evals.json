@@ -84,6 +84,114 @@
           "description": "输出应包含 ma15 <= 15、explosion_score > 1.5、buy/hold/sell 分层和 buy_hold 回测边界。"
         }
       ]
+    },
+    {
+      "id": 5,
+      "prompt": "帮我选股",
+      "expected_output": "应触发本 Skill，并先要求或确认市场、周期、输入数据和目标风格；不得伪造行情、候选股或收益结论。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "短提示触发",
+          "description": "输出应识别这是选股任务，并使用本 Skill 的数据契约和验证边界。"
+        },
+        {
+          "name": "先确认数据边界",
+          "description": "输出应要求本地行情文件、市场、周期或用户目标，而不是直接编造候选股。"
+        },
+        {
+          "name": "不承诺收益",
+          "description": "输出应明确候选排序不是投资建议或确定收益。"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "我有一个本地 prices.csv，想用脚本生成候选股 CSV。请告诉 Agent 应该怎么运行，并说明如何判断输出是否可信。",
+      "expected_output": "应先运行 validate_ohlcv.py 校验字段和质量，再运行 score_candidates.py；应说明 pandas/numpy 依赖、输出字段、摘要计数、0 候选含义和真实行情/回测边界。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "使用校验脚本",
+          "description": "输出应包含 validate_ohlcv.py，并把字段缺失、负价格、重复日期和历史不足作为显式失败或风险。"
+        },
+        {
+          "name": "使用评分脚本",
+          "description": "输出应包含 score_candidates.py、配置文件和输出 CSV 路径。"
+        },
+        {
+          "name": "解释摘要",
+          "description": "输出应解释 candidates、effective_empty_result、failed_symbols、threshold_failed_symbols 和 turnover_assumption 等通用摘要字段；同时说明预设脚本会把历史不足作为显式失败，只有自行实现批量跳过时才应统计 insufficient_history_symbols。"
+        },
+        {
+          "name": "不伪造真实验证",
+          "description": "输出不得把本地脚本 smoke 说成真实行情接入、真实回测或收益验证。"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "按 QSSS-derived 原口径给我评分，但我的 CSV 没有 prediction 或 prediction_score 列，也没有真实 LightGBM 上游结果。",
+      "expected_output": "应显式拒绝把动量分或固定 0.5 冒充 prediction，说明评分脚本会失败或无法完整复刻 QSSS 原口径，并要求先生成或提供上游预测列。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "要求 prediction 输入",
+          "description": "输出应说明 QSSS-derived 必须有 prediction 或 prediction_score，且值域为 0 到 1。"
+        },
+        {
+          "name": "禁止伪造 ML",
+          "description": "输出应明确不能用动量、固定 0.5 或 mock 预测冒充 LightGBM prediction。"
+        },
+        {
+          "name": "说明外部 gate",
+          "description": "输出应说明真实 LightGBM prediction 生成是上游 gate，评分脚本只消费该列。"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "审查一个 ML 选股策略：它用 close.shift(-5) 做标签，随机 train_test_split，先对全量特征 fit StandardScaler，LightGBM 不可用时返回 0.5，还说无交易成本说明的回测收益已经验证。",
+      "expected_output": "应逐项指出未来收益标签只能用于训练标签构造、不能泄漏到预测期特征或筛选条件；还应指出时间序列随机切分风险、全量标准化泄漏、0.5 fallback 静默降级、无交易成本/滑点/不可交易约束时不能声称真实收益已验证，并给出时间序列切分和显式失败等修正方法。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "识别全量标准化泄漏",
+          "description": "输出应指出 StandardScaler 只能在训练集 fit，再 transform 验证集、测试集和预测集。"
+        },
+        {
+          "name": "识别 0.5 fallback",
+          "description": "输出应指出 LightGBM 不可用时返回 0.5 是静默降级，不能解释成真实中性概率。"
+        },
+        {
+          "name": "否定无成本收益验证",
+          "description": "输出应说明缺少交易成本、滑点、停牌、涨跌停和不可交易状态时不能声称真实策略收益已验证。"
+        },
+        {
+          "name": "给出修正路径",
+          "description": "输出应建议时间序列切分、样本外验证、显式环境失败和完整回测约束。"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "我已经有带 prediction_score 的 QSSS-derived 本地 CSV，运行评分脚本后看到 prediction_source=external_unverified，这是什么意思？",
+      "expected_output": "应说明 QSSS-derived 评分脚本只消费上游 prediction_score，不训练或验证真实 LightGBM 链路；external_unverified 表示预测列来源未由当前脚本验证，仍需单独核验上游生成过程。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "解释 prediction_source",
+          "description": "输出应解释 prediction_source=external_unverified 的含义。"
+        },
+        {
+          "name": "不伪造上游验证",
+          "description": "输出不得把评分脚本通过说成真实 LightGBM prediction 生成链路已通过。"
+        },
+        {
+          "name": "说明上游 gate",
+          "description": "输出应要求单独验证 prediction_score 的训练窗口、标签、特征和数据泄漏风险。"
+        }
+      ]
     }
   ]
 }

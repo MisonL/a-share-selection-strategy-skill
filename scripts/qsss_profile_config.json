@@ -20,9 +20,9 @@
     "short_momentum": 3
   },
   "cleaning": {
-    "clip_columns": ["close", "volume", "turn"],
+    "clip_columns": ["close", "volume", "turn", "turnover"],
     "clip_sigma": 3.0,
-    "fill_columns": ["close", "volume", "turn"]
+    "fill_columns": ["close", "volume", "turn", "turnover"]
   },
   "momentum_score_mode": "momentum_1m",
   "weights": {

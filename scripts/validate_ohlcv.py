@@ -32,12 +32,12 @@ def main(argv: list[str] | None = None) -> int:
         frame = read_table(Path(args.input))
         errors = validate_frame(frame, min_history_rows=args.min_history_rows)
     except Exception as exc:  # noqa: BLE001
-        print(f"ERROR: {exc}", file=sys.stderr)
+        print(f"ERROR: {exc} [input={Path(args.input).name}]", file=sys.stderr)
         return 2
 
     if errors:
         for error in errors:
-            print(f"ERROR: {error}", file=sys.stderr)
+            print(f"ERROR: {error} [input={Path(args.input).name}]", file=sys.stderr)
         return 1
 
     symbols = frame["symbol"].nunique()
@@ -50,7 +50,7 @@ def read_table(path: Path) -> pd.DataFrame:
         raise FileNotFoundError(f"input file not found: {path}")
     suffix = path.suffix.lower()
     if suffix == ".csv":
-        return pd.read_csv(path)
+        return pd.read_csv(path, dtype={"symbol": str})
     if suffix in {".parquet", ".pq"}:
         return pd.read_parquet(path)
     raise ValueError("unsupported input format; use .csv, .parquet, or .pq")

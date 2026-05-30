@@ -14,6 +14,7 @@
 - `date` 支持 `YYYY-MM-DD` 或 `YYYYMMDD`。
 - `volume` 单位必须在同一文件内一致；脚本无法从纯数值可靠识别股、手、张或成交额混用。
 - QSSS-derived 输入必须包含 `market=A-share`、`prediction` 或 `prediction_score`，以及 `turn` 或 `turnover`。
+- `weight/notional/quantity/cash_reserved` 必须来自可追溯资金分配、组合或订单模型；测试用等权或固定金额字段只能验证门禁行为，不能替代真实现金容量证明。
 
 ## 验证命令
 

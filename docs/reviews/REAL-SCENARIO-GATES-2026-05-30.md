@@ -131,10 +131,12 @@
 - 真实并发门禁复验产物在 `/tmp/stock-selection-overlap-gate-20260530T112415/`；对三份真实成本/滑点回测设置 `--max-open-positions 10 --fail-on-symbol-overlap --require-capital-fields` 返回 3，并写出 `daily.csv`、`overlap.csv` 和 `summary.json`。summary 记录 `trades=15`、`complete_trades=15`、`max_open_positions=12`、`same_symbol_overlap_rows=21`、`cash_capacity_verifiable=false`、`capital_fields_missing=weight,notional,quantity,cash_reserved`。
 - 新增候选资金字段透传和 `--max-gross-weight` 权重容量门禁。复验产物在 `/tmp/stock-selection-capacity-gate-20260530T114644/`；基于同一真实 12-symbol/3 信号日候选和价格，额外写入测试用等权 `weight/notional/quantity/cash_reserved` 后复跑回测。
 - 同一复验中，`--max-gross-weight 1.0 --require-capital-fields` 返回 3，并写出 `summary_fail.json`；`--max-gross-weight 3.0 --require-capital-fields` 返回 0。summary 记录 `capital_fields_present=weight,notional,quantity,cash_reserved`、`capital_fields_missing=[]`、`cash_capacity_verifiable=true`、`weight_capacity_verifiable=true`、`max_gross_weight=2.0`、`max_gross_weight_dates=2026-05-20,2026-05-21,2026-05-22`。
+- 新增 `--max-gross-notional` 和 `--max-cash-reserved` 金额容量门禁。复验产物在 `/tmp/stock-selection-cash-capacity-gate-20260530T120429/`；使用同一测试用资金字段回测产物，`--max-gross-notional 1000000 --max-cash-reserved 1000000` 返回 3，`--max-gross-notional 3000000 --max-cash-reserved 3000000` 返回 0。
+- 金额容量复验的失败 summary 记录 `max_gross_notional=2000000.0`、`max_cash_reserved=2000000.0`，二者最大日期均为 `2026-05-15,2026-05-18,2026-05-19,2026-05-20,2026-05-21,2026-05-22`；stderr 包含 `max_gross_notional=2000000.0 limit=1000000.0` 和 `max_cash_reserved=2000000.0 limit=1000000.0`。
 
 边界:
 
-- 成本和滑点只是简单 round-trip bps 扣减；资金曲线只是按信号日等权复利已完成交易。并发门禁已能暴露最大持仓、同标的重叠和权重总暴露超限；测试用资金字段可证明透传和门禁行为，不能替代真实组合或订单模型生成的现金容量证明。
+- 成本和滑点只是简单 round-trip bps 扣减；资金曲线只是按信号日等权复利已完成交易。并发门禁已能暴露最大持仓、同标的重叠，以及权重、名义金额、预留现金超限；测试用资金字段可证明透传和门禁行为，不能替代真实组合或订单模型生成的现金容量证明。
 - 新 baostock 取数入口和 `--require-tradable-bars` 可拒绝 `tradestatus != 1` 的不可交易行，但回测仍不判断涨跌停状态；因此 `limit_rules_model=not_modeled` 仍必须保留。
 - 已有 12-symbol/3 信号日真实候选 CSV 与真实 OHLCV 运行记录；仍需要更大股票池、更多时间段和真实交易约束复验后，才能评价策略质量。
 
@@ -190,7 +192,7 @@
 - akshare 正式联网入口的 hist/daily fallback、metadata 和严格失败契约。
 - yfinance 正式联网入口的 metadata、内置 timeout、空结果和严格失败契约；本轮带 `--timeout-seconds 10` 的 AAPL/MSFT 取数、校验和通用评分通过。
 - LightGBM prediction 生成器的本地契约、失败边界和合成 demo 真模型运行链路。
-- buy-hold 基线回测脚本的本地契约、失败边界、round-trip bps 成本/滑点扣减、可选 `tradestatus` 入场/退出门禁、等权资金曲线、组合阈值失败门槛、并发持仓门禁、候选资金字段透传和权重总暴露失败门禁。
+- buy-hold 基线回测脚本的本地契约、失败边界、round-trip bps 成本/滑点扣减、可选 `tradestatus` 入场/退出门禁、等权资金曲线、组合阈值失败门槛、并发持仓门禁、候选资金字段透传，以及权重、名义金额、预留现金容量失败门禁。
 - 2-symbol baostock 真实依赖 smoke 链路: 真实行情落地、真实 LightGBM prediction 生成、QSSS 最新日评分。
 - 12-symbol baostock 多信号日真实链路: 严格信号日截断、真实 QSSS 候选生成、5 日 buy-hold 基线回测，且 `incomplete_trades=0`。
 - baostock 日 K `tradestatus/preclose/pctChg/isST` 字段可取，取数阶段可拒绝 `tradestatus != 1` 的不可交易行。

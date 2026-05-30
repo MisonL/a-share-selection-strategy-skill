@@ -202,17 +202,10 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
         self.assertIn("weight_missing", stderr.getvalue())
 
     def test_non_numeric_or_negative_capital_fields_are_rejected(self) -> None:
-        bad_value = capitalized_trade(
-            "000001", "2026-05-12", "2026-05-12", "2026-05-14", "bad"
-        )
-        negative_value = capitalized_trade(
-            "000001", "2026-05-12", "2026-05-12", "2026-05-14", -0.1
-        )
-
         with self.assertRaisesRegex(ValueError, "weight must be numeric"):
-            overlap_report.build_overlap_report([pd.DataFrame([bad_value])])
+            overlap_report.build_overlap_report([pd.DataFrame([bad_capital("weight", "bad")])])
         with self.assertRaisesRegex(ValueError, "weight must be >= 0"):
-            overlap_report.build_overlap_report([pd.DataFrame([negative_value])])
+            overlap_report.build_overlap_report([pd.DataFrame([bad_capital("weight", -1)])])
 
 
 def trade(
@@ -239,14 +232,21 @@ def capitalized_trade(
     entry_date: str,
     exit_date: str,
     weight: object,
+    notional: object = 10000.0,
 ) -> dict[str, object]:
     return {
         **trade(symbol, signal_date, entry_date, exit_date),
         "weight": weight,
-        "notional": 10000.0,
+        "notional": notional,
         "quantity": 100,
-        "cash_reserved": 10000.0,
+        "cash_reserved": notional,
     }
+
+
+def bad_capital(field: str, value: object) -> dict[str, object]:
+    row = capitalized_trade("000001", "2026-05-12", "2026-05-12", "2026-05-14", 0.1)
+    row[field] = value
+    return row
 
 
 def incomplete_trade(symbol: str, signal_date: str) -> dict[str, object]:

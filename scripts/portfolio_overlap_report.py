@@ -13,7 +13,9 @@ import pandas as pd
 
 from stock_selection_capital import (
     CAPITAL_FIELDS,
-    max_gross_weight_summary,
+    capacity_gate,
+    capacity_summary_fields,
+    daily_capacity_values,
     normalize_complete_capital_fields,
     trade_capital_values,
 )
@@ -31,6 +33,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--summary-output", required=True, help="Summary JSON path.")
     parser.add_argument("--max-open-positions", type=int, default=None)
     parser.add_argument("--max-gross-weight", type=float, default=None)
+    parser.add_argument("--max-gross-notional", type=float, default=None)
+    parser.add_argument("--max-cash-reserved", type=float, default=None)
     parser.add_argument("--fail-on-symbol-overlap", action="store_true")
     parser.add_argument("--require-capital-fields", action="store_true")
     args = parser.parse_args(argv)
@@ -42,6 +46,8 @@ def main(argv: list[str] | None = None) -> int:
             summary,
             max_open_positions=args.max_open_positions,
             max_gross_weight=args.max_gross_weight,
+            max_gross_notional=args.max_gross_notional,
+            max_cash_reserved=args.max_cash_reserved,
             fail_on_symbol_overlap=args.fail_on_symbol_overlap,
             require_capital_fields=args.require_capital_fields,
         )
@@ -136,8 +142,7 @@ def daily_row(group: pd.DataFrame) -> pd.Series:
         "signal_dates": ",".join(sorted(group["signal_date"].astype(str).unique())),
         "trade_indices": ",".join(str(value) for value in sorted(group["trade_index"])),
     }
-    if "weight" in group:
-        row["gross_weight"] = float(group["weight"].sum())
+    row.update(daily_capacity_values(group))
     return pd.Series(row)
 
 
@@ -196,7 +201,6 @@ def build_summary(
     missing = [field for field in CAPITAL_FIELDS if field not in combined]
     max_open = int(daily["open_positions"].max()) if not daily.empty else 0
     max_dates = daily.loc[daily["open_positions"] == max_open, "date"].astype(str).tolist()
-    max_weight, weight_dates = max_gross_weight_summary(daily)
     return {
         "trades": int(len(combined)),
         "complete_trades": int(len(complete)),
@@ -205,8 +209,7 @@ def build_summary(
         "daily_rows": int(len(daily)),
         "max_open_positions": max_open,
         "max_open_position_dates": max_dates,
-        "max_gross_weight": max_weight,
-        "max_gross_weight_dates": weight_dates,
+        **capacity_summary_fields(daily),
         "same_symbol_overlap_rows": int(len(overlaps)),
         "same_symbol_overlap_symbols": sorted(overlaps["symbol"].unique().tolist())
         if not overlaps.empty
@@ -216,7 +219,6 @@ def build_summary(
         "weight_capacity_verifiable": "weight" in present,
         "cash_capacity_verifiable": not missing,
     }
-
 
 def empty_overlaps() -> pd.DataFrame:
     return pd.DataFrame(
@@ -229,6 +231,8 @@ def gate_violations(
     *,
     max_open_positions: int | None,
     max_gross_weight: float | None,
+    max_gross_notional: float | None,
+    max_cash_reserved: float | None,
     fail_on_symbol_overlap: bool,
     require_capital_fields: bool,
 ) -> list[str]:
@@ -239,26 +243,15 @@ def gate_violations(
         violations.append(
             f"max_open_positions={summary['max_open_positions']} limit={max_open_positions}"
         )
-    if max_gross_weight is not None and max_gross_weight < 0:
-        raise ValueError("max-gross-weight must be >= 0")
-    if max_gross_weight is not None and not summary["weight_capacity_verifiable"]:
-        violations.append("weight_missing")
-    gross_weight = summary["max_gross_weight"] or 0.0
-    if (
-        max_gross_weight is not None
-        and summary["weight_capacity_verifiable"]
-        and gross_weight > max_gross_weight
-    ):
-        violations.append(
-            f"max_gross_weight={gross_weight} limit={max_gross_weight}"
-        )
+    capacity_gate(summary, violations, "weight", "max_gross_weight", max_gross_weight)
+    capacity_gate(summary, violations, "notional", "max_gross_notional", max_gross_notional)
+    capacity_gate(summary, violations, "cash_reserved", "max_cash_reserved", max_cash_reserved)
     if fail_on_symbol_overlap and summary["same_symbol_overlap_rows"]:
         violations.append(f"same_symbol_overlap_rows={summary['same_symbol_overlap_rows']}")
     if require_capital_fields and not summary["cash_capacity_verifiable"]:
         missing = ",".join(summary["capital_fields_missing"])
         violations.append(f"capital_fields_missing={missing}")
     return violations
-
 
 def write_outputs(
     daily: pd.DataFrame,
@@ -282,6 +275,8 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
         f"incomplete_trades={summary['incomplete_trades']} "
         f"max_open_positions={summary['max_open_positions']} "
         f"max_gross_weight={summary['max_gross_weight']} "
+        f"max_gross_notional={summary['max_gross_notional']} "
+        f"max_cash_reserved={summary['max_cash_reserved']} "
         f"same_symbol_overlap_rows={summary['same_symbol_overlap_rows']} "
         f"cash_capacity_verifiable={summary['cash_capacity_verifiable']} "
         f"calendar_model={summary['calendar_model']} "

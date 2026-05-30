@@ -145,6 +145,18 @@ uv run --with pandas --with numpy --with baostock python scripts/fetch_baostock_
   --fail-on-fetch-error
 ```
 
+美股等通用 OHLCV 可先通过 yfinance 落地，再走通用校验和评分。真实环境失败时命令会非 0；门禁不能只看退出码，还必须检查 metadata 中 `rows > 0`、`symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`。该脚本写入原始 `Close`，不会用 `Adj Close` 静默替代 `close`。
+
+```bash
+uv run --with pandas --with numpy --with yfinance python scripts/fetch_yfinance_ohlcv.py \
+  --symbols AAPL,MSFT \
+  --start-date 2024-01-01 \
+  --end-date 2026-05-29 \
+  --output /tmp/stock-selection-us/prices.csv \
+  --metadata-output /tmp/stock-selection-us/metadata.json \
+  --fail-on-fetch-error
+```
+
 真实回测必须先按信号日截断评分输入，避免用未来行情生成候选；回测价格文件可以保留信号日之后的真实行用于出场：
 
 ```bash
@@ -234,7 +246,7 @@ import yaml
 from pathlib import Path
 assert yaml.safe_load(Path("agents/openai.yaml").read_text())["interface"]["display_name"]
 PY
-PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/create_demo_data.py scripts/validate_ohlcv.py scripts/score_candidates.py scripts/generate_lightgbm_predictions.py scripts/backtest_buy_hold.py scripts/fetch_baostock_a_share.py scripts/slice_prices_as_of.py scripts/stock_selection_config.py scripts/stock_selection_data.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_profile.py scripts/stock_selection_universe.py scripts/stock_selection_diagnostics.py scripts/lightgbm_prediction_summary.py
+PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/create_demo_data.py scripts/validate_ohlcv.py scripts/score_candidates.py scripts/generate_lightgbm_predictions.py scripts/backtest_buy_hold.py scripts/fetch_baostock_a_share.py scripts/fetch_yfinance_ohlcv.py scripts/slice_prices_as_of.py scripts/stock_selection_config.py scripts/stock_selection_data.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_profile.py scripts/stock_selection_universe.py scripts/stock_selection_diagnostics.py scripts/lightgbm_prediction_summary.py
 PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy --with pyarrow python -m unittest discover -s tests -v
 ```
 
@@ -258,7 +270,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
 ## 重要边界
 
 - 本 Skill 不是投资建议，不承诺收益，不生成交易指令。
-- 评分、校验、切片、预测和回测脚本以本地文件为入口；`fetch_baostock_a_share.py` 是显式可选联网取数入口，只负责落地本地 gate 文件，不调用券商接口或交易接口。
+- 评分、校验、切片、预测和回测脚本以本地文件为入口；`fetch_baostock_a_share.py` 和 `fetch_yfinance_ohlcv.py` 是显式可选联网取数入口，只负责落地本地 gate 文件，不调用券商接口或交易接口。
 - 没有真实回测时，不得声称策略收益已经验证。
 - 使用机器学习预测时，必须明确训练窗口、预测窗口、标签定义和未来数据泄漏风险。
 - QSSS-derived 配置只复刻评分消费层；真实 LightGBM prediction 可由本仓库可选生成器或外部上游生成，但必须单独验证训练窗口、标签定义和未来泄漏风险。

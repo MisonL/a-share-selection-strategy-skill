@@ -35,6 +35,7 @@ jobs:
             scripts/generate_lightgbm_predictions.py \
             scripts/backtest_buy_hold.py \
             scripts/fetch_baostock_a_share.py \
+            scripts/fetch_yfinance_ohlcv.py \
             scripts/slice_prices_as_of.py \
             scripts/stock_selection_config.py \
             scripts/lightgbm_prediction_summary.py \

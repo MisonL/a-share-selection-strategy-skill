@@ -219,6 +219,8 @@ def summary_command(args: argparse.Namespace, output: Path) -> list[str]:
         command.append("--fail-on-symbol-overlap")
     if args.expect_portfolio_violations:
         command.append("--expect-portfolio-violations")
+    if args.drop_invalid_rows:
+        command.append("--allow-dropped-invalid-rows")
     return command
 
 

@@ -67,7 +67,7 @@ class WalkForwardArtifactCliTests(unittest.TestCase):
         self.assertIn("summary_2026-05-12_candidates=3", stderr)
 
 
-def call_cli(root: Path, output: Path) -> tuple[int, str, str]:
+def call_cli(root: Path, output: Path, extra_args: list[str] | None = None) -> tuple[int, str, str]:
     args = [
         "--run-dir",
         str(root),
@@ -91,6 +91,8 @@ def call_cli(root: Path, output: Path) -> tuple[int, str, str]:
         "--manifest-validation",
         str(root / "run_manifest_validation.json"),
     ]
+    if extra_args:
+        args.extend(extra_args)
     stdout = StringIO()
     stderr = StringIO()
     with redirect_stdout(stdout), redirect_stderr(stderr):
@@ -160,8 +162,8 @@ def price_row(symbol: str, date: str = "2026-05-12") -> dict[str, object]:
 
 def candidate_rows() -> list[dict[str, object]]:
     return [
-        {"symbol": "000001", "date": "2026-05-12", "total_score": 0.8},
-        {"symbol": "600000", "date": "2026-05-12", "total_score": 0.7},
+        {"symbol": "000001", "date": "2026-05-12", "close": 10.5, "total_score": 0.8},
+        {"symbol": "600000", "date": "2026-05-12", "close": 10.5, "total_score": 0.7},
     ]
 
 

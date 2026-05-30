@@ -99,6 +99,48 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
         self.assertEqual(0, code)
         self.assertEqual("2026-05-12", data["signals"][0]["signal_date"])
 
+    def test_cli_rejects_dropped_invalid_rows_without_explicit_allow(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(
+                Path(tmpdir),
+                metadata_updates={
+                    "invalid_rows": 10,
+                    "dropped_invalid_rows": 10,
+                    "raw_non_trading_rows": 10,
+                    "non_trading_rows": 0,
+                },
+            )
+            output = Path(tmpdir) / "summary.json"
+
+            code, _stdout, stderr = call_cli(root, output, ["--expected-symbol-count", "2"])
+
+        self.assertEqual(3, code)
+        self.assertIn("metadata_invalid_rows=10", stderr)
+
+    def test_cli_allows_explicitly_dropped_invalid_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(
+                Path(tmpdir),
+                metadata_updates={
+                    "invalid_rows": 10,
+                    "dropped_invalid_rows": 10,
+                    "raw_non_trading_rows": 10,
+                    "non_trading_rows": 0,
+                },
+            )
+            output = Path(tmpdir) / "summary.json"
+
+            code, _stdout, stderr = call_cli(
+                root,
+                output,
+                ["--expected-symbol-count", "2", "--allow-dropped-invalid-rows"],
+            )
+
+            data = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(0, code)
+        self.assertEqual("", stderr)
+        self.assertEqual([], data["quality_errors"])
+
 
 def call_cli(root: Path, output: Path, extra_args: list[str]) -> tuple[int, str, str]:
     stdout = StringIO()
@@ -114,22 +156,30 @@ def build_run(
     portfolio_violates: bool = False,
     skipped_symbols: int = 0,
     signal_parent: str = "",
+    metadata_updates: dict[str, object] | None = None,
 ) -> Path:
+    metadata = {
+        "source": "baostock",
+        "start_date": "2026-05-01",
+        "end_date": "2026-05-20",
+        "adjustflag": "3",
+        "rows": 20,
+        "raw_rows": 20,
+        "symbol_count": 2,
+        "failed_symbols": [],
+        "empty_symbols": [],
+        "invalid_rows": 0,
+        "dropped_invalid_rows": 0,
+        "raw_non_trading_rows": 0,
+        "non_trading_rows": 0,
+        "raw_tradestatus_missing_rows": 0,
+        "tradestatus_missing_rows": 0,
+    }
+    if metadata_updates:
+        metadata.update(metadata_updates)
     write_json(
         root / "metadata.json",
-        {
-            "source": "baostock",
-            "start_date": "2026-05-01",
-            "end_date": "2026-05-20",
-            "adjustflag": "3",
-            "rows": 20,
-            "symbol_count": 2,
-            "failed_symbols": [],
-            "empty_symbols": [],
-            "invalid_rows": 0,
-            "non_trading_rows": 0,
-            "tradestatus_missing_rows": 0,
-        },
+        metadata,
     )
     write_signal_dir(root / signal_parent / "2026-05-12", skipped_symbols)
     write_equity(root / "qsss_equity_curve.csv")

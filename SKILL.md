@@ -82,7 +82,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `portfolio_equity_curve.py`：可选等权组合资金曲线生成器，读取一个或多个回测 CSV，并支持 final equity / max drawdown 失败门槛。
 - `portfolio_overlap_report.py`：可选组合并发持仓、同标的重叠、资金字段完整性，以及权重、名义金额和预留现金容量门禁报告。
 - `validate_walk_forward_manifest.py`：校验一键 runner manifest 的步骤顺序、退出码和门禁参数；不替代真实行情、prediction 或回测执行。
-- `validate_walk_forward_artifacts.py`：校验 walk-forward 复验目录中的真实 CSV/JSON artifact 内容，包括信号窗口、候选、sizing、回测、资金曲线、组合 summary 和 manifest 校验报告。
+- `validate_walk_forward_artifacts.py`：校验 walk-forward 复验目录中的真实 CSV/JSON artifact 内容，包括信号窗口、候选原始信号日 close、sizing 的 signal close、回测、资金曲线、组合 summary 和 manifest 校验报告。
 - `slice_prices_as_of.py`：按信号日截断本地行情，防止用未来行情生成候选。
 - `fetch_baostock_a_share.py`：可选 baostock A 股日线取数脚本，输出本地行情 CSV 和 metadata JSON，包含 `tradestatus/preclose/pctChg/isST` 门禁字段。
 - `fetch_akshare_a_share.py`：可选 akshare A 股日线取数脚本，先尝试中文列接口，失败时记录 fallback 并转用 `stock_zh_a_daily`。
@@ -186,6 +186,8 @@ uv run --with pandas --with numpy python scripts/portfolio_equity_curve.py --bac
 uv run --with pandas --with numpy python scripts/portfolio_overlap_report.py --backtests qsss_backtest.csv --daily-output qsss_daily_positions.csv --overlap-output qsss_overlap.csv --summary-output qsss_overlap_summary.json --max-gross-weight 1.0 --max-gross-notional 1000000 --max-cash-reserved 1000000 --require-capital-fields
 uv run --with pandas python scripts/summarize_walk_forward_run.py --run-dir RUN_DIR --output RUN_DIR/qsss_run_summary.json --expected-symbol-count N --required-tradability-model tradestatus_entry_exit_only --required-limit-rules-model not_modeled
 ```
+
+若真实源数据存在已知不可交易或缺失数值行，只能在取数时显式传入 `--drop-invalid-rows`。后续 summary 和 artifact validator 必须同时显式传入 `--allow-dropped-invalid-rows`，并确认 metadata 满足 `invalid_rows == dropped_invalid_rows`、清洗后 `non_trading_rows=0` 且 `tradestatus_missing_rows=0`。该模式不等于源数据无异常。
 
 涨跌停规则仍未建模；如需确认 baostock 字段能力，只能用 `probe_baostock_limit_fields.py` 做字段可用性探测并记录真实错误码。
 

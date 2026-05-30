@@ -105,6 +105,24 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
         self.assertIn("--require-capital-fields", commands["portfolio_overlap"])
         self.assertIn("--fail-on-symbol-overlap", commands["portfolio_overlap"])
 
+    def test_drop_invalid_rows_marks_summary_allowance_explicitly(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            args = args_for(Path(tmpdir), signal_dates=["2026-05-12"], drop_invalid_rows=True)
+            executor = FakeExecutor({})
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args=args,
+                manifest=manifest,
+                manifest_path=Path(tmpdir) / "run_manifest.json",
+                executor=executor,
+            )
+
+            runner.run_pipeline(context)
+            commands = {item["step"]: item["command"] for item in manifest["steps"]}
+
+        self.assertIn("--drop-invalid-rows", commands["fetch"])
+        self.assertIn("--allow-dropped-invalid-rows", commands["summary"])
+
 
 class FakeExecutor:
     def __init__(self, returncodes: dict[str, int]) -> None:
@@ -150,34 +168,40 @@ def signal_from_command(command: list[str]) -> str:
     raise AssertionError(f"cannot infer signal from command: {command}")
 
 
-def args_for(output_dir: Path, *, signal_dates: list[str]) -> object:
+def args_for(
+    output_dir: Path,
+    *,
+    signal_dates: list[str],
+    drop_invalid_rows: bool = False,
+) -> object:
     parser = runner.build_parser()
-    return parser.parse_args(
-        [
-            "--symbols",
-            "000001,600000",
-            "--start-date",
-            "2024-01-01",
-            "--end-date",
-            "2026-05-29",
-            "--signal-dates",
-            *signal_dates,
-            "--output-dir",
-            str(output_dir),
-            "--cash-budget",
-            "1000000",
-            "--max-open-positions",
-            "10",
-            "--max-gross-weight",
-            "1.0",
-            "--max-gross-notional",
-            "1000000",
-            "--max-cash-reserved",
-            "1000000",
-            "--fail-on-symbol-overlap",
-            "--expect-portfolio-violations",
-        ]
-    )
+    args = [
+        "--symbols",
+        "000001,600000",
+        "--start-date",
+        "2024-01-01",
+        "--end-date",
+        "2026-05-29",
+        "--signal-dates",
+        *signal_dates,
+        "--output-dir",
+        str(output_dir),
+        "--cash-budget",
+        "1000000",
+        "--max-open-positions",
+        "10",
+        "--max-gross-weight",
+        "1.0",
+        "--max-gross-notional",
+        "1000000",
+        "--max-cash-reserved",
+        "1000000",
+        "--fail-on-symbol-overlap",
+        "--expect-portfolio-violations",
+    ]
+    if drop_invalid_rows:
+        args.append("--drop-invalid-rows")
+    return parser.parse_args(args)
 
 
 if __name__ == "__main__":

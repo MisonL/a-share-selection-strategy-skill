@@ -199,6 +199,12 @@
 - 同一扩容复验 `qsss_run_summary.json` 记录 `quality_errors=[]`、`signals=6`、候选数分别为 `7/7/5/11/9/6`、`completed_trades=45`、`incomplete_trades=0`、资金曲线 `final_equity=0.8880888922355726`、`total_return=-0.11191110776442736`、`max_drawdown=-0.1266837841224236`。
 - 同一扩容复验组合 violation 仍为 5 个：`max_open_positions=20 > 10`、`max_gross_weight=1.9770939999999997 > 1.0`、`max_gross_notional=5931282.0 > 1000000.0`、`max_cash_reserved=5931282.0 > 1000000.0`、`same_symbol_overlap_rows=49`。这说明扩容后风险暴露更大，不应通过放宽阈值改写为成功。
 - 对同一扩容复验执行 `validate_walk_forward_manifest.py` 返回 0，报告在 `/tmp/stock-selection-p1-expanded-20sym-6d-fixed-20260530T145904/run_manifest_validation.json`，结果为 `steps_checked=40`、`errors=[]`；执行 `validate_walk_forward_artifacts.py` 返回 0，报告在 `/tmp/stock-selection-p1-expanded-20sym-6d-fixed-20260530T145904/run_artifact_validation.json`，结果为 `signals_checked=6`、`total_candidates=45`、`total_completed_trades=45`、`final_equity=0.8880888922355726`、`portfolio_violations=5`、`errors=[]`。
+- P1 40-symbol/6 信号日扩容首次严格复验在 `/tmp/stock-selection-p1-expanded-40sym-6d-20260530T150755/` 暴露 baostock 原始不可交易行：`600438` 在 `2026-02-25` 到 `2026-03-10` 共 10 行 `tradestatus=0` 且 `volume/amount/turn` 为空，fetch 返回 3，metadata 记录 `raw_rows=23200`、`invalid_rows=10`、`raw_non_trading_rows=10`。这是源数据质量边界，不应静默吞掉。
+- 同一 40-symbol/6 信号日扩容在显式 `--drop-invalid-rows` 后的端到端复验产物为 `/tmp/stock-selection-p1-expanded-40sym-6d-dropinvalid-fixed-20260530T153132/`；runner 共 40 步，除 `portfolio_overlap` 按预期返回 3 并被允许外，其余步骤返回 0，summary 命令显式包含 `--allow-dropped-invalid-rows`。
+- 同一 40-symbol/6 信号日显式 drop-invalid 复验 metadata 为 `rows=23190`、`raw_rows=23200`、`symbol_count=40`、`invalid_rows=10`、`dropped_invalid_rows=10`、`raw_non_trading_rows=10`、`non_trading_rows=0`、`raw_tradestatus_missing_rows=0`、`tradestatus_missing_rows=0`、`adjustflag=3`。这证明坏行被显式记录并丢弃，不证明源数据无异常。
+- 同一 40-symbol/6 信号日显式 drop-invalid 复验 `qsss_run_summary.json` 记录 `quality_errors=[]`、候选数分别为 `16/13/10/20/14/12`、`completed_trades=85`、`incomplete_trades=0`、资金曲线 `final_equity=0.8851723337824899`、`total_return=-0.11482766621751006`、`max_drawdown=-0.1239265099532115`。
+- 同一 40-symbol/6 信号日显式 drop-invalid 复验组合 violation 仍为 5 个：`max_open_positions=34 > 10`、`max_gross_weight=1.9791856666666663 > 1.0`、`max_gross_notional=5937557.0 > 1000000.0`、`max_cash_reserved=5937557.0 > 1000000.0`、`same_symbol_overlap_rows=97`。扩容后组合风险继续放大，不应通过放宽阈值改写为成功。
+- 对同一 40-symbol/6 信号日显式 drop-invalid 复验执行 `validate_walk_forward_manifest.py` 返回 0，报告在 `/tmp/stock-selection-p1-expanded-40sym-6d-dropinvalid-fixed-20260530T153132/run_manifest_validation.json`，结果为 `steps_checked=40`、`errors=[]`；执行 `validate_walk_forward_artifacts.py --allow-dropped-invalid-rows` 返回 0，报告在 `/tmp/stock-selection-p1-expanded-40sym-6d-dropinvalid-fixed-20260530T153132/run_artifact_validation.json`，结果为 `signals_checked=6`、`total_candidates=85`、`total_completed_trades=85`、`final_equity=0.8851723337824899`、`portfolio_violations=5`、`errors=[]`，并额外校验候选和 sizing 的信号日价格与 `prices_signal_window.csv` 原始 close 一致。
 
 边界:
 
@@ -206,10 +212,10 @@
 - 12-symbol 三信号日回测证明了真实候选和真实 OHLCV 能进入 close-to-close 基线回测；当前代码支持 round-trip bps 扣减、等权资金曲线、取数阶段 `tradestatus` 门禁、回测级 `--require-tradable-bars` 门禁、组合并发持仓报告和测试资金字段权重容量门禁，但仍不覆盖真实现金容量、涨跌停或全市场泛化能力。
 - current-code 复验只证明固定 12-symbol、三信号日、5 日持有、10 bps 成本、5 bps 滑点和 `tradestatus` 入场/退出门禁下的可复跑边界；不能外推为全市场样本外收益有效。
 - P1 四信号日扩展复验只证明同一固定池新增 `2026-04-24` 后仍能按固定门禁复跑；不能外推为策略正期望、全市场泛化、真实成交容量或涨跌停规则已覆盖。
-- P1 20-symbol/6 信号日扩容复验只证明固定 20 支股票、6 个信号日、`cash_budget=3000000`、5 日持有、10 bps 成本、5 bps 滑点和 `tradestatus` 入场/退出门禁下的可复跑边界；不能外推为全市场样本外收益有效，也不能证明 100 万现金预算适合更大候选集。
+- P1 40-symbol/6 信号日扩容复验只证明固定 40 支股票、6 个信号日、显式丢弃 10 行源数据异常、`cash_budget=3000000`、5 日持有、10 bps 成本、5 bps 滑点和 `tradestatus` 入场/退出门禁下的可复跑边界；不能外推为全市场样本外收益有效，也不能证明 100 万现金预算适合更大候选集。
 - `run_baostock_walk_forward.py` 只编排既有 CLI 并记录命令级 manifest，不新增行情、prediction、sizing、回测或组合逻辑；它不能把固定 12-symbol/4 信号日小样本外推为全市场结论。
 - `validate_walk_forward_manifest.py` 只校验 runner manifest 的结构、步骤顺序、退出码和门禁参数；不能替代真实行情、真实 LightGBM、真实回测或真实组合报告。
-- `validate_walk_forward_artifacts.py` 只校验既有复验目录内的 artifact 内容一致性，不重新联网取数、不重新训练 LightGBM、不重新回测，也不能把固定小样本外推为全市场结论。
+- `validate_walk_forward_artifacts.py` 只校验既有复验目录内的 artifact 内容一致性，不重新联网取数、不重新训练 LightGBM、不重新回测，也不能把固定小样本外推为全市场结论；当前会额外校验候选和 sizing 信号日价格与原始信号窗口 close 一致。
 - P2a 字段探测只证明 baostock 日 K 当前候选字段不可用；不等同于真实涨跌停规则门禁通过。
 - `--drop-invalid-rows` 成功不等于源数据无异常；审查时必须同时检查 metadata 的 `invalid_rows`、`dropped_invalid_rows`、`raw_non_trading_rows` 和 `non_trading_rows`。
 - baostock 日 K 未直接提供 `up_limit/down_limit/limit_status`；当前不得把 `preclose + pctChg`、prefix 或 `isST` 粗推解释为真实涨跌停规则已建模。
@@ -218,7 +224,7 @@
 
 ## Current Next Gates / 下一步门禁
 
-- P1: 继续扩大 A 股真实 QSSS 门禁。当前已有 20-symbol/6 信号日复验，下一轮应优先提高股票池宽度或增加更早历史信号日，并保留固定阈值、metadata、summary、manifest validator 和 artifact validator 证据。
+- P1: 继续扩大 A 股真实 QSSS 门禁。当前已有 40-symbol/6 信号日复验，下一轮应优先增加更早历史信号日或另取独立股票池，并保留固定阈值、metadata、summary、manifest validator 和 artifact validator 证据。
 - P2: 真实涨跌停规则门禁。P2a 已确认当前 baostock 日 K 无直接 `up_limit/down_limit/limit_status/is_trading/suspended` 字段；未取得可靠直接字段或另起明确规则建模任务前，不得把 `preclose/pctChg/isST` 粗推写成已建模。
 - P3: 外部源稳定性观察。akshare `stock_zh_a_hist`、yfinance/Yahoo 和 baostock 长期稳定性只能按固定脚本持续复验，不优先于 P1 的 A 股真实策略门禁。
 

@@ -7,6 +7,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+from walk_forward_metadata_checks import metadata_gate_errors
+from walk_forward_price_checks import signal_price_errors
+
 
 CAPITAL_FIELDS = ("weight", "notional", "quantity", "cash_reserved")
 PRICE_COLUMNS = (
@@ -24,7 +27,7 @@ def build_artifact_report(run_dir: Path, args: Any, validator: str) -> dict[str,
     symbols = list(args.expected_symbols)
     errors = count_errors(dates, args.expected_candidates)
     summary = load_json(run_dir / "qsss_run_summary.json")
-    errors += metadata_errors(load_json(run_dir / "metadata.json"), symbols)
+    errors += metadata_errors(load_json(run_dir / "metadata.json"), symbols, args)
     errors += summary_errors(summary, dates, args.expected_candidates)
     totals = validate_signal_artifacts(run_dir, dates, symbols, args, errors)
     errors += equity_errors(run_dir / "qsss_equity_curve.csv", summary, dates, args, totals)
@@ -41,7 +44,7 @@ def count_errors(dates: list[str], expected: list[int]) -> list[str]:
     return []
 
 
-def metadata_errors(metadata: dict[str, Any], symbols: list[str]) -> list[str]:
+def metadata_errors(metadata: dict[str, Any], symbols: list[str], args: Any) -> list[str]:
     errors = []
     actual = [item.get("symbol") for item in metadata.get("symbols", [])]
     expected = {"source": "baostock", "adjustflag": "3"}
@@ -50,24 +53,12 @@ def metadata_errors(metadata: dict[str, Any], symbols: list[str]) -> list[str]:
             errors.append(f"metadata_{key}={metadata.get(key)}")
     if metadata.get("requested_symbols") != symbols or actual != symbols:
         errors.append("metadata_symbols_mismatch")
-    if int(metadata.get("rows", 0)) <= 0 or int(metadata.get("raw_rows", 0)) <= 0:
-        errors.append(f"metadata_rows={metadata.get('rows')} raw_rows={metadata.get('raw_rows')}")
-    if int(metadata.get("symbol_count", 0)) != len(symbols):
-        errors.append(f"metadata_symbol_count={metadata.get('symbol_count')}")
-    for key in ["failed_symbols", "empty_symbols"]:
-        if metadata.get(key):
-            errors.append(f"metadata_{key}={len(metadata[key])}")
-    for key in invalid_metadata_keys():
-        if int(metadata.get(key, 0)) != 0:
-            errors.append(f"metadata_{key}={metadata.get(key)}")
-    return errors
-
-
-def invalid_metadata_keys() -> tuple[str, ...]:
-    return (
-        "invalid_rows", "dropped_invalid_rows", "raw_non_trading_rows",
-        "non_trading_rows", "raw_tradestatus_missing_rows", "tradestatus_missing_rows",
+    errors += metadata_gate_errors(
+        metadata,
+        len(symbols),
+        allow_dropped_invalid_rows=args.allow_dropped_invalid_rows,
     )
+    return errors
 
 
 def summary_errors(summary: dict[str, Any], dates: list[str], expected: list[int]) -> list[str]:
@@ -99,10 +90,12 @@ def validate_signal_artifacts(
         candidates = read_csv(signal_dir / "qsss_candidates.csv")
         sized = read_csv(signal_dir / "qsss_sized_candidates.csv")
         backtest = read_csv(signal_dir / "qsss_backtest.csv")
-        errors += price_window_errors(read_csv(signal_dir / "prices_signal_window.csv"), date, symbols)
+        prices = read_csv(signal_dir / "prices_signal_window.csv")
+        errors += price_window_errors(prices, date, symbols)
         errors += prediction_errors(load_json(signal_dir / "prediction_summary.json"), date, len(symbols))
         errors += candidate_errors(candidates, date, symbols, expected, "candidates")
         errors += candidate_errors(sized, date, symbols, expected, "sized")
+        errors += signal_price_errors(candidates, sized, prices, date)
         errors += sized_errors(sized, date, args)
         errors += backtest_errors(backtest, date, expected, args)
         totals["candidates"] += len(candidates)
@@ -112,7 +105,7 @@ def validate_signal_artifacts(
 
 def price_window_errors(rows: list[dict[str, str]], signal_date: str, symbols: list[str]) -> list[str]:
     errors = required_column_errors(rows, PRICE_COLUMNS, f"{signal_date}_prices")
-    if sorted({row.get("symbol", "") for row in rows}) != symbols:
+    if {row.get("symbol", "") for row in rows} != set(symbols):
         errors.append(f"{signal_date}_price_symbols_mismatch")
     if any(row.get("date", "") > signal_date for row in rows):
         errors.append(f"{signal_date}_future_price_rows")

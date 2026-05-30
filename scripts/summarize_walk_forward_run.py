@@ -13,13 +13,15 @@ from typing import Any
 import pandas as pd
 
 from stock_selection_data import read_table
+from walk_forward_metadata_checks import metadata_gate_errors
 
 
 DATE_DIR = re.compile(r"\d{4}-\d{2}-\d{2}")
 METADATA_FIELDS = (
     "source", "start_date", "end_date", "adjustflag", "rows", "raw_rows",
     "symbol_count", "failed_symbols", "empty_symbols", "invalid_rows",
-    "non_trading_rows", "tradestatus_missing_rows",
+    "dropped_invalid_rows", "raw_non_trading_rows", "non_trading_rows",
+    "raw_tradestatus_missing_rows", "tradestatus_missing_rows",
 )
 
 
@@ -63,6 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-cash-reserved", type=float)
     parser.add_argument("--fail-on-symbol-overlap", action="store_true")
     parser.add_argument("--expect-portfolio-violations", action="store_true")
+    parser.add_argument("--allow-dropped-invalid-rows", action="store_true")
     return parser
 
 
@@ -158,7 +161,11 @@ def quality_errors(
     metadata: dict[str, Any],
     options: argparse.Namespace,
 ) -> list[str]:
-    errors = metadata_errors(metadata, options.expected_symbol_count)
+    errors = metadata_errors(
+        metadata,
+        options.expected_symbol_count,
+        allow_dropped_invalid_rows=options.allow_dropped_invalid_rows,
+    )
     for signal in summary["signals"]:
         errors.extend(signal_errors(signal, options))
     if summary["equity"]["incomplete_trades"]:
@@ -171,23 +178,17 @@ def quality_errors(
     return errors
 
 
-def metadata_errors(metadata: dict[str, Any], expected_symbol_count: int | None) -> list[str]:
-    errors = []
-    for key in ["rows", "symbol_count", "failed_symbols", "empty_symbols"]:
-        if key not in metadata:
-            errors.append(f"metadata_missing_{key}")
-    if int(metadata.get("rows", 0)) <= 0:
-        errors.append(f"metadata_rows={metadata.get('rows')}")
-    actual_count = int(metadata.get("symbol_count", 0))
-    if expected_symbol_count is not None and actual_count != expected_symbol_count:
-        errors.append(f"metadata_symbol_count={actual_count} expected={expected_symbol_count}")
-    for key in ["failed_symbols", "empty_symbols"]:
-        if metadata.get(key):
-            errors.append(f"metadata_{key}={len(metadata[key])}")
-    for key in ["invalid_rows", "non_trading_rows", "tradestatus_missing_rows"]:
-        if int(metadata.get(key, 0)) != 0:
-            errors.append(f"metadata_{key}={metadata.get(key)}")
-    return errors
+def metadata_errors(
+    metadata: dict[str, Any],
+    expected_symbol_count: int | None,
+    *,
+    allow_dropped_invalid_rows: bool,
+) -> list[str]:
+    return metadata_gate_errors(
+        metadata,
+        expected_symbol_count,
+        allow_dropped_invalid_rows=allow_dropped_invalid_rows,
+    )
 
 
 def signal_errors(signal: dict[str, Any], options: argparse.Namespace) -> list[str]:

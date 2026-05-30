@@ -48,6 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--hold-days", type=int, default=5)
     parser.add_argument("--cost-bps", type=float, default=10.0)
     parser.add_argument("--slippage-bps", type=float, default=5.0)
+    parser.add_argument("--allow-dropped-invalid-rows", action="store_true")
     return parser
 
 

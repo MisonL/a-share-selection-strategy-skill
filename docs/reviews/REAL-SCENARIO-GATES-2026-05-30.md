@@ -133,10 +133,13 @@
 - 同一复验中，`--max-gross-weight 1.0 --require-capital-fields` 返回 3，并写出 `summary_fail.json`；`--max-gross-weight 3.0 --require-capital-fields` 返回 0。summary 记录 `capital_fields_present=weight,notional,quantity,cash_reserved`、`capital_fields_missing=[]`、`cash_capacity_verifiable=true`、`weight_capacity_verifiable=true`、`max_gross_weight=2.0`、`max_gross_weight_dates=2026-05-20,2026-05-21,2026-05-22`。
 - 新增 `--max-gross-notional` 和 `--max-cash-reserved` 金额容量门禁。复验产物在 `/tmp/stock-selection-cash-capacity-gate-20260530T120429/`；使用同一测试用资金字段回测产物，`--max-gross-notional 1000000 --max-cash-reserved 1000000` 返回 3，`--max-gross-notional 3000000 --max-cash-reserved 3000000` 返回 0。
 - 金额容量复验的失败 summary 记录 `max_gross_notional=2000000.0`、`max_cash_reserved=2000000.0`，二者最大日期均为 `2026-05-15,2026-05-18,2026-05-19,2026-05-20,2026-05-21,2026-05-22`；stderr 包含 `max_gross_notional=2000000.0 limit=1000000.0` 和 `max_cash_reserved=2000000.0 limit=1000000.0`。
+- 新增 `allocate_candidate_capital.py`，按 `symbol+date` 精确连接候选和价格，用信号日 close、`cash_budget` 和 `lot_size` 生成 `quantity/notional/cash_reserved/weight`，模型标记为 `equal_cash_budget_lot_floor`。
+- sizing 真实复验产物在 `/tmp/stock-selection-sizing-gate-verify-20260530T122929/`；同一 12-symbol/3 信号日候选分别用 `cash_budget=1000000`、`lot_size=100` 生成 sized candidates，三日 `allocated_candidates` 分别为 7、5、3，`unallocated_candidates=0`，`total_cash_reserved` 分别为 `961321.0`、`959281.0`、`987871.0`。
+- sizing 产物继续进入回测和容量门禁；严格阈值 `--max-gross-weight 1.0 --max-gross-notional 1000000 --max-cash-reserved 1000000` 返回 3，宽松阈值 `3.0/3000000/3000000` 返回 0。失败 summary 记录 `max_gross_weight=1.9471519999999998`、`max_gross_notional=1947152.0`、`max_cash_reserved=1947152.0`。
 
 边界:
 
-- 成本和滑点只是简单 round-trip bps 扣减；资金曲线只是按信号日等权复利已完成交易。并发门禁已能暴露最大持仓、同标的重叠，以及权重、名义金额、预留现金超限；测试用资金字段可证明透传和门禁行为，不能替代真实组合或订单模型生成的现金容量证明。
+- 成本和滑点只是简单 round-trip bps 扣减；资金曲线只是按信号日等权复利已完成交易。sizing 脚本让仓位字段来源可追溯，但它仍只是本地 equal-cash/lot-floor 模型，不代表真实订单成交、券商容量、涨跌停可买入或全市场策略质量。
 - 新 baostock 取数入口和 `--require-tradable-bars` 可拒绝 `tradestatus != 1` 的不可交易行，但回测仍不判断涨跌停状态；因此 `limit_rules_model=not_modeled` 仍必须保留。
 - 已有 12-symbol/3 信号日真实候选 CSV 与真实 OHLCV 运行记录；仍需要更大股票池、更多时间段和真实交易约束复验后，才能评价策略质量。
 
@@ -192,7 +195,7 @@
 - akshare 正式联网入口的 hist/daily fallback、metadata 和严格失败契约。
 - yfinance 正式联网入口的 metadata、内置 timeout、空结果和严格失败契约；本轮带 `--timeout-seconds 10` 的 AAPL/MSFT 取数、校验和通用评分通过。
 - LightGBM prediction 生成器的本地契约、失败边界和合成 demo 真模型运行链路。
-- buy-hold 基线回测脚本的本地契约、失败边界、round-trip bps 成本/滑点扣减、可选 `tradestatus` 入场/退出门禁、等权资金曲线、组合阈值失败门槛、并发持仓门禁、候选资金字段透传，以及权重、名义金额、预留现金容量失败门禁。
+- buy-hold 基线回测脚本的本地契约、失败边界、round-trip bps 成本/滑点扣减、可选 `tradestatus` 入场/退出门禁、等权资金曲线、组合阈值失败门槛、并发持仓门禁、候选资金字段透传、equal-cash/lot-floor sizing 产物，以及权重、名义金额、预留现金容量失败门禁。
 - 2-symbol baostock 真实依赖 smoke 链路: 真实行情落地、真实 LightGBM prediction 生成、QSSS 最新日评分。
 - 12-symbol baostock 多信号日真实链路: 严格信号日截断、真实 QSSS 候选生成、5 日 buy-hold 基线回测，且 `incomplete_trades=0`。
 - baostock 日 K `tradestatus/preclose/pctChg/isST` 字段可取，取数阶段可拒绝 `tradestatus != 1` 的不可交易行。
@@ -204,4 +207,4 @@
 
 - akshare `stock_zh_a_hist` 中文列接口在当前环境可稳定取数。
 - yfinance/Yahoo 在当前环境长期稳定取数。
-- 全市场级 QSSS 策略质量、样本外收益、真实涨跌停规则和真实现金容量。
+- 全市场级 QSSS 策略质量、样本外收益、真实涨跌停规则、真实成交容量和券商订单证明。

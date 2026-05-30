@@ -76,6 +76,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `validate_ohlcv.py`：校验本地 CSV/Parquet 行情文件。
 - `score_candidates.py`：读取本地行情文件并输出候选股 CSV。
 - `generate_lightgbm_predictions.py`：可选 LightGBM 预测生成器，输出 `prediction_score`。
+- `allocate_candidate_capital.py`：可选候选资金分配脚本，按信号日 close、现金预算和 lot size 生成可追溯 sizing 字段。
 - `backtest_buy_hold.py`：可选 close-to-close buy-hold 基线回测，可透传候选表资金字段。
 - `portfolio_equity_curve.py`：可选等权组合资金曲线生成器，读取一个或多个回测 CSV，并支持 final equity / max drawdown 失败门槛。
 - `portfolio_overlap_report.py`：可选组合并发持仓、同标的重叠、资金字段完整性，以及权重、名义金额和预留现金容量门禁报告。
@@ -132,7 +133,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py --input /tm
 - `score_candidates.py` 只消费预测列，不训练 LightGBM，也不会用技术因子伪造机器学习预测。
 - `prediction_source=external_unverified` 表示当前脚本只消费外部预测，不验证其训练窗口、标签定义、特征、标准化或未来泄漏风险。
 - `generate_lightgbm_predictions.py` 是可选上游生成器；真实门禁必须启用 `--fail-on-skipped`，或检查 `raw_symbols == predicted_symbols` 且 `skipped_symbols == 0`。
-- `backtest_buy_hold.py` 只做信号日收盘价到未来第 N 个可用交易行收盘价的基线；`--cost-bps` 和 `--slippage-bps` 只做 round-trip bps 扣减，`--require-tradable-bars` 只检查入场和退出日 `tradestatus=1`，不覆盖涨跌停；资金字段只透传和汇总门禁，不生成真实仓位 sizing。
+- `backtest_buy_hold.py` 只做信号日收盘价到未来第 N 个可用交易行收盘价的基线；`--cost-bps` 和 `--slippage-bps` 只做 round-trip bps 扣减，`--require-tradable-bars` 只检查入场和退出日 `tradestatus=1`，不覆盖涨跌停；回测不生成 sizing，需先由 `allocate_candidate_capital.py` 生成可追溯资金字段。
 
 QSSS-derived 总分：
 
@@ -173,7 +174,8 @@ uv run --with pandas --with numpy python scripts/slice_prices_as_of.py --input p
 uv run --with-requirements requirements-ml.txt python scripts/generate_lightgbm_predictions.py --input prices_signal_window.csv --output predictions_signal_window.csv --summary-output prediction_summary.json --fail-on-skipped
 uv run --with pandas --with numpy python scripts/validate_ohlcv.py --input predictions_signal_window.csv --config scripts/qsss_profile_config.json
 uv run --with pandas --with numpy python scripts/score_candidates.py --input predictions_signal_window.csv --config scripts/qsss_profile_config.json --output qsss_candidates.csv --fail-on-skipped --fail-on-empty-result
-uv run --with pandas --with numpy python scripts/backtest_buy_hold.py --prices prices.csv --candidates qsss_candidates.csv --output qsss_backtest.csv --hold-days 5 --fail-on-incomplete
+uv run --with pandas --with numpy python scripts/allocate_candidate_capital.py --prices prices.csv --candidates qsss_candidates.csv --output qsss_sized_candidates.csv --cash-budget 1000000 --lot-size 100 --fail-on-unallocated
+uv run --with pandas --with numpy python scripts/backtest_buy_hold.py --prices prices.csv --candidates qsss_sized_candidates.csv --output qsss_backtest.csv --hold-days 5 --fail-on-incomplete
 uv run --with pandas --with numpy python scripts/portfolio_equity_curve.py --backtests qsss_backtest.csv --output qsss_equity_curve.csv
 uv run --with pandas --with numpy python scripts/portfolio_overlap_report.py --backtests qsss_backtest.csv --daily-output qsss_daily_positions.csv --overlap-output qsss_overlap.csv --summary-output qsss_overlap_summary.json --max-gross-weight 1.0 --max-gross-notional 1000000 --max-cash-reserved 1000000 --require-capital-fields
 ```

@@ -33,6 +33,7 @@ jobs:
             scripts/validate_ohlcv.py \
             scripts/score_candidates.py \
             scripts/generate_lightgbm_predictions.py \
+            scripts/allocate_candidate_capital.py \
             scripts/backtest_buy_hold.py \
             scripts/stock_selection_capital.py \
             scripts/portfolio_equity_curve.py \

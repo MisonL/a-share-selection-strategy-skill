@@ -11,8 +11,10 @@ from typing import Any
 
 import pandas as pd
 
+from stock_selection_tradability import prefixed_tradability_stats, tradability_stats
 
-FIELDS = "date,code,open,high,low,close,volume,amount,turn"
+
+FIELDS = "date,code,open,high,low,close,preclose,pctChg,volume,amount,turn,tradestatus,isST"
 NUMERIC_COLUMNS = ["open", "high", "low", "close", "volume", "amount", "turn"]
 
 
@@ -118,9 +120,13 @@ def collect_rows(result: Any, symbol: str) -> list[dict[str, Any]]:
                 "high": raw["high"],
                 "low": raw["low"],
                 "close": raw["close"],
+                "preclose": raw.get("preclose", ""),
+                "pctChg": raw.get("pctChg", ""),
                 "volume": raw["volume"],
                 "amount": raw["amount"],
                 "turn": raw["turn"],
+                "tradestatus": raw.get("tradestatus", ""),
+                "isST": raw.get("isST", ""),
             }
         )
     return rows
@@ -159,6 +165,8 @@ def build_metadata(
         "invalid_symbols": [],
         "invalid_row_examples": [],
         "dropped_invalid_rows": 0,
+        **prefixed_tradability_stats(frame, "raw_"),
+        **tradability_stats(frame),
     }
 
 
@@ -178,6 +186,8 @@ def apply_quality_policy(
     result = result.reset_index(drop=True)
     metadata["rows"] = int(len(result))
     metadata["symbol_count"] = int(result["symbol"].nunique()) if not result.empty else 0
+    metadata.update(prefixed_tradability_stats(frame, "raw_"))
+    metadata.update(tradability_stats(result))
     metadata["symbols"] = [
         symbol_metadata_for_frame(symbol, result)
         for symbol in metadata["requested_symbols"]
@@ -233,6 +243,10 @@ def strict_gate_errors(
     errors = []
     if metadata["invalid_rows"] != metadata["dropped_invalid_rows"]:
         errors.append(f"invalid_rows={metadata['invalid_rows']}")
+    if metadata.get("tradestatus_missing_rows", 0):
+        errors.append(f"tradestatus_missing_rows={metadata['tradestatus_missing_rows']}")
+    if metadata.get("non_trading_rows", 0):
+        errors.append(f"non_trading_rows={metadata['non_trading_rows']}")
     if fail_on_fetch_error and metadata["failed_symbols"]:
         errors.append(f"failed_symbols={len(metadata['failed_symbols'])}")
     if fail_on_fetch_error and metadata["empty_symbols"]:
@@ -269,6 +283,8 @@ def print_summary(metadata: dict[str, Any], prefix: str = "OK") -> None:
         f"empty_symbols={len(metadata['empty_symbols'])} "
         f"invalid_rows={metadata['invalid_rows']} "
         f"dropped_invalid_rows={metadata['dropped_invalid_rows']} "
+        f"non_trading_rows={metadata.get('non_trading_rows', 0)} "
+        f"tradestatus_missing_rows={metadata.get('tradestatus_missing_rows', 0)} "
         f"start_date={metadata['start_date']} end_date={metadata['end_date']} "
         f"adjustflag={metadata['adjustflag']}"
     )

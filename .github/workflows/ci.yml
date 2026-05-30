@@ -46,6 +46,7 @@ jobs:
             scripts/stock_selection_output.py \
             scripts/stock_selection_profile.py \
             scripts/stock_selection_universe.py \
+            scripts/stock_selection_tradability.py \
             scripts/stock_selection_diagnostics.py
       - name: Run tests
         run: PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s tests -v

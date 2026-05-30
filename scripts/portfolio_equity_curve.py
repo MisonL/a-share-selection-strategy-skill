@@ -14,6 +14,8 @@ from stock_selection_data import parse_dates, read_table
 
 
 REQUIRED_COLUMNS = ["signal_date", "return", "missing_data", "status"]
+MIN_DRAWDOWN_FLOOR = -1.0
+MAX_DRAWDOWN_FLOOR = 0.0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -24,19 +26,38 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", required=True, help="Output equity curve CSV path.")
     parser.add_argument("--initial-equity", type=float, default=1.0)
     parser.add_argument("--fail-on-incomplete", action="store_true")
+    parser.add_argument(
+        "--min-final-equity",
+        type=float,
+        default=None,
+        help="Fail if final equity is lower than this value.",
+    )
+    parser.add_argument(
+        "--max-drawdown-floor",
+        type=float,
+        default=None,
+        help="Fail if max_drawdown is lower than this value, for example -0.10.",
+    )
     args = parser.parse_args(argv)
     try:
+        validate_gate_thresholds(args.min_final_equity, args.max_drawdown_floor)
         frames = [read_table(Path(path)) for path in args.backtests]
         curve, summary = build_equity_curve(
             frames,
             initial_equity=args.initial_equity,
         )
-        if args.fail_on_incomplete and summary["incomplete_trades"]:
+        violations = gate_violations(
+            summary,
+            fail_on_incomplete=args.fail_on_incomplete,
+            min_final_equity=args.min_final_equity,
+            max_drawdown_floor=args.max_drawdown_floor,
+        )
+        if violations:
             print_summary(summary, args.output, prefix="ERROR_SUMMARY")
             print(
                 "ERROR: strict gate failed; "
-                f"incomplete_trades={summary['incomplete_trades']} "
-                "output_not_written=true",
+                + "; ".join(violations)
+                + " output_not_written=true",
                 file=sys.stderr,
             )
             return 3
@@ -50,6 +71,39 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     print_summary(summary, args.output)
     return 0
+
+
+def validate_gate_thresholds(
+    min_final_equity: float | None,
+    max_drawdown_floor: float | None,
+) -> None:
+    if min_final_equity is not None and min_final_equity <= 0:
+        raise ValueError("min-final-equity must be > 0")
+    if max_drawdown_floor is None:
+        return
+    if max_drawdown_floor < MIN_DRAWDOWN_FLOOR or max_drawdown_floor > MAX_DRAWDOWN_FLOOR:
+        raise ValueError("max-drawdown-floor must be between -1.0 and 0.0")
+
+
+def gate_violations(
+    summary: dict[str, Any],
+    *,
+    fail_on_incomplete: bool,
+    min_final_equity: float | None,
+    max_drawdown_floor: float | None,
+) -> list[str]:
+    violations: list[str] = []
+    if fail_on_incomplete and summary["incomplete_trades"]:
+        violations.append(f"incomplete_trades={summary['incomplete_trades']}")
+    if min_final_equity is not None and summary["final_equity"] < min_final_equity:
+        violations.append(
+            f"final_equity={summary['final_equity']} min_final_equity={min_final_equity}"
+        )
+    if max_drawdown_floor is not None and summary["max_drawdown"] < max_drawdown_floor:
+        violations.append(
+            f"max_drawdown={summary['max_drawdown']} max_drawdown_floor={max_drawdown_floor}"
+        )
+    return violations
 
 
 def build_equity_curve(

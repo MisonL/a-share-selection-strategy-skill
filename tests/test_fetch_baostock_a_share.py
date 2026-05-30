@@ -30,9 +30,13 @@ class FetchBaostockAShareTests(unittest.TestCase):
                     "10.2",
                     "9.9",
                     "10.1",
+                    "10.0",
+                    "1.0000",
                     "1000",
                     "10100",
                     "0.5",
+                    "1",
+                    "0",
                 ]
             ]
         )
@@ -42,6 +46,8 @@ class FetchBaostockAShareTests(unittest.TestCase):
         self.assertEqual("1000", rows[0]["volume"])
         self.assertEqual("10100", rows[0]["amount"])
         self.assertEqual("0.5", rows[0]["turn"])
+        self.assertEqual("10.0", rows[0]["preclose"])
+        self.assertEqual("1", rows[0]["tradestatus"])
 
     def test_write_outputs_writes_metadata_json(self) -> None:
         metadata = {
@@ -71,6 +77,7 @@ class FetchBaostockAShareTests(unittest.TestCase):
                     "volume": "",
                     "amount": "",
                     "turn": "",
+                    "tradestatus": "0",
                 },
             ]
         )
@@ -91,12 +98,16 @@ class FetchBaostockAShareTests(unittest.TestCase):
             "invalid_rows=1",
             fetcher.strict_gate_errors(updated, fail_on_fetch_error=True),
         )
+        self.assertIn(
+            "non_trading_rows=1",
+            fetcher.strict_gate_errors(updated, fail_on_fetch_error=True),
+        )
 
     def test_quality_policy_can_explicitly_drop_invalid_rows(self) -> None:
         frame = fetcher.pd.DataFrame(
             [
                 valid_row("000001", "2026-05-20"),
-                {**valid_row("688981", "2025-09-01"), "volume": ""},
+                {**valid_row("688981", "2025-09-01"), "volume": "", "tradestatus": "0"},
             ]
         )
         metadata = metadata_for(["000001", "688981"], frame)
@@ -112,10 +123,28 @@ class FetchBaostockAShareTests(unittest.TestCase):
             "invalid_rows=1",
             fetcher.strict_gate_errors(updated, fail_on_fetch_error=True),
         )
+        self.assertNotIn(
+            "non_trading_rows=1",
+            fetcher.strict_gate_errors(updated, fail_on_fetch_error=True),
+        )
         self.assertIn(
             "empty_symbols=1",
             fetcher.strict_gate_errors(updated, fail_on_fetch_error=True),
         )
+
+    def test_strict_gate_rejects_non_trading_rows(self) -> None:
+        frame = fetcher.pd.DataFrame(
+            [{**valid_row("688981", "2025-09-01"), "tradestatus": "0"}]
+        )
+        metadata = metadata_for(["688981"], frame)
+        _result, updated = fetcher.apply_quality_policy(
+            frame,
+            metadata,
+            drop_invalid_rows=False,
+        )
+        errors = fetcher.strict_gate_errors(updated, fail_on_fetch_error=True)
+        self.assertIn("non_trading_rows=1", errors)
+        self.assertEqual(["688981"], updated["non_trading_symbols"])
 
     def test_strict_gate_rejects_empty_symbol(self) -> None:
         metadata = {
@@ -132,7 +161,21 @@ class FetchBaostockAShareTests(unittest.TestCase):
 
 
 class FakeResult:
-    fields = ["date", "code", "open", "high", "low", "close", "volume", "amount", "turn"]
+    fields = [
+        "date",
+        "code",
+        "open",
+        "high",
+        "low",
+        "close",
+        "preclose",
+        "pctChg",
+        "volume",
+        "amount",
+        "turn",
+        "tradestatus",
+        "isST",
+    ]
 
     def __init__(self, rows: list[list[str]]) -> None:
         self.rows = rows
@@ -156,9 +199,13 @@ def valid_row(symbol: str, date: str) -> dict[str, str]:
         "high": "10.2",
         "low": "9.9",
         "close": "10.1",
+        "preclose": "10.0",
+        "pctChg": "1.0",
         "volume": "1000",
         "amount": "10100",
         "turn": "0.5",
+        "tradestatus": "1",
+        "isST": "0",
     }
 
 

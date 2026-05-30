@@ -77,12 +77,12 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `score_candidates.py`：读取本地行情文件并输出候选股 CSV。
 - `generate_lightgbm_predictions.py`：可选 LightGBM 预测生成器，输出 `prediction_score`。
 - `backtest_buy_hold.py`：可选 close-to-close buy-hold 基线回测。
-- `portfolio_equity_curve.py`：可选等权组合资金曲线生成器，读取一个或多个回测 CSV。
+- `portfolio_equity_curve.py`：可选等权组合资金曲线生成器，读取一个或多个回测 CSV，并支持 final equity / max drawdown 失败门槛。
 - `slice_prices_as_of.py`：按信号日截断本地行情，防止用未来行情生成候选。
-- `fetch_baostock_a_share.py`：可选 baostock A 股日线取数脚本，输出本地行情 CSV 和 metadata JSON。
+- `fetch_baostock_a_share.py`：可选 baostock A 股日线取数脚本，输出本地行情 CSV 和 metadata JSON，包含 `tradestatus/preclose/pctChg/isST` 门禁字段。
 - `fetch_akshare_a_share.py`：可选 akshare A 股日线取数脚本，先尝试中文列接口，失败时记录 fallback 并转用 `stock_zh_a_daily`。
 - `fetch_yfinance_ohlcv.py`：可选 yfinance 日线取数脚本，输出本地通用 OHLCV CSV 和 metadata JSON；用 `--timeout-seconds` 显式限制每票拉取超时。
-- `stock_selection_*.py`、`lightgbm_prediction_summary.py`：评分脚本使用的配置、数据读取、指标、输出、profile、股票池和诊断辅助函数。
+- `stock_selection_*.py`、`lightgbm_prediction_summary.py`：评分脚本使用的配置、数据读取、指标、输出、profile、股票池、可交易性元数据和诊断辅助函数。
 
 使用方式：
 
@@ -131,7 +131,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py --input /tm
 - `score_candidates.py` 只消费预测列，不训练 LightGBM，也不会用技术因子伪造机器学习预测。
 - `prediction_source=external_unverified` 表示当前脚本只消费外部预测，不验证其训练窗口、标签定义、特征、标准化或未来泄漏风险。
 - `generate_lightgbm_predictions.py` 是可选上游生成器；真实门禁必须启用 `--fail-on-skipped`，或检查 `raw_symbols == predicted_symbols` 且 `skipped_symbols == 0`。
-- `backtest_buy_hold.py` 只做信号日收盘价到未来第 N 个可用交易行收盘价的基线；`--cost-bps` 和 `--slippage-bps` 只做 round-trip bps 扣减，不覆盖涨跌停、停牌可交易性或组合资金曲线。
+- `backtest_buy_hold.py` 只做信号日收盘价到未来第 N 个可用交易行收盘价的基线；`--cost-bps` 和 `--slippage-bps` 只做 round-trip bps 扣减，不覆盖涨跌停或停牌可交易性；组合层门禁由 `portfolio_equity_curve.py` 输出。
 
 QSSS-derived 总分：
 

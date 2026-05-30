@@ -64,6 +64,34 @@ class PortfolioEquityCurveCliTests(unittest.TestCase):
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn("incomplete_trades=1", stderr.getvalue())
 
+    def test_cli_threshold_failure_returns_error_without_output(self) -> None:
+        frame = backtest_frame("2026-05-12", [-0.05, -0.07])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            backtest = Path(tmpdir) / "backtest.csv"
+            output = Path(tmpdir) / "equity.csv"
+            frame.to_csv(backtest, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = equity_curve.main(
+                    [
+                        "--backtests",
+                        str(backtest),
+                        "--output",
+                        str(output),
+                        "--min-final-equity",
+                        "0.98",
+                        "--max-drawdown-floor",
+                        "-0.03",
+                    ]
+                )
+
+        self.assertEqual(3, code)
+        self.assertFalse(output.exists())
+        self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
+        self.assertIn("final_equity=0.94 min_final_equity=0.98", stderr.getvalue())
+        self.assertIn("max_drawdown=-0.06000000000000005", stderr.getvalue())
+
     def test_rejects_missing_required_columns(self) -> None:
         frame = pd.DataFrame([{"signal_date": "2026-05-12", "return": 0.01}])
 

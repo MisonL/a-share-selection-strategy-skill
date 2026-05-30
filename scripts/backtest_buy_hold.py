@@ -11,6 +11,7 @@ from typing import Any
 import pandas as pd
 
 from stock_selection_data import parse_dates, read_table
+from stock_selection_capital import add_candidate_capital_fields
 from stock_selection_tradability import tradability_failure_reason
 from validate_ohlcv import validate_frame
 
@@ -83,7 +84,7 @@ def run_backtest(
         evaluate_candidate(row, prepared, hold_days, cost_bps, slippage_bps, require_tradable_bars)
         for _, row in candidates.iterrows()
     ]
-    result = pd.DataFrame(rows)
+    result = add_candidate_capital_fields(pd.DataFrame(rows), candidates)
     return result, build_summary(result, hold_days, cost_bps, slippage_bps, require_tradable_bars)
 
 

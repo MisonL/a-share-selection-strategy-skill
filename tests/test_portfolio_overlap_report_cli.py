@@ -95,8 +95,133 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
             self.assertEqual(4, data["max_open_positions"])
             self.assertEqual(2, data["same_symbol_overlap_rows"])
 
+    def test_cli_accepts_capital_fields_and_gross_weight_under_limit(self) -> None:
+        frame = pd.DataFrame(
+            [
+                capitalized_trade("000001", "2026-05-12", "2026-05-12", "2026-05-14", 0.4),
+                capitalized_trade("000002", "2026-05-12", "2026-05-13", "2026-05-14", 0.5),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            backtest = Path(tmpdir) / "backtest.csv"
+            daily = Path(tmpdir) / "daily.csv"
+            overlaps = Path(tmpdir) / "overlaps.csv"
+            summary = Path(tmpdir) / "summary.json"
+            frame.to_csv(backtest, index=False)
+            code = overlap_report.main(
+                [
+                    "--backtests",
+                    str(backtest),
+                    "--daily-output",
+                    str(daily),
+                    "--overlap-output",
+                    str(overlaps),
+                    "--summary-output",
+                    str(summary),
+                    "--max-gross-weight",
+                    "1.0",
+                    "--require-capital-fields",
+                ]
+            )
+            data = json.loads(summary.read_text(encoding="utf-8"))
+            daily_frame = pd.read_csv(daily)
 
-def trade(symbol: str, signal_date: str, entry_date: str, exit_date: str) -> dict[str, object]:
+        self.assertEqual(0, code)
+        self.assertTrue(data["weight_capacity_verifiable"])
+        self.assertTrue(data["cash_capacity_verifiable"])
+        self.assertEqual([], data["capital_fields_missing"])
+        self.assertEqual(0.9, round(float(data["max_gross_weight"]), 6))
+        self.assertEqual(["2026-05-13", "2026-05-14"], data["max_gross_weight_dates"])
+        self.assertEqual([0.4, 0.9, 0.9], daily_frame["gross_weight"].round(6).tolist())
+
+    def test_cli_fails_when_gross_weight_exceeds_limit(self) -> None:
+        frame = pd.DataFrame(
+            [
+                capitalized_trade("000001", "2026-05-12", "2026-05-12", "2026-05-14", 0.7),
+                capitalized_trade("000002", "2026-05-12", "2026-05-13", "2026-05-14", 0.45),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            backtest = Path(tmpdir) / "backtest.csv"
+            daily = Path(tmpdir) / "daily.csv"
+            overlaps = Path(tmpdir) / "overlaps.csv"
+            summary = Path(tmpdir) / "summary.json"
+            frame.to_csv(backtest, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = overlap_report.main(
+                    [
+                        "--backtests",
+                        str(backtest),
+                        "--daily-output",
+                        str(daily),
+                        "--overlap-output",
+                        str(overlaps),
+                        "--summary-output",
+                        str(summary),
+                        "--max-gross-weight",
+                        "1.0",
+                    ]
+                )
+            output_exists = daily.exists()
+
+        self.assertEqual(3, code)
+        self.assertTrue(output_exists)
+        self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
+        self.assertIn("max_gross_weight=1.15 limit=1.0", stderr.getvalue())
+
+    def test_cli_max_gross_weight_requires_weight_column(self) -> None:
+        frame = pd.DataFrame([trade("000001", "2026-05-12", "2026-05-12", "2026-05-14")])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            backtest = Path(tmpdir) / "backtest.csv"
+            daily = Path(tmpdir) / "daily.csv"
+            overlaps = Path(tmpdir) / "overlaps.csv"
+            summary = Path(tmpdir) / "summary.json"
+            frame.to_csv(backtest, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = overlap_report.main(
+                    [
+                        "--backtests",
+                        str(backtest),
+                        "--daily-output",
+                        str(daily),
+                        "--overlap-output",
+                        str(overlaps),
+                        "--summary-output",
+                        str(summary),
+                        "--max-gross-weight",
+                        "1.0",
+                    ]
+                )
+
+        self.assertEqual(3, code)
+        self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
+        self.assertIn("weight_missing", stderr.getvalue())
+
+    def test_non_numeric_or_negative_capital_fields_are_rejected(self) -> None:
+        bad_value = capitalized_trade(
+            "000001", "2026-05-12", "2026-05-12", "2026-05-14", "bad"
+        )
+        negative_value = capitalized_trade(
+            "000001", "2026-05-12", "2026-05-12", "2026-05-14", -0.1
+        )
+
+        with self.assertRaisesRegex(ValueError, "weight must be numeric"):
+            overlap_report.build_overlap_report([pd.DataFrame([bad_value])])
+        with self.assertRaisesRegex(ValueError, "weight must be >= 0"):
+            overlap_report.build_overlap_report([pd.DataFrame([negative_value])])
+
+
+def trade(
+    symbol: str,
+    signal_date: str,
+    entry_date: str,
+    exit_date: str,
+    **capital_fields: object,
+) -> dict[str, object]:
     return {
         "symbol": symbol,
         "signal_date": signal_date,
@@ -104,6 +229,23 @@ def trade(symbol: str, signal_date: str, entry_date: str, exit_date: str) -> dic
         "status": "complete",
         "entry_date": entry_date,
         "exit_date": exit_date,
+        **capital_fields,
+    }
+
+
+def capitalized_trade(
+    symbol: str,
+    signal_date: str,
+    entry_date: str,
+    exit_date: str,
+    weight: object,
+) -> dict[str, object]:
+    return {
+        **trade(symbol, signal_date, entry_date, exit_date),
+        "weight": weight,
+        "notional": 10000.0,
+        "quantity": 100,
+        "cash_reserved": 10000.0,
     }
 
 

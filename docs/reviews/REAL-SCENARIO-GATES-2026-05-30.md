@@ -129,10 +129,12 @@
 - 只读并发持仓审查确认 `/tmp/stock-selection-backtest-costs-20260530T101000/` 的 15 笔真实 complete 交易最大同时打开 12 笔，发生在 `2026-05-15`、`2026-05-18`、`2026-05-19`；同一 symbol 跨信号日重复持仓冲突共有 21 个 `date-symbol` 组合，涉及 `002594`、`300059`、`300750`、`601318`、`000333`。
 - 新增 `portfolio_overlap_report.py`，读取多个回测 CSV，按 business-day 闭区间统计 `daily_open_positions`、`max_open_positions`、同标的重叠和资金字段可验证性。
 - 真实并发门禁复验产物在 `/tmp/stock-selection-overlap-gate-20260530T112415/`；对三份真实成本/滑点回测设置 `--max-open-positions 10 --fail-on-symbol-overlap --require-capital-fields` 返回 3，并写出 `daily.csv`、`overlap.csv` 和 `summary.json`。summary 记录 `trades=15`、`complete_trades=15`、`max_open_positions=12`、`same_symbol_overlap_rows=21`、`cash_capacity_verifiable=false`、`capital_fields_missing=weight,notional,quantity,cash_reserved`。
+- 新增候选资金字段透传和 `--max-gross-weight` 权重容量门禁。复验产物在 `/tmp/stock-selection-capacity-gate-20260530T114644/`；基于同一真实 12-symbol/3 信号日候选和价格，额外写入测试用等权 `weight/notional/quantity/cash_reserved` 后复跑回测。
+- 同一复验中，`--max-gross-weight 1.0 --require-capital-fields` 返回 3，并写出 `summary_fail.json`；`--max-gross-weight 3.0 --require-capital-fields` 返回 0。summary 记录 `capital_fields_present=weight,notional,quantity,cash_reserved`、`capital_fields_missing=[]`、`cash_capacity_verifiable=true`、`weight_capacity_verifiable=true`、`max_gross_weight=2.0`、`max_gross_weight_dates=2026-05-20,2026-05-21,2026-05-22`。
 
 边界:
 
-- 成本和滑点只是简单 round-trip bps 扣减；资金曲线只是按信号日等权复利已完成交易。并发门禁已能暴露最大持仓和同标的重叠，但缺少 `weight/notional/quantity/cash_reserved` 时仍不能证明现金容量。
+- 成本和滑点只是简单 round-trip bps 扣减；资金曲线只是按信号日等权复利已完成交易。并发门禁已能暴露最大持仓、同标的重叠和权重总暴露超限；测试用资金字段可证明透传和门禁行为，不能替代真实组合或订单模型生成的现金容量证明。
 - 新 baostock 取数入口和 `--require-tradable-bars` 可拒绝 `tradestatus != 1` 的不可交易行，但回测仍不判断涨跌停状态；因此 `limit_rules_model=not_modeled` 仍必须保留。
 - 已有 12-symbol/3 信号日真实候选 CSV 与真实 OHLCV 运行记录；仍需要更大股票池、更多时间段和真实交易约束复验后，才能评价策略质量。
 
@@ -171,7 +173,7 @@
 边界:
 
 - 2-symbol 最新日 smoke 不证明全市场策略质量，也不证明样本外收益。
-- 12-symbol 三信号日回测证明了真实候选和真实 OHLCV 能进入 close-to-close 基线回测；当前代码支持 round-trip bps 扣减、等权资金曲线、取数阶段 `tradestatus` 门禁、回测级 `--require-tradable-bars` 门禁和组合并发持仓报告，但仍不覆盖真实现金容量、涨跌停或全市场泛化能力。
+- 12-symbol 三信号日回测证明了真实候选和真实 OHLCV 能进入 close-to-close 基线回测；当前代码支持 round-trip bps 扣减、等权资金曲线、取数阶段 `tradestatus` 门禁、回测级 `--require-tradable-bars` 门禁、组合并发持仓报告和测试资金字段权重容量门禁，但仍不覆盖真实现金容量、涨跌停或全市场泛化能力。
 - `--drop-invalid-rows` 成功不等于源数据无异常；审查时必须同时检查 metadata 的 `invalid_rows`、`dropped_invalid_rows`、`raw_non_trading_rows` 和 `non_trading_rows`。
 - baostock 日 K 未直接提供 `up_limit/down_limit/limit_status`；当前不得把 `preclose + pctChg`、prefix 或 `isST` 粗推解释为真实涨跌停规则已建模。
 - `generate_lightgbm_predictions.py` 当前把最新预测概率重复写入该标的评分窗口，目的是让评分脚本消费当前概率；不要解释成逐日历史预测序列。
@@ -188,7 +190,7 @@
 - akshare 正式联网入口的 hist/daily fallback、metadata 和严格失败契约。
 - yfinance 正式联网入口的 metadata、内置 timeout、空结果和严格失败契约；本轮带 `--timeout-seconds 10` 的 AAPL/MSFT 取数、校验和通用评分通过。
 - LightGBM prediction 生成器的本地契约、失败边界和合成 demo 真模型运行链路。
-- buy-hold 基线回测脚本的本地契约、失败边界、round-trip bps 成本/滑点扣减、可选 `tradestatus` 入场/退出门禁、等权资金曲线、组合阈值失败门槛和并发持仓门禁。
+- buy-hold 基线回测脚本的本地契约、失败边界、round-trip bps 成本/滑点扣减、可选 `tradestatus` 入场/退出门禁、等权资金曲线、组合阈值失败门槛、并发持仓门禁、候选资金字段透传和权重总暴露失败门禁。
 - 2-symbol baostock 真实依赖 smoke 链路: 真实行情落地、真实 LightGBM prediction 生成、QSSS 最新日评分。
 - 12-symbol baostock 多信号日真实链路: 严格信号日截断、真实 QSSS 候选生成、5 日 buy-hold 基线回测，且 `incomplete_trades=0`。
 - baostock 日 K `tradestatus/preclose/pctChg/isST` 字段可取，取数阶段可拒绝 `tradestatus != 1` 的不可交易行。

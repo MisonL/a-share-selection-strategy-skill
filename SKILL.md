@@ -30,6 +30,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `docs/qsss-derived-profile.md`：QSSS-derived A 股默认剖面、ML 口径和工程边界。
 - `docs/output-templates.md`：无法选股、0 候选和候选结果输出模板。
 - `docs/reviews/REAL-SCENARIO-GATES-2026-05-30.md`：真实任务场景门禁记录、下一步门禁优先级和仍未证明的边界。
+- `docs/reviews/P2A-BAOSTOCK-LIMIT-FIELDS-2026-05-30.md`：baostock 涨跌停字段探测报告。
 
 ## 可选第三方库
 
@@ -180,6 +181,8 @@ uv run --with pandas --with numpy python scripts/portfolio_equity_curve.py --bac
 uv run --with pandas --with numpy python scripts/portfolio_overlap_report.py --backtests qsss_backtest.csv --daily-output qsss_daily_positions.csv --overlap-output qsss_overlap.csv --summary-output qsss_overlap_summary.json --max-gross-weight 1.0 --max-gross-notional 1000000 --max-cash-reserved 1000000 --require-capital-fields
 uv run --with pandas python scripts/summarize_walk_forward_run.py --run-dir RUN_DIR --output RUN_DIR/qsss_run_summary.json --expected-symbol-count N --required-tradability-model tradestatus_entry_exit_only --required-limit-rules-model not_modeled
 ```
+
+涨跌停规则仍未建模；如需确认 baostock 字段能力，只能用 `probe_baostock_limit_fields.py` 做字段可用性探测并记录真实错误码。
 
 ## Agent 工作流
 

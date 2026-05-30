@@ -187,6 +187,7 @@
 - 同一复验显式传入信号日 `2026-04-24/2026-05-12/2026-05-15/2026-05-20`；fetch、slice、predict、validate、score、size、backtest、equity、summary 均返回 0，overlap 严格门禁返回 3 并写出 summary。`qsss_run_summary.json` 记录 `signals=4`、`candidates=20`、`completed_trades=20`、`incomplete_trades=0`、`quality_errors=0`、`portfolio_violations=5`。
 - 四信号日候选数分别为 `2026-04-24=5`、`2026-05-12=7`、`2026-05-15=5`、`2026-05-20=3`；四日均为 `raw_symbols=12`、`predicted_symbols=12`、`skipped_symbols=0`、`tradability_model=tradestatus_entry_exit_only`、`limit_rules_model=not_modeled`。
 - 四信号日资金曲线为 `periods=4`、`positions=20`、`final_equity=0.9349716121129314`、`total_return=-0.06502838788706855`、`max_drawdown=-0.0808452854798374`；组合 violation 仍为 `max_open_positions=12 > 10`、`max_gross_weight=1.9471519999999998 > 1.0`、`max_gross_notional=1947152.0 > 1000000.0`、`max_cash_reserved=1947152.0 > 1000000.0`、`same_symbol_overlap_rows=21`。
+- P2a baostock 涨跌停字段探测已脚本化，报告见 `docs/reviews/P2A-BAOSTOCK-LIMIT-FIELDS-2026-05-30.md`；产物在 `/tmp/stock-selection-p2a-limit-field-probe-20260530T135328/`，`supported_candidate_fields=[]`、`unsupported_candidate_fields=up_limit,down_limit,limit_status,is_trading,suspended`、错误码均为 `10004012`，`available_control_fields=preclose,pctChg,tradestatus,isST,turn,volume,amount`。
 
 边界:
 
@@ -194,6 +195,7 @@
 - 12-symbol 三信号日回测证明了真实候选和真实 OHLCV 能进入 close-to-close 基线回测；当前代码支持 round-trip bps 扣减、等权资金曲线、取数阶段 `tradestatus` 门禁、回测级 `--require-tradable-bars` 门禁、组合并发持仓报告和测试资金字段权重容量门禁，但仍不覆盖真实现金容量、涨跌停或全市场泛化能力。
 - current-code 复验只证明固定 12-symbol、三信号日、5 日持有、10 bps 成本、5 bps 滑点和 `tradestatus` 入场/退出门禁下的可复跑边界；不能外推为全市场样本外收益有效。
 - P1 四信号日扩展复验只证明同一固定池新增 `2026-04-24` 后仍能按固定门禁复跑；不能外推为策略正期望、全市场泛化、真实成交容量或涨跌停规则已覆盖。
+- P2a 字段探测只证明 baostock 日 K 当前候选字段不可用；不等同于真实涨跌停规则门禁通过。
 - `--drop-invalid-rows` 成功不等于源数据无异常；审查时必须同时检查 metadata 的 `invalid_rows`、`dropped_invalid_rows`、`raw_non_trading_rows` 和 `non_trading_rows`。
 - baostock 日 K 未直接提供 `up_limit/down_limit/limit_status`；当前不得把 `preclose + pctChg`、prefix 或 `isST` 粗推解释为真实涨跌停规则已建模。
 - `generate_lightgbm_predictions.py` 当前把最新预测概率重复写入该标的评分窗口，目的是让评分脚本消费当前概率；不要解释成逐日历史预测序列。
@@ -202,7 +204,7 @@
 ## Current Next Gates / 下一步门禁
 
 - P1: 扩大 A 股真实 QSSS 门禁。用更大股票池和更多历史信号日，按信号日截断、真实 LightGBM 生成、QSSS 评分、sizing、成本/滑点、`--require-tradable-bars` 回测、组合并发和容量报告完整复跑；通过条件必须绑定产物目录、metadata、summary、退出码和固定阈值。
-- P2: 真实涨跌停规则门禁。先确认可靠数据源字段；未取得 `up_limit/down_limit/limit_status` 等直接字段前，不得把 `preclose/pctChg/isST` 粗推写成已建模。
+- P2: 真实涨跌停规则门禁。P2a 已确认当前 baostock 日 K 无直接 `up_limit/down_limit/limit_status/is_trading/suspended` 字段；未取得可靠直接字段或另起明确规则建模任务前，不得把 `preclose/pctChg/isST` 粗推写成已建模。
 - P3: 外部源稳定性观察。akshare `stock_zh_a_hist`、yfinance/Yahoo 和 baostock 长期稳定性只能按固定脚本持续复验，不优先于 P1 的 A 股真实策略门禁。
 
 ## 当前结论

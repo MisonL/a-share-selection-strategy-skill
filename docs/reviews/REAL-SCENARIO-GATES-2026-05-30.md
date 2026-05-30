@@ -27,18 +27,19 @@
 
 ## 场景 G: akshare A 股映射
 
-状态: 外部源可用性不稳定；中文列 `stock_zh_a_hist` 曾通过，本轮复验失败；`stock_zh_a_daily` fallback 当前可用。
+状态: 外部源可用性不稳定；中文列 `stock_zh_a_hist` 曾通过，本轮复验失败；`stock_zh_a_daily` fallback 在指定复验窗口可用。
 
 证据:
 
 - `uv run --with akshare --with pandas --with numpy` 可安装并导入 akshare `1.18.64`。
 - 历史门禁中 `ak.stock_zh_a_hist(symbol="000001", ...)` 成功返回 338 行，样本取 160 行。
 - 本轮严格中文列路径在 `/tmp/stock-selection-akshare-current-retry-20260530T092022/` 三次失败，错误为 `RemoteDisconnected`。
-- `stock_zh_a_daily(symbol="sz000001", ...)` 当前可用；产物在 `/tmp/stock-selection-akshare-alt-20260530T092125/`，映射后 177 行，日期范围 `2025-09-01` 到 `2026-05-29`。
+- `stock_zh_a_daily(symbol="sz000001", ...)` 在 `/tmp/stock-selection-akshare-alt-20260530T092125/` 复验窗口可用，映射后 177 行，日期范围 `2025-09-01` 到 `2026-05-29`。
 - `stock_zh_a_daily` 映射使用 `volume -> volume`、`amount -> amount`、`turnover -> turn`，`validate_ohlcv.py` 返回 0，通用 `score_candidates.py` 返回 0 且候选数为 0。
 - 新增 `fetch_akshare_a_share.py`，正式入口优先尝试 `stock_zh_a_hist`，失败或空结果时记录 `fallback_errors` 并转用 `stock_zh_a_daily`。
 - 正式入口复验产物在 `/tmp/stock-selection-akshare-cli-real-20260530T093800/`；取数返回 0，metadata 记录 `rows=177`、`symbols[0].provider=stock_zh_a_daily`、`len(fallback_errors)=1`，随后通用校验和评分均返回 0。
 - 连续 3 次正式入口复验产物在 `/tmp/akshare-a-share-stability-20260530103633-49722`；三次 `stock_zh_a_hist` 均被远端断开并记录 1 条 `fallback_errors`，三次均 fallback 到 `stock_zh_a_daily`，`rows=177`、`symbol_count=1`、`failed_symbols=[]`、`empty_symbols=[]`，通用 `validate_ohlcv.py` 均返回 0。
+- 当前外部源复验产物在 `/tmp/stock-selection-external-sources-current-20260530T125716/akshare/`；正式入口返回 0，metadata 记录 `rows=177`、`symbol_count=1`、`failed_symbols=[]`、`empty_symbols=[]`、`symbols[0].provider=stock_zh_a_daily`、`len(fallback_errors)=1`，后续 `validate_ohlcv.py` 和通用 `score_candidates.py` 均返回 0。
 - QSSS-derived 校验按预期拒绝 `market=A股`、`000001.SZ`、缺 `prediction_score`、缺 `turn`。
 - 补齐外部 `prediction_score` 后，`score_candidates.py` 返回 0，并输出 `prediction_source=external_unverified lightgbm_not_executed_by_this_script=true`。
 
@@ -66,12 +67,13 @@
 - 本轮复验产物在 `/tmp/stock-selection-yfinance-current-20260530T084650/`；yfinance AAPL/MSFT 取数返回 1，错误包括 `curl: (28) Connection timed out after 30002 milliseconds`、`curl: (35) TLS connect error`、`yfinance returned empty dataframe for symbols=['AAPL', 'MSFT']`，未生成 `aapl_msft_ohlcv.csv`。
 - 同一目录的 Yahoo chart API 直连探针返回 1；AAPL 为 `UNEXPECTED_EOF_WHILE_READING`，MSFT 为 handshake timeout。
 - 新增正式入口后，`fetch_yfinance_ohlcv.py --symbols AAPL,MSFT --start-date 2024-01-01 --end-date 2026-05-29 --fail-on-fetch-error` 在 `/tmp/stock-selection-yfinance-cli-real-20260530T091000/` 返回 3，耗时 59.47 秒，写出空 CSV 和 metadata。
-- 该 metadata 记录 `rows=0`、`symbol_count=0`、`failed_symbols=2`、`empty_symbols=['AAPL','MSFT']`，错误为 Yahoo TLS connect error；对空 CSV 运行 `validate_ohlcv.py` 返回 1，运行 `score_candidates.py` 返回 2。
+- 该 metadata 记录 `rows=0`、`symbol_count=0`、`len(failed_symbols)=2`、`empty_symbols=['AAPL','MSFT']`，错误为 Yahoo TLS connect error；对空 CSV 运行 `validate_ohlcv.py` 返回 1，运行 `score_candidates.py` 返回 2。
 - README 干净路径复验产物在 `/tmp/stock-selection-readme-clean-20260530T091810/us/`；yfinance 命令用 60 秒外部超时包裹后成功，metadata 记录 `rows=1206`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`。
 - 新增脚本内 `--timeout-seconds` 后，受控复验产物在 `/tmp/stock-selection-yfinance-current-20260530T095106/`；`--timeout-seconds 10` 取数返回 0，耗时 2.592 秒，metadata 记录 `rows=1206`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`、`timeout_seconds=10.0`。
 - 同一产物的 `validate_ohlcv.py` 返回 0，`score_candidates.py` 返回 0，候选数为 0，stderr 提示缺少 `turn/turnover` 时通用模式使用 neutral turnover 序列。
 - 连续 3 次受控复验产物在 `/tmp/stock-selection-yfinance-repeat-20260530T100324/`；三次 fetch 均返回 0，耗时分别为 2.644 秒、2.006 秒、1.738 秒，metadata 均记录 `rows=1206`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`、`timeout_seconds=10.0`，后续校验和评分均返回 0。
 - 再次连续 3 次受控复验产物在 `/tmp/stock-selection-yfinance-stability-20260530T111830-76636/`；三次 `fetch_yfinance_ohlcv.py`、通用 `validate_ohlcv.py` 和通用 `score_candidates.py` 均返回 0，metadata 均记录 `rows=1206`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`、`timeout_seconds=10.0`。
+- 当前外部源复验产物在 `/tmp/stock-selection-external-sources-current-20260530T125716/yfinance/`；`fetch_yfinance_ohlcv.py --timeout-seconds 10` 返回 0，metadata 记录 `rows=1206`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`、`timeout_seconds=10.0`，后续 `validate_ohlcv.py` 和通用 `score_candidates.py` 均返回 0。
 
 边界:
 

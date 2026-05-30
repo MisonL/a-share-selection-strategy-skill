@@ -145,7 +145,7 @@ uv run --with pandas --with numpy --with baostock python scripts/fetch_baostock_
   --fail-on-fetch-error
 ```
 
-akshare A 股入口会先尝试 `stock_zh_a_hist` 中文列；该接口失败或空结果时，会在 metadata 中记录 `fallback_errors` 并转用 `stock_zh_a_daily` 英文字段。
+akshare A 股入口会先尝试 `stock_zh_a_hist` 中文列；该接口失败或空结果时，会在 metadata 中记录 `fallback_errors` 并转用 `stock_zh_a_daily` 英文字段。真实环境失败时命令应非 0，不得改用 mock 或缓存样例冒充成功。
 
 ```bash
 uv run --with pandas --with numpy --with akshare python scripts/fetch_akshare_a_share.py \
@@ -157,7 +157,7 @@ uv run --with pandas --with numpy --with akshare python scripts/fetch_akshare_a_
   --fail-on-fetch-error
 ```
 
-美股等通用 OHLCV 可先通过 yfinance 落地，再走通用校验和评分。真实环境失败时命令会非 0；门禁不能只看退出码，还必须检查 metadata 中 `rows > 0`、`symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`。该脚本写入原始 `Close`，不会用 `Adj Close` 静默替代 `close`；`--timeout-seconds` 用于限制每票拉取超时。
+美股等通用 OHLCV 可先通过 yfinance 落地，再走通用校验和评分。真实环境失败时命令会非 0，不得改用 mock 或缓存样例冒充成功；门禁还必须检查 metadata 中 `rows > 0`、`symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`。该脚本写入原始 `Close`，不会用 `Adj Close` 静默替代 `close`；`--timeout-seconds` 用于限制每票拉取超时。
 
 ```bash
 uv run --with pandas --with numpy --with yfinance python scripts/fetch_yfinance_ohlcv.py \

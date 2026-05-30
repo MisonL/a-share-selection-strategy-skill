@@ -68,10 +68,12 @@
 - README 干净路径复验产物在 `/tmp/stock-selection-readme-clean-20260530T091810/us/`；yfinance 命令用 60 秒外部超时包裹后成功，metadata 记录 `rows=1206`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`。
 - 新增脚本内 `--timeout-seconds` 后，受控复验产物在 `/tmp/stock-selection-yfinance-current-20260530T095106/`；`--timeout-seconds 10` 取数返回 0，耗时 2.592 秒，metadata 记录 `rows=1206`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`、`timeout_seconds=10.0`。
 - 同一产物的 `validate_ohlcv.py` 返回 0，`score_candidates.py` 返回 0，候选数为 0，stderr 提示缺少 `turn/turnover` 时通用模式使用 neutral turnover 序列。
+- 连续 3 次受控复验产物在 `/tmp/stock-selection-yfinance-repeat-20260530T100324/`；三次 fetch 均返回 0，耗时分别为 2.644 秒、2.006 秒、1.738 秒，metadata 均记录 `rows=1206`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`、`timeout_seconds=10.0`，后续校验和评分均返回 0。
 
 边界:
 
 - 本场景证明 yfinance 当前环境存在波动，不应把单次成功或失败推广为稳定可用性结论。
+- 连续 3 次成功只证明当前窗口内指定参数可用，不证明 Yahoo 源长期稳定可用。
 - `--timeout-seconds` 只限制每票 yfinance history 拉取等待时间，不能证明 Yahoo 源稳定可用。
 - yfinance 只满足通用 OHLCV；若用于 QSSS-derived，仍需外部补齐 `market=A-share`、真实上游 `prediction_score` 和 `turn` 或 `turnover`。
 - 本轮新增 `fetch_yfinance_ohlcv.py` 作为正式联网入口；单元测试只覆盖字段映射、`Close` 口径、metadata 和空结果严格失败，不替代真实 Yahoo 网络门禁。
@@ -98,21 +100,26 @@
 
 ## 场景 M: buy-hold 基线回测
 
-状态: 本地契约门禁已建立；baostock 真实候选和真实 OHLCV 已进入 12-symbol/3 信号日 close-to-close 基线回测；仍不代表完整策略回测。
+状态: 本地契约门禁已建立；baostock 真实候选和真实 OHLCV 已进入 12-symbol/3 信号日 close-to-close 基线回测；新增 round-trip bps 成本和滑点扣减，但仍不代表完整策略回测。
 
 证据:
 
 - 本轮新增 `scripts/backtest_buy_hold.py`。
 - 脚本只做信号日收盘价到未来第 N 个可用交易行收盘价的 close-to-close buy-hold 基线。
 - 候选日期必须精确匹配 OHLCV 日期，不自动滚动到下一交易日。
-- 输出显式标记 `cost_model=excluded`、`slippage_model=excluded`、`tradability_model=not_modeled`。
+- 输出显式标记 `cost_model=round_trip_bps`、`slippage_model=round_trip_bps`、`tradability_model=not_modeled`、`limit_rules_model=not_modeled`。
+- `--cost-bps` 和 `--slippage-bps` 只按 round-trip bps 从 `gross_return` 中扣减，并额外输出 `cost_bps`、`slippage_bps` 和扣减后的 `return`。
 - 本轮新增 `tests/test_buy_hold_backtest_cli.py`，覆盖正常收益、缺入场日不回退、严格模式遇到缺数据非 0 且不写输出。
+- 本轮测试补充覆盖 `cost_bps=12.5`、`slippage_bps=7.5` 时 `return = gross_return - 0.002`，以及负成本或负滑点显式失败。
 - 本地合成 demo 完成路径已通过: 先用 180 日行情切出截至 `2025-07-31` 的信号窗口生成候选，再用完整行情运行 `backtest_buy_hold.py --hold-days 5`，输出 `completed_trades=2`、`incomplete_trades=0`。
 - 本次合成 demo 的回测收益范围为 `0.0059836162887334` 到 `0.0071089378908271`。
+- 已有真实 `/tmp/stock-selection-ashare-scan-20260530-032723/` 回测产物仍是旧格式，字段值为 `cost_model=excluded`、`slippage_model=excluded`，尚未用 round-trip bps 参数复跑。
+- 使用同一 12-symbol/3 信号日产物复跑 round-trip bps 回测，产物在 `/tmp/stock-selection-backtest-costs-20260530T101000/`；三次命令均返回 0，`cost_bps=10.0`、`slippage_bps=5.0`、`incomplete_trades=0`。
+- 成本/滑点复跑结果显示每笔 `return = gross_return - 0.0015`；`2026-05-12` 净收益范围为 `-0.084328` 到 `-0.023832`，`2026-05-15` 为 `-0.034293` 到 `-0.013157`，`2026-05-20` 为 `-0.019537` 到 `-0.001379`。
 
 边界:
 
-- 该脚本不覆盖交易成本、滑点、涨跌停、停牌可交易性或组合资金曲线。
+- 成本和滑点只是简单 round-trip bps 扣减，不覆盖涨跌停、停牌可交易性或组合资金曲线。
 - 已有 12-symbol/3 信号日真实候选 CSV 与真实 OHLCV 运行记录；仍需要更大股票池、更多时间段和真实交易约束复验后，才能评价策略质量。
 
 ## 场景 U: baostock A 股全链路
@@ -144,7 +151,7 @@
 边界:
 
 - 2-symbol 最新日 smoke 不证明全市场策略质量，也不证明样本外收益。
-- 12-symbol 三信号日回测证明了真实候选和真实 OHLCV 能进入当前 close-to-close 基线回测；它仍不覆盖交易成本、滑点、涨跌停、停牌可交易性、组合资金曲线或全市场泛化能力。
+- 12-symbol 三信号日回测证明了真实候选和真实 OHLCV 能进入 close-to-close 基线回测；当前代码支持 round-trip bps 扣减并已复跑真实 12-symbol/3 信号日产物，但仍不覆盖涨跌停、停牌可交易性、组合资金曲线或全市场泛化能力。
 - `--drop-invalid-rows` 成功不等于源数据无异常；审查时必须同时检查 metadata 的 `invalid_rows` 和 `dropped_invalid_rows`。
 - `generate_lightgbm_predictions.py` 当前把最新预测概率重复写入该标的评分窗口，目的是让评分脚本消费当前概率；不要解释成逐日历史预测序列。
 - baostock 复权口径为 `adjustflag=3`，后续报告必须继续记录复权口径。
@@ -160,7 +167,7 @@
 - akshare 正式联网入口的 hist/daily fallback、metadata 和严格失败契约。
 - yfinance 正式联网入口的 metadata、内置 timeout、空结果和严格失败契约；本轮带 `--timeout-seconds 10` 的 AAPL/MSFT 取数、校验和通用评分通过。
 - LightGBM prediction 生成器的本地契约、失败边界和合成 demo 真模型运行链路。
-- buy-hold 基线回测脚本的本地契约和失败边界。
+- buy-hold 基线回测脚本的本地契约、失败边界和 round-trip bps 成本/滑点扣减。
 - 2-symbol baostock 真实依赖 smoke 链路: 真实行情落地、真实 LightGBM prediction 生成、QSSS 最新日评分。
 - 12-symbol baostock 多信号日真实链路: 严格信号日截断、真实 QSSS 候选生成、5 日 buy-hold 基线回测，且 `incomplete_trades=0`。
 - 信号日截断防未来泄漏门禁。
@@ -170,4 +177,4 @@
 
 - akshare `stock_zh_a_hist` 中文列接口在当前环境可稳定取数。
 - yfinance/Yahoo 在当前环境可稳定取数。
-- 全市场级 QSSS 策略质量、样本外收益、交易成本、滑点、涨跌停和停牌可交易性。
+- 全市场级 QSSS 策略质量、样本外收益、涨跌停、停牌可交易性和组合资金曲线。

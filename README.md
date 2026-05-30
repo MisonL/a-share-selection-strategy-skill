@@ -196,10 +196,10 @@ uv run --with pandas --with numpy python scripts/backtest_buy_hold.py \
   --candidates /tmp/stock-selection-a-share/qsss_candidates.csv \
   --output /tmp/stock-selection-a-share/qsss_backtest.csv \
   --hold-days 5 \
+  --cost-bps 10 --slippage-bps 5 \
   --fail-on-incomplete
 ```
-
-如果需要最小 buy-hold 基线回测，可使用 `backtest_buy_hold.py`。它只做信号日收盘价到未来第 N 个可用交易行收盘价的 close-to-close 基线，不扣交易成本、不模拟滑点、不判断涨跌停或停牌可交易性。
+如果需要最小 buy-hold 基线回测，可使用 `backtest_buy_hold.py`。它只做信号日收盘价到未来第 N 个可用交易行收盘价的 close-to-close 基线；`--cost-bps` 和 `--slippage-bps` 只按 round-trip bps 从 gross return 中扣减，不判断涨跌停、停牌可交易性或组合资金曲线。
 
 输入约定：`symbol` 必须按文本保存以保留前导零；校验脚本会拒绝 1 到 3 位纯数字代码，避免把 `000001` 这类 A 股代码被表格软件损坏后的值当作有效输入。`date` 支持 `YYYY-MM-DD` 或 `YYYYMMDD`；`volume` 单位必须在同一文件内保持一致，脚本只能校验数值和非负，无法从纯数值可靠判断“股/手/张/成交额”是否混用。QSSS-derived 的 `market` 只接受精确值 `A-share`，不会自动归一化 `A股`、`China` 等别名。
 

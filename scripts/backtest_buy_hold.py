@@ -22,6 +22,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--candidates", required=True, help="Path to candidates CSV.")
     parser.add_argument("--output", required=True, help="Path to output CSV.")
     parser.add_argument("--hold-days", "--holding-days", dest="hold_days", type=int, default=5)
+    parser.add_argument("--cost-bps", type=float, default=0.0, help="Round-trip cost in basis points.")
+    parser.add_argument("--slippage-bps", type=float, default=0.0, help="Round-trip slippage in basis points.")
     parser.add_argument("--fail-on-incomplete", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -29,6 +31,8 @@ def main(argv: list[str] | None = None) -> int:
             read_table(Path(args.prices)),
             read_table(Path(args.candidates)),
             hold_days=args.hold_days,
+            cost_bps=args.cost_bps,
+            slippage_bps=args.slippage_bps,
         )
         if args.fail_on_incomplete and summary["incomplete_trades"]:
             print_summary(summary, args.output, prefix="ERROR_SUMMARY")
@@ -57,20 +61,26 @@ def run_backtest(
     candidates: pd.DataFrame,
     *,
     hold_days: int,
+    cost_bps: float = 0.0,
+    slippage_bps: float = 0.0,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     if hold_days < 1:
         raise ValueError("hold-days must be >= 1")
+    if cost_bps < 0:
+        raise ValueError("cost-bps must be >= 0")
+    if slippage_bps < 0:
+        raise ValueError("slippage-bps must be >= 0")
     price_errors = validate_frame(prices, min_history_rows=0)
     if price_errors:
         raise ValueError("; ".join(price_errors))
     validate_candidates(candidates)
     prepared = prepare_prices(prices)
     rows = [
-        evaluate_candidate(row, prepared, hold_days)
+        evaluate_candidate(row, prepared, hold_days, cost_bps, slippage_bps)
         for _, row in candidates.iterrows()
     ]
     result = pd.DataFrame(rows)
-    return result, build_summary(result, hold_days)
+    return result, build_summary(result, hold_days, cost_bps, slippage_bps)
 
 
 def validate_candidates(candidates: pd.DataFrame) -> None:
@@ -94,20 +104,52 @@ def evaluate_candidate(
     row: pd.Series,
     prices: pd.DataFrame,
     holding_days: int,
+    cost_bps: float,
+    slippage_bps: float,
 ) -> dict[str, Any]:
     symbol = str(row["symbol"])
     signal_date = parse_dates(pd.Series([row["date"]])).iloc[0]
     history = prices[prices["symbol"] == symbol].reset_index(drop=True)
     if pd.isna(signal_date) or history.empty:
-        return incomplete_row(symbol, row["date"], holding_days, "missing_entry_price")
+        return incomplete_row(
+            symbol,
+            row["date"],
+            holding_days,
+            "missing_entry_price",
+            cost_bps,
+            slippage_bps,
+        )
     entry_positions = history.index[history["date"] == signal_date].tolist()
     if not entry_positions:
-        return incomplete_row(symbol, signal_date.date(), holding_days, "missing_entry_price")
+        return incomplete_row(
+            symbol,
+            signal_date.date(),
+            holding_days,
+            "missing_entry_price",
+            cost_bps,
+            slippage_bps,
+        )
     entry_pos = int(entry_positions[0])
     exit_pos = entry_pos + holding_days
     if exit_pos >= len(history):
-        return incomplete_row(symbol, signal_date.date(), holding_days, "missing_future_price")
-    return completed_row(symbol, signal_date.date(), history, entry_pos, exit_pos, holding_days)
+        return incomplete_row(
+            symbol,
+            signal_date.date(),
+            holding_days,
+            "missing_future_price",
+            cost_bps,
+            slippage_bps,
+        )
+    return completed_row(
+        symbol,
+        signal_date.date(),
+        history,
+        entry_pos,
+        exit_pos,
+        holding_days,
+        cost_bps,
+        slippage_bps,
+    )
 
 
 def completed_row(
@@ -117,11 +159,15 @@ def completed_row(
     entry_pos: int,
     exit_pos: int,
     holding_days: int,
+    cost_bps: float,
+    slippage_bps: float,
 ) -> dict[str, Any]:
     entry = history.iloc[entry_pos]
     exit_row = history.iloc[exit_pos]
     entry_close = float(entry["close"])
     exit_close = float(exit_row["close"])
+    gross_return = exit_close / entry_close - 1
+    total_deduction = bps_to_ratio(cost_bps + slippage_bps)
     return {
         **base_row(symbol, signal_date),
         "entry_date": entry["date"].date().isoformat(),
@@ -130,7 +176,10 @@ def completed_row(
         "exit_close": exit_close,
         "hold_days_requested": holding_days,
         "holding_period": int(exit_pos - entry_pos),
-        "return": exit_close / entry_close - 1,
+        "gross_return": gross_return,
+        "cost_bps": cost_bps,
+        "slippage_bps": slippage_bps,
+        "return": gross_return - total_deduction,
         "missing_data": False,
         "missing_reason": "none",
         "status": "complete",
@@ -142,6 +191,8 @@ def incomplete_row(
     signal_date: Any,
     holding_days: int,
     reason: str,
+    cost_bps: float,
+    slippage_bps: float,
 ) -> dict[str, Any]:
     return {
         **base_row(symbol, signal_date),
@@ -151,6 +202,9 @@ def incomplete_row(
         "exit_close": pd.NA,
         "hold_days_requested": holding_days,
         "holding_period": pd.NA,
+        "gross_return": pd.NA,
+        "cost_bps": cost_bps,
+        "slippage_bps": slippage_bps,
         "return": pd.NA,
         "missing_data": True,
         "missing_reason": reason,
@@ -162,14 +216,19 @@ def base_row(symbol: str, signal_date: Any) -> dict[str, Any]:
     return {
         "symbol": symbol,
         "signal_date": str(signal_date),
-        "cost_model": "excluded",
-        "slippage_model": "excluded",
+        "cost_model": "round_trip_bps",
+        "slippage_model": "round_trip_bps",
         "tradability_model": "not_modeled",
         "limit_rules_model": "not_modeled",
     }
 
 
-def build_summary(result: pd.DataFrame, holding_days: int) -> dict[str, Any]:
+def build_summary(
+    result: pd.DataFrame,
+    holding_days: int,
+    cost_bps: float,
+    slippage_bps: float,
+) -> dict[str, Any]:
     completed = int((result["missing_data"] == False).sum())
     total = int(len(result))
     return {
@@ -177,6 +236,8 @@ def build_summary(result: pd.DataFrame, holding_days: int) -> dict[str, Any]:
         "completed_trades": completed,
         "incomplete_trades": total - completed,
         "hold_days": int(holding_days),
+        "cost_bps": float(cost_bps),
+        "slippage_bps": float(slippage_bps),
         "missing_reason_counts": missing_reason_counts(result),
     }
 
@@ -191,15 +252,22 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
         f"{prefix}: candidates={summary['candidates']} "
         f"completed_trades={summary['completed_trades']} "
         f"incomplete_trades={summary['incomplete_trades']} "
-        f"hold_days={summary['hold_days']} output={output}"
+        f"hold_days={summary['hold_days']} "
+        f"cost_bps={summary['cost_bps']} "
+        f"slippage_bps={summary['slippage_bps']} output={output}"
     )
     if summary["missing_reason_counts"]:
         print(f"INFO: missing_reason_counts={summary['missing_reason_counts']}")
     print(
-        "INFO: baseline=buy_hold_close_to_close costs=excluded "
-        "slippage=excluded tradability_model=not_modeled "
+        "INFO: baseline=buy_hold_close_to_close "
+        "cost_model=round_trip_bps slippage_model=round_trip_bps "
+        "tradability_model=not_modeled "
         "suspension=missing_future_price"
     )
+
+
+def bps_to_ratio(value: float) -> float:
+    return float(value) / 10000.0
 
 
 def missing_reason_counts(result: pd.DataFrame) -> str:

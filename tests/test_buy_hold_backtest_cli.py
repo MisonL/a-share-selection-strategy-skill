@@ -26,15 +26,27 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         candidate = prices[prices["symbol"] == "000002"].iloc[[20]][
             ["symbol", "date"]
         ]
-        result, summary = backtest.run_backtest(prices, candidate, hold_days=5)
+        result, summary = backtest.run_backtest(
+            prices,
+            candidate,
+            hold_days=5,
+            cost_bps=12.5,
+            slippage_bps=7.5,
+        )
         history = prices[prices["symbol"] == "000002"].reset_index(drop=True)
-        expected = history.loc[25, "close"] / history.loc[20, "close"] - 1
+        gross = history.loc[25, "close"] / history.loc[20, "close"] - 1
+        expected = gross - 0.002
 
         self.assertEqual(1, summary["completed_trades"])
         self.assertEqual(0, summary["incomplete_trades"])
+        self.assertEqual(12.5, summary["cost_bps"])
+        self.assertEqual(7.5, summary["slippage_bps"])
+        self.assertAlmostEqual(gross, float(result["gross_return"].iloc[0]))
         self.assertAlmostEqual(expected, float(result["return"].iloc[0]))
-        self.assertEqual("excluded", result["cost_model"].iloc[0])
-        self.assertEqual("excluded", result["slippage_model"].iloc[0])
+        self.assertEqual(12.5, float(result["cost_bps"].iloc[0]))
+        self.assertEqual(7.5, float(result["slippage_bps"].iloc[0]))
+        self.assertEqual("round_trip_bps", result["cost_model"].iloc[0])
+        self.assertEqual("round_trip_bps", result["slippage_model"].iloc[0])
         self.assertEqual("not_modeled", result["tradability_model"].iloc[0])
         self.assertEqual("not_modeled", result["limit_rules_model"].iloc[0])
 
@@ -45,6 +57,16 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         self.assertEqual(1, summary["incomplete_trades"])
         self.assertTrue(bool(result["missing_data"].iloc[0]))
         self.assertEqual("missing_entry_price", result["missing_reason"].iloc[0])
+
+    def test_negative_cost_or_slippage_is_rejected(self) -> None:
+        prices = build_frame(days=130)
+        candidate = prices[prices["symbol"] == "000002"].iloc[[20]][
+            ["symbol", "date"]
+        ]
+        with self.assertRaisesRegex(ValueError, "cost-bps"):
+            backtest.run_backtest(prices, candidate, hold_days=5, cost_bps=-1)
+        with self.assertRaisesRegex(ValueError, "slippage-bps"):
+            backtest.run_backtest(prices, candidate, hold_days=5, slippage_bps=-1)
 
     def test_cli_strict_incomplete_returns_error_without_output(self) -> None:
         prices = build_frame(days=130)
@@ -99,6 +121,10 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
                         str(output_path),
                         "--hold-days",
                         "5",
+                        "--cost-bps",
+                        "10",
+                        "--slippage-bps",
+                        "5",
                         "--fail-on-incomplete",
                     ]
                 )
@@ -106,6 +132,8 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         self.assertFalse(output_path.exists())
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn("missing_reason_counts=missing_future_price:1", stdout.getvalue())
+        self.assertIn("cost_bps=10.0", stdout.getvalue())
+        self.assertIn("slippage_bps=5.0", stdout.getvalue())
         self.assertIn("incomplete_trades=1", stderr.getvalue())
 
 

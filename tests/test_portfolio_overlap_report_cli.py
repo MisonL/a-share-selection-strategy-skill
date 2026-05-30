@@ -1,0 +1,122 @@
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
+from pathlib import Path
+
+import pandas as pd
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPTS = ROOT / "scripts"
+sys_path = __import__("sys").path
+sys_path.insert(0, str(SCRIPTS))
+
+import portfolio_overlap_report as overlap_report  # noqa: E402
+
+
+class PortfolioOverlapReportCliTests(unittest.TestCase):
+    def test_build_overlap_report_counts_overlap_and_missing_capital_fields(self) -> None:
+        frame = pd.DataFrame(
+            [
+                trade("000001", "2026-05-12", "2026-05-12", "2026-05-14"),
+                trade("000001", "2026-05-13", "2026-05-13", "2026-05-15"),
+                trade("000002", "2026-05-12", "2026-05-13", "2026-05-13"),
+                incomplete_trade("000003", "2026-05-12"),
+            ]
+        )
+
+        daily, overlaps, summary = overlap_report.build_overlap_report([frame])
+
+        self.assertEqual(4, summary["trades"])
+        self.assertEqual(3, summary["complete_trades"])
+        self.assertEqual(1, summary["incomplete_trades"])
+        self.assertEqual(3, summary["max_open_positions"])
+        self.assertEqual(["2026-05-13"], summary["max_open_position_dates"])
+        self.assertEqual(2, summary["same_symbol_overlap_rows"])
+        self.assertEqual(["000001"], summary["same_symbol_overlap_symbols"])
+        self.assertFalse(summary["cash_capacity_verifiable"])
+        self.assertEqual(["weight", "notional", "quantity", "cash_reserved"], summary["capital_fields_missing"])
+        self.assertEqual(["2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15"], daily["date"].tolist())
+        self.assertEqual(2, len(overlaps))
+        self.assertEqual(["000001"], sorted(overlaps["symbol"].unique().tolist()))
+
+    def test_cli_reports_real_overlap_and_writes_outputs(self) -> None:
+        first = pd.DataFrame(
+            [
+                trade("000001", "2026-05-12", "2026-05-12", "2026-05-14"),
+                trade("000002", "2026-05-12", "2026-05-12", "2026-05-13"),
+            ]
+        )
+        second = pd.DataFrame(
+            [
+                trade("000001", "2026-05-13", "2026-05-13", "2026-05-15"),
+                trade("000003", "2026-05-13", "2026-05-13", "2026-05-13"),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            first_path = Path(tmpdir) / "first.csv"
+            second_path = Path(tmpdir) / "second.csv"
+            daily = Path(tmpdir) / "daily.csv"
+            overlaps = Path(tmpdir) / "overlaps.csv"
+            summary = Path(tmpdir) / "summary.json"
+            first.to_csv(first_path, index=False)
+            second.to_csv(second_path, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = overlap_report.main(
+                    [
+                        "--backtests",
+                        str(first_path),
+                        str(second_path),
+                        "--daily-output",
+                        str(daily),
+                        "--overlap-output",
+                        str(overlaps),
+                        "--summary-output",
+                        str(summary),
+                        "--max-open-positions",
+                        "3",
+                        "--fail-on-symbol-overlap",
+                    ]
+                )
+
+            data = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(3, code)
+            self.assertTrue(daily.exists())
+            self.assertTrue(overlaps.exists())
+            self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
+            self.assertIn("max_open_positions=4 limit=3", stderr.getvalue())
+            self.assertIn("same_symbol_overlap_rows=", stderr.getvalue())
+            self.assertEqual(4, data["max_open_positions"])
+            self.assertEqual(2, data["same_symbol_overlap_rows"])
+
+
+def trade(symbol: str, signal_date: str, entry_date: str, exit_date: str) -> dict[str, object]:
+    return {
+        "symbol": symbol,
+        "signal_date": signal_date,
+        "missing_data": False,
+        "status": "complete",
+        "entry_date": entry_date,
+        "exit_date": exit_date,
+    }
+
+
+def incomplete_trade(symbol: str, signal_date: str) -> dict[str, object]:
+    return {
+        "symbol": symbol,
+        "signal_date": signal_date,
+        "missing_data": True,
+        "status": "incomplete",
+        "entry_date": "",
+        "exit_date": "",
+    }
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import sys
 from pathlib import Path
 from typing import Any
@@ -11,9 +12,23 @@ from typing import Any
 import pandas as pd
 
 from stock_selection_data import parse_dates, read_table
+from stock_selection_backtest_rows import (
+    LIMIT_RULES_MODEL,
+    build_summary,
+    completed_row,
+    incomplete_row,
+)
 from stock_selection_capital import add_candidate_capital_fields
 from stock_selection_tradability import tradability_failure_reason
 from validate_ohlcv import validate_frame
+
+
+@dataclass(frozen=True)
+class BacktestOptions:
+    holding_days: int
+    cost_bps: float
+    slippage_bps: float
+    require_tradable_bars: bool
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -80,8 +95,14 @@ def run_backtest(
         raise ValueError("; ".join(price_errors))
     validate_candidates(candidates)
     prepared = prepare_prices(prices)
+    options = BacktestOptions(
+        holding_days=hold_days,
+        cost_bps=cost_bps,
+        slippage_bps=slippage_bps,
+        require_tradable_bars=require_tradable_bars,
+    )
     rows = [
-        evaluate_candidate(row, prepared, hold_days, cost_bps, slippage_bps, require_tradable_bars)
+        evaluate_candidate(row, prepared, options)
         for _, row in candidates.iterrows()
     ]
     result = add_candidate_capital_fields(pd.DataFrame(rows), candidates)
@@ -108,152 +129,106 @@ def prepare_prices(prices: pd.DataFrame) -> pd.DataFrame:
 def evaluate_candidate(
     row: pd.Series,
     prices: pd.DataFrame,
-    holding_days: int,
-    cost_bps: float,
-    slippage_bps: float,
-    require_tradable_bars: bool,
+    options: BacktestOptions,
 ) -> dict[str, Any]:
     symbol = str(row["symbol"])
     signal_date = parse_dates(pd.Series([row["date"]])).iloc[0]
     history = prices[prices["symbol"] == symbol].reset_index(drop=True)
     if pd.isna(signal_date) or history.empty:
-        return incomplete_row(
-            symbol,
-            row["date"],
-            holding_days,
-            "missing_entry_price",
-            cost_bps,
-            slippage_bps,
+        return missing_entry_row(row, symbol=symbol, options=options)
+    entry_pos = entry_position(history, signal_date)
+    if entry_pos is None:
+        return missing_entry_row(
+            row,
+            symbol=symbol,
+            options=options,
+            signal_date=signal_date.date(),
         )
-    entry_positions = history.index[history["date"] == signal_date].tolist()
-    if not entry_positions:
-        return incomplete_row(
-            symbol,
-            signal_date.date(),
-            holding_days,
-            "missing_entry_price",
-            cost_bps,
-            slippage_bps,
-        )
-    entry_pos = int(entry_positions[0])
-    exit_pos = entry_pos + holding_days
-    if exit_pos >= len(history):
-        return incomplete_row(
-            symbol,
-            signal_date.date(),
-            holding_days,
-            "missing_future_price",
-            cost_bps,
-            slippage_bps,
-        )
-    if require_tradable_bars:
-        reason = tradability_failure_reason(history, entry_pos, exit_pos)
-        if reason:
-            return incomplete_row(
-                symbol, signal_date.date(), holding_days, reason, cost_bps, slippage_bps
-            )
-    return completed_row(
-        symbol,
-        signal_date.date(),
+    failure = future_or_tradability_failure(
         history,
         entry_pos,
-        exit_pos,
-        holding_days,
-        cost_bps,
-        slippage_bps,
+        options,
+    )
+    if failure["reason"]:
+        return incomplete_row(
+            symbol=symbol,
+            signal_date=signal_date.date(),
+            holding_days=options.holding_days,
+            reason=failure["reason"],
+            cost_bps=options.cost_bps,
+            slippage_bps=options.slippage_bps,
+            require_tradable_bars=options.require_tradable_bars,
+        )
+    return completed_from_signal(
+        symbol=symbol,
+        signal_date=signal_date,
+        history=history,
+        entry_pos=entry_pos,
+        exit_pos=failure["exit_pos"],
+        options=options,
     )
 
 
-def completed_row(
+def missing_entry_row(
+    row: pd.Series,
+    *,
+    symbol: str,
+    options: BacktestOptions,
+    signal_date: Any | None = None,
+) -> dict[str, Any]:
+    return incomplete_row(
+        symbol=symbol,
+        signal_date=signal_date or row["date"],
+        holding_days=options.holding_days,
+        reason="missing_entry_price",
+        cost_bps=options.cost_bps,
+        slippage_bps=options.slippage_bps,
+        require_tradable_bars=options.require_tradable_bars,
+    )
+
+
+def completed_from_signal(
+    *,
     symbol: str,
     signal_date: Any,
     history: pd.DataFrame,
     entry_pos: int,
     exit_pos: int,
-    holding_days: int,
-    cost_bps: float,
-    slippage_bps: float,
+    options: BacktestOptions,
 ) -> dict[str, Any]:
-    entry = history.iloc[entry_pos]
-    exit_row = history.iloc[exit_pos]
-    entry_close = float(entry["close"])
-    exit_close = float(exit_row["close"])
-    gross_return = exit_close / entry_close - 1
-    total_deduction = bps_to_ratio(cost_bps + slippage_bps)
-    return {
-        **base_row(symbol, signal_date),
-        "entry_date": entry["date"].date().isoformat(),
-        "exit_date": exit_row["date"].date().isoformat(),
-        "entry_close": entry_close,
-        "exit_close": exit_close,
-        "hold_days_requested": holding_days,
-        "holding_period": int(exit_pos - entry_pos),
-        "gross_return": gross_return,
-        "cost_bps": cost_bps,
-        "slippage_bps": slippage_bps,
-        "return": gross_return - total_deduction,
-        "missing_data": False,
-        "missing_reason": "none",
-        "status": "complete",
-    }
+    return completed_row(
+        symbol=symbol,
+        signal_date=signal_date.date(),
+        history=history,
+        entry_pos=entry_pos,
+        exit_pos=exit_pos,
+        holding_days=options.holding_days,
+        cost_bps=options.cost_bps,
+        slippage_bps=options.slippage_bps,
+        require_tradable_bars=options.require_tradable_bars,
+    )
 
 
-def incomplete_row(
-    symbol: str,
-    signal_date: Any,
-    holding_days: int,
-    reason: str,
-    cost_bps: float,
-    slippage_bps: float,
+def entry_position(history: pd.DataFrame, signal_date: Any) -> int | None:
+    positions = history.index[history["date"] == signal_date].tolist()
+    if not positions:
+        return None
+    return int(positions[0])
+
+
+def future_or_tradability_failure(
+    history: pd.DataFrame,
+    entry_pos: int,
+    options: BacktestOptions,
 ) -> dict[str, Any]:
-    return {
-        **base_row(symbol, signal_date),
-        "entry_date": "",
-        "exit_date": "",
-        "entry_close": pd.NA,
-        "exit_close": pd.NA,
-        "hold_days_requested": holding_days,
-        "holding_period": pd.NA,
-        "gross_return": pd.NA,
-        "cost_bps": cost_bps,
-        "slippage_bps": slippage_bps,
-        "return": pd.NA,
-        "missing_data": True,
-        "missing_reason": reason,
-        "status": "incomplete",
-    }
-
-
-def base_row(symbol: str, signal_date: Any) -> dict[str, Any]:
-    return {
-        "symbol": symbol,
-        "signal_date": str(signal_date),
-        "cost_model": "round_trip_bps",
-        "slippage_model": "round_trip_bps",
-        "tradability_model": "not_modeled",
-        "limit_rules_model": "not_modeled",
-    }
-
-
-def build_summary(
-    result: pd.DataFrame,
-    holding_days: int,
-    cost_bps: float,
-    slippage_bps: float,
-    require_tradable_bars: bool,
-) -> dict[str, Any]:
-    completed = int((result["missing_data"] == False).sum())
-    total = int(len(result))
-    return {
-        "candidates": total,
-        "completed_trades": completed,
-        "incomplete_trades": total - completed,
-        "hold_days": int(holding_days),
-        "cost_bps": float(cost_bps),
-        "slippage_bps": float(slippage_bps),
-        "tradability_required": bool(require_tradable_bars),
-        "missing_reason_counts": missing_reason_counts(result),
-    }
+    exit_pos = entry_pos + options.holding_days
+    if exit_pos >= len(history):
+        return {"reason": "missing_future_price", "exit_pos": exit_pos}
+    if options.require_tradable_bars:
+        reason = tradability_failure_reason(history, entry_pos, exit_pos)
+        if reason:
+            return {"reason": reason, "exit_pos": exit_pos}
+    return {"reason": "", "exit_pos": exit_pos}
 
 
 def write_output(frame: pd.DataFrame, path: Path) -> None:
@@ -269,29 +244,19 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
         f"hold_days={summary['hold_days']} "
         f"cost_bps={summary['cost_bps']} "
         f"slippage_bps={summary['slippage_bps']} "
-        f"tradability_required={summary['tradability_required']} output={output}"
+        f"tradability_required={summary['tradability_required']} "
+        f"tradability_model={summary['tradability_model']} output={output}"
     )
     if summary["missing_reason_counts"]:
         print(f"INFO: missing_reason_counts={summary['missing_reason_counts']}")
     print(
         "INFO: baseline=buy_hold_close_to_close "
         "cost_model=round_trip_bps slippage_model=round_trip_bps "
-        "tradability_model=not_modeled "
+        f"tradability_model={summary['tradability_model']} "
         "suspension=missing_future_price "
-        "tradability_gate=optional_tradestatus"
+        "tradability_gate=optional_tradestatus "
+        f"limit_rules_model={LIMIT_RULES_MODEL}"
     )
-
-
-def bps_to_ratio(value: float) -> float:
-    return float(value) / 10000.0
-
-
-def missing_reason_counts(result: pd.DataFrame) -> str:
-    missing = result[result["missing_data"] == True]
-    if missing.empty:
-        return ""
-    counts = missing["missing_reason"].value_counts().sort_index()
-    return ",".join(f"{reason}:{count}" for reason, count in counts.items())
 
 
 if __name__ == "__main__":

@@ -35,6 +35,7 @@ jobs:
             scripts/generate_lightgbm_predictions.py \
             scripts/allocate_candidate_capital.py \
             scripts/backtest_buy_hold.py \
+            scripts/stock_selection_backtest_rows.py \
             scripts/stock_selection_capital.py \
             scripts/portfolio_equity_curve.py \
             scripts/portfolio_overlap_report.py \

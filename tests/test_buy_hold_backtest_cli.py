@@ -145,7 +145,10 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         self.assertEqual(0, summary["completed_trades"])
         self.assertEqual(1, summary["incomplete_trades"])
         self.assertTrue(summary["tradability_required"])
+        self.assertEqual("tradestatus_entry_exit_only", summary["tradability_model"])
         self.assertEqual("non_tradable_entry", result["missing_reason"].iloc[0])
+        self.assertEqual("tradestatus_entry_exit_only", result["tradability_model"].iloc[0])
+        self.assertEqual("not_modeled", result["limit_rules_model"].iloc[0])
         self.assertEqual("non_tradable_entry:1", summary["missing_reason_counts"])
 
     def test_require_tradable_bars_requires_status_column(self) -> None:
@@ -160,7 +163,9 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         )
 
         self.assertEqual(1, summary["incomplete_trades"])
+        self.assertEqual("tradestatus_entry_exit_only", summary["tradability_model"])
         self.assertEqual("missing_tradestatus", result["missing_reason"].iloc[0])
+        self.assertEqual("tradestatus_entry_exit_only", result["tradability_model"].iloc[0])
 
     def test_cli_strict_incomplete_returns_error_without_output(self) -> None:
         prices = build_frame(days=130)
@@ -262,6 +267,8 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertFalse(output_path.exists())
         self.assertIn("tradability_required=True", stdout.getvalue())
+        self.assertIn("tradability_model=tradestatus_entry_exit_only", stdout.getvalue())
+        self.assertIn("limit_rules_model=not_modeled", stdout.getvalue())
         self.assertIn("missing_reason_counts=non_tradable_entry:1", stdout.getvalue())
 
 

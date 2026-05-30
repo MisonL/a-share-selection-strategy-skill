@@ -37,7 +37,7 @@
 - `stock_zh_a_daily(symbol="sz000001", ...)` 当前可用；产物在 `/tmp/stock-selection-akshare-alt-20260530T092125/`，映射后 177 行，日期范围 `2025-09-01` 到 `2026-05-29`。
 - `stock_zh_a_daily` 映射使用 `volume -> volume`、`amount -> amount`、`turnover -> turn`，`validate_ohlcv.py` 返回 0，通用 `score_candidates.py` 返回 0 且候选数为 0。
 - 新增 `fetch_akshare_a_share.py`，正式入口优先尝试 `stock_zh_a_hist`，失败或空结果时记录 `fallback_errors` 并转用 `stock_zh_a_daily`。
-- 正式入口复验产物在 `/tmp/stock-selection-akshare-cli-real-20260530T093800/`；取数返回 0，metadata 记录 `rows=177`、`provider=stock_zh_a_daily`、`fallback_errors=1`，随后通用校验和评分均返回 0。
+- 正式入口复验产物在 `/tmp/stock-selection-akshare-cli-real-20260530T093800/`；取数返回 0，metadata 记录 `rows=177`、`symbols[0].provider=stock_zh_a_daily`、`len(fallback_errors)=1`，随后通用校验和评分均返回 0。
 - 连续 3 次正式入口复验产物在 `/tmp/akshare-a-share-stability-20260530103633-49722`；三次 `stock_zh_a_hist` 均被远端断开并记录 1 条 `fallback_errors`，三次均 fallback 到 `stock_zh_a_daily`，`rows=177`、`symbol_count=1`、`failed_symbols=[]`、`empty_symbols=[]`，通用 `validate_ohlcv.py` 均返回 0。
 - QSSS-derived 校验按预期拒绝 `market=A股`、`000001.SZ`、缺 `prediction_score`、缺 `turn`。
 - 补齐外部 `prediction_score` 后，`score_candidates.py` 返回 0，并输出 `prediction_source=external_unverified lightgbm_not_executed_by_this_script=true`。
@@ -110,13 +110,13 @@
 - 本轮新增 `scripts/backtest_buy_hold.py`。
 - 脚本只做信号日收盘价到未来第 N 个可用交易行收盘价的 close-to-close buy-hold 基线。
 - 候选日期必须精确匹配 OHLCV 日期，不自动滚动到下一交易日。
-- 输出显式标记 `cost_model=round_trip_bps`、`slippage_model=round_trip_bps`、`tradability_model=not_modeled`、`limit_rules_model=not_modeled`。
+- 输出显式标记 `cost_model=round_trip_bps`、`slippage_model=round_trip_bps`；未启用回测级可交易门禁时 `tradability_model=not_modeled`，启用 `--require-tradable-bars` 时为 `tradestatus_entry_exit_only`；`limit_rules_model` 始终为 `not_modeled`。
 - `--cost-bps` 和 `--slippage-bps` 只按 round-trip bps 从 `gross_return` 中扣减，并额外输出 `cost_bps`、`slippage_bps` 和扣减后的 `return`。
 - 本轮新增 `tests/test_buy_hold_backtest_cli.py`，覆盖正常收益、缺入场日不回退、严格模式遇到缺数据非 0 且不写输出。
 - 本轮测试补充覆盖 `cost_bps=12.5`、`slippage_bps=7.5` 时 `return = gross_return - 0.002`，以及负成本或负滑点显式失败。
 - 本地合成 demo 完成路径已通过: 先用 180 日行情切出截至 `2025-07-31` 的信号窗口生成候选，再用完整行情运行 `backtest_buy_hold.py --hold-days 5`，输出 `completed_trades=2`、`incomplete_trades=0`。
 - 本次合成 demo 的回测收益范围为 `0.0059836162887334` 到 `0.0071089378908271`。
-- 已有真实 `/tmp/stock-selection-ashare-scan-20260530-032723/` 回测产物仍是旧格式，字段值为 `cost_model=excluded`、`slippage_model=excluded`，尚未用 round-trip bps 参数复跑。
+- 真实 `/tmp/stock-selection-ashare-scan-20260530-032723/` 中的旧回测 CSV 只是 historical/no-cost baseline，字段值为 `cost_model=excluded`、`slippage_model=excluded`；成本/滑点证据以 `/tmp/stock-selection-backtest-costs-20260530T101000/` 和后续 sizing 复跑产物为准。
 - 使用同一 12-symbol/3 信号日产物复跑 round-trip bps 回测，产物在 `/tmp/stock-selection-backtest-costs-20260530T101000/`；三次命令均返回 0，`cost_bps=10.0`、`slippage_bps=5.0`、`incomplete_trades=0`。
 - 成本/滑点复跑结果显示每笔 `return = gross_return - 0.0015`；`2026-05-12` 净收益范围为 `-0.084328` 到 `-0.023832`，`2026-05-15` 为 `-0.034293` 到 `-0.013157`，`2026-05-20` 为 `-0.019537` 到 `-0.001379`。
 - 新增 `portfolio_equity_curve.py`，读取一个或多个回测 CSV，只使用 `status=complete` 且 `missing_data=false` 的交易，按信号日等权平均 `return` 并复利生成 `equity`、`running_peak`、`drawdown`。
@@ -125,6 +125,7 @@
 - `portfolio_equity_curve.py` 新增 `--min-final-equity` 和 `--max-drawdown-floor`。真实成本/滑点回测产物复验在 `/tmp/stock-selection-equity-threshold-gate-20260530T104740/`；设置 `min-final-equity=0.95` 和 `max-drawdown-floor=-0.05` 返回 3 且不写失败输出，设置 `0.90/-0.10` 返回 0 并写出资金曲线。
 - `backtest_buy_hold.py` 新增 `--require-tradable-bars`，打开后要求入场和退出 bar 都有 `tradestatus=1`；缺列、入场不可交易或退出不可交易会转为 incomplete，并可被 `--fail-on-incomplete` 拦截。
 - 回测级 `tradestatus` 门禁复验产物在 `/tmp/stock-selection-backtest-tradability-gate-20260530T111018/`；含 `tradestatus` 的 000001/600000 真实价格返回 0 且 `completed_trades=2`，旧 12-symbol 真实价格因缺 `tradestatus` 返回 3 且不写输出，`missing_reason_counts=missing_tradestatus:7`。
+- 当前代码复跑产物在 `/tmp/stock-selection-backtest-tradability-current-20260530T124812/`；baostock 000001/600000 短窗口取数 36 行，`non_trading_rows=0`、`tradestatus_missing_rows=0`，启用 `--require-tradable-bars --fail-on-incomplete` 返回 0，回测 CSV 记录 `tradability_model=tradestatus_entry_exit_only` 且 `limit_rules_model=not_modeled`。
 - 历史只读字段审查确认 `/tmp/stock-selection-ashare-scan-20260530-032723/prices.csv` 有 OHLCV 和 `turn`，但没有 `tradestatus`、`suspended`、`is_trading`、`limit_status`、`up_limit`、`down_limit`、`pre_close` 等字段；候选和回测产物也没有可交易/停牌/涨跌停字段。
 - 只读并发持仓审查确认 `/tmp/stock-selection-backtest-costs-20260530T101000/` 的 15 笔真实 complete 交易最大同时打开 12 笔，发生在 `2026-05-15`、`2026-05-18`、`2026-05-19`；同一 symbol 跨信号日重复持仓冲突共有 21 个 `date-symbol` 组合，涉及 `002594`、`300059`、`300750`、`601318`、`000333`。
 - 新增 `portfolio_overlap_report.py`，读取多个回测 CSV，按 business-day 闭区间统计 `daily_open_positions`、`max_open_positions`、同标的重叠和资金字段可验证性。
@@ -191,7 +192,7 @@
 - 本地 CSV 评分链路。
 - 本地 Parquet 读取、校验和评分链路。
 - QSSS-derived 对 A 股字段、market、symbol、prediction、turn 的门禁。
-- akshare A 股 `stock_zh_a_daily` 真实源当前可拉取，并可映射到本地文件后进入通用校验和评分；`stock_zh_a_hist` 当前稳定性未证明。
+- akshare A 股 `stock_zh_a_daily` 在 2026-05-30 指定窗口曾可拉取，并可映射到本地文件后进入通用校验和评分；`stock_zh_a_hist` 稳定性未证明。
 - akshare 正式联网入口的 hist/daily fallback、metadata 和严格失败契约。
 - yfinance 正式联网入口的 metadata、内置 timeout、空结果和严格失败契约；本轮带 `--timeout-seconds 10` 的 AAPL/MSFT 取数、校验和通用评分通过。
 - LightGBM prediction 生成器的本地契约、失败边界和合成 demo 真模型运行链路。
@@ -201,7 +202,7 @@
 - baostock 日 K `tradestatus/preclose/pctChg/isST` 字段可取，取数阶段可拒绝 `tradestatus != 1` 的不可交易行。
 - 真实 12-symbol/3 信号日样本已经暴露最大 12 笔并发持仓和同标的重复持仓冲突风险，并已可由 `portfolio_overlap_report.py` 自动化失败。
 - 信号日截断防未来泄漏门禁。
-- 上一轮远端基线提交 `242c637` 的 CI 通过，GitHub Actions run 为 `26670338754`。
+- CI 证据必须绑定具体 `headSha` 和 GitHub Actions run；不得把旧提交的绿色 CI 外推为当前代码已验证。
 
 仍未证明:
 

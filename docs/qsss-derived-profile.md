@@ -86,7 +86,7 @@ total_score =
 
 排序按 `total_score` 降序。CLI 派生视图可额外列出低价均线、超短线爆发潜力和低价爆发标的。
 
-`signal_tier` 和 `recommendation` 是展示分层，不是买卖建议。原 Web 回测只支持真实日线收盘价上的 `buy_hold` 基线；`backtest_buy_hold.py` 不覆盖交易成本、滑点、涨跌停和不可交易状态。
+`signal_tier` 和 `recommendation` 是展示分层，不是买卖建议。原 Web 回测只支持真实日线收盘价上的 `buy_hold` 基线；`backtest_buy_hold.py` 只支持 round-trip bps 成本和滑点扣减，不覆盖涨跌停和不可交易状态。
 
 ## 工程派生边界
 

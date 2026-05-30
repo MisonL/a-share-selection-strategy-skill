@@ -77,6 +77,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `score_candidates.py`：读取本地行情文件并输出候选股 CSV。
 - `generate_lightgbm_predictions.py`：可选 LightGBM 预测生成器，输出 `prediction_score`。
 - `backtest_buy_hold.py`：可选 close-to-close buy-hold 基线回测。
+- `portfolio_equity_curve.py`：可选等权组合资金曲线生成器，读取一个或多个回测 CSV。
 - `slice_prices_as_of.py`：按信号日截断本地行情，防止用未来行情生成候选。
 - `fetch_baostock_a_share.py`：可选 baostock A 股日线取数脚本，输出本地行情 CSV 和 metadata JSON。
 - `fetch_akshare_a_share.py`：可选 akshare A 股日线取数脚本，先尝试中文列接口，失败时记录 fallback 并转用 `stock_zh_a_daily`。
@@ -172,6 +173,7 @@ uv run --with-requirements requirements-ml.txt python scripts/generate_lightgbm_
 uv run --with pandas --with numpy python scripts/validate_ohlcv.py --input predictions_signal_window.csv --config scripts/qsss_profile_config.json
 uv run --with pandas --with numpy python scripts/score_candidates.py --input predictions_signal_window.csv --config scripts/qsss_profile_config.json --output qsss_candidates.csv --fail-on-skipped --fail-on-empty-result
 uv run --with pandas --with numpy python scripts/backtest_buy_hold.py --prices prices.csv --candidates qsss_candidates.csv --output qsss_backtest.csv --hold-days 5 --fail-on-incomplete
+uv run --with pandas --with numpy python scripts/portfolio_equity_curve.py --backtests qsss_backtest.csv --output qsss_equity_curve.csv
 ```
 
 ## Agent 工作流
@@ -199,7 +201,7 @@ uv run --with pandas --with numpy python scripts/backtest_buy_hold.py --prices p
 - 是否隐藏上游失败或用 mock 数据冒充真实结果。
 - 是否混用不同市场的数据单位、价格复权口径或成交量单位。
 - 是否只在单一时间段过拟合。
-- 是否没有交易成本、滑点、停牌、涨跌停等约束。
+- 是否缺少停牌、涨跌停等真实可交易性约束。
 - 是否把候选排序说成确定收益。
 - 是否没有记录被过滤股票的原因。
 
@@ -219,7 +221,7 @@ uv run --with pandas --with numpy python scripts/backtest_buy_hold.py --prices p
 
 - 时间序列切分，避免随机切分造成未来泄漏。
 - 样本外区间表现。
-- 加入交易成本、滑点和不可交易状态。
+- 加入交易成本、滑点、组合资金曲线和不可交易状态。
 - 对不同市场、行业、年份分别统计。
 
 不能运行真实验证时，明确说明“未验证真实行情结果”，不要用理论推导冒充已通过。

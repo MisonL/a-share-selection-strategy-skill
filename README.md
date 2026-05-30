@@ -198,9 +198,9 @@ uv run --with pandas --with numpy python scripts/backtest_buy_hold.py \
   --hold-days 5 \
   --cost-bps 10 --slippage-bps 5 \
   --fail-on-incomplete
+uv run --with pandas --with numpy python scripts/portfolio_equity_curve.py --backtests /tmp/stock-selection-a-share/qsss_backtest.csv --output /tmp/stock-selection-a-share/qsss_equity_curve.csv
 ```
-如果需要最小 buy-hold 基线回测，可使用 `backtest_buy_hold.py`。它只做信号日收盘价到未来第 N 个可用交易行收盘价的 close-to-close 基线；`--cost-bps` 和 `--slippage-bps` 只按 round-trip bps 从 gross return 中扣减，不判断涨跌停、停牌可交易性或组合资金曲线。
-
+`backtest_buy_hold.py` 是 close-to-close 基线；`--cost-bps`/`--slippage-bps` 只按 round-trip bps 从 gross return 中扣减。`portfolio_equity_curve.py` 只对已完成交易按信号日等权复利生成资金曲线；二者都不判断涨跌停或停牌可交易性。
 输入约定：`symbol` 必须按文本保存以保留前导零；校验脚本会拒绝 1 到 3 位纯数字代码，避免把 `000001` 这类 A 股代码被表格软件损坏后的值当作有效输入。`date` 支持 `YYYY-MM-DD` 或 `YYYYMMDD`；`volume` 单位必须在同一文件内保持一致，脚本只能校验数值和非负，无法从纯数值可靠判断“股/手/张/成交额”是否混用。QSSS-derived 的 `market` 只接受精确值 `A-share`，不会自动归一化 `A股`、`China` 等别名。
 
 常见字段映射：akshare 中文列需映射为 `股票代码 -> symbol`、`日期 -> date`、`成交量 -> volume`、`成交额 -> amount`、`换手率 -> turn`，`stock_zh_a_daily` 英文字段需映射 `volume -> volume`、`amount -> amount`、`turnover -> turn`，其中 `成交额` 或 `amount` 不得映射为 `volume`；tushare 需将 `ts_code` 去掉 `.SZ`/`.SH` 后写入 `symbol`，`trade_date -> date`，`vol -> volume`，`amount -> amount`，`turnover_rate -> turn`；yfinance 需将 `Date/Symbol/Open/High/Low/Close/Volume` 映射为小写标准字段。yfinance 映射后只满足通用 OHLCV；若用于 QSSS-derived，还必须外部补齐 `market=A-share`、真实上游 `prediction_score`、以及 `turn` 或 `turnover`，不能从 yfinance OHLCV 自动推断。不要把 `Adj Close` 静默替换为 `close`；使用复权价时要记录复权口径。多源合并时统一保留一个预测列，推荐先生成 `prediction_score = coalesce(prediction_score, prediction)`。
@@ -259,7 +259,7 @@ import yaml
 from pathlib import Path
 assert yaml.safe_load(Path("agents/openai.yaml").read_text())["interface"]["display_name"]
 PY
-PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/create_demo_data.py scripts/validate_ohlcv.py scripts/score_candidates.py scripts/generate_lightgbm_predictions.py scripts/backtest_buy_hold.py scripts/fetch_baostock_a_share.py scripts/fetch_akshare_a_share.py scripts/fetch_yfinance_ohlcv.py scripts/slice_prices_as_of.py scripts/stock_selection_config.py scripts/stock_selection_data.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_profile.py scripts/stock_selection_universe.py scripts/stock_selection_diagnostics.py scripts/lightgbm_prediction_summary.py
+PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/create_demo_data.py scripts/validate_ohlcv.py scripts/score_candidates.py scripts/generate_lightgbm_predictions.py scripts/backtest_buy_hold.py scripts/portfolio_equity_curve.py scripts/fetch_baostock_a_share.py scripts/fetch_akshare_a_share.py scripts/fetch_yfinance_ohlcv.py scripts/slice_prices_as_of.py scripts/stock_selection_config.py scripts/stock_selection_data.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_profile.py scripts/stock_selection_universe.py scripts/stock_selection_diagnostics.py scripts/lightgbm_prediction_summary.py
 PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy --with pyarrow python -m unittest discover -s tests -v
 ```
 

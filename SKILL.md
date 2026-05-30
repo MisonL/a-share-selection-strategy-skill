@@ -59,6 +59,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 | 数据源 | 关键映射 |
 |--------|----------|
 | akshare A 股中文列 | `日期 -> date`、`股票代码 -> symbol`、`开盘/最高/最低/收盘 -> open/high/low/close`、`成交量 -> volume`、`成交额 -> amount`、`换手率 -> turn` |
+| akshare `stock_zh_a_daily` | `date -> date`、`open/high/low/close` 同名映射、`volume -> volume`、`amount -> amount`、`turnover -> turn` |
 | baostock | `code -> symbol`，去掉 `sz.` 或 `sh.`；补 `market=A-share`；其余 OHLCV 字段同名映射 |
 | tushare | `ts_code -> symbol`，去掉 `.SZ` 或 `.SH`；`trade_date -> date`、`vol -> volume`、`turnover_rate -> turn` |
 | yfinance | `Date/Symbol/Open/High/Low/Close/Volume` 映射为小写标准字段 |
@@ -78,6 +79,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `backtest_buy_hold.py`：可选 close-to-close buy-hold 基线回测。
 - `slice_prices_as_of.py`：按信号日截断本地行情，防止用未来行情生成候选。
 - `fetch_baostock_a_share.py`：可选 baostock A 股日线取数脚本，输出本地行情 CSV 和 metadata JSON。
+- `fetch_akshare_a_share.py`：可选 akshare A 股日线取数脚本，先尝试中文列接口，失败时记录 fallback 并转用 `stock_zh_a_daily`。
 - `fetch_yfinance_ohlcv.py`：可选 yfinance 日线取数脚本，输出本地通用 OHLCV CSV 和 metadata JSON。
 - `stock_selection_*.py`、`lightgbm_prediction_summary.py`：评分脚本使用的配置、数据读取、指标、输出、profile、股票池和诊断辅助函数。
 

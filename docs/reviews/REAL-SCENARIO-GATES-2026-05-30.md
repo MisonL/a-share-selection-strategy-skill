@@ -27,24 +27,29 @@
 
 ## 场景 G: akshare A 股映射
 
-状态: 通过但依赖外部源可用性。
+状态: 外部源可用性不稳定；中文列 `stock_zh_a_hist` 曾通过，本轮复验失败；`stock_zh_a_daily` fallback 当前可用。
 
 证据:
 
 - `uv run --with akshare --with pandas --with numpy` 可安装并导入 akshare `1.18.64`。
-- `ak.stock_zh_a_hist(symbol="000001", ...)` 成功返回 338 行，样本取 160 行。
-- 字段映射使用 `股票代码 -> symbol`、`日期 -> date`、`开盘 -> open`、`最高 -> high`、`最低 -> low`、`收盘 -> close`、`成交量 -> volume`、`换手率 -> turn`。
+- 历史门禁中 `ak.stock_zh_a_hist(symbol="000001", ...)` 成功返回 338 行，样本取 160 行。
+- 本轮严格中文列路径在 `/tmp/stock-selection-akshare-current-retry-20260530T092022/` 三次失败，错误为 `RemoteDisconnected`。
+- `stock_zh_a_daily(symbol="sz000001", ...)` 当前可用；产物在 `/tmp/stock-selection-akshare-alt-20260530T092125/`，映射后 177 行，日期范围 `2025-09-01` 到 `2026-05-29`。
+- `stock_zh_a_daily` 映射使用 `volume -> volume`、`amount -> amount`、`turnover -> turn`，`validate_ohlcv.py` 返回 0，通用 `score_candidates.py` 返回 0 且候选数为 0。
+- 新增 `fetch_akshare_a_share.py`，正式入口优先尝试 `stock_zh_a_hist`，失败或空结果时记录 `fallback_errors` 并转用 `stock_zh_a_daily`。
+- 正式入口复验产物在 `/tmp/stock-selection-akshare-cli-real-20260530T093800/`；取数返回 0，metadata 记录 `rows=177`、`provider=stock_zh_a_daily`、`fallback_errors=1`，随后通用校验和评分均返回 0。
 - QSSS-derived 校验按预期拒绝 `market=A股`、`000001.SZ`、缺 `prediction_score`、缺 `turn`。
 - 补齐外部 `prediction_score` 后，`score_candidates.py` 返回 0，并输出 `prediction_source=external_unverified lightgbm_not_executed_by_this_script=true`。
 
 边界:
 
 - `prediction_score` 是外部补齐值，本仓库仍未验证真实 LightGBM prediction 生成链路。
-- `成交额` 只能作为可选 `amount` 字段，不得映射为 `volume`。
+- `stock_zh_a_daily` 当前成功只证明替代日线接口可进入通用校验和评分，不证明 `stock_zh_a_hist` 稳定可用。
+- `成交额` 或 `amount` 只能作为可选 `amount` 字段，不得映射为 `volume`。
 
 ## 场景 I: yfinance 美股映射
 
-状态: 未通过，受外部网络或 Yahoo 源门禁阻断。
+状态: 外部源可用性不稳定；同日既复现 Yahoo/TLS 失败，也有一次干净 README 路径成功拉取。
 
 证据:
 
@@ -60,11 +65,12 @@
 - 同一目录的 Yahoo chart API 直连探针返回 1；AAPL 为 `UNEXPECTED_EOF_WHILE_READING`，MSFT 为 handshake timeout。
 - 新增正式入口后，`fetch_yfinance_ohlcv.py --symbols AAPL,MSFT --start-date 2024-01-01 --end-date 2026-05-29 --fail-on-fetch-error` 在 `/tmp/stock-selection-yfinance-cli-real-20260530T091000/` 返回 3，耗时 59.47 秒，写出空 CSV 和 metadata。
 - 该 metadata 记录 `rows=0`、`symbol_count=0`、`failed_symbols=2`、`empty_symbols=['AAPL','MSFT']`，错误为 Yahoo TLS connect error；对空 CSV 运行 `validate_ohlcv.py` 返回 1，运行 `score_candidates.py` 返回 2。
+- README 干净路径复验产物在 `/tmp/stock-selection-readme-clean-20260530T091810/us/`；yfinance 命令用 60 秒外部超时包裹后成功，metadata 记录 `rows=1206`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`。
 
 边界:
 
-- 本场景不能证明 yfinance 单票或多票 MultiIndex、Date reset、Adj Close 与 Close 口径、symbol 写入或缺 `turn`/`turnover` warning 的真实端到端表现。
-- 网络可用后应保留同一复验路径: 先落地本地 CSV 或 Parquet，再运行 `validate_ohlcv.py` 和 `score_candidates.py`。
+- 本场景证明 yfinance 当前环境存在波动，不应把单次成功或失败推广为稳定可用性结论。
+- yfinance 只满足通用 OHLCV；若用于 QSSS-derived，仍需外部补齐 `market=A-share`、真实上游 `prediction_score` 和 `turn` 或 `turnover`。
 - 本轮新增 `fetch_yfinance_ohlcv.py` 作为正式联网入口；单元测试只覆盖字段映射、`Close` 口径、metadata 和空结果严格失败，不替代真实 Yahoo 网络门禁。
 
 ## 场景 L: LightGBM prediction 生成
@@ -145,16 +151,18 @@
 - 本地 CSV 评分链路。
 - 本地 Parquet 读取、校验和评分链路。
 - QSSS-derived 对 A 股字段、market、symbol、prediction、turn 的门禁。
-- akshare A 股真实源在本次环境可拉取并映射到本地文件后进入校验和评分。
+- akshare A 股 `stock_zh_a_daily` 真实源当前可拉取，并可映射到本地文件后进入通用校验和评分；`stock_zh_a_hist` 当前稳定性未证明。
+- akshare 正式联网入口的 hist/daily fallback、metadata 和严格失败契约。
 - yfinance 正式联网入口的 metadata、空结果和严格失败契约。
 - LightGBM prediction 生成器的本地契约、失败边界和合成 demo 真模型运行链路。
 - buy-hold 基线回测脚本的本地契约和失败边界。
 - 2-symbol baostock 真实依赖 smoke 链路: 真实行情落地、真实 LightGBM prediction 生成、QSSS 最新日评分。
 - 12-symbol baostock 多信号日真实链路: 严格信号日截断、真实 QSSS 候选生成、5 日 buy-hold 基线回测，且 `incomplete_trades=0`。
 - 信号日截断防未来泄漏门禁。
-- 最新提交 `da0d2c4` 的远端 CI 通过，GitHub Actions run 为 `26669430459`。
+- 上一轮远端基线提交 `242c637` 的 CI 通过，GitHub Actions run 为 `26670338754`。
 
 仍未证明:
 
+- akshare `stock_zh_a_hist` 中文列接口在当前环境可稳定取数。
 - yfinance/Yahoo 在当前环境可稳定取数。
 - 全市场级 QSSS 策略质量、样本外收益、交易成本、滑点、涨跌停和停牌可交易性。

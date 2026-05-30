@@ -123,6 +123,30 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
         self.assertIn("--drop-invalid-rows", commands["fetch"])
         self.assertIn("--allow-dropped-invalid-rows", commands["summary"])
 
+    def test_max_candidates_writes_run_scoped_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = args_for(output, signal_dates=["2026-05-12"], max_candidates=2)
+            executor = FakeExecutor({})
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args=args,
+                manifest=manifest,
+                manifest_path=output / "run_manifest.json",
+                executor=executor,
+            )
+
+            runner.run_pipeline(context)
+            config_path = output / "qsss_profile_config.json"
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            commands = {item["step"]: item["command"] for item in manifest["steps"]}
+
+        self.assertEqual(2, config["output"]["max_candidates"])
+        self.assertEqual(str(config_path), manifest["config_path"])
+        self.assertEqual(2, manifest["max_candidates"])
+        self.assertIn(str(config_path), commands["2026-05-12:validate"])
+        self.assertIn(str(config_path), commands["2026-05-12:score"])
+
 
 class FakeExecutor:
     def __init__(self, returncodes: dict[str, int]) -> None:
@@ -173,6 +197,7 @@ def args_for(
     *,
     signal_dates: list[str],
     drop_invalid_rows: bool = False,
+    max_candidates: int | None = None,
 ) -> object:
     parser = runner.build_parser()
     args = [
@@ -199,6 +224,8 @@ def args_for(
         "--fail-on-symbol-overlap",
         "--expect-portfolio-violations",
     ]
+    if max_candidates is not None:
+        args.extend(["--max-candidates", str(max_candidates)])
     if drop_invalid_rows:
         args.append("--drop-invalid-rows")
     return parser.parse_args(args)

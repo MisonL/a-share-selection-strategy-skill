@@ -85,6 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", required=True, help="Output run directory.")
     parser.add_argument("--adjust", default="3", help="baostock adjustflag.")
     parser.add_argument("--cash-budget", type=float, required=True)
+    parser.add_argument("--max-candidates", type=non_negative_int, help="Override score output.max_candidates.")
     parser.add_argument("--lot-size", type=int, default=100)
     parser.add_argument("--hold-days", type=int, default=5)
     parser.add_argument("--cost-bps", type=float, default=10.0)
@@ -110,10 +111,19 @@ def run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, cwd=str(Path.cwd()), capture_output=True, text=True)
 
 
+def non_negative_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("value must be a non-negative integer")
+    return parsed
+
+
 def run_pipeline(context: RunContext) -> None:
     args = context.args
     output = Path(args.output_dir)
     output.mkdir(parents=True, exist_ok=True)
+    config_path = prepare_config(args, output)
+    context.manifest["config_path"] = str(config_path)
     prices = output / "prices.csv"
     backtests = []
     run_step(context, Step("fetch", fetch_command(args, prices, output / "metadata.json")))
@@ -121,7 +131,7 @@ def run_pipeline(context: RunContext) -> None:
         signal_dir = output / "signals" / signal_date
         signal_dir.mkdir(parents=True, exist_ok=True)
         signal = SignalRun(signal_date=signal_date, prices=prices, paths=signal_paths(signal_dir))
-        run_signal(context, signal)
+        run_signal(context, signal, config_path)
         backtests.append(signal.paths["backtest"])
     run_step(context, Step("equity", equity_command(output, backtests)))
     overlap_allowed = (0, 3) if args.expect_portfolio_violations else (0,)
@@ -129,14 +139,14 @@ def run_pipeline(context: RunContext) -> None:
     run_step(context, Step("summary", summary_command(args, output)))
 
 
-def run_signal(context: RunContext, signal: SignalRun) -> None:
+def run_signal(context: RunContext, signal: SignalRun, config_path: Path) -> None:
     args = context.args
     paths = signal.paths
     name = signal.signal_date
     run_step(context, Step(f"{name}:slice", slice_command(signal.prices, paths["sliced"], name)))
     run_step(context, Step(f"{name}:predict", predict_command(paths)))
-    run_step(context, Step(f"{name}:validate", validate_command(paths["predictions"])))
-    run_step(context, Step(f"{name}:score", score_command(paths)))
+    run_step(context, Step(f"{name}:validate", validate_command(paths["predictions"], config_path)))
+    run_step(context, Step(f"{name}:score", score_command(paths, config_path)))
     run_step(context, Step(f"{name}:allocate", allocate_command(args, signal.prices, paths)))
     run_step(context, Step(f"{name}:backtest", backtest_command(args, signal.prices, paths)))
 
@@ -171,6 +181,16 @@ def signal_paths(signal_dir: Path) -> dict[str, Path]:
     }
 
 
+def prepare_config(args: argparse.Namespace, output: Path) -> Path:
+    if args.max_candidates is None:
+        return CONFIG_PATH
+    config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    config.setdefault("output", {})["max_candidates"] = args.max_candidates
+    config_path = output / "qsss_profile_config.json"
+    write_json(config, config_path)
+    return config_path
+
+
 def fetch_command(args: argparse.Namespace, prices: Path, metadata: Path) -> list[str]:
     command = script_command("fetch_baostock_a_share.py", "--symbols", args.symbols, "--start-date", args.start_date, "--end-date", args.end_date, "--output", prices, "--metadata-output", metadata, "--adjust", args.adjust, "--fail-on-fetch-error")
     if args.drop_invalid_rows:
@@ -186,12 +206,12 @@ def predict_command(paths: dict[str, Path]) -> list[str]:
     return script_command("generate_lightgbm_predictions.py", "--input", paths["sliced"], "--output", paths["predictions"], "--summary-output", paths["prediction_summary"], "--fail-on-skipped")
 
 
-def validate_command(predictions: Path) -> list[str]:
-    return script_command("validate_ohlcv.py", "--input", predictions, "--config", CONFIG_PATH)
+def validate_command(predictions: Path, config_path: Path) -> list[str]:
+    return script_command("validate_ohlcv.py", "--input", predictions, "--config", config_path)
 
 
-def score_command(paths: dict[str, Path]) -> list[str]:
-    return script_command("score_candidates.py", "--input", paths["predictions"], "--config", CONFIG_PATH, "--output", paths["candidates"], "--fail-on-skipped", "--fail-on-empty-result")
+def score_command(paths: dict[str, Path], config_path: Path) -> list[str]:
+    return script_command("score_candidates.py", "--input", paths["predictions"], "--config", config_path, "--output", paths["candidates"], "--fail-on-skipped", "--fail-on-empty-result")
 
 
 def allocate_command(args: argparse.Namespace, prices: Path, paths: dict[str, Path]) -> list[str]:
@@ -238,6 +258,7 @@ def initial_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "end_date": args.end_date,
         "signal_dates": list(args.signal_dates),
         "adjustflag": str(args.adjust),
+        "max_candidates": args.max_candidates,
         "limit_rules_model": LIMIT_RULES_MODEL,
         "tradability_model": TRADABILITY_MODEL,
         "steps": [],

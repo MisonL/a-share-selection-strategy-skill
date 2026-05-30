@@ -215,6 +215,11 @@
 - 同一独立池复验 `qsss_run_summary.json` 记录 `quality_errors=[]`、候选数分别为 `2/13/7/9/15/13`、`completed_trades=59`、`incomplete_trades=0`、资金曲线 `final_equity=0.9604703366149994`、`total_return=-0.039529663385000635`、`max_drawdown=-0.0472927083305888`。
 - 同一独立池复验组合 violation 为 3 个：`max_open_positions=15 > 10`、`max_gross_notional=2998116.0 > 1000000.0`、`max_cash_reserved=2998116.0 > 1000000.0`。独立池仍未满足组合容量门禁。
 - 对同一独立池复验执行 `validate_walk_forward_manifest.py` 返回 0，报告在 `/tmp/stock-selection-p1-40sym-independent-6d-20260530T155523/run_manifest_validation.json`，结果为 `steps_checked=40`、`errors=[]`；执行 `validate_walk_forward_artifacts.py --allow-dropped-invalid-rows` 返回 0，报告在 `/tmp/stock-selection-p1-40sym-independent-6d-20260530T155523/run_artifact_validation.json`，结果为 `signals_checked=6`、`total_candidates=59`、`total_completed_trades=59`、`final_equity=0.9604703366149994`、`portfolio_violations=3`、`errors=[]`。
+- 新增 `run_baostock_walk_forward.py --max-candidates` 后，同一独立 40-symbol/6 信号日池完成 top-N=2 复验，产物在 `/tmp/stock-selection-p1-40sym-independent-topn2-20260530T161120/`。runner 使用 run-scoped `qsss_profile_config.json`，manifest 记录 `max_candidates=2` 和该配置路径；全链路未传入 `--expect-portfolio-violations`，40 个步骤均返回 0。
+- 同一 top-N=2 复验 metadata 仍显式记录源数据异常：`rows=23190`、`raw_rows=23200`、`symbol_count=40`、`invalid_rows=10`、`dropped_invalid_rows=10`、`raw_non_trading_rows=10`、`non_trading_rows=0`、`raw_tradestatus_missing_rows=0`、`tradestatus_missing_rows=0`、`adjustflag=3`。
+- 同一 top-N=2 复验每个信号日候选数均为 `2`，`qsss_run_summary.json` 记录 `quality_errors=[]`、`completed_trades=12`、`incomplete_trades=0`、资金曲线 `final_equity=0.8990438382018885`、`total_return=-0.10095616179811151`、`max_drawdown=-0.1009561617981115`。
+- 同一 top-N=2 复验组合 summary 记录 `max_open_positions=2`、`max_gross_weight=0.9997069999999999`、`max_gross_notional=999707.0`、`max_cash_reserved=999707.0`、`same_symbol_overlap_rows=0`，组合 `violations=[]`。这只证明显式 top-N 截断下现有 equal-cash/lot-floor sizing 能通过固定组合门禁，不等同于已实现组合感知容量模型。
+- 对同一 top-N=2 复验执行 `validate_walk_forward_manifest.py --expected-max-candidates 2` 返回 0，报告在 `/tmp/stock-selection-p1-40sym-independent-topn2-20260530T161120/run_manifest_validation.json`，结果为 `steps_checked=40`、`errors=[]`；执行 `validate_walk_forward_artifacts.py --allow-dropped-invalid-rows` 返回 0，报告在 `/tmp/stock-selection-p1-40sym-independent-topn2-20260530T161120/run_artifact_validation.json`，结果为 `signals_checked=6`、`total_candidates=12`、`total_completed_trades=12`、`final_equity=0.8990438382018885`、`portfolio_violations=0`、`errors=[]`。
 
 边界:
 
@@ -223,6 +228,7 @@
 - current-code 复验只证明固定 12-symbol、三信号日、5 日持有、10 bps 成本、5 bps 滑点和 `tradestatus` 入场/退出门禁下的可复跑边界；不能外推为全市场样本外收益有效。
 - P1 四信号日扩展复验只证明同一固定池新增 `2026-04-24` 后仍能按固定门禁复跑；不能外推为策略正期望、全市场泛化、真实成交容量或涨跌停规则已覆盖。
 - P1 40-symbol/6 信号日扩容复验只证明两个 40 支股票池、多个 6 信号日窗口、显式丢弃 10 行源数据异常、`cash_budget=3000000`、5 日持有、10 bps 成本、5 bps 滑点和 `tradestatus` 入场/退出门禁下的可复跑边界；不能外推为全市场样本外收益有效，也不能证明 100 万现金预算适合更大候选集。
+- P1 独立 40-symbol/6 信号日 top-N=2 复验只证明 `--max-candidates` 能把每期候选显式截断并通过现有固定组合门禁；它不证明跨信号日滚动现金占用、同标的组合级去重或真实订单容量已建模。
 - `run_baostock_walk_forward.py` 只编排既有 CLI 并记录命令级 manifest，不新增行情、prediction、sizing、回测或组合逻辑；它不能把固定 12-symbol/4 信号日小样本外推为全市场结论。
 - `validate_walk_forward_manifest.py` 只校验 runner manifest 的结构、步骤顺序、退出码和门禁参数；不能替代真实行情、真实 LightGBM、真实回测或真实组合报告。
 - `validate_walk_forward_artifacts.py` 只校验既有复验目录内的 artifact 内容一致性，不重新联网取数、不重新训练 LightGBM、不重新回测，也不能把固定小样本外推为全市场结论；当前会额外校验候选和 sizing 信号日价格与原始信号窗口 close 一致。
@@ -234,7 +240,7 @@
 
 ## Current Next Gates / 下一步门禁
 
-- P1: 继续扩大 A 股真实 QSSS 门禁。当前已有两个 40-symbol 池的 6 信号日复验，下一轮应优先把真实组合容量模型从“暴露 violation”推进到“可配置约束下通过”，并保留固定阈值、metadata、summary、manifest validator 和 artifact validator 证据。
+- P1: 继续扩大 A 股真实 QSSS 门禁。当前已有两个 40-symbol 池的 6 信号日复验，且已证明 top-N=2 可在独立池通过固定组合门禁；下一轮应实现真正的组合感知容量 sizing/cut，按持有期滚动处理现金占用、同标的重叠和最大并发仓位，并保留固定阈值、metadata、summary、manifest validator 和 artifact validator 证据。
 - P2: 真实涨跌停规则门禁。P2a 已确认当前 baostock 日 K 无直接 `up_limit/down_limit/limit_status/is_trading/suspended` 字段；未取得可靠直接字段或另起明确规则建模任务前，不得把 `preclose/pctChg/isST` 粗推写成已建模。
 - P3: 外部源稳定性观察。akshare `stock_zh_a_hist`、yfinance/Yahoo 和 baostock 长期稳定性只能按固定脚本持续复验，不优先于 P1 的 A 股真实策略门禁。
 
@@ -258,6 +264,7 @@
 - P1 20-symbol/6 信号日扩容复验可完整跑到组合严格门禁，摘要质量错误为 0，并进一步暴露 45 笔完成交易、最大 20 笔并发持仓、49 行同标的重叠、`final_equity=0.8880888922355726` 和更高资金阈值风险。
 - P1 40-symbol 两个 6 信号日窗口复验可完整跑到组合严格门禁，摘要质量错误为 0；较近窗口完成 85 笔交易、`final_equity=0.8851723337824899` 并暴露 5 个组合 violation，较早窗口完成 76 笔交易、`final_equity=0.9994234423069976` 并暴露 3 个组合 violation。
 - P1 独立 40-symbol/6 信号日复验与上一组 40-symbol 池交集为 0，可完整跑到组合严格门禁，摘要质量错误为 0，完成 59 笔交易、`final_equity=0.9604703366149994`，并暴露 3 个组合容量 violation。
+- P1 独立 40-symbol/6 信号日 top-N=2 复验可在不使用 `--expect-portfolio-violations` 的情况下完整通过，摘要质量错误为 0，完成 12 笔交易、`final_equity=0.8990438382018885`，组合 `portfolio_violations=0`。
 - 真实 12-symbol/3 信号日样本已经暴露最大 12 笔并发持仓和同标的重复持仓冲突风险，并已可由 `portfolio_overlap_report.py` 自动化失败。
 - 信号日截断防未来泄漏门禁。
 - CI 证据必须绑定具体 `headSha` 和 GitHub Actions run；不得把旧提交的绿色 CI 外推为当前代码已验证。

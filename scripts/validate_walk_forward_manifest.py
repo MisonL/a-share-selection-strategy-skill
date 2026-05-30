@@ -45,6 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--expected-symbol-count", type=int, required=True)
     parser.add_argument("--required-tradability-model", required=True)
     parser.add_argument("--required-limit-rules-model", required=True)
+    parser.add_argument("--expected-max-candidates", type=int)
     parser.add_argument("--expect-portfolio-violations", action="store_true")
     return parser
 
@@ -87,6 +88,10 @@ def top_level_errors(
             errors.append(f"manifest_{key}={manifest.get(key)} expected={value}")
     if len(manifest.get("symbols", [])) != args.expected_symbol_count:
         errors.append(f"manifest_symbol_count={len(manifest.get('symbols', []))}")
+    if args.expected_max_candidates is not None:
+        actual = manifest.get("max_candidates")
+        if actual != args.expected_max_candidates:
+            errors.append(f"manifest_max_candidates={actual}")
     return errors
 
 

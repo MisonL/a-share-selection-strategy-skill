@@ -69,6 +69,21 @@ class WalkForwardManifestCliTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertIn("steps_not_list", stderr)
 
+    def test_cli_checks_expected_max_candidates_when_requested(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest = Path(tmpdir) / "run_manifest.json"
+            output = Path(tmpdir) / "manifest_report.json"
+            write_json(manifest, build_manifest(["2026-05-12"], max_candidates=2))
+
+            code, _stdout, stderr = call_cli(
+                manifest,
+                output,
+                ["--expected-max-candidates", "3"],
+            )
+
+        self.assertEqual(3, code)
+        self.assertIn("manifest_max_candidates=2", stderr)
+
 
 def call_cli(manifest: Path, output: Path | None, extra: list[str]) -> tuple[int, str, str]:
     args = [
@@ -98,6 +113,7 @@ def build_manifest(
     *,
     overlap_code: int = 0,
     failed_step: str = "",
+    max_candidates: int | None = None,
 ) -> dict[str, object]:
     steps = [step("fetch", fetch_command())]
     for signal_date in signal_dates:
@@ -120,6 +136,7 @@ def build_manifest(
         "signal_dates": signal_dates,
         "tradability_model": "tradestatus_entry_exit_only",
         "limit_rules_model": "not_modeled",
+        "max_candidates": max_candidates,
         "steps": steps,
     }
 

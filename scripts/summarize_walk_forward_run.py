@@ -77,6 +77,7 @@ def build_run_summary(run_dir: Path, options: argparse.Namespace) -> dict[str, A
     summary = {
         "run_dir": str(run_dir),
         "metadata": metadata_view(metadata),
+        "allocation": load_json(run_dir / "qsss_allocation_summary.json") if (run_dir / "qsss_allocation_summary.json").exists() else None,
         "signals": signals,
         "equity": equity,
         "portfolio": portfolio,

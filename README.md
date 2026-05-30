@@ -212,7 +212,7 @@ uv run --with pandas --with numpy python scripts/portfolio_overlap_report.py --b
 
 自动化流水线应把 `failed_symbols=0`、`insufficient_history_symbols=0`、`effective_empty_result=false` 作为成功门槛；也可在 CLI 中显式传入 `--fail-on-skipped` 和 `--fail-on-empty-result`，让跳过标的或 0 候选直接返回非 0。`failed_symbols>0` 表示存在单股运行期异常，即使脚本仍输出了其他候选，也应进入人工复核或失败处理。成功摘要会输出截断样例，例如 `failed_symbol_examples`、`insufficient_history_symbol_examples`，用于定位需要复核的标的。
 
-配置中的 `output.max_candidates` 大于 0 时限制输出数量；设为 0 表示不截断候选结果。一键 runner 可用 `--max-candidates` 写出 run-scoped 配置，便于在 manifest 中追踪本次 top-N 门禁。
+配置中的 `output.max_candidates` 大于 0 时限制输出数量；设为 0 表示不截断候选结果。一键 runner 可用 `--max-candidates` 写出 run-scoped 配置，便于在 manifest 中追踪本次 top-N 门禁；也可用 `--allocation-model portfolio_cash_lot_floor` 启用组合级 sizing/cut，并生成 raw、selected、sized、skipped 和 allocation summary 证据。
 
 ## 策略框架
 

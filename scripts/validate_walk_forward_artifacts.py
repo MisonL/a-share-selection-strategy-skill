@@ -40,6 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--expected-final-equity", type=float, required=True)
     parser.add_argument("--final-equity-tolerance", type=float, default=1e-12)
     parser.add_argument("--expected-portfolio-violations", type=int, required=True)
+    parser.add_argument("--required-allocation-model", default="equal_cash_budget_lot_floor")
     parser.add_argument("--required-tradability-model", required=True)
     parser.add_argument("--required-limit-rules-model", required=True)
     parser.add_argument("--manifest-validation")

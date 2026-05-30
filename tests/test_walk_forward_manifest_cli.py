@@ -84,6 +84,20 @@ class WalkForwardManifestCliTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertIn("manifest_max_candidates=2", stderr)
 
+    def test_cli_accepts_portfolio_allocation_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest = Path(tmpdir) / "run_manifest.json"
+            output = Path(tmpdir) / "manifest_report.json"
+            write_json(manifest, build_manifest(["2026-05-12"], allocation_model="portfolio_cash_lot_floor"))
+
+            code, stdout, stderr = call_cli(manifest, output, [])
+            report = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(0, code)
+        self.assertIn("OK:", stdout)
+        self.assertEqual("", stderr)
+        self.assertEqual([], report["errors"])
+
 
 def call_cli(manifest: Path, output: Path | None, extra: list[str]) -> tuple[int, str, str]:
     args = [
@@ -114,14 +128,18 @@ def build_manifest(
     overlap_code: int = 0,
     failed_step: str = "",
     max_candidates: int | None = None,
+    allocation_model: str = "equal_cash_budget_lot_floor",
 ) -> dict[str, object]:
     steps = [step("fetch", fetch_command())]
     for signal_date in signal_dates:
-        steps.extend(signal_steps(signal_date))
+        steps.extend(signal_steps(signal_date, allocation_model))
+    if allocation_model == "portfolio_cash_lot_floor":
+        steps.append(step("portfolio_allocate", portfolio_allocate_command()))
+        steps.extend(step(f"{signal_date}:backtest", backtest_command()) for signal_date in signal_dates)
     steps.extend(
         [
             step("equity", command("portfolio_equity_curve.py", "--fail-on-incomplete")),
-            step("portfolio_overlap", overlap_command(), options={"code": overlap_code, "allowed": [0, 3]}),
+            step("portfolio_overlap", overlap_command(), options=overlap_options(overlap_code)),
             step("summary", summary_command(signal_dates)),
         ]
     )
@@ -137,19 +155,27 @@ def build_manifest(
         "tradability_model": "tradestatus_entry_exit_only",
         "limit_rules_model": "not_modeled",
         "max_candidates": max_candidates,
+        "allocation_model": allocation_model,
         "steps": steps,
     }
 
 
-def signal_steps(signal_date: str) -> list[dict[str, object]]:
-    return [
+def overlap_options(overlap_code: int) -> dict[str, object]:
+    allowed = [0, 3] if overlap_code == 3 else [0]
+    return {"code": overlap_code, "allowed": allowed}
+
+
+def signal_steps(signal_date: str, allocation_model: str) -> list[dict[str, object]]:
+    steps = [
         step(f"{signal_date}:slice", command("slice_prices_as_of.py", "--as-of-date", signal_date)),
         step(f"{signal_date}:predict", command("generate_lightgbm_predictions.py", "--summary-output", "--fail-on-skipped")),
         step(f"{signal_date}:validate", command("validate_ohlcv.py", "--config", "qsss_profile_config.json")),
         step(f"{signal_date}:score", command("score_candidates.py", "--fail-on-skipped", "--fail-on-empty-result")),
-        step(f"{signal_date}:allocate", command("allocate_candidate_capital.py", "--cash-budget", "1000000", "--lot-size", "100", "--fail-on-unallocated")),
-        step(f"{signal_date}:backtest", command("backtest_buy_hold.py", "--require-tradable-bars", "--fail-on-incomplete")),
     ]
+    if allocation_model != "portfolio_cash_lot_floor":
+        steps.append(step(f"{signal_date}:allocate", command("allocate_candidate_capital.py", "--cash-budget", "1000000", "--lot-size", "100", "--fail-on-unallocated")))
+        steps.append(step(f"{signal_date}:backtest", backtest_command()))
+    return steps
 
 
 def fetch_command() -> list[str]:
@@ -158,6 +184,14 @@ def fetch_command() -> list[str]:
 
 def overlap_command() -> list[str]:
     return command("portfolio_overlap_report.py", "--max-open-positions", "10", "--max-gross-weight", "1.0", "--max-gross-notional", "1000000", "--max-cash-reserved", "1000000", "--fail-on-symbol-overlap", "--require-capital-fields")
+
+
+def portfolio_allocate_command() -> list[str]:
+    return command("allocate_portfolio_candidate_capital.py", "--raw-candidates", "raw.csv", "--candidate-outputs", "candidates.csv", "--sized-outputs", "sized.csv", "--skipped-output", "skipped.csv", "--summary-output", "allocation.json", "--max-open-positions", "10", "--max-gross-weight", "1.0", "--max-gross-notional", "1000000", "--max-cash-reserved", "1000000", "--fail-on-symbol-overlap")
+
+
+def backtest_command() -> list[str]:
+    return command("backtest_buy_hold.py", "--require-tradable-bars", "--fail-on-incomplete")
 
 
 def summary_command(signal_dates: list[str]) -> list[str]:

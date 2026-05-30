@@ -11,6 +11,7 @@ from typing import Any
 
 
 SIGNAL_SUFFIXES = ("slice", "predict", "validate", "score", "allocate", "backtest")
+PORTFOLIO_SIGNAL_SUFFIXES = ("slice", "predict", "validate", "score")
 RUNNER = "run_baostock_walk_forward"
 SOURCE = "baostock"
 
@@ -56,9 +57,10 @@ def build_report(manifest: dict[str, Any], args: argparse.Namespace) -> dict[str
     errors.extend(top_level_errors(manifest, args, signal_dates))
     steps = manifest.get("steps", [])
     step_list = steps if isinstance(steps, list) else []
-    errors.extend(step_order_errors(steps, signal_dates))
+    allocation_model = str(manifest.get("allocation_model", "equal_cash_budget_lot_floor"))
+    errors.extend(step_order_errors(steps, signal_dates, allocation_model))
     errors.extend(step_record_errors(step_list, expect_overlap=args.expect_portfolio_violations))
-    errors.extend(command_errors(step_list, signal_dates, args))
+    errors.extend(command_errors(step_list, signal_dates, args, allocation_model))
     return {
         "schema_version": 1,
         "validator": "validate_walk_forward_manifest",
@@ -95,20 +97,24 @@ def top_level_errors(
     return errors
 
 
-def step_order_errors(steps: Any, signal_dates: list[str]) -> list[str]:
+def step_order_errors(steps: Any, signal_dates: list[str], allocation_model: str) -> list[str]:
     if not isinstance(steps, list):
         return ["steps_not_list"]
     actual = [step.get("step") for step in steps if isinstance(step, dict)]
-    expected = expected_steps(signal_dates)
+    expected = expected_steps(signal_dates, allocation_model)
     if actual != expected:
         return [f"step_order_mismatch expected={','.join(expected)}"]
     return []
 
 
-def expected_steps(signal_dates: list[str]) -> list[str]:
+def expected_steps(signal_dates: list[str], allocation_model: str) -> list[str]:
     names = ["fetch"]
+    suffixes = PORTFOLIO_SIGNAL_SUFFIXES if allocation_model == "portfolio_cash_lot_floor" else SIGNAL_SUFFIXES
     for signal_date in signal_dates:
-        names.extend(f"{signal_date}:{suffix}" for suffix in SIGNAL_SUFFIXES)
+        names.extend(f"{signal_date}:{suffix}" for suffix in suffixes)
+    if allocation_model == "portfolio_cash_lot_floor":
+        names.append("portfolio_allocate")
+        names.extend(f"{signal_date}:backtest" for signal_date in signal_dates)
     names.extend(["equity", "portfolio_overlap", "summary"])
     return names
 
@@ -145,6 +151,7 @@ def command_errors(
     steps: list[dict[str, Any]],
     signal_dates: list[str],
     args: argparse.Namespace,
+    allocation_model: str,
 ) -> list[str]:
     errors = []
     by_name = {
@@ -154,22 +161,25 @@ def command_errors(
     }
     errors.extend(requirements(by_name.get("fetch", []), "fetch", fetch_requirements()))
     for signal_date in signal_dates:
-        errors.extend(signal_command_errors(by_name, signal_date))
+        errors.extend(signal_command_errors(by_name, signal_date, allocation_model))
+    if allocation_model == "portfolio_cash_lot_floor":
+        errors.extend(portfolio_allocate_errors(by_name.get("portfolio_allocate", [])))
     errors.extend(requirements(by_name.get("equity", []), "equity", ["portfolio_equity_curve.py", "--fail-on-incomplete"]))
     errors.extend(overlap_command_errors(by_name.get("portfolio_overlap", [])))
     errors.extend(summary_command_errors(by_name.get("summary", []), args))
     return errors
 
 
-def signal_command_errors(by_name: dict[str, list[str]], signal_date: str) -> list[str]:
+def signal_command_errors(by_name: dict[str, list[str]], signal_date: str, allocation_model: str) -> list[str]:
     checks = {
         "slice": ["slice_prices_as_of.py", "--as-of-date", signal_date],
         "predict": ["generate_lightgbm_predictions.py", "--summary-output", "--fail-on-skipped"],
         "validate": ["validate_ohlcv.py", "--config", "qsss_profile_config.json"],
         "score": ["score_candidates.py", "--fail-on-skipped", "--fail-on-empty-result"],
-        "allocate": ["allocate_candidate_capital.py", "--cash-budget", "--lot-size", "--fail-on-unallocated"],
         "backtest": ["backtest_buy_hold.py", "--require-tradable-bars", "--fail-on-incomplete"],
     }
+    if allocation_model != "portfolio_cash_lot_floor":
+        checks["allocate"] = ["allocate_candidate_capital.py", "--cash-budget", "--lot-size", "--fail-on-unallocated"]
     errors = []
     for suffix, required in checks.items():
         errors.extend(requirements(by_name.get(f"{signal_date}:{suffix}", []), f"{signal_date}:{suffix}", required))
@@ -199,6 +209,23 @@ def overlap_command_errors(command: list[str]) -> list[str]:
         "--require-capital-fields",
     ]
     return requirements(command, "portfolio_overlap", required)
+
+
+def portfolio_allocate_errors(command: list[str]) -> list[str]:
+    required = [
+        "allocate_portfolio_candidate_capital.py",
+        "--raw-candidates",
+        "--candidate-outputs",
+        "--sized-outputs",
+        "--skipped-output",
+        "--summary-output",
+        "--max-open-positions",
+        "--max-gross-weight",
+        "--max-gross-notional",
+        "--max-cash-reserved",
+        "--fail-on-symbol-overlap",
+    ]
+    return requirements(command, "portfolio_allocate", required)
 
 
 def summary_command_errors(command: list[str], args: argparse.Namespace) -> list[str]:

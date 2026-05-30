@@ -9,17 +9,12 @@ from typing import Any
 
 from walk_forward_metadata_checks import metadata_gate_errors
 from walk_forward_price_checks import signal_price_errors
+from walk_forward_allocation_checks import allocation_errors
 
 
 CAPITAL_FIELDS = ("weight", "notional", "quantity", "cash_reserved")
-PRICE_COLUMNS = (
-    "symbol", "date", "open", "high", "low", "close", "volume", "amount",
-    "turn", "tradestatus", "isST",
-)
-SIZED_COLUMNS = (
-    "cash_budget", "lot_size", "capital_model", "signal_close", "cash_slot",
-    "quantity", "cash_reserved", "notional", "weight", "unallocated",
-)
+PRICE_COLUMNS = ("symbol", "date", "open", "high", "low", "close", "volume", "amount", "turn", "tradestatus", "isST")
+SIZED_COLUMNS = ("cash_budget", "lot_size", "capital_model", "signal_close", "cash_slot", "quantity", "cash_reserved", "notional", "weight", "unallocated")
 
 
 def build_artifact_report(run_dir: Path, args: Any, validator: str) -> dict[str, Any]:
@@ -28,6 +23,7 @@ def build_artifact_report(run_dir: Path, args: Any, validator: str) -> dict[str,
     errors = count_errors(dates, args.expected_candidates)
     summary = load_json(run_dir / "qsss_run_summary.json")
     errors += metadata_errors(load_json(run_dir / "metadata.json"), symbols, args)
+    errors += allocation_errors(run_dir, summary, args, load_json, read_csv)
     errors += summary_errors(summary, dates, args.expected_candidates)
     totals = validate_signal_artifacts(run_dir, dates, symbols, args, errors)
     errors += equity_errors(run_dir / "qsss_equity_curve.csv", summary, dates, args, totals)
@@ -97,6 +93,7 @@ def validate_signal_artifacts(
         errors += candidate_errors(sized, date, symbols, expected, "sized")
         errors += signal_price_errors(candidates, sized, prices, date)
         errors += sized_errors(sized, date, args)
+        errors += raw_candidate_errors(run_dir, date, len(candidates), args)
         errors += backtest_errors(backtest, date, expected, args)
         totals["candidates"] += len(candidates)
         totals["completed_trades"] += count_complete(backtest)
@@ -142,7 +139,7 @@ def candidate_errors(
 def sized_errors(rows: list[dict[str, str]], signal_date: str, args: Any) -> list[str]:
     errors = required_column_errors(rows, SIZED_COLUMNS, f"{signal_date}_sized")
     for row in rows:
-        if row.get("capital_model") != "equal_cash_budget_lot_floor":
+        if row.get("capital_model") != args.required_allocation_model:
             errors.append(f"{signal_date}_capital_model={row.get('capital_model')}")
         if float_value(row.get("cash_budget")) != args.cash_budget:
             errors.append(f"{signal_date}_cash_budget={row.get('cash_budget')}")
@@ -151,6 +148,13 @@ def sized_errors(rows: list[dict[str, str]], signal_date: str, args: Any) -> lis
         if row.get("unallocated", "").lower() not in ("false", "0"):
             errors.append(f"{signal_date}_unallocated={row.get('unallocated')}")
     return errors
+
+
+def raw_candidate_errors(run_dir: Path, date: str, selected_count: int, args: Any) -> list[str]:
+    if args.required_allocation_model != "portfolio_cash_lot_floor":
+        return []
+    rows = read_csv(run_dir / "signals" / date / "qsss_raw_candidates.csv")
+    return [f"{date}_raw_candidates_lt_selected"] if len(rows) < selected_count else []
 
 
 def backtest_errors(rows: list[dict[str, str]], date: str, expected: int, args: Any) -> list[str]:

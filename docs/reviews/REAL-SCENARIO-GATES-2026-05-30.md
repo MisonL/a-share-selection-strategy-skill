@@ -220,6 +220,11 @@
 - 同一 top-N=2 复验每个信号日候选数均为 `2`，`qsss_run_summary.json` 记录 `quality_errors=[]`、`completed_trades=12`、`incomplete_trades=0`、资金曲线 `final_equity=0.8990438382018885`、`total_return=-0.10095616179811151`、`max_drawdown=-0.1009561617981115`。
 - 同一 top-N=2 复验组合 summary 记录 `max_open_positions=2`、`max_gross_weight=0.9997069999999999`、`max_gross_notional=999707.0`、`max_cash_reserved=999707.0`、`same_symbol_overlap_rows=0`，组合 `violations=[]`。这只证明显式 top-N 截断下现有 equal-cash/lot-floor sizing 能通过固定组合门禁，不等同于已实现组合感知容量模型。
 - 对同一 top-N=2 复验执行 `validate_walk_forward_manifest.py --expected-max-candidates 2` 返回 0，报告在 `/tmp/stock-selection-p1-40sym-independent-topn2-20260530T161120/run_manifest_validation.json`，结果为 `steps_checked=40`、`errors=[]`；执行 `validate_walk_forward_artifacts.py --allow-dropped-invalid-rows` 返回 0，报告在 `/tmp/stock-selection-p1-40sym-independent-topn2-20260530T161120/run_artifact_validation.json`，结果为 `signals_checked=6`、`total_candidates=12`、`total_completed_trades=12`、`final_equity=0.8990438382018885`、`portfolio_violations=0`、`errors=[]`。
+- 新增 `portfolio_cash_lot_floor` 组合级 sizing/cut 后，同一独立 40-symbol/6 信号日池完成真实组合容量复验，产物在 `/tmp/stock-selection-p1-portfolio-capacity-20260530T165104/`。runner 未传入 `--expect-portfolio-violations`，manifest 记录 `allocation_model=portfolio_cash_lot_floor`，步骤序列为每期 slice/predict/validate/score、统一 `portfolio_allocate`、逐期 backtest、equity、portfolio_overlap、summary，共 35 步且全部返回 0。
+- 同一组合容量复验生成每信号日 `qsss_raw_candidates.csv`、cut 后 `qsss_candidates.csv`、`qsss_sized_candidates.csv`，以及全局 `qsss_skipped_candidates.csv` 和 `qsss_allocation_summary.json`。allocation summary 记录 `raw_candidates=59`、`allocated_candidates=48`、`skipped_candidates=11`、`skip_reason_counts={'max_open_positions': 11}`，各信号日 raw/allocated/skipped 为 `2/2/0`、`13/10/3`、`7/7/0`、`9/9/0`、`15/10/5`、`13/10/3`。
+- 同一组合容量复验 allocation summary 同时记录约束与实际最大值：`cash_budget=3000000`、`lot_size=100`、`hold_days=5`、`max_open_positions=10` 且 limit 为 `10`、`max_gross_weight=0.99571` 且 limit 为 `1.0`、`max_gross_notional=2987130.0` 且 limit 为 `3000000.0`、`max_cash_reserved=2987130.0` 且 limit 为 `3000000.0`、`fail_on_symbol_overlap=true`。
+- 同一组合容量复验 `qsss_run_summary.json` 记录 `quality_errors=[]`、`completed_trades=48`、`incomplete_trades=0`、资金曲线 `final_equity=0.9614512632665976`、`total_return=-0.03854873673340242`、`max_drawdown=-0.0494320515108941`；portfolio summary 记录 `max_open_positions=10`、`max_gross_weight=0.9957099999999997`、`max_gross_notional=2987130.0`、`max_cash_reserved=2987130.0`、`same_symbol_overlap_rows=0`、`violations=[]`。
+- 对同一组合容量复验执行 `validate_walk_forward_manifest.py` 返回 0，报告在 `/tmp/stock-selection-p1-portfolio-capacity-20260530T165104/run_manifest_validation.json`，结果为 `steps_checked=35`、`errors=[]`；执行 `validate_walk_forward_artifacts.py --required-allocation-model portfolio_cash_lot_floor --allow-dropped-invalid-rows` 返回 0，报告在 `/tmp/stock-selection-p1-portfolio-capacity-20260530T165104/run_artifact_validation.json`，结果为 `signals_checked=6`、`total_candidates=48`、`total_completed_trades=48`、`final_equity=0.9614512632665976`、`portfolio_violations=0`、`errors=[]`。
 
 边界:
 
@@ -229,6 +234,7 @@
 - P1 四信号日扩展复验只证明同一固定池新增 `2026-04-24` 后仍能按固定门禁复跑；不能外推为策略正期望、全市场泛化、真实成交容量或涨跌停规则已覆盖。
 - P1 40-symbol/6 信号日扩容复验只证明两个 40 支股票池、多个 6 信号日窗口、显式丢弃 10 行源数据异常、`cash_budget=3000000`、5 日持有、10 bps 成本、5 bps 滑点和 `tradestatus` 入场/退出门禁下的可复跑边界；不能外推为全市场样本外收益有效，也不能证明 100 万现金预算适合更大候选集。
 - P1 独立 40-symbol/6 信号日 top-N=2 复验只证明 `--max-candidates` 能把每期候选显式截断并通过现有固定组合门禁；它不证明跨信号日滚动现金占用、同标的组合级去重或真实订单容量已建模。
+- P1 `portfolio_cash_lot_floor` 复验证明了当前代码能按固定持有期滚动处理现金占用、并发仓位和同标的重叠，并输出 raw/selected/sized/skipped/allocation summary 证据；但仍只是本地 close-to-close + lot-floor 模型，不证明真实涨跌停、真实订单成交、券商容量或全市场策略质量。
 - `run_baostock_walk_forward.py` 只编排既有 CLI 并记录命令级 manifest，不新增行情、prediction、sizing、回测或组合逻辑；它不能把固定 12-symbol/4 信号日小样本外推为全市场结论。
 - `validate_walk_forward_manifest.py` 只校验 runner manifest 的结构、步骤顺序、退出码和门禁参数；不能替代真实行情、真实 LightGBM、真实回测或真实组合报告。
 - `validate_walk_forward_artifacts.py` 只校验既有复验目录内的 artifact 内容一致性，不重新联网取数、不重新训练 LightGBM、不重新回测，也不能把固定小样本外推为全市场结论；当前会额外校验候选和 sizing 信号日价格与原始信号窗口 close 一致。
@@ -240,7 +246,7 @@
 
 ## Current Next Gates / 下一步门禁
 
-- P1: 继续扩大 A 股真实 QSSS 门禁。当前已有两个 40-symbol 池的 6 信号日复验，且已证明 top-N=2 可在独立池通过固定组合门禁；下一轮应实现真正的组合感知容量 sizing/cut，按持有期滚动处理现金占用、同标的重叠和最大并发仓位，并保留固定阈值、metadata、summary、manifest validator 和 artifact validator 证据。
+- P1: 继续扩大 A 股真实 QSSS 门禁。当前已有两个 40-symbol 池的 6 信号日复验，已证明 top-N=2 可在独立池通过固定组合门禁，并已实现 `portfolio_cash_lot_floor` 组合级 sizing/cut。下一轮 P1 应优先在更多独立池/窗口复验该组合模型，或推进更真实的订单容量/涨跌停规则门禁。
 - P2: 真实涨跌停规则门禁。P2a 已确认当前 baostock 日 K 无直接 `up_limit/down_limit/limit_status/is_trading/suspended` 字段；未取得可靠直接字段或另起明确规则建模任务前，不得把 `preclose/pctChg/isST` 粗推写成已建模。
 - P3: 外部源稳定性观察。akshare `stock_zh_a_hist`、yfinance/Yahoo 和 baostock 长期稳定性只能按固定脚本持续复验，不优先于 P1 的 A 股真实策略门禁。
 
@@ -265,6 +271,7 @@
 - P1 40-symbol 两个 6 信号日窗口复验可完整跑到组合严格门禁，摘要质量错误为 0；较近窗口完成 85 笔交易、`final_equity=0.8851723337824899` 并暴露 5 个组合 violation，较早窗口完成 76 笔交易、`final_equity=0.9994234423069976` 并暴露 3 个组合 violation。
 - P1 独立 40-symbol/6 信号日复验与上一组 40-symbol 池交集为 0，可完整跑到组合严格门禁，摘要质量错误为 0，完成 59 笔交易、`final_equity=0.9604703366149994`，并暴露 3 个组合容量 violation。
 - P1 独立 40-symbol/6 信号日 top-N=2 复验可在不使用 `--expect-portfolio-violations` 的情况下完整通过，摘要质量错误为 0，完成 12 笔交易、`final_equity=0.8990438382018885`，组合 `portfolio_violations=0`。
+- P1 独立 40-symbol/6 信号日 `portfolio_cash_lot_floor` 复验可在不使用 `--expect-portfolio-violations` 的情况下完整通过，raw 候选 59 个、组合 cut 后 48 个、跳过 11 个且原因均为 `max_open_positions`，完成 48 笔交易、`final_equity=0.9614512632665976`，组合 `portfolio_violations=0`。
 - 真实 12-symbol/3 信号日样本已经暴露最大 12 笔并发持仓和同标的重复持仓冲突风险，并已可由 `portfolio_overlap_report.py` 自动化失败。
 - 信号日截断防未来泄漏门禁。
 - CI 证据必须绑定具体 `headSha` 和 GitHub Actions run；不得把旧提交的绿色 CI 外推为当前代码已验证。

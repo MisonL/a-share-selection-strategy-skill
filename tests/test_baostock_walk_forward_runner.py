@@ -147,6 +147,33 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
         self.assertIn(str(config_path), commands["2026-05-12:validate"])
         self.assertIn(str(config_path), commands["2026-05-12:score"])
 
+    def test_portfolio_allocation_model_runs_global_allocate_before_backtests(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            args = args_for(
+                Path(tmpdir),
+                signal_dates=["2026-05-12", "2026-05-20"],
+                allocation_model="portfolio_cash_lot_floor",
+            )
+            executor = FakeExecutor({})
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args=args,
+                manifest=manifest,
+                manifest_path=Path(tmpdir) / "run_manifest.json",
+                executor=executor,
+            )
+
+            runner.run_pipeline(context)
+            steps = [item["step"] for item in manifest["steps"]]
+            commands = {item["step"]: item["command"] for item in manifest["steps"]}
+
+        self.assertNotIn("2026-05-12:allocate", steps)
+        self.assertLess(steps.index("portfolio_allocate"), steps.index("2026-05-12:backtest"))
+        self.assertLess(steps.index("portfolio_allocate"), steps.index("2026-05-20:backtest"))
+        self.assertIn("allocate_portfolio_candidate_capital.py", commands["portfolio_allocate"][1])
+        self.assertIn("qsss_raw_candidates.csv", " ".join(commands["2026-05-12:score"]))
+        self.assertEqual("portfolio_cash_lot_floor", manifest["allocation_model"])
+
 
 class FakeExecutor:
     def __init__(self, returncodes: dict[str, int]) -> None:
@@ -166,6 +193,8 @@ def infer_step(command: list[str]) -> str:
         return "fetch"
     if script == "portfolio_equity_curve.py":
         return "equity"
+    if script == "allocate_portfolio_candidate_capital.py":
+        return "portfolio_allocate"
     if script == "portfolio_overlap_report.py":
         return "portfolio_overlap"
     if script == "summarize_walk_forward_run.py":
@@ -198,6 +227,7 @@ def args_for(
     signal_dates: list[str],
     drop_invalid_rows: bool = False,
     max_candidates: int | None = None,
+    allocation_model: str | None = None,
 ) -> object:
     parser = runner.build_parser()
     args = [
@@ -226,6 +256,8 @@ def args_for(
     ]
     if max_candidates is not None:
         args.extend(["--max-candidates", str(max_candidates)])
+    if allocation_model is not None:
+        args.extend(["--allocation-model", allocation_model])
     if drop_invalid_rows:
         args.append("--drop-invalid-rows")
     return parser.parse_args(args)

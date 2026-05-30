@@ -29,7 +29,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `docs/factor-framework.md`：通用因子、评分、过滤和输出字段。
 - `docs/qsss-derived-profile.md`：QSSS-derived A 股默认剖面、ML 口径和工程边界。
 - `docs/output-templates.md`：无法选股、0 候选和候选结果输出模板。
-- `docs/reviews/REAL-SCENARIO-GATES-2026-05-30.md`：真实任务场景门禁记录和仍未证明的边界。
+- `docs/reviews/REAL-SCENARIO-GATES-2026-05-30.md`：真实任务场景门禁记录、下一步门禁优先级和仍未证明的边界。
 
 ## 可选第三方库
 

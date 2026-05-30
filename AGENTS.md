@@ -5,7 +5,7 @@
 - 全程使用中文沟通。
 - 不得伪造行情、候选股、LightGBM prediction、回测收益或联网结果。
 - 本仓库脚本以 CLI 为稳定入口；Python API 复用时需自行将 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`。
-- 真实行情接入、真实 LightGBM prediction 生成、真实策略回测是外部门禁，不能用本地 smoke test 代替。
+- 真实行情接入、真实 LightGBM prediction 生成、真实策略回测是外部门禁，不能用本地 smoke test 代替；当前真实门禁优先级以 `docs/reviews/REAL-SCENARIO-GATES-2026-05-30.md` 为准。
 - 当前仓库未声明许可证；不要替用户添加或推断授权条款。
 
 ## 输入数据要求

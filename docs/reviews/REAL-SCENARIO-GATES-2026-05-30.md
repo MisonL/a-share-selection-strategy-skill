@@ -183,12 +183,17 @@
 - 资金曲线返回 0，`final_equity=0.9191547145201625`、`total_return=-0.08084528547983749`、`max_drawdown=-0.08084528547983749`；该小样本未证明正收益。
 - 组合严格门禁返回 3 并写出报告，原因是 `max_open_positions=12 > 10`、`max_gross_weight=1.9471519999999998 > 1.0`、`max_gross_notional=1947152.0 > 1000000.0`、`max_cash_reserved=1947152.0 > 1000000.0`、`same_symbol_overlap_rows=21`。该失败是有效风险暴露，不应通过放宽阈值改写为成功。
 - 新增 `summarize_walk_forward_run.py`，用于把真实 walk-forward 运行目录汇总为 JSON，并自动检查 metadata、prediction skipped、候选数、incomplete trades、资金曲线和组合门禁；已对 `/tmp/stock-selection-oos-20260530T130952/` 生成 `qsss_run_summary.json`，返回 0，`quality_errors=0` 且记录 5 个组合门禁 violation。后续 P1 扩大复验必须优先生成该摘要，减少人工抄写误差。
+- P1 四信号日扩展复验产物在 `/tmp/stock-selection-p1-qsss-12sym-4d-20260530T133043/`；固定 12-symbol 池身份已核对为 `000001,000333,000651,002594,300059,300750,600000,600036,600519,601318,603288,688111`，metadata 为 `rows=6960`、`symbol_count=12`、`invalid_rows=0`、`non_trading_rows=0`、`tradestatus_missing_rows=0`、`adjustflag=3`。
+- 同一复验显式传入信号日 `2026-04-24/2026-05-12/2026-05-15/2026-05-20`；fetch、slice、predict、validate、score、size、backtest、equity、summary 均返回 0，overlap 严格门禁返回 3 并写出 summary。`qsss_run_summary.json` 记录 `signals=4`、`candidates=20`、`completed_trades=20`、`incomplete_trades=0`、`quality_errors=0`、`portfolio_violations=5`。
+- 四信号日候选数分别为 `2026-04-24=5`、`2026-05-12=7`、`2026-05-15=5`、`2026-05-20=3`；四日均为 `raw_symbols=12`、`predicted_symbols=12`、`skipped_symbols=0`、`tradability_model=tradestatus_entry_exit_only`、`limit_rules_model=not_modeled`。
+- 四信号日资金曲线为 `periods=4`、`positions=20`、`final_equity=0.9349716121129314`、`total_return=-0.06502838788706855`、`max_drawdown=-0.0808452854798374`；组合 violation 仍为 `max_open_positions=12 > 10`、`max_gross_weight=1.9471519999999998 > 1.0`、`max_gross_notional=1947152.0 > 1000000.0`、`max_cash_reserved=1947152.0 > 1000000.0`、`same_symbol_overlap_rows=21`。
 
 边界:
 
 - 2-symbol 最新日 smoke 不证明全市场策略质量，也不证明样本外收益。
 - 12-symbol 三信号日回测证明了真实候选和真实 OHLCV 能进入 close-to-close 基线回测；当前代码支持 round-trip bps 扣减、等权资金曲线、取数阶段 `tradestatus` 门禁、回测级 `--require-tradable-bars` 门禁、组合并发持仓报告和测试资金字段权重容量门禁，但仍不覆盖真实现金容量、涨跌停或全市场泛化能力。
 - current-code 复验只证明固定 12-symbol、三信号日、5 日持有、10 bps 成本、5 bps 滑点和 `tradestatus` 入场/退出门禁下的可复跑边界；不能外推为全市场样本外收益有效。
+- P1 四信号日扩展复验只证明同一固定池新增 `2026-04-24` 后仍能按固定门禁复跑；不能外推为策略正期望、全市场泛化、真实成交容量或涨跌停规则已覆盖。
 - `--drop-invalid-rows` 成功不等于源数据无异常；审查时必须同时检查 metadata 的 `invalid_rows`、`dropped_invalid_rows`、`raw_non_trading_rows` 和 `non_trading_rows`。
 - baostock 日 K 未直接提供 `up_limit/down_limit/limit_status`；当前不得把 `preclose + pctChg`、prefix 或 `isST` 粗推解释为真实涨跌停规则已建模。
 - `generate_lightgbm_predictions.py` 当前把最新预测概率重复写入该标的评分窗口，目的是让评分脚本消费当前概率；不要解释成逐日历史预测序列。
@@ -213,9 +218,10 @@
 - LightGBM prediction 生成器的本地契约、失败边界和合成 demo 真模型运行链路。
 - buy-hold 基线回测脚本的本地契约、失败边界、round-trip bps 成本/滑点扣减、可选 `tradestatus` 入场/退出门禁、等权资金曲线、组合阈值失败门槛、并发持仓门禁、候选资金字段透传、equal-cash/lot-floor sizing 产物，以及权重、名义金额、预留现金容量失败门禁。
 - 2-symbol baostock 真实依赖 smoke 链路: 真实行情落地、真实 LightGBM prediction 生成、QSSS 最新日评分。
-- 12-symbol baostock 多信号日真实链路: 严格信号日截断、真实 QSSS 候选生成、5 日 buy-hold 基线回测，且 `incomplete_trades=0`。
+- 12-symbol baostock 多信号日真实链路: 严格信号日截断、真实 QSSS 候选生成、5 日 buy-hold 基线回测，3/4 信号日复验记录均为 `incomplete_trades=0`。
 - baostock 日 K `tradestatus/preclose/pctChg/isST` 字段可取，取数阶段可拒绝 `tradestatus != 1` 的不可交易行。
 - current-code 12-symbol/3 信号日 walk-forward 复验可完整跑到组合严格门禁，并以非 0 暴露并发、同标的重叠和资金阈值风险。
+- P1 12-symbol/4 信号日扩展复验可完整跑到组合严格门禁，摘要质量错误为 0，并继续暴露同一组组合阈值风险。
 - 真实 12-symbol/3 信号日样本已经暴露最大 12 笔并发持仓和同标的重复持仓冲突风险，并已可由 `portfolio_overlap_report.py` 自动化失败。
 - 信号日截断防未来泄漏门禁。
 - CI 证据必须绑定具体 `headSha` 和 GitHub Actions run；不得把旧提交的绿色 CI 外推为当前代码已验证。

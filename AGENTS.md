@@ -33,5 +33,6 @@ PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy --with pyarrow pytho
 如需校验 Skill 结构，将 `QUICK_VALIDATE` 替换成本机 skill-creator 的 `quick_validate.py` 路径：
 
 ```bash
+QUICK_VALIDATE=/path/to/skill-creator/scripts/quick_validate.py
 uv run --with pyyaml python "$QUICK_VALIDATE" "$(pwd)"
 ```

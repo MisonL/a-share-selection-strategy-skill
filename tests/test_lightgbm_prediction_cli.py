@@ -3,12 +3,13 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 import json
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -106,6 +107,42 @@ class LightgbmPredictionCliTests(unittest.TestCase):
         self.assertEqual(2, code)
         self.assertFalse(output_path.exists())
         self.assertIn("lightgbm and scikit-learn", stderr.getvalue())
+
+    def test_cli_fail_on_skipped_returns_error_without_output(self) -> None:
+        full_history = build_frame(days=180, include_turn=True)
+        short_history = build_frame(days=120, include_turn=True)
+        short_history = short_history[short_history["symbol"] == "600001"]
+        frame = full_history[full_history["symbol"] == "000002"]
+        frame = pd.concat([frame, short_history], ignore_index=True)
+        deps = {"classifier": RecordingClassifier, "scaler": RecordingScaler}
+        original_loader = generator.load_model_dependencies
+        generator.load_model_dependencies = lambda: deps
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                input_path = Path(tmpdir) / "prices.csv"
+                output_path = Path(tmpdir) / "predictions.csv"
+                frame.to_csv(input_path, index=False)
+                stdout = StringIO()
+                stderr = StringIO()
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    code = generator.main(
+                        [
+                            "--input",
+                            str(input_path),
+                            "--output",
+                            str(output_path),
+                            "--min-history-rows",
+                            "150",
+                            "--fail-on-skipped",
+                        ]
+                    )
+            self.assertEqual(3, code)
+            self.assertFalse(output_path.exists())
+            self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
+            self.assertIn("skipped_symbols=1", stdout.getvalue())
+            self.assertIn("output_not_written=true", stderr.getvalue())
+        finally:
+            generator.load_model_dependencies = original_loader
 
 
 if __name__ == "__main__":

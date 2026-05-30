@@ -243,6 +243,7 @@ PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy --with pyarrow pytho
 该 smoke 只验证本地文件读取、评分和输出流程，不代表真实行情接入、真实 LightGBM prediction 生成链路或真实回测已经通过。
 
 ```bash
+python3 scripts/create_demo_data.py --output /tmp/stock-selection-demo
 uv run --with pandas --with numpy python scripts/score_candidates.py \
   --input /tmp/stock-selection-demo/prices.csv \
   --config scripts/example_config.json \
@@ -260,7 +261,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
 - 评分、校验、切片、预测和回测脚本以本地文件为入口；`fetch_baostock_a_share.py` 是显式可选联网取数入口，只负责落地本地 gate 文件，不调用券商接口或交易接口。
 - 没有真实回测时，不得声称策略收益已经验证。
 - 使用机器学习预测时，必须明确训练窗口、预测窗口、标签定义和未来数据泄漏风险。
-- QSSS-derived 配置只复刻评分消费层；真实 LightGBM prediction 生成需要在上游单独实现和验证。
+- QSSS-derived 配置只复刻评分消费层；真实 LightGBM prediction 可由本仓库可选生成器或外部上游生成，但必须单独验证训练窗口、标签定义和未来泄漏风险。
 
 ## 授权
 

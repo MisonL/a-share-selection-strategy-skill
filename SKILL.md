@@ -131,7 +131,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py --input /tm
 - `score_candidates.py` 只消费预测列，不训练 LightGBM，也不会用技术因子伪造机器学习预测。
 - `prediction_source=external_unverified` 表示当前脚本只消费外部预测，不验证其训练窗口、标签定义、特征、标准化或未来泄漏风险。
 - `generate_lightgbm_predictions.py` 是可选上游生成器；真实门禁必须启用 `--fail-on-skipped`，或检查 `raw_symbols == predicted_symbols` 且 `skipped_symbols == 0`。
-- `backtest_buy_hold.py` 只做信号日收盘价到未来第 N 个可用交易行收盘价的基线；`--cost-bps` 和 `--slippage-bps` 只做 round-trip bps 扣减，不覆盖涨跌停或停牌可交易性；组合层门禁由 `portfolio_equity_curve.py` 输出。
+- `backtest_buy_hold.py` 只做信号日收盘价到未来第 N 个可用交易行收盘价的基线；`--cost-bps` 和 `--slippage-bps` 只做 round-trip bps 扣减，`--require-tradable-bars` 只检查入场和退出日 `tradestatus=1`，不覆盖涨跌停；组合层门禁由 `portfolio_equity_curve.py` 输出。
 
 QSSS-derived 总分：
 

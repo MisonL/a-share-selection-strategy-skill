@@ -68,6 +68,40 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "slippage-bps"):
             backtest.run_backtest(prices, candidate, hold_days=5, slippage_bps=-1)
 
+    def test_require_tradable_bars_marks_non_tradable_entry(self) -> None:
+        prices = build_frame(days=130)
+        prices["tradestatus"] = "1"
+        mask = (prices["symbol"] == "000002") & (prices["date"] == prices.iloc[20]["date"])
+        prices.loc[mask, "tradestatus"] = "0"
+        candidate = prices[prices["symbol"] == "000002"].iloc[[20]][["symbol", "date"]]
+
+        result, summary = backtest.run_backtest(
+            prices,
+            candidate,
+            hold_days=5,
+            require_tradable_bars=True,
+        )
+
+        self.assertEqual(0, summary["completed_trades"])
+        self.assertEqual(1, summary["incomplete_trades"])
+        self.assertTrue(summary["tradability_required"])
+        self.assertEqual("non_tradable_entry", result["missing_reason"].iloc[0])
+        self.assertEqual("non_tradable_entry:1", summary["missing_reason_counts"])
+
+    def test_require_tradable_bars_requires_status_column(self) -> None:
+        prices = build_frame(days=130)
+        candidate = prices[prices["symbol"] == "000002"].iloc[[20]][["symbol", "date"]]
+
+        result, summary = backtest.run_backtest(
+            prices,
+            candidate,
+            hold_days=5,
+            require_tradable_bars=True,
+        )
+
+        self.assertEqual(1, summary["incomplete_trades"])
+        self.assertEqual("missing_tradestatus", result["missing_reason"].iloc[0])
+
     def test_cli_strict_incomplete_returns_error_without_output(self) -> None:
         prices = build_frame(days=130)
         candidate = pd.DataFrame([{"symbol": "000002", "date": "2025-12-31"}])
@@ -135,6 +169,40 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         self.assertIn("cost_bps=10.0", stdout.getvalue())
         self.assertIn("slippage_bps=5.0", stdout.getvalue())
         self.assertIn("incomplete_trades=1", stderr.getvalue())
+
+    def test_cli_require_tradable_bars_returns_error_without_output(self) -> None:
+        prices = build_frame(days=130)
+        prices["tradestatus"] = "1"
+        history = prices[prices["symbol"] == "000002"].reset_index(drop=True)
+        mask = (prices["symbol"] == "000002") & (prices["date"] == history.loc[20, "date"])
+        prices.loc[mask, "tradestatus"] = "0"
+        candidate = history.iloc[[20]][["symbol", "date"]]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            prices_path = Path(tmpdir) / "prices.csv"
+            candidates_path = Path(tmpdir) / "candidates.csv"
+            output_path = Path(tmpdir) / "backtest.csv"
+            prices.to_csv(prices_path, index=False)
+            candidate.to_csv(candidates_path, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = backtest.main(
+                    [
+                        "--prices",
+                        str(prices_path),
+                        "--candidates",
+                        str(candidates_path),
+                        "--output",
+                        str(output_path),
+                        "--require-tradable-bars",
+                        "--fail-on-incomplete",
+                    ]
+                )
+
+        self.assertEqual(3, code)
+        self.assertFalse(output_path.exists())
+        self.assertIn("tradability_required=True", stdout.getvalue())
+        self.assertIn("missing_reason_counts=non_tradable_entry:1", stdout.getvalue())
 
 
 if __name__ == "__main__":

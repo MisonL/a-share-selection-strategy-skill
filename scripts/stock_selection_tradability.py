@@ -67,3 +67,21 @@ def tradability_examples(frame: pd.DataFrame) -> list[dict[str, Any]]:
         return []
     columns = [column for column in TRADABILITY_COLUMNS if column in frame]
     return frame[columns].head(10).to_dict("records")
+
+
+def tradability_failure_reason(
+    history: pd.DataFrame,
+    entry_pos: int,
+    exit_pos: int,
+) -> str:
+    if "tradestatus" not in history:
+        return "missing_tradestatus"
+    if not is_tradable_status(history.iloc[entry_pos].get("tradestatus")):
+        return "non_tradable_entry"
+    if not is_tradable_status(history.iloc[exit_pos].get("tradestatus")):
+        return "non_tradable_exit"
+    return ""
+
+
+def is_tradable_status(value: object) -> bool:
+    return str(value).strip() == "1"

@@ -11,6 +11,7 @@ from typing import Any
 import pandas as pd
 
 from stock_selection_data import parse_dates, read_table
+from stock_selection_tradability import tradability_failure_reason
 from validate_ohlcv import validate_frame
 
 
@@ -24,6 +25,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--hold-days", "--holding-days", dest="hold_days", type=int, default=5)
     parser.add_argument("--cost-bps", type=float, default=0.0, help="Round-trip cost in basis points.")
     parser.add_argument("--slippage-bps", type=float, default=0.0, help="Round-trip slippage in basis points.")
+    parser.add_argument("--require-tradable-bars", action="store_true")
     parser.add_argument("--fail-on-incomplete", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -33,6 +35,7 @@ def main(argv: list[str] | None = None) -> int:
             hold_days=args.hold_days,
             cost_bps=args.cost_bps,
             slippage_bps=args.slippage_bps,
+            require_tradable_bars=args.require_tradable_bars,
         )
         if args.fail_on_incomplete and summary["incomplete_trades"]:
             print_summary(summary, args.output, prefix="ERROR_SUMMARY")
@@ -63,6 +66,7 @@ def run_backtest(
     hold_days: int,
     cost_bps: float = 0.0,
     slippage_bps: float = 0.0,
+    require_tradable_bars: bool = False,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     if hold_days < 1:
         raise ValueError("hold-days must be >= 1")
@@ -76,11 +80,11 @@ def run_backtest(
     validate_candidates(candidates)
     prepared = prepare_prices(prices)
     rows = [
-        evaluate_candidate(row, prepared, hold_days, cost_bps, slippage_bps)
+        evaluate_candidate(row, prepared, hold_days, cost_bps, slippage_bps, require_tradable_bars)
         for _, row in candidates.iterrows()
     ]
     result = pd.DataFrame(rows)
-    return result, build_summary(result, hold_days, cost_bps, slippage_bps)
+    return result, build_summary(result, hold_days, cost_bps, slippage_bps, require_tradable_bars)
 
 
 def validate_candidates(candidates: pd.DataFrame) -> None:
@@ -106,6 +110,7 @@ def evaluate_candidate(
     holding_days: int,
     cost_bps: float,
     slippage_bps: float,
+    require_tradable_bars: bool,
 ) -> dict[str, Any]:
     symbol = str(row["symbol"])
     signal_date = parse_dates(pd.Series([row["date"]])).iloc[0]
@@ -140,6 +145,12 @@ def evaluate_candidate(
             cost_bps,
             slippage_bps,
         )
+    if require_tradable_bars:
+        reason = tradability_failure_reason(history, entry_pos, exit_pos)
+        if reason:
+            return incomplete_row(
+                symbol, signal_date.date(), holding_days, reason, cost_bps, slippage_bps
+            )
     return completed_row(
         symbol,
         signal_date.date(),
@@ -228,6 +239,7 @@ def build_summary(
     holding_days: int,
     cost_bps: float,
     slippage_bps: float,
+    require_tradable_bars: bool,
 ) -> dict[str, Any]:
     completed = int((result["missing_data"] == False).sum())
     total = int(len(result))
@@ -238,6 +250,7 @@ def build_summary(
         "hold_days": int(holding_days),
         "cost_bps": float(cost_bps),
         "slippage_bps": float(slippage_bps),
+        "tradability_required": bool(require_tradable_bars),
         "missing_reason_counts": missing_reason_counts(result),
     }
 
@@ -254,7 +267,8 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
         f"incomplete_trades={summary['incomplete_trades']} "
         f"hold_days={summary['hold_days']} "
         f"cost_bps={summary['cost_bps']} "
-        f"slippage_bps={summary['slippage_bps']} output={output}"
+        f"slippage_bps={summary['slippage_bps']} "
+        f"tradability_required={summary['tradability_required']} output={output}"
     )
     if summary["missing_reason_counts"]:
         print(f"INFO: missing_reason_counts={summary['missing_reason_counts']}")
@@ -262,7 +276,8 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
         "INFO: baseline=buy_hold_close_to_close "
         "cost_model=round_trip_bps slippage_model=round_trip_bps "
         "tradability_model=not_modeled "
-        "suspension=missing_future_price"
+        "suspension=missing_future_price "
+        "tradability_gate=optional_tradestatus"
     )
 
 

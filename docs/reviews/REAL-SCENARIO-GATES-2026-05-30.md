@@ -122,12 +122,15 @@
 - 使用真实 12-symbol/3 信号日成本/滑点回测产物生成资金曲线，产物在 `/tmp/stock-selection-equity-curve-20260530T102617/`；命令返回 0，`periods=3`、`positions=15`、`incomplete_trades=0`、`final_equity=0.9191547145201625`、`total_return=-0.08084528547983749`、`max_drawdown=-0.08084528547983749`。
 - 真实资金曲线的等权平均净收益为 `2026-05-12=-0.043135064458`、`2026-05-15=-0.027106257927`、`2026-05-20=-0.012646729332`；最大回撤区间为 `START -> 2026-05-20`。
 - `portfolio_equity_curve.py` 新增 `--min-final-equity` 和 `--max-drawdown-floor`。真实成本/滑点回测产物复验在 `/tmp/stock-selection-equity-threshold-gate-20260530T104740/`；设置 `min-final-equity=0.95` 和 `max-drawdown-floor=-0.05` 返回 3 且不写失败输出，设置 `0.90/-0.10` 返回 0 并写出资金曲线。
+- `backtest_buy_hold.py` 新增 `--require-tradable-bars`，打开后要求入场和退出 bar 都有 `tradestatus=1`；缺列、入场不可交易或退出不可交易会转为 incomplete，并可被 `--fail-on-incomplete` 拦截。
+- 回测级 `tradestatus` 门禁复验产物在 `/tmp/stock-selection-backtest-tradability-gate-20260530T111018/`；含 `tradestatus` 的 000001/600000 真实价格返回 0 且 `completed_trades=2`，旧 12-symbol 真实价格因缺 `tradestatus` 返回 3 且不写输出，`missing_reason_counts=missing_tradestatus:7`。
 - 历史只读字段审查确认 `/tmp/stock-selection-ashare-scan-20260530-032723/prices.csv` 有 OHLCV 和 `turn`，但没有 `tradestatus`、`suspended`、`is_trading`、`limit_status`、`up_limit`、`down_limit`、`pre_close` 等字段；候选和回测产物也没有可交易/停牌/涨跌停字段。
+- 只读并发持仓审查确认 `/tmp/stock-selection-backtest-costs-20260530T101000/` 的 15 笔真实 complete 交易最大同时打开 12 笔，发生在 `2026-05-15`、`2026-05-18`、`2026-05-19`；同一 symbol 跨信号日重复持仓冲突共有 21 个 `date-symbol` 组合，涉及 `002594`、`300059`、`300750`、`601318`、`000333`。
 
 边界:
 
 - 成本和滑点只是简单 round-trip bps 扣减；资金曲线只是按信号日等权复利已完成交易，不覆盖仓位容量、现金占用、并发持仓冲突、调仓或风控。
-- 新 baostock 取数入口可在落地阶段拒绝 `tradestatus != 1` 的不可交易行，但 `backtest_buy_hold.py` 本身仍不判断信号日可买入、退出日可卖出或涨跌停状态；因此 `tradability_model=not_modeled` 和 `limit_rules_model=not_modeled` 仍必须保留。
+- 新 baostock 取数入口和 `--require-tradable-bars` 可拒绝 `tradestatus != 1` 的不可交易行，但回测仍不判断涨跌停状态；因此 `limit_rules_model=not_modeled` 仍必须保留。
 - 已有 12-symbol/3 信号日真实候选 CSV 与真实 OHLCV 运行记录；仍需要更大股票池、更多时间段和真实交易约束复验后，才能评价策略质量。
 
 ## 场景 U: baostock A 股全链路
@@ -160,13 +163,14 @@
 - 新门禁复验产物在 `/tmp/stock-selection-baostock-tradability-gate-20260530T104739/`；688981 短窗口严格 fetch 返回 3，metadata 为 `raw_rows=15`、`invalid_rows=6`、`raw_non_trading_rows=6`、`non_trading_rows=6`、`tradestatus_missing_rows=0`，错误包含 `invalid_rows=6; non_trading_rows=6`。
 - 同一短窗口显式 `--drop-invalid-rows` 后返回 0，metadata 为 `rows=9`、`dropped_invalid_rows=6`、`raw_non_trading_rows=6`、`non_trading_rows=0`；用 `validate_ohlcv.py --min-history-rows 1` 校验返回 0。默认校验返回 1 是因为短窗口只有 9 行，低于 120 行历史门槛。
 - 正常长窗口复验产物在 `/tmp/stock-selection-baostock-tradability-normal-20260530T104829/`；000001/600000 取数返回 0，metadata 记录 `rows=354`、`symbol_count=2`、`invalid_rows=0`、`non_trading_rows=0`、`tradestatus_missing_rows=0`，默认 `validate_ohlcv.py` 返回 0。
+- 涨跌停只读探测产物在 `/tmp/stock-selection-limit-rule-probe-20260530T105951/`；000001、600000、300750、688981 窗口样例显示可用 `preclose/pctChg/isST` 做理论候选研究，但没有直接 `up_limit/down_limit/limit_status` 字段，也未发现可证明规则实现的精确涨跌停样例。
 
 边界:
 
 - 2-symbol 最新日 smoke 不证明全市场策略质量，也不证明样本外收益。
-- 12-symbol 三信号日回测证明了真实候选和真实 OHLCV 能进入 close-to-close 基线回测；当前代码支持 round-trip bps 扣减、等权资金曲线和取数阶段 `tradestatus` 门禁，但仍不覆盖涨跌停、仓位容量、并发持仓冲突或全市场泛化能力。
+- 12-symbol 三信号日回测证明了真实候选和真实 OHLCV 能进入 close-to-close 基线回测；当前代码支持 round-trip bps 扣减、等权资金曲线、取数阶段 `tradestatus` 门禁和回测级 `--require-tradable-bars` 门禁，但仍不覆盖涨跌停、仓位容量、并发持仓冲突或全市场泛化能力。
 - `--drop-invalid-rows` 成功不等于源数据无异常；审查时必须同时检查 metadata 的 `invalid_rows`、`dropped_invalid_rows`、`raw_non_trading_rows` 和 `non_trading_rows`。
-- baostock 日 K 未直接提供 `up_limit/down_limit/limit_status`；当前不得把 `preclose + pctChg` 推断解释为真实涨跌停规则已建模。
+- baostock 日 K 未直接提供 `up_limit/down_limit/limit_status`；当前不得把 `preclose + pctChg`、prefix 或 `isST` 粗推解释为真实涨跌停规则已建模。
 - `generate_lightgbm_predictions.py` 当前把最新预测概率重复写入该标的评分窗口，目的是让评分脚本消费当前概率；不要解释成逐日历史预测序列。
 - baostock 复权口径为 `adjustflag=3`，后续报告必须继续记录复权口径。
 
@@ -181,10 +185,11 @@
 - akshare 正式联网入口的 hist/daily fallback、metadata 和严格失败契约。
 - yfinance 正式联网入口的 metadata、内置 timeout、空结果和严格失败契约；本轮带 `--timeout-seconds 10` 的 AAPL/MSFT 取数、校验和通用评分通过。
 - LightGBM prediction 生成器的本地契约、失败边界和合成 demo 真模型运行链路。
-- buy-hold 基线回测脚本的本地契约、失败边界、round-trip bps 成本/滑点扣减、等权资金曲线和组合阈值失败门槛。
+- buy-hold 基线回测脚本的本地契约、失败边界、round-trip bps 成本/滑点扣减、可选 `tradestatus` 入场/退出门禁、等权资金曲线和组合阈值失败门槛。
 - 2-symbol baostock 真实依赖 smoke 链路: 真实行情落地、真实 LightGBM prediction 生成、QSSS 最新日评分。
 - 12-symbol baostock 多信号日真实链路: 严格信号日截断、真实 QSSS 候选生成、5 日 buy-hold 基线回测，且 `incomplete_trades=0`。
 - baostock 日 K `tradestatus/preclose/pctChg/isST` 字段可取，取数阶段可拒绝 `tradestatus != 1` 的不可交易行。
+- 真实 12-symbol/3 信号日样本已经暴露最大 12 笔并发持仓和同标的重复持仓冲突风险。
 - 信号日截断防未来泄漏门禁。
 - 上一轮远端基线提交 `242c637` 的 CI 通过，GitHub Actions run 为 `26670338754`。
 
@@ -192,4 +197,4 @@
 
 - akshare `stock_zh_a_hist` 中文列接口在当前环境可稳定取数。
 - yfinance/Yahoo 在当前环境可稳定取数。
-- 全市场级 QSSS 策略质量、样本外收益、真实涨跌停规则、回测级买卖可交易性、仓位容量和并发持仓冲突。
+- 全市场级 QSSS 策略质量、样本外收益、真实涨跌停规则、仓位容量和并发持仓自动化门禁。

@@ -21,7 +21,8 @@ def score_symbol(group: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any]:
     close = data["close"].astype(float)
     volume = data["volume"].astype(float)
     metrics = compute_metrics(data, close, volume, config)
-    latest = data.iloc[-1]
+    latest = group.iloc[-1]
+    cleaned_latest = data.iloc[-1]
     ma15 = calculate_ma(close, 15)
     explosion_line = config.get("derived_views", {}).get("explosion_score_min", 1.5)
     ma15_line = config.get("derived_views", {}).get("low_ma15_max", 15.0)
@@ -53,7 +54,7 @@ def score_symbol(group: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any]:
         "signal_tier": signal_tier,
         "recommendation": signal_tier,
         "key_reasons": build_reasons(metrics),
-        "risk_notes": build_risk_notes(metrics, float(latest["volume"])),
+        "risk_notes": build_risk_notes(metrics, float(cleaned_latest["volume"])),
         "data_window": f"{group['date'].iloc[0].date()} to {group['date'].iloc[-1].date()}",
     }
 
@@ -270,9 +271,7 @@ def resolve_turnover(data: pd.DataFrame, strict: bool = False) -> pd.Series:
     return pd.Series(np.ones(len(data)), index=data.index, dtype=float)
 
 
-def weighted_total(
-    trend: float, momentum: float, explosion: float, risk: float, weights: dict[str, Any]
-) -> float:
+def weighted_total(trend: float, momentum: float, explosion: float, risk: float, weights: dict[str, Any]) -> float:
     trend_weight = float(
         weights.get("prediction_score", weights.get("trend_score", 0))
     )

@@ -136,6 +136,20 @@ class StockSelectionScriptTests(unittest.TestCase):
         self.assertEqual(2, summary["scored_symbols"])
         self.assertEqual(0, summary["failed_symbols"])
 
+    def test_qsss_candidate_output_keeps_raw_signal_close(self) -> None:
+        config = load_config("qsss_profile_config.json")
+        config["thresholds"] = permissive_thresholds(120)
+        frame = build_frame(include_prediction=True, include_turn=True)
+        mask = frame["symbol"].eq("000002")
+        last_index = frame[mask].index[-1]
+        frame.loc[last_index - 1, "close"] = 70.0
+        frame.loc[last_index, "close"] = 77.19
+
+        candidates, _summary = scorer.score_candidates(frame, config)
+        output = candidates[candidates["symbol"].eq("000002")].iloc[0]
+
+        self.assertEqual(77.19, output["close"])
+
     def test_universe_filtering_reports_all_filtered_symbols(self) -> None:
         config = load_config("qsss_profile_config.json")
         frame = build_frame(include_prediction=True, include_turn=True)

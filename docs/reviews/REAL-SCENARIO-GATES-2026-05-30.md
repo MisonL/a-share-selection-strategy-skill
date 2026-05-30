@@ -47,6 +47,9 @@
 - 关键错误包括 `curl: (28) Connection timed out`、`curl: (35) TLS connect error`、`MSFT: possibly delisted; no price data found`。
 - 最终只生成 `/tmp/stock-selection-yfinance-scenario-i/yfinance_error.json`，未生成 `generic_ohlcv_aapl_msft.csv` 或 `scored_candidates.csv`。
 - 对缺失 CSV 运行 `validate_ohlcv.py` 和 `score_candidates.py` 均返回 2，错误明确为 input file not found。
+- 新一轮 yfinance 真实网络测试产物在 `/tmp/stock-selection-yfinance-current/`；`uv run --with yfinance --with pandas --with numpy python /tmp/stock-selection-yfinance-fetch.py` 返回 1。
+- yfinance stderr 包含 `curl: (28) Connection timed out after 30002 milliseconds`，AAPL/MSFT 均失败，metadata 记录 raw shape 为 `0 x 12`，未生成可验证 CSV。
+- 直连 Yahoo chart API 探针也返回 1，AAPL/MSFT 均在 HTTPS handshake 阶段 30 秒超时，错误为 `_ssl.c:1063: The handshake operation timed out`。
 
 边界:
 
@@ -94,7 +97,7 @@
 
 ## 场景 U: baostock A 股全链路
 
-状态: 真实行情取数、LightGBM 生成、QSSS 最新日评分已通过；信号日防泄漏 strict 评分门禁正确失败。
+状态: 2-symbol 最新日 smoke 已通过；12-symbol 多信号日真实 QSSS 候选回测已通过；baostock 无效 OHLCV 行门禁已补强。
 
 证据:
 
@@ -106,12 +109,18 @@
 - 生成结果通过 `validate_ohlcv.py --config scripts/qsss_profile_config.json`，再进入 QSSS-derived 评分，输出 `scored_symbols=2`、`candidates=1`、`threshold_failures=min_prediction_score:1`。
 - 使用 `slice_prices_as_of.py --as-of-date 2026-05-20` 截断信号窗口后重新生成 prediction 和评分，strict QSSS 评分返回 3，`effective_empty_result=true`，原因是 `threshold_filtered_all`。这说明信号日防泄漏协议生效，且当前真实两票在该信号日没有可进入回测的 QSSS 候选。
 - 为单独验证回测脚本与真实 OHLCV 的兼容性，人工构造 `2026-05-20` 候选后运行 `backtest_buy_hold.py --hold-days 5 --fail-on-incomplete` 返回 0，`completed_trades=2`、`incomplete_trades=0`，收益范围为 `-0.0009285051067781` 到 `0.0548098434004473`。
+- 新一轮 12-symbol 真实扫描产物在 `/tmp/stock-selection-ashare-scan-20260530-032723`，代码覆盖 `00/002/300/600/601/603/688` 前缀: `000001,000333,000651,002594,300059,300750,600000,600036,600519,601318,603288,688111`。
+- 12-symbol baostock 抓取返回 0，输出 6960 行，`failed_symbols=0`。
+- 信号日 `2026-05-12` 执行 fetch、slice、predict、validate、score、backtest 全部返回 0，真实 QSSS 候选 7 个，`incomplete_trades=0`，5 日收益范围为 `-0.082828` 到 `-0.022332`。
+- 信号日 `2026-05-15` 执行 fetch、slice、predict、validate、score、backtest 全部返回 0，真实 QSSS 候选 5 个，`incomplete_trades=0`，5 日收益范围为 `-0.032793` 到 `-0.011657`。
+- 信号日 `2026-05-20` 执行 fetch、slice、predict、validate、score、backtest 全部返回 0，真实 QSSS 候选 3 个，`incomplete_trades=0`，5 日收益范围为 `-0.018037` 到 `0.000121`。
+- 另一次本地 12-symbol 扫描使用 `688981` 时，baostock 返回 6 行 `volume/amount/turn` 为空的记录，触发 `slice_prices_as_of.py` 对无效 OHLCV 的显式失败。该反馈已转化为 `fetch_baostock_a_share.py` metadata 质量门禁: 默认报告 `invalid_rows` 并非 0 退出，只有显式 `--drop-invalid-rows` 才允许丢弃并记录 `dropped_invalid_rows`。
 
 边界:
 
-- 最新日 QSSS 评分产生 1 个候选，但没有未来价格，不能用于同日 buy-hold 完成路径。
-- 信号日截断后的 strict QSSS 评分无候选，因此真实策略候选回测仍未产生收益结果。
-- 人工候选回测只证明 `backtest_buy_hold.py` 能消费真实 A 股 OHLCV，不证明策略候选收益。
+- 2-symbol 最新日 smoke 不证明全市场策略质量，也不证明样本外收益。
+- 12-symbol 三信号日回测证明了真实候选和真实 OHLCV 能进入当前 close-to-close 基线回测；它仍不覆盖交易成本、滑点、涨跌停、停牌可交易性、组合资金曲线或全市场泛化能力。
+- `generate_lightgbm_predictions.py` 当前把最新预测概率重复写入该标的评分窗口，目的是让评分脚本消费当前概率；不要解释成逐日历史预测序列。
 - baostock 复权口径为 `adjustflag=3`，后续报告必须继续记录复权口径。
 
 ## 当前结论
@@ -124,12 +133,12 @@
 - akshare A 股真实源在本次环境可拉取并映射到本地文件后进入校验和评分。
 - LightGBM prediction 生成器的本地契约、失败边界和合成 demo 真模型运行链路。
 - buy-hold 基线回测脚本的本地契约和失败边界。
-- baostock A 股真实行情落地、真实 LightGBM prediction 生成、QSSS 最新日评分链路。
+- 2-symbol baostock 真实依赖 smoke 链路: 真实行情落地、真实 LightGBM prediction 生成、QSSS 最新日评分。
+- 12-symbol baostock 多信号日真实链路: 严格信号日截断、真实 QSSS 候选生成、5 日 buy-hold 基线回测，且 `incomplete_trades=0`。
 - 信号日截断防未来泄漏门禁。
 
 仍未证明:
 
 - yfinance/Yahoo 在当前环境可稳定取数。
-- 信号日截断后产生可回测的真实 QSSS 候选。
-- 真实 QSSS 候选和真实行情上的 buy-hold 收益结果。
-- 完整 CI 远端运行结果。
+- 全市场级 QSSS 策略质量、样本外收益、交易成本、滑点、涨跌停和停牌可交易性。
+- 最新提交后的完整 CI 远端运行结果。

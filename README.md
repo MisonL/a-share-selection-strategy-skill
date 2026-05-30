@@ -14,53 +14,6 @@
 | 显式失败边界 | 字段缺失、预测缺失、配置错误、脚本环境问题都会显式暴露，不伪造成功结果。 |
 | Agent 友好 | `SKILL.md` 可直接作为 Skill 入口，`evals/` 可用于验证 Agent 是否正确触发和使用。 |
 
-## 目录结构
-
-```text
-stock-selection-strategy-skill/
-|-- .github/
-|   `-- workflows/
-|       `-- ci.yml
-|-- agents/
-|   `-- openai.yaml
-|-- SKILL.md
-|-- README.md
-|-- evals/
-|   `-- evals.json
-|-- requirements.txt
-|-- requirements-parquet.txt
-|-- requirements-ml.txt
-|-- tests/
-|   |-- helpers.py
-|   |-- test_fetch_baostock_a_share.py
-|   |-- test_buy_hold_backtest_cli.py
-|   |-- test_lightgbm_prediction_cli.py
-|   |-- test_slice_prices_as_of.py
-|   |-- test_stock_selection_config.py
-|   |-- test_stock_selection_parquet_cli.py
-|   |-- test_stock_selection_profile_gates.py
-|   |-- test_stock_selection_strict_cli.py
-|   `-- test_stock_selection_scripts.py
-`-- scripts/
-    |-- example_config.json
-    |-- backtest_buy_hold.py
-    |-- create_demo_data.py
-    |-- fetch_baostock_a_share.py
-    |-- generate_lightgbm_predictions.py
-    |-- slice_prices_as_of.py
-    |-- qsss_profile_config.json
-    |-- score_candidates.py
-    |-- stock_selection_config.py
-    |-- stock_selection_data.py
-    |-- stock_selection_diagnostics.py
-    |-- lightgbm_prediction_summary.py
-    |-- stock_selection_metrics.py
-    |-- stock_selection_output.py
-    |-- stock_selection_profile.py
-    |-- stock_selection_universe.py
-    `-- validate_ohlcv.py
-```
-
 ## 快速开始
 
 以下命令假设 `uv` 已安装并在 `PATH` 中。若当前环境没有 `uv`，可先创建临时虚拟环境：
@@ -180,7 +133,7 @@ uv run --with pandas --with numpy --with scikit-learn --with lightgbm \
   --output /tmp/stock-selection-ml-demo/prices_generated_prediction.csv
 ```
 
-真实 A 股行情可先落地为本地文件，再进入同一链路。下面示例使用 baostock，输出行情 CSV 和元数据 JSON；真实环境失败时命令会非 0，不应改用 mock 数据：
+真实 A 股行情可先落地为本地文件，再进入同一链路。下面示例使用 baostock，输出行情 CSV 和元数据 JSON；真实环境失败时命令会非 0，不应改用 mock 数据。门禁不能只看命令退出码，还必须检查 metadata 中 `rows > 0`、`symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`、`invalid_rows == 0`。若 baostock 返回停牌或异常行导致 `volume`、`amount`、`turn` 为空，脚本默认失败；只有显式加 `--drop-invalid-rows` 时才会丢弃这些行，并在 metadata 记录 `dropped_invalid_rows` 和示例。
 
 ```bash
 uv run --with pandas --with numpy --with baostock python scripts/fetch_baostock_a_share.py \
@@ -202,7 +155,8 @@ uv run --with pandas --with numpy python scripts/slice_prices_as_of.py \
 uv run --with-requirements requirements-ml.txt python scripts/generate_lightgbm_predictions.py \
   --input /tmp/stock-selection-a-share/prices_signal_window.csv \
   --output /tmp/stock-selection-a-share/predictions_signal_window.csv \
-  --summary-output /tmp/stock-selection-a-share/prediction_summary.json
+  --summary-output /tmp/stock-selection-a-share/prediction_summary.json \
+  --fail-on-skipped
 uv run --with pandas --with numpy python scripts/validate_ohlcv.py \
   --input /tmp/stock-selection-a-share/predictions_signal_window.csv \
   --config scripts/qsss_profile_config.json
@@ -220,29 +174,7 @@ uv run --with pandas --with numpy python scripts/backtest_buy_hold.py \
   --fail-on-incomplete
 ```
 
-如果需要最小 buy-hold 基线回测，可使用 `backtest_buy_hold.py`。它只做信号日收盘价到未来第 N 个可用交易行收盘价的 close-to-close 基线，不扣交易成本、不模拟滑点、不判断涨跌停或停牌可交易性：
-
-```bash
-python3 scripts/create_demo_data.py --output /tmp/stock-selection-backtest-demo --days 180
-uv run --with pandas --with numpy python - <<'PY'
-import pandas as pd
-frame = pd.read_csv("/tmp/stock-selection-backtest-demo/prices.csv", dtype={"symbol": str})
-cutoff = sorted(frame["date"].unique())[150]
-frame[frame["date"] <= cutoff].to_csv(
-    "/tmp/stock-selection-backtest-demo/prices_signal_window.csv",
-    index=False,
-)
-PY
-uv run --with pandas --with numpy python scripts/score_candidates.py \
-  --input /tmp/stock-selection-backtest-demo/prices_signal_window.csv \
-  --config scripts/example_config.json \
-  --output /tmp/stock-selection-backtest-demo/candidates.csv
-uv run --with pandas --with numpy python scripts/backtest_buy_hold.py \
-  --prices /tmp/stock-selection-backtest-demo/prices.csv \
-  --candidates /tmp/stock-selection-backtest-demo/candidates.csv \
-  --output /tmp/stock-selection-backtest-demo/buy_hold_backtest.csv \
-  --hold-days 5
-```
+如果需要最小 buy-hold 基线回测，可使用 `backtest_buy_hold.py`。它只做信号日收盘价到未来第 N 个可用交易行收盘价的 close-to-close 基线，不扣交易成本、不模拟滑点、不判断涨跌停或停牌可交易性。
 
 输入约定：`symbol` 必须按文本保存以保留前导零；校验脚本会拒绝 1 到 3 位纯数字代码，避免把 `000001` 这类 A 股代码被表格软件损坏后的值当作有效输入。`date` 支持 `YYYY-MM-DD` 或 `YYYYMMDD`；`volume` 单位必须在同一文件内保持一致，脚本只能校验数值和非负，无法从纯数值可靠判断“股/手/张/成交额”是否混用。QSSS-derived 的 `market` 只接受精确值 `A-share`，不会自动归一化 `A股`、`China` 等别名。
 
@@ -285,28 +217,6 @@ total_score =
   + (1 - volatility) * 0.15
 ```
 
-## 输出字段
-
-`score_candidates.py` 默认输出 CSV，核心字段包括：
-
-| 字段 | 含义 |
-|------|------|
-| `rank` | 候选排名 |
-| `symbol` | 股票代码 |
-| `name` | 股票名称 |
-| `total_score` | 综合得分 |
-| `prediction_score` | 模型上涨概率或输入预测分 |
-| `momentum_score` | 动量得分 |
-| `explosion_score` | 短线异动得分 |
-| `risk_score` | 风险得分 |
-| `signal_tier` | 信号分层，值为 `high_signal`、`medium_signal` 或 `low_signal`，非交易建议 |
-| `recommendation` | 历史兼容字段，与 `signal_tier` 同值，非交易建议 |
-| `key_reasons` | 主要入选原因 |
-| `risk_notes` | 风险提示 |
-| `data_window` | 使用的数据区间 |
-
-实际 CSV 还会包含行情快照和诊断字段；上表列出核心解释字段。
-
 ## 验证清单
 
 修改 Skill 或脚本后建议执行：
@@ -324,22 +234,8 @@ import yaml
 from pathlib import Path
 assert yaml.safe_load(Path("agents/openai.yaml").read_text())["interface"]["display_name"]
 PY
-# 或使用备用虚拟环境:
-/tmp/stock-selection-skill-venv/bin/python - <<'PY'
-import yaml
-from pathlib import Path
-assert yaml.safe_load(Path("agents/openai.yaml").read_text())["interface"]["display_name"]
-PY
 PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/create_demo_data.py scripts/validate_ohlcv.py scripts/score_candidates.py scripts/generate_lightgbm_predictions.py scripts/backtest_buy_hold.py scripts/fetch_baostock_a_share.py scripts/slice_prices_as_of.py scripts/stock_selection_config.py scripts/stock_selection_data.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_profile.py scripts/stock_selection_universe.py scripts/stock_selection_diagnostics.py scripts/lightgbm_prediction_summary.py
 PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy --with pyarrow python -m unittest discover -s tests -v
-# 或使用备用虚拟环境:
-PYTHONDONTWRITEBYTECODE=1 /tmp/stock-selection-skill-venv/bin/python -m unittest discover -s tests -v
-```
-
-没有 `uv` 时，可使用前文的备用虚拟环境运行单测：
-
-```bash
-/tmp/stock-selection-skill-venv/bin/python -m unittest discover -s tests -v
 ```
 
 如需 smoke test，可使用 demo 数据运行：
@@ -361,7 +257,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
 ## 重要边界
 
 - 本 Skill 不是投资建议，不承诺收益，不生成交易指令。
-- 脚本只处理本地文件，不联网取数，不调用券商接口。
+- 评分、校验、切片、预测和回测脚本以本地文件为入口；`fetch_baostock_a_share.py` 是显式可选联网取数入口，只负责落地本地 gate 文件，不调用券商接口或交易接口。
 - 没有真实回测时，不得声称策略收益已经验证。
 - 使用机器学习预测时，必须明确训练窗口、预测窗口、标签定义和未来数据泄漏风险。
 - QSSS-derived 配置只复刻评分消费层；真实 LightGBM prediction 生成需要在上游单独实现和验证。

@@ -34,6 +34,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", required=True, help="Output CSV path.")
     parser.add_argument("--metadata-output", required=True, help="Output metadata JSON path.")
     parser.add_argument("--market", default="US", help="Market label to write. Default: US.")
+    parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=30.0,
+        help="Per-symbol yfinance history timeout. Default: 30.",
+    )
     parser.add_argument("--fail-on-fetch-error", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -71,6 +77,7 @@ def fetch_prices(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any]
                 end=args.end_date,
                 auto_adjust=False,
                 actions=False,
+                timeout=args.timeout_seconds,
             )
             symbol_rows = history_rows(history, symbol, market=args.market)
         except Exception as exc:  # noqa: BLE001
@@ -154,6 +161,7 @@ def build_metadata(
         "start_date": args.start_date,
         "end_date": args.end_date,
         "market": args.market,
+        "timeout_seconds": float(args.timeout_seconds),
         "adjustment": "auto_adjust_false_close",
         "rows": int(len(frame)),
         "symbol_count": int(frame["symbol"].nunique()) if not frame.empty else 0,

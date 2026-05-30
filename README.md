@@ -157,7 +157,7 @@ uv run --with pandas --with numpy --with akshare python scripts/fetch_akshare_a_
   --fail-on-fetch-error
 ```
 
-美股等通用 OHLCV 可先通过 yfinance 落地，再走通用校验和评分。真实环境失败时命令会非 0；门禁不能只看退出码，还必须检查 metadata 中 `rows > 0`、`symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`。该脚本写入原始 `Close`，不会用 `Adj Close` 静默替代 `close`。自动化复验建议使用外部超时包裹该命令，避免 Yahoo 网络或 TLS 握手长时间阻塞。
+美股等通用 OHLCV 可先通过 yfinance 落地，再走通用校验和评分。真实环境失败时命令会非 0；门禁不能只看退出码，还必须检查 metadata 中 `rows > 0`、`symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`。该脚本写入原始 `Close`，不会用 `Adj Close` 静默替代 `close`；`--timeout-seconds` 用于限制每票拉取超时。
 
 ```bash
 uv run --with pandas --with numpy --with yfinance python scripts/fetch_yfinance_ohlcv.py \
@@ -166,6 +166,7 @@ uv run --with pandas --with numpy --with yfinance python scripts/fetch_yfinance_
   --end-date 2026-05-29 \
   --output /tmp/stock-selection-us/prices.csv \
   --metadata-output /tmp/stock-selection-us/metadata.json \
+  --timeout-seconds 30 \
   --fail-on-fetch-error
 ```
 

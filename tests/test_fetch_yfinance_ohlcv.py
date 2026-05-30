@@ -48,6 +48,7 @@ class FetchYfinanceOhlcvTests(unittest.TestCase):
         self.assertEqual(1200, rows[0]["volume"])
 
     def test_cli_writes_prices_and_metadata_with_fake_yfinance(self) -> None:
+        calls = []
         fake = fake_yfinance(
             {
                 "AAPL": pd.DataFrame(
@@ -62,7 +63,8 @@ class FetchYfinanceOhlcvTests(unittest.TestCase):
                     ],
                     index=pd.to_datetime(["2026-05-20"]),
                 )
-            }
+            },
+            calls=calls,
         )
         old_module = sys.modules.get("yfinance")
         sys.modules["yfinance"] = fake
@@ -84,6 +86,8 @@ class FetchYfinanceOhlcvTests(unittest.TestCase):
                             str(output),
                             "--metadata-output",
                             str(metadata),
+                            "--timeout-seconds",
+                            "7",
                         ]
                     )
                 saved = json.loads(metadata.read_text(encoding="utf-8"))
@@ -94,6 +98,8 @@ class FetchYfinanceOhlcvTests(unittest.TestCase):
         self.assertEqual(0, code)
         self.assertIn("OK: source=yfinance rows=1", stdout.getvalue())
         self.assertEqual(1, saved["rows"])
+        self.assertEqual(7.0, saved["timeout_seconds"])
+        self.assertEqual(7.0, calls[0]["timeout"])
         self.assertEqual([], saved["failed_symbols"])
         self.assertEqual([], saved["empty_symbols"])
         self.assertEqual("AAPL", frame["symbol"].iloc[0])
@@ -137,12 +143,17 @@ class FetchYfinanceOhlcvTests(unittest.TestCase):
         self.assertIn("empty_symbols=1", stderr.getvalue())
 
 
-def fake_yfinance(histories: dict[str, pd.DataFrame]) -> types.SimpleNamespace:
+def fake_yfinance(
+    histories: dict[str, pd.DataFrame],
+    calls: list[dict[str, object]] | None = None,
+) -> types.SimpleNamespace:
     class FakeTicker:
         def __init__(self, symbol: str) -> None:
             self.symbol = symbol
 
-        def history(self, **_: object) -> pd.DataFrame:
+        def history(self, **kwargs: object) -> pd.DataFrame:
+            if calls is not None:
+                calls.append({"symbol": self.symbol, **kwargs})
             return histories[self.symbol]
 
     return types.SimpleNamespace(Ticker=FakeTicker)

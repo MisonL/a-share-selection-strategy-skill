@@ -66,10 +66,13 @@
 - 新增正式入口后，`fetch_yfinance_ohlcv.py --symbols AAPL,MSFT --start-date 2024-01-01 --end-date 2026-05-29 --fail-on-fetch-error` 在 `/tmp/stock-selection-yfinance-cli-real-20260530T091000/` 返回 3，耗时 59.47 秒，写出空 CSV 和 metadata。
 - 该 metadata 记录 `rows=0`、`symbol_count=0`、`failed_symbols=2`、`empty_symbols=['AAPL','MSFT']`，错误为 Yahoo TLS connect error；对空 CSV 运行 `validate_ohlcv.py` 返回 1，运行 `score_candidates.py` 返回 2。
 - README 干净路径复验产物在 `/tmp/stock-selection-readme-clean-20260530T091810/us/`；yfinance 命令用 60 秒外部超时包裹后成功，metadata 记录 `rows=1206`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`。
+- 新增脚本内 `--timeout-seconds` 后，受控复验产物在 `/tmp/stock-selection-yfinance-current-20260530T095106/`；`--timeout-seconds 10` 取数返回 0，耗时 2.592 秒，metadata 记录 `rows=1206`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`、`timeout_seconds=10.0`。
+- 同一产物的 `validate_ohlcv.py` 返回 0，`score_candidates.py` 返回 0，候选数为 0，stderr 提示缺少 `turn/turnover` 时通用模式使用 neutral turnover 序列。
 
 边界:
 
 - 本场景证明 yfinance 当前环境存在波动，不应把单次成功或失败推广为稳定可用性结论。
+- `--timeout-seconds` 只限制每票 yfinance history 拉取等待时间，不能证明 Yahoo 源稳定可用。
 - yfinance 只满足通用 OHLCV；若用于 QSSS-derived，仍需外部补齐 `market=A-share`、真实上游 `prediction_score` 和 `turn` 或 `turnover`。
 - 本轮新增 `fetch_yfinance_ohlcv.py` 作为正式联网入口；单元测试只覆盖字段映射、`Close` 口径、metadata 和空结果严格失败，不替代真实 Yahoo 网络门禁。
 
@@ -136,11 +139,13 @@
 - 6 行无效行均来自真实 baostock 返回，日期为 `2025-09-01`、`2025-09-02`、`2025-09-03`、`2025-09-04`、`2025-09-05`、`2025-09-08`，字段 `volume/amount/turn` 为空。
 - 同一 fetch CSV 运行 `validate_ohlcv.py` 返回 1，错误包含 `column volume has 6 missing values` 和 `column volume has 6 non-numeric values`；运行 `slice_prices_as_of.py --as-of-date 2025-09-08` 返回 2 且不写 sliced 输出。
 - 该反馈已转化为 `fetch_baostock_a_share.py` metadata 质量门禁: 默认报告 `invalid_rows` 并非 0 退出，只有显式 `--drop-invalid-rows` 才允许丢弃并记录 `dropped_invalid_rows`。
+- 受控复验产物在 `/tmp/stock-selection-ashare-current-20260530T095205/`；默认严格 fetch 仍返回 3，`invalid_rows=6`、`dropped_invalid_rows=0`，显式 `--drop-invalid-rows` 后返回 0，`raw_rows=1422`、`rows=1416`、`dropped_invalid_rows=6`，清洗后 validate 返回 0。
 
 边界:
 
 - 2-symbol 最新日 smoke 不证明全市场策略质量，也不证明样本外收益。
 - 12-symbol 三信号日回测证明了真实候选和真实 OHLCV 能进入当前 close-to-close 基线回测；它仍不覆盖交易成本、滑点、涨跌停、停牌可交易性、组合资金曲线或全市场泛化能力。
+- `--drop-invalid-rows` 成功不等于源数据无异常；审查时必须同时检查 metadata 的 `invalid_rows` 和 `dropped_invalid_rows`。
 - `generate_lightgbm_predictions.py` 当前把最新预测概率重复写入该标的评分窗口，目的是让评分脚本消费当前概率；不要解释成逐日历史预测序列。
 - baostock 复权口径为 `adjustflag=3`，后续报告必须继续记录复权口径。
 
@@ -153,7 +158,7 @@
 - QSSS-derived 对 A 股字段、market、symbol、prediction、turn 的门禁。
 - akshare A 股 `stock_zh_a_daily` 真实源当前可拉取，并可映射到本地文件后进入通用校验和评分；`stock_zh_a_hist` 当前稳定性未证明。
 - akshare 正式联网入口的 hist/daily fallback、metadata 和严格失败契约。
-- yfinance 正式联网入口的 metadata、空结果和严格失败契约。
+- yfinance 正式联网入口的 metadata、内置 timeout、空结果和严格失败契约；本轮带 `--timeout-seconds 10` 的 AAPL/MSFT 取数、校验和通用评分通过。
 - LightGBM prediction 生成器的本地契约、失败边界和合成 demo 真模型运行链路。
 - buy-hold 基线回测脚本的本地契约和失败边界。
 - 2-symbol baostock 真实依赖 smoke 链路: 真实行情落地、真实 LightGBM prediction 生成、QSSS 最新日评分。

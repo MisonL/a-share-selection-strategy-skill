@@ -191,6 +191,7 @@
 - 新增 `run_baostock_walk_forward.py` 一键 runner 后，P1 固定 12-symbol/4 信号日复验产物在 `/tmp/stock-selection-p1-runner-20260530T140916/`；runner 从 fetch 到 summary 共记录 28 个步骤到 `run_manifest.json`，其中只有 `portfolio_overlap` 返回 `3` 且允许返回码为 `[0,3]`，最终 `summary` 返回 0。
 - 同一 runner 复验的 metadata 为 `rows=6960`、`raw_rows=6960`、`symbol_count=12`、`failed_symbols=[]`、`empty_symbols=[]`、`invalid_rows=0`、`non_trading_rows=0`、`tradestatus_missing_rows=0`、`adjustflag=3`；`qsss_run_summary.json` 记录 `quality_errors=[]`、`signals=4`、`candidates=20`、`completed_trades=20`、`incomplete_trades=0`，资金曲线和组合 violation 与上一条 P1 四信号日复验一致。
 - 新增 `validate_walk_forward_manifest.py` 后，对同一 runner 产物执行 manifest 契约校验返回 0，报告在 `/tmp/stock-selection-p1-runner-20260530T140916/run_manifest_validation.json`；校验结果为 `steps_checked=28`、`errors=[]`，只证明命令级步骤、退出码和门禁参数记录完整。
+- 新增 `validate_walk_forward_artifacts.py` 后，对同一 runner 产物执行 artifact 内容校验返回 0，报告在 `/tmp/stock-selection-p1-runner-20260530T140916/run_artifact_validation.json`；校验结果为 `signals_checked=4`、`total_candidates=20`、`total_completed_trades=20`、`final_equity=0.9349716121129314`、`portfolio_violations=5`、`manifest_checked=true`、`errors=[]`，覆盖真实 `metadata.json`、信号窗口 CSV、候选 CSV、sizing CSV、回测 CSV、资金曲线 CSV、组合 summary JSON 和 manifest 校验报告。
 
 边界:
 
@@ -200,6 +201,7 @@
 - P1 四信号日扩展复验只证明同一固定池新增 `2026-04-24` 后仍能按固定门禁复跑；不能外推为策略正期望、全市场泛化、真实成交容量或涨跌停规则已覆盖。
 - `run_baostock_walk_forward.py` 只编排既有 CLI 并记录命令级 manifest，不新增行情、prediction、sizing、回测或组合逻辑；它不能把固定 12-symbol/4 信号日小样本外推为全市场结论。
 - `validate_walk_forward_manifest.py` 只校验 runner manifest 的结构、步骤顺序、退出码和门禁参数；不能替代真实行情、真实 LightGBM、真实回测或真实组合报告。
+- `validate_walk_forward_artifacts.py` 只校验既有复验目录内的 artifact 内容一致性，不重新联网取数、不重新训练 LightGBM、不重新回测，也不能把固定小样本外推为全市场结论。
 - P2a 字段探测只证明 baostock 日 K 当前候选字段不可用；不等同于真实涨跌停规则门禁通过。
 - `--drop-invalid-rows` 成功不等于源数据无异常；审查时必须同时检查 metadata 的 `invalid_rows`、`dropped_invalid_rows`、`raw_non_trading_rows` 和 `non_trading_rows`。
 - baostock 日 K 未直接提供 `up_limit/down_limit/limit_status`；当前不得把 `preclose + pctChg`、prefix 或 `isST` 粗推解释为真实涨跌停规则已建模。

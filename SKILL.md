@@ -82,6 +82,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `portfolio_equity_curve.py`：可选等权组合资金曲线生成器，读取一个或多个回测 CSV，并支持 final equity / max drawdown 失败门槛。
 - `portfolio_overlap_report.py`：可选组合并发持仓、同标的重叠、资金字段完整性，以及权重、名义金额和预留现金容量门禁报告。
 - `validate_walk_forward_manifest.py`：校验一键 runner manifest 的步骤顺序、退出码和门禁参数；不替代真实行情、prediction 或回测执行。
+- `validate_walk_forward_artifacts.py`：校验 walk-forward 复验目录中的真实 CSV/JSON artifact 内容，包括信号窗口、候选、sizing、回测、资金曲线、组合 summary 和 manifest 校验报告。
 - `slice_prices_as_of.py`：按信号日截断本地行情，防止用未来行情生成候选。
 - `fetch_baostock_a_share.py`：可选 baostock A 股日线取数脚本，输出本地行情 CSV 和 metadata JSON，包含 `tradestatus/preclose/pctChg/isST` 门禁字段。
 - `fetch_akshare_a_share.py`：可选 akshare A 股日线取数脚本，先尝试中文列接口，失败时记录 fallback 并转用 `stock_zh_a_daily`。
@@ -174,6 +175,7 @@ total_score =
 ```bash
 uv run --with pandas --with numpy --with baostock --with-requirements requirements-ml.txt python scripts/run_baostock_walk_forward.py --symbols SYMBOLS --start-date START --end-date END --signal-dates YYYY-MM-DD --output-dir RUN_DIR --cash-budget 1000000 --max-open-positions 10 --max-gross-weight 1.0 --max-gross-notional 1000000 --max-cash-reserved 1000000 --fail-on-symbol-overlap --expect-portfolio-violations
 python scripts/validate_walk_forward_manifest.py --manifest RUN_DIR/run_manifest.json --signal-dates YYYY-MM-DD --expected-symbol-count N --required-tradability-model tradestatus_entry_exit_only --required-limit-rules-model not_modeled --expect-portfolio-violations
+python scripts/validate_walk_forward_artifacts.py --run-dir RUN_DIR --output RUN_DIR/run_artifact_validation.json --signal-dates YYYY-MM-DD --expected-symbols SYMBOLS --expected-candidates CANDIDATE_COUNTS --expected-final-equity FINAL_EQUITY --expected-portfolio-violations N --required-tradability-model tradestatus_entry_exit_only --required-limit-rules-model not_modeled --manifest-validation RUN_DIR/run_manifest_validation.json
 uv run --with pandas --with numpy python scripts/slice_prices_as_of.py --input prices.csv --output prices_signal_window.csv --as-of-date YYYY-MM-DD
 uv run --with-requirements requirements-ml.txt python scripts/generate_lightgbm_predictions.py --input prices_signal_window.csv --output predictions_signal_window.csv --summary-output prediction_summary.json --fail-on-skipped
 uv run --with pandas --with numpy python scripts/validate_ohlcv.py --input predictions_signal_window.csv --config scripts/qsss_profile_config.json

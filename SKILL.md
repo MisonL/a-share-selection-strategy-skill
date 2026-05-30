@@ -171,6 +171,7 @@ total_score =
 真实链路建议顺序：
 
 ```bash
+uv run --with pandas --with numpy --with baostock --with-requirements requirements-ml.txt python scripts/run_baostock_walk_forward.py --symbols SYMBOLS --start-date START --end-date END --signal-dates YYYY-MM-DD --output-dir RUN_DIR --cash-budget 1000000 --max-open-positions 10 --max-gross-weight 1.0 --max-gross-notional 1000000 --max-cash-reserved 1000000 --fail-on-symbol-overlap --expect-portfolio-violations
 uv run --with pandas --with numpy python scripts/slice_prices_as_of.py --input prices.csv --output prices_signal_window.csv --as-of-date YYYY-MM-DD
 uv run --with-requirements requirements-ml.txt python scripts/generate_lightgbm_predictions.py --input prices_signal_window.csv --output predictions_signal_window.csv --summary-output prediction_summary.json --fail-on-skipped
 uv run --with pandas --with numpy python scripts/validate_ohlcv.py --input predictions_signal_window.csv --config scripts/qsss_profile_config.json

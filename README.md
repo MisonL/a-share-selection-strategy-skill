@@ -173,6 +173,7 @@ uv run --with pandas --with numpy --with yfinance python scripts/fetch_yfinance_
 真实回测必须先按信号日截断评分输入，避免用未来行情生成候选；回测价格文件可以保留信号日之后的真实行用于出场：
 
 ```bash
+uv run --with pandas --with numpy --with baostock --with-requirements requirements-ml.txt python scripts/run_baostock_walk_forward.py --symbols 000001,000333,000651,002594,300059,300750,600000,600036,600519,601318,603288,688111 --start-date 2024-01-01 --end-date 2026-05-29 --signal-dates 2026-04-24 2026-05-12 2026-05-15 2026-05-20 --output-dir /tmp/stock-selection-p1-qsss-run --cash-budget 1000000 --max-open-positions 10 --max-gross-weight 1.0 --max-gross-notional 1000000 --max-cash-reserved 1000000 --fail-on-symbol-overlap --expect-portfolio-violations
 uv run --with pandas --with numpy python scripts/slice_prices_as_of.py \
   --input /tmp/stock-selection-a-share/prices.csv \
   --output /tmp/stock-selection-a-share/prices_signal_window.csv \
@@ -261,7 +262,7 @@ import yaml
 from pathlib import Path
 assert yaml.safe_load(Path("agents/openai.yaml").read_text())["interface"]["display_name"]
 PY
-PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/create_demo_data.py scripts/validate_ohlcv.py scripts/score_candidates.py scripts/generate_lightgbm_predictions.py scripts/allocate_candidate_capital.py scripts/backtest_buy_hold.py scripts/stock_selection_backtest_rows.py scripts/stock_selection_capital.py scripts/portfolio_equity_curve.py scripts/portfolio_overlap_report.py scripts/summarize_walk_forward_run.py scripts/probe_baostock_limit_fields.py scripts/fetch_baostock_a_share.py scripts/fetch_akshare_a_share.py scripts/fetch_yfinance_ohlcv.py scripts/slice_prices_as_of.py scripts/stock_selection_config.py scripts/stock_selection_data.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_profile.py scripts/stock_selection_universe.py scripts/stock_selection_tradability.py scripts/stock_selection_diagnostics.py scripts/lightgbm_prediction_summary.py
+PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile scripts/create_demo_data.py scripts/validate_ohlcv.py scripts/score_candidates.py scripts/generate_lightgbm_predictions.py scripts/allocate_candidate_capital.py scripts/backtest_buy_hold.py scripts/stock_selection_backtest_rows.py scripts/stock_selection_capital.py scripts/portfolio_equity_curve.py scripts/portfolio_overlap_report.py scripts/summarize_walk_forward_run.py scripts/run_baostock_walk_forward.py scripts/probe_baostock_limit_fields.py scripts/fetch_baostock_a_share.py scripts/fetch_akshare_a_share.py scripts/fetch_yfinance_ohlcv.py scripts/slice_prices_as_of.py scripts/stock_selection_config.py scripts/stock_selection_data.py scripts/stock_selection_metrics.py scripts/stock_selection_output.py scripts/stock_selection_profile.py scripts/stock_selection_universe.py scripts/stock_selection_tradability.py scripts/stock_selection_diagnostics.py scripts/lightgbm_prediction_summary.py
 PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy --with pyarrow python -m unittest discover -s tests -v
 ```
 

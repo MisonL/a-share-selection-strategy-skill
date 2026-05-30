@@ -188,6 +188,8 @@
 - 四信号日候选数分别为 `2026-04-24=5`、`2026-05-12=7`、`2026-05-15=5`、`2026-05-20=3`；四日均为 `raw_symbols=12`、`predicted_symbols=12`、`skipped_symbols=0`、`tradability_model=tradestatus_entry_exit_only`、`limit_rules_model=not_modeled`。
 - 四信号日资金曲线为 `periods=4`、`positions=20`、`final_equity=0.9349716121129314`、`total_return=-0.06502838788706855`、`max_drawdown=-0.0808452854798374`；组合 violation 仍为 `max_open_positions=12 > 10`、`max_gross_weight=1.9471519999999998 > 1.0`、`max_gross_notional=1947152.0 > 1000000.0`、`max_cash_reserved=1947152.0 > 1000000.0`、`same_symbol_overlap_rows=21`。
 - P2a baostock 涨跌停字段探测已脚本化，报告见 `docs/reviews/P2A-BAOSTOCK-LIMIT-FIELDS-2026-05-30.md`；产物在 `/tmp/stock-selection-p2a-limit-field-probe-20260530T135328/`，`supported_candidate_fields=[]`、`unsupported_candidate_fields=up_limit,down_limit,limit_status,is_trading,suspended`、错误码均为 `10004012`，`available_control_fields=preclose,pctChg,tradestatus,isST,turn,volume,amount`。
+- 新增 `run_baostock_walk_forward.py` 一键 runner 后，P1 固定 12-symbol/4 信号日复验产物在 `/tmp/stock-selection-p1-runner-20260530T140916/`；runner 从 fetch 到 summary 共记录 28 个步骤到 `run_manifest.json`，其中只有 `portfolio_overlap` 返回 `3` 且允许返回码为 `[0,3]`，最终 `summary` 返回 0。
+- 同一 runner 复验的 metadata 为 `rows=6960`、`raw_rows=6960`、`symbol_count=12`、`failed_symbols=[]`、`empty_symbols=[]`、`invalid_rows=0`、`non_trading_rows=0`、`tradestatus_missing_rows=0`、`adjustflag=3`；`qsss_run_summary.json` 记录 `quality_errors=[]`、`signals=4`、`candidates=20`、`completed_trades=20`、`incomplete_trades=0`，资金曲线和组合 violation 与上一条 P1 四信号日复验一致。
 
 边界:
 
@@ -195,6 +197,7 @@
 - 12-symbol 三信号日回测证明了真实候选和真实 OHLCV 能进入 close-to-close 基线回测；当前代码支持 round-trip bps 扣减、等权资金曲线、取数阶段 `tradestatus` 门禁、回测级 `--require-tradable-bars` 门禁、组合并发持仓报告和测试资金字段权重容量门禁，但仍不覆盖真实现金容量、涨跌停或全市场泛化能力。
 - current-code 复验只证明固定 12-symbol、三信号日、5 日持有、10 bps 成本、5 bps 滑点和 `tradestatus` 入场/退出门禁下的可复跑边界；不能外推为全市场样本外收益有效。
 - P1 四信号日扩展复验只证明同一固定池新增 `2026-04-24` 后仍能按固定门禁复跑；不能外推为策略正期望、全市场泛化、真实成交容量或涨跌停规则已覆盖。
+- `run_baostock_walk_forward.py` 只编排既有 CLI 并记录命令级 manifest，不新增行情、prediction、sizing、回测或组合逻辑；它不能把固定 12-symbol/4 信号日小样本外推为全市场结论。
 - P2a 字段探测只证明 baostock 日 K 当前候选字段不可用；不等同于真实涨跌停规则门禁通过。
 - `--drop-invalid-rows` 成功不等于源数据无异常；审查时必须同时检查 metadata 的 `invalid_rows`、`dropped_invalid_rows`、`raw_non_trading_rows` 和 `non_trading_rows`。
 - baostock 日 K 未直接提供 `up_limit/down_limit/limit_status`；当前不得把 `preclose + pctChg`、prefix 或 `isST` 粗推解释为真实涨跌停规则已建模。

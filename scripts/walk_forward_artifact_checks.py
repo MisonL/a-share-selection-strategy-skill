@@ -199,7 +199,8 @@ def equity_errors(
     final = float_value(rows[-1].get("equity")) if rows else 0.0
     if abs(final - args.expected_final_equity) > args.final_equity_tolerance:
         errors.append(f"equity_final_equity={final}")
-    if summary.get("equity", {}).get("final_equity") != final:
+    summary_final = float(summary.get("equity", {}).get("final_equity", 0.0))
+    if abs(summary_final - final) > args.final_equity_tolerance:
         errors.append("summary_equity_final_mismatch")
     return errors
 

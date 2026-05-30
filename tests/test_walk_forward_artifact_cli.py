@@ -66,6 +66,18 @@ class WalkForwardArtifactCliTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertIn("summary_2026-05-12_candidates=3", stderr)
 
+    def test_cli_accepts_tiny_summary_equity_rounding_difference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(Path(tmpdir))
+            summary = read_json(root / "qsss_run_summary.json")
+            summary["equity"]["final_equity"] = 0.9950000000000001
+            write_json(root / "qsss_run_summary.json", summary)
+
+            code, _stdout, stderr = call_cli(root, root / "artifact_validation.json")
+
+        self.assertEqual(0, code)
+        self.assertEqual("", stderr)
+
 
 def call_cli(root: Path, output: Path, extra_args: list[str] | None = None) -> tuple[int, str, str]:
     args = [

@@ -182,6 +182,7 @@
 - 三个信号日 `raw_symbols=12`、`predicted_symbols=12`、`skipped_symbols=0`；候选数分别为 7、5、3，completed trades 分别为 7、5、3，`incomplete_trades=0`，回测输出 `tradability_model=tradestatus_entry_exit_only` 且 `limit_rules_model=not_modeled`。
 - 资金曲线返回 0，`final_equity=0.9191547145201625`、`total_return=-0.08084528547983749`、`max_drawdown=-0.08084528547983749`；该小样本未证明正收益。
 - 组合严格门禁返回 3 并写出报告，原因是 `max_open_positions=12 > 10`、`max_gross_weight=1.9471519999999998 > 1.0`、`max_gross_notional=1947152.0 > 1000000.0`、`max_cash_reserved=1947152.0 > 1000000.0`、`same_symbol_overlap_rows=21`。该失败是有效风险暴露，不应通过放宽阈值改写为成功。
+- 新增 `summarize_walk_forward_run.py`，用于把真实 walk-forward 运行目录汇总为 JSON，并自动检查 metadata、prediction skipped、候选数、incomplete trades、资金曲线和组合门禁；已对 `/tmp/stock-selection-oos-20260530T130952/` 生成 `qsss_run_summary.json`，返回 0，`quality_errors=0` 且记录 5 个组合门禁 violation。后续 P1 扩大复验必须优先生成该摘要，减少人工抄写误差。
 
 边界:
 

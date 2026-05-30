@@ -178,6 +178,7 @@ uv run --with pandas --with numpy python scripts/allocate_candidate_capital.py -
 uv run --with pandas --with numpy python scripts/backtest_buy_hold.py --prices prices.csv --candidates qsss_sized_candidates.csv --output qsss_backtest.csv --hold-days 5 --fail-on-incomplete
 uv run --with pandas --with numpy python scripts/portfolio_equity_curve.py --backtests qsss_backtest.csv --output qsss_equity_curve.csv
 uv run --with pandas --with numpy python scripts/portfolio_overlap_report.py --backtests qsss_backtest.csv --daily-output qsss_daily_positions.csv --overlap-output qsss_overlap.csv --summary-output qsss_overlap_summary.json --max-gross-weight 1.0 --max-gross-notional 1000000 --max-cash-reserved 1000000 --require-capital-fields
+uv run --with pandas python scripts/summarize_walk_forward_run.py --run-dir RUN_DIR --output RUN_DIR/qsss_run_summary.json --expected-symbol-count N --required-tradability-model tradestatus_entry_exit_only --required-limit-rules-model not_modeled
 ```
 
 ## Agent 工作流

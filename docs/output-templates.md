@@ -53,6 +53,16 @@
 - 若用户要求复权价，需要显式改造脚本和 metadata 口径，再重新落地、校验和评分。
 ```
 
+## Yfinance market 标签不是市场证明
+
+```markdown
+## Yfinance market 只是输出标签
+- `fetch_yfinance_ohlcv.py --market` 只把标签写入 CSV 和 metadata，不校验 symbol 所属市场、交易所或交易日历。
+- metadata 中 `source=yfinance`、`market=A-share` 和基础 `validate_ohlcv.py` 通过，不能写成 A 股数据源或 A 股交易日历门禁通过。
+- 如果 symbol 仍是 `AAPL` 这类非六位代码，QSSS-derived A 股 profile 应按 symbol 格式门禁显式失败。
+- 报告时必须披露真实数据源、requested symbols、market 标签来源，以及 QSSS profile 校验结果。
+```
+
 ## Yfinance 部分取数成功
 
 ```markdown

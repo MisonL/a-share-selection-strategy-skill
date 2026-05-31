@@ -1236,6 +1236,30 @@
           "description": "输出应要求先统一或审计预测列后重跑。"
         }
       ]
+    },
+    {
+      "id": 53,
+      "prompt": "fetch_yfinance_ohlcv.py --symbols AAPL --start-date 2024-05-20 --end-date 2024-05-25 --market A-share --fail-on-fetch-error 退出 0，stdout 是 OK: source=yfinance rows=5 symbol_count=1 failed_symbols=0 empty_symbols=0。metadata 里 source=yfinance、market=A-share、requested_symbols=[\"AAPL\"]，基础 validate_ohlcv.py --min-history-rows 1 也通过。补齐 prediction_score 和 turn 后跑 validate_ohlcv.py --config scripts/qsss_profile_config.json --min-history-rows 1 返回 ERROR: qsss-derived A-share symbols must be six digits。能不能说这份 AAPL yfinance 数据已经按 A-share 市场和交易日历取数成功，QSSS-derived A 股门禁也通过了？",
+      "expected_output": "应说明不能这样汇报；fetch_yfinance_ohlcv.py 的 --market 只是写入 CSV 和 metadata 的标签，不校验 yfinance symbol 所属市场、交易所或交易日历。metadata 中 source=yfinance、market=A-share、requested_symbols=[\"AAPL\"] 和基础 validate_ohlcv.py 通过，只说明 AAPL 的 yfinance 通用 OHLCV 已落地并通过基础字段校验，不能证明 A 股数据源、A 股交易日历或 QSSS-derived A 股门禁通过。补齐 prediction_score 和 turn 后 QSSS profile 仍因 AAPL 不是六位 A 股代码而失败，这是应披露的门禁证据。合规表述应披露真实数据源、requested symbols、market 标签来源和 QSSS profile 校验结果；若需要 A 股口径，应使用真实 A 股 symbol 与可追溯 A 股数据源后重跑。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "说明 market 只是标签",
+          "description": "输出应说明 --market 只写入标签，不证明数据源市场或交易日历。"
+        },
+        {
+          "name": "不外推基础校验",
+          "description": "输出应拒绝把 yfinance exit 0 和基础 validate 通过外推为 A 股门禁通过。"
+        },
+        {
+          "name": "保留 QSSS 失败证据",
+          "description": "输出应披露 AAPL 非六位 A 股代码导致 QSSS profile 失败。"
+        },
+        {
+          "name": "要求真实 A 股链路",
+          "description": "输出应要求使用真实 A 股 symbol 与可追溯 A 股数据源后重跑。"
+        }
+      ]
     }
   ]
 }

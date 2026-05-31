@@ -251,7 +251,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
 
 如果 `candidates=0` 且 `effective_empty_result=true`，这表示脚本成功运行但没有标的通过当前阈值；不要写成“产生候选股”。用 `score_diagnostics.csv` 查看每个已评分 symbol 的 `failed_thresholds`。如果 metadata 中 `fallback_errors` 非空，必须说明主接口失败且已使用 fallback provider；fallback 成功不等于主接口稳定可用。akshare 输出可满足通用 OHLCV 和 `turn` 口径，但仍不生成真实 `prediction/prediction_score`，不能直接解释成 QSSS-derived 或 LightGBM 链路通过。
 
-美股等通用 OHLCV 可先通过 yfinance 落地，再走通用校验和评分。真实环境失败时命令会非 0，不得改用 mock 或缓存样例冒充成功；门禁还必须检查 metadata 中 `rows > 0`、`symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`。该脚本写入原始 `Close`，不会用 `Adj Close` 静默替代 `close`；`--timeout-seconds` 用于限制每票拉取超时。
+美股等通用 OHLCV 可先通过 yfinance 落地，再走通用校验和评分。真实环境失败时命令会非 0，不得改用 mock 或缓存样例冒充成功；门禁还必须检查 metadata 中 `rows > 0`、`symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`。该脚本写入原始 `Close`，不会用 `Adj Close` 静默替代 `close`；`--timeout-seconds` 用于限制每票拉取超时。`--market` 只是写入 CSV 和 metadata 的标签，不校验 yfinance symbol 所属市场、交易所或交易日历。
 
 ```bash
 uv run --with pandas --with numpy --with yfinance python scripts/fetch_yfinance_ohlcv.py \

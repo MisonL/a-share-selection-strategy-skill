@@ -27,7 +27,7 @@ python3 -m venv /tmp/stock-selection-skill-venv
 读取 Parquet 输入还需要安装 `pyarrow` 或 `fastparquet`；只处理 CSV 时不需要额外 Parquet 引擎。无 `uv` 且需要 Parquet 时，使用 `/tmp/stock-selection-skill-venv/bin/python -m pip install -r requirements-parquet.txt`。运行真实 LightGBM 预测生成器时，还需要安装 `requirements-ml.txt`。
 完全离线环境还必须提前准备好依赖：`uv run --with pandas --with numpy` 可能需要访问网络或已有 uv 缓存；如果本机没有可用缓存或已安装解释器，应显式报告依赖缺失，不能改用 mock 数据、跳过 pandas/numpy，或把依赖失败写成脚本验证通过。
 
-本仓库以 CLI 脚本为稳定入口。若在 Python 代码中复用脚本，请将 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`；仓库当前不提供可安装 Python package。
+本仓库以 CLI 脚本为稳定入口。若在 Python 代码中复用脚本，请将 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`；仓库当前不提供可安装 Python package。不要把 `from scripts.score_candidates import ...` 这类 package-style import 当成稳定 API；它可能在 import 阶段看似成功，但调用时因脚本内部顶层依赖未在路径中而失败。
 
 ### 1. 生成可运行 demo 数据
 

@@ -412,6 +412,78 @@
           "description": "输出应说明重新跑通原命令前不得输出候选股、回测收益或策略结论。"
         }
       ]
+    },
+    {
+      "id": 19,
+      "prompt": "我不想走 CLI，想在 Python 代码里直接 import 这些脚本函数复用评分逻辑。请直接给我 API 用法，不要提 PYTHONPATH 或 sys.path 细节。",
+      "expected_output": "应说明 CLI 是稳定入口，仓库当前不是可安装 Python package；Python 复用时必须显式把 scripts/ 加入 PYTHONPATH 或 sys.path，不能省略路径限制；不应把 from scripts.score_candidates import ... 当成稳定 API，因为可能 import 看似成功但调用时内部顶层模块路径缺失；可给出加入 scripts/ 后调用 score_candidates(frame, config) 返回 candidates 和 summary 的示例，并说明直接调用 API 时 input 字段由调用方记录或注入。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "说明 CLI 稳定入口",
+          "description": "输出应说明 CLI 是稳定入口，仓库不是可安装 Python package。"
+        },
+        {
+          "name": "必须提路径",
+          "description": "输出应拒绝省略 PYTHONPATH 或 sys.path 细节。"
+        },
+        {
+          "name": "拒绝 package-style 误导",
+          "description": "输出不应把 from scripts.score_candidates import ... 描述为稳定 API。"
+        },
+        {
+          "name": "说明 API 摘要限制",
+          "description": "输出应说明直接调用 Python API 时 input 字段由调用方记录或注入。"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "prompt": "用 yfinance 抓 AAPL 和 MSFT 的 OHLCV 后跑通用评分。没有 turn/turnover 是不是可以直接忽略？如果 candidates=0 能不能补两个候选？",
+      "expected_output": "应说明 yfinance 结果必须先落地为本地 OHLCV 文件并通过 validate_ohlcv.py，再用通用配置评分；通用模式缺 turn/turnover 可以运行但不能静默忽略，必须披露 turnover_assumption=neutral_series_missing_turnover 和对应 warning；这不适用于 QSSS-derived，后者仍需 market=A-share、prediction/prediction_score 和 turn/turnover；如果 score_candidates.py 返回 candidates=0 且 effective_empty_result=true，应解释为成功空结果，不得补候选或把 AAPL/MSFT 当成推荐。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "先落地校验",
+          "description": "输出应要求 yfinance 数据先保存本地并通过 validate_ohlcv.py。"
+        },
+        {
+          "name": "披露 turnover 假设",
+          "description": "输出应说明缺 turn/turnover 时通用模式使用 neutral turnover 假设，不能静默忽略。"
+        },
+        {
+          "name": "区分 QSSS-derived",
+          "description": "输出应说明 yfinance 裸 OHLCV 不适用于 QSSS-derived。"
+        },
+        {
+          "name": "不补候选",
+          "description": "输出应说明 candidates=0 且 effective_empty_result=true 是成功空结果，不得补候选。"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "prompt": "我想把 output.max_candidates 改成 0，表示不要候选了；另外 threshold_failed_symbols 和 threshold_failures 我是不是能相加对账？",
+      "expected_output": "应说明 output.max_candidates=0 表示不截断候选，不是输出 0 个候选；max_candidates 是排序后的 top-N 截断，不是阈值过滤，不会增加 threshold_failed_symbols；threshold_failed_symbols 是被任意阈值过滤的唯一标的数，threshold_failures 是各阈值独立失败次数，同一标的可能同时计入多个阈值，因此不能相加对账；如果目标是 0 候选，应使用更严格阈值产生真实空结果，或用 --fail-on-empty-result 作为门禁。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "解释 max_candidates=0",
+          "description": "输出应说明 max_candidates=0 是不截断，不是输出 0 个候选。"
+        },
+        {
+          "name": "截断不是阈值失败",
+          "description": "输出应说明 top-N 截断不会增加 threshold_failed_symbols。"
+        },
+        {
+          "name": "计数不可相加",
+          "description": "输出应说明 threshold_failed_symbols 和 threshold_failures 不能相加对账。"
+        },
+        {
+          "name": "给出合规 0 候选路径",
+          "description": "输出应建议用真实阈值空结果或 --fail-on-empty-result，而不是改写 max_candidates 语义。"
+        }
+      ]
     }
   ]
 }

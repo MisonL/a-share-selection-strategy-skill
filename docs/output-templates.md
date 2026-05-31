@@ -62,6 +62,26 @@
 - 依赖失败是环境门禁失败，不是策略结果、候选结果或回测结论。
 ```
 
+## Python API 复用边界
+
+```markdown
+## Python 复用需要显式脚本路径
+- 本仓库 CLI 是稳定入口，当前不是可安装 Python package。
+- 复用脚本函数前，必须把仓库的 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`。
+- 不要把 `from scripts.score_candidates import ...` 当成稳定 API；它可能在 import 阶段成功，但调用时因内部顶层模块路径缺失而失败。
+- 直接调用 Python API 时，`input` 字段由调用方记录或注入，不能把 API 调用摘要说成完整 CLI 门禁。
+```
+
+## 配置和摘要口径
+
+```markdown
+## 配置和摘要口径
+- `output.max_candidates=0` 表示不截断候选，不是输出 0 个候选。
+- `max_candidates` 是排序后的 top-N 截断，不是阈值过滤；截断不增加 `threshold_failed_symbols`。
+- `threshold_failed_symbols` 是被任意阈值过滤的唯一标的数。
+- `threshold_failures` 是逐阈值失败次数，同一标的可能同时计入多个阈值，不能和 `threshold_failed_symbols` 相加对账。
+```
+
 ## QSSS-derived 缺少 prediction
 
 ```markdown

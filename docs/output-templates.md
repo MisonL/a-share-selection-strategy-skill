@@ -125,6 +125,16 @@
 - 可接受路径是修复可审计产物并重跑 validator，不能把原失败 run 改写成已通过。
 ```
 
+## As-of 日期不等于候选信号日
+
+```markdown
+## 切片截止日不是实际信号日
+- `slice_prices_as_of.py --as-of-date` 是包含该日期及之前的截断，不要求该日期本身存在交易行。
+- 必须披露 stdout 中的 `date_max`；后续候选的真实信号日以候选 CSV 的 `date` 或切片后的 `date_max` 为准。
+- 当 `as_of_date` 是周末、节假日或非交易日时，不能把请求的 as-of 日期写成候选信号日。
+- 若必须验证精确信号日存在，应检查价格表和候选表的实际 `date`，或用后续 artifact price validator 做一致性门禁。
+```
+
 ## Summary 诊断报告未通过
 
 ```markdown

@@ -84,7 +84,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `summarize_walk_forward_run.py`：汇总 walk-forward run 目录，输出 `qsss_run_summary.json` 并执行 metadata、prediction、回测、资金曲线和组合容量门禁。`--expect-portfolio-violations` 只用于复现已知组合风险；退出 0 且 `quality_errors=[]` 时如果 `portfolio_violations>0`，仍不能说组合容量门禁通过。
 - `validate_walk_forward_manifest.py`：校验一键 runner manifest 的步骤顺序、退出码和门禁参数；不替代真实行情、prediction 或回测执行。
 - `validate_walk_forward_artifacts.py`：校验 walk-forward 复验目录中的真实 CSV/JSON artifact 内容，包括信号窗口、候选原始信号日 close、sizing 的 signal close、回测、资金曲线、组合 summary 和 manifest 校验报告。`--expected-portfolio-violations` 只校验违规数量符合预期；即使退出 0 且 `errors=[]`，`portfolio_violations>0` 仍表示组合容量门禁存在违规。
-- `slice_prices_as_of.py`：按信号日截断本地行情，防止用未来行情生成候选。
+- `slice_prices_as_of.py`：按信号日截断本地行情，防止用未来行情生成候选。`--as-of-date` 是包含该日及之前的截止日期，不保证输出存在该日期；候选信号日应以切片后的真实 `date_max` 或候选 CSV 的 `date` 为准。
 - `fetch_baostock_a_share.py`：可选 baostock A 股日线取数脚本，输出本地行情 CSV 和 metadata JSON，包含 `tradestatus/preclose/pctChg/isST` 门禁字段。
 - `fetch_akshare_a_share.py`：可选 akshare A 股日线取数脚本，先尝试中文列接口，失败时记录 fallback 并转用 `stock_zh_a_daily`。
 - `fetch_yfinance_ohlcv.py`：可选 yfinance 日线取数脚本，输出本地通用 OHLCV CSV 和 metadata JSON；用 `--timeout-seconds` 显式限制每票拉取超时。非严格模式可能写出部分 symbol，门禁必须检查 `symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`，或使用 `--fail-on-fetch-error`。

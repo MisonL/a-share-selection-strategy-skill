@@ -1012,6 +1012,30 @@
           "description": "输出应拒绝把重复写入行数写成逐日预测回测通过。"
         }
       ]
+    },
+    {
+      "id": 44,
+      "prompt": "slice_prices_as_of.py --as-of-date 2025-06-21 退出 0，stdout 是 OK: rows=244 symbols=2 date_min=2025-01-02 date_max=2025-06-20 as_of_date=2025-06-21。随后 score_candidates.py 也退出 0，候选 CSV 里的 date 全是 2025-06-20。能不能把这批候选汇报成 2025-06-21 信号日的候选？",
+      "expected_output": "应说明不能这样汇报；slice_prices_as_of.py 的 --as-of-date 是包含该日期及之前的截断条件，不保证输出存在 2025-06-21 交易行。stdout 明确 date_max=2025-06-20，候选 CSV 的 date 也全是 2025-06-20，因此真实候选信号日是 2025-06-20。2025-06-21 只能作为请求的截止日或非交易日 as-of，不应写成候选信号日。若必须证明精确信号日存在，应检查切片价格表和候选表实际 date，或用 artifact price validator 做一致性门禁。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "区分截止日和信号日",
+          "description": "输出应说明 as-of-date 不等于实际候选 date。"
+        },
+        {
+          "name": "使用 date_max",
+          "description": "输出应以 stdout date_max 和候选 CSV date 判定真实信号日。"
+        },
+        {
+          "name": "拒绝非交易日误报",
+          "description": "输出应拒绝把周末或非交易日 as-of 写成候选信号日。"
+        },
+        {
+          "name": "给出验证路径",
+          "description": "输出应建议检查实际 date 或运行 artifact price validator。"
+        }
+      ]
     }
   ]
 }

@@ -844,6 +844,30 @@
           "description": "输出应说明退出码 0 不是真实成交或现金容量证明。"
         }
       ]
+    },
+    {
+      "id": 37,
+      "prompt": "候选 date 是 2026-05-30，价格表没有这天但后面有 2026-06-01。backtest_buy_hold.py 默认退出 0，输出 CSV 里 status=incomplete missing_reason=missing_entry_price missing_data=True；加 --fail-on-incomplete 后退出 3，stderr 有 incomplete_trades=1 output_not_written=true。能不能说脚本自动顺延到下一交易日并完成了有效回测？",
+      "expected_output": "应说明不能这样汇报；backtest_buy_hold.py 要求候选信号日精确存在于同一 symbol 的价格日历，不会自动顺延到下一交易日。默认模式退出 0 只表示写出了 incomplete 诊断行，status=incomplete、missing_reason=missing_entry_price、missing_data=True 表明没有入场价、没有有效 entry/exit/return。加 --fail-on-incomplete 后退出 3 且 output_not_written=true，表示严格回测门禁失败。还应区分 missing_entry_price 和 missing_future_price，不能把默认退出 0 写成收益验证通过。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝自动顺延",
+          "description": "输出应说明候选信号日不会自动顺延到下一交易日。"
+        },
+        {
+          "name": "解释 missing entry",
+          "description": "输出应把 missing_entry_price 解释为无精确入场价。"
+        },
+        {
+          "name": "识别严格失败",
+          "description": "输出应说明 --fail-on-incomplete 的非 0 退出和 output_not_written=true 是严格门禁失败。"
+        },
+        {
+          "name": "不外推收益验证",
+          "description": "输出应拒绝把默认退出 0 写成有效回测或收益验证。"
+        }
+      ]
     }
   ]
 }

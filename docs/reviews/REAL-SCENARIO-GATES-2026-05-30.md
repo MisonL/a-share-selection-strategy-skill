@@ -237,7 +237,7 @@
 - P1 `portfolio_cash_lot_floor` 复验证明了当前代码能按固定持有期滚动处理现金占用、并发仓位和同标的重叠，并输出 raw/selected/sized/skipped/allocation summary 证据；但仍只是本地 close-to-close + lot-floor 模型，不证明真实涨跌停、真实订单成交、券商容量或全市场策略质量。
 - `run_baostock_walk_forward.py` 只编排既有 CLI 并记录命令级 manifest，不新增行情、prediction、sizing、回测或组合逻辑；它不能把固定 12-symbol/4 信号日小样本外推为全市场结论。
 - `validate_walk_forward_manifest.py` 只校验 runner manifest 的结构、步骤顺序、退出码和门禁参数；不能替代真实行情、真实 LightGBM、真实回测或真实组合报告。
-- `validate_walk_forward_artifacts.py` 只校验既有复验目录内的 artifact 内容一致性，不重新联网取数、不重新训练 LightGBM、不重新回测，也不能把固定小样本外推为全市场结论；当前会额外校验候选和 sizing 信号日价格与原始信号窗口 close 一致。
+- `validate_walk_forward_artifacts.py` 只校验既有复验目录内的 artifact 内容一致性，不重新联网取数、不重新训练 LightGBM、不重新回测，也不能把固定小样本外推为全市场结论；当前会额外校验候选和 sizing 信号日价格与原始信号窗口 close 一致，并交叉校验 allocation/overlap 容量摘要一致性。
 - P2a 字段探测只证明 baostock 日 K 当前候选字段不可用；不等同于真实涨跌停规则门禁通过。
 - `--drop-invalid-rows` 成功不等于源数据无异常；审查时必须同时检查 metadata 的 `invalid_rows`、`dropped_invalid_rows`、`raw_non_trading_rows` 和 `non_trading_rows`。
 - baostock 日 K 未直接提供 `up_limit/down_limit/limit_status`；当前不得把 `preclose + pctChg`、prefix 或 `isST` 粗推解释为真实涨跌停规则已建模。
@@ -272,6 +272,7 @@
 - P1 独立 40-symbol/6 信号日复验与上一组 40-symbol 池交集为 0，可完整跑到组合严格门禁，摘要质量错误为 0，完成 59 笔交易、`final_equity=0.9604703366149994`，并暴露 3 个组合容量 violation。
 - P1 独立 40-symbol/6 信号日 top-N=2 复验可在不使用 `--expect-portfolio-violations` 的情况下完整通过，摘要质量错误为 0，完成 12 笔交易、`final_equity=0.8990438382018885`，组合 `portfolio_violations=0`。
 - P1 独立 40-symbol/6 信号日 `portfolio_cash_lot_floor` 复验可在不使用 `--expect-portfolio-violations` 的情况下完整通过，raw 候选 59 个、组合 cut 后 48 个、跳过 11 个且原因均为 `max_open_positions`，完成 48 笔交易、`final_equity=0.9614512632665976`，组合 `portfolio_violations=0`。
+- P1 `portfolio_cash_lot_floor` artifact validator 已交叉校验 `qsss_allocation_summary.json` 与 `qsss_overlap_summary.json` 的最大持仓、权重、名义金额和预留现金容量字段，真实复验目录 `run_artifact_validation_crosscheck.json` 通过且 `errors=0`。
 - 真实 12-symbol/3 信号日样本已经暴露最大 12 笔并发持仓和同标的重复持仓冲突风险，并已可由 `portfolio_overlap_report.py` 自动化失败。
 - 信号日截断防未来泄漏门禁。
 - CI 证据必须绑定具体 `headSha` 和 GitHub Actions run；不得把旧提交的绿色 CI 外推为当前代码已验证。

@@ -23,11 +23,19 @@ def build_artifact_report(run_dir: Path, args: Any, validator: str) -> dict[str,
     errors = count_errors(dates, args.expected_candidates)
     summary = load_json(run_dir / "qsss_run_summary.json")
     errors += metadata_errors(load_json(run_dir / "metadata.json"), symbols, args)
-    errors += allocation_errors(run_dir, summary, args, load_json, read_csv)
+    overlap = load_json(run_dir / "qsss_overlap_summary.json")
+    errors += allocation_errors(
+        run_dir=run_dir,
+        summary=summary,
+        overlap=overlap,
+        args=args,
+        load_json=load_json,
+        read_csv=read_csv,
+    )
     errors += summary_errors(summary, dates, args.expected_candidates)
     totals = validate_signal_artifacts(run_dir, dates, symbols, args, errors)
     errors += equity_errors(run_dir / "qsss_equity_curve.csv", summary, dates, args, totals)
-    errors += overlap_errors(load_json(run_dir / "qsss_overlap_summary.json"), summary, args)
+    errors += overlap_errors(overlap, summary, args)
     manifest_checked = bool(args.manifest_validation)
     if args.manifest_validation:
         errors += manifest_errors(load_json(Path(args.manifest_validation)), dates)

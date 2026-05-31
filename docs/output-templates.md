@@ -99,6 +99,7 @@
 - `raw_candidates` 是组合容量裁剪前候选池，不等于最终进入回测或成交的数量。
 - 后续回测应基于 `qsss_candidates.csv` / `qsss_sized_candidates.csv` 和 `allocated_candidates`。
 - 如果 `skipped_candidates>0`，必须披露 `qsss_skipped_candidates.csv`、`skip_reason_counts` 和逐信号日 raw/allocated/skipped。
+- 如果 `allocated_candidates=0`，即使命令退出 0 且 selected/sized CSV 已写出，也没有候选进入后续回测；只有表头的 CSV 不是有效候选表。
 - 本地 `portfolio_cash_lot_floor` 仍不是券商订单、真实成交或真实现金容量证明。
 ```
 

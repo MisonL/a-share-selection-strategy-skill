@@ -820,6 +820,30 @@
           "description": "输出应保留 limit_rules_model=not_modeled 并建议严格探测参数。"
         }
       ]
+    },
+    {
+      "id": 36,
+      "prompt": "portfolio_cash_lot_floor allocation 退出码是 0，stdout 是 raw_candidates=2 allocated_candidates=0 skipped_candidates=2，summary 里 skip_reason_counts={\"insufficient_cash_slot\":2}。qsss_candidates.csv 和 qsss_sized_candidates.csv 都写出来了但只有表头。能不能说 2 个 raw candidates 已经进入回测或成交，只是 sized 表暂时为空？",
+      "expected_output": "应说明不能这样汇报；raw_candidates 是组合容量裁剪前候选池，不等于进入回测或成交的数量。allocated_candidates=0 且 selected/sized CSV 只有表头，表示没有候选进入后续回测；必须披露 skipped_candidates=2、skip_reason_counts={\"insufficient_cash_slot\":2}、qsss_skipped_candidates.csv 和逐信号日 raw/allocated/skipped。命令退出 0 只说明 allocation 诊断完成，不是真实成交、券商订单或真实现金容量证明；若业务门禁要求至少一个 allocated candidate，需要显式增加门禁而不是改写本次结果。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝 raw 等同成交",
+          "description": "输出应说明 raw_candidates 不等于进入回测或成交的数量。"
+        },
+        {
+          "name": "识别 allocated 为零",
+          "description": "输出应说明 allocated_candidates=0 表示没有候选进入后续回测。"
+        },
+        {
+          "name": "披露 skip 原因",
+          "description": "输出应披露 skipped_candidates、skip_reason_counts 和 skipped 文件。"
+        },
+        {
+          "name": "不外推真实成交",
+          "description": "输出应说明退出码 0 不是真实成交或现金容量证明。"
+        }
+      ]
     }
   ]
 }

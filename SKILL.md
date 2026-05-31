@@ -177,7 +177,7 @@ total_score =
 
 真实 P1 组合容量门禁默认使用 `portfolio_cash_lot_floor`。这条路径会在所有信号日评分后统一做组合级 sizing/cut，再回测和校验组合容量；默认不传 `--expect-portfolio-violations`。只有复现已知失败窗口、并且目标是暴露组合风险时，才把 `--expect-portfolio-violations` 放入 runner 和 manifest validator。
 
-`portfolio_cash_lot_floor` 的 `raw_candidates` 只是组合容量裁剪前候选池；进入回测的是 `qsss_candidates.csv` 和 `qsss_sized_candidates.csv`。如果 `skipped_candidates>0`，必须披露 `skip_reason_counts`，不能说全部 raw candidates 都进入回测或成交。
+`portfolio_cash_lot_floor` 的 `raw_candidates` 只是组合容量裁剪前候选池；进入回测的是 `qsss_candidates.csv` 和 `qsss_sized_candidates.csv`。如果 `skipped_candidates>0`，必须披露 `skip_reason_counts`，不能说全部 raw candidates 都进入回测或成交。`allocated_candidates=0` 仍可能退出 0 并写出只有表头的 selected/sized CSV；这表示没有候选进入后续回测。
 
 候选 `close` 和 sized `signal_close` 必须等于对应 `prices_signal_window.csv` 中的原始信号日 close。`validate_walk_forward_artifacts.py` 对价格不一致返回非 0 时，应按真实门禁失败处理，不能因报告 JSON 已写出而解释为通过。
 

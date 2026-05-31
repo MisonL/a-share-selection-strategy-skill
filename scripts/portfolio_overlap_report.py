@@ -9,18 +9,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
-from stock_selection_capital import (
-    CAPITAL_FIELDS,
-    capacity_gate,
-    capacity_summary_fields,
-    daily_capacity_values,
-    normalize_complete_capital_fields,
-    trade_capital_values,
-)
-from stock_selection_data import parse_dates, read_table
-
 
 REQUIRED_COLUMNS = ["symbol", "signal_date", "entry_date", "exit_date", "missing_data", "status"]
 
@@ -39,6 +27,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--require-capital-fields", action="store_true")
     args = parser.parse_args(argv)
     try:
+        ensure_runtime_dependencies()
         frames = [read_table(Path(path)) for path in args.backtests]
         daily, overlaps, summary = build_overlap_report(frames)
         write_outputs(daily, overlaps, summary, args)
@@ -71,9 +60,34 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def ensure_runtime_dependencies() -> None:
+    if "pd" in globals():
+        return
+    import pandas as pandas_module
+    import stock_selection_capital as capital_module
+    import stock_selection_data as data_module
+
+    globals().update(
+        {
+            "pd": pandas_module,
+            "CAPITAL_FIELDS": capital_module.CAPITAL_FIELDS,
+            "capacity_gate": capital_module.capacity_gate,
+            "capacity_summary_fields": capital_module.capacity_summary_fields,
+            "daily_capacity_values": capital_module.daily_capacity_values,
+            "normalize_complete_capital_fields": (
+                capital_module.normalize_complete_capital_fields
+            ),
+            "parse_dates": data_module.parse_dates,
+            "read_table": data_module.read_table,
+            "trade_capital_values": capital_module.trade_capital_values,
+        }
+    )
+
+
 def build_overlap_report(
     frames: list[pd.DataFrame],
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
+    ensure_runtime_dependencies()
     if not frames:
         raise ValueError("at least one backtest file is required")
     combined = prepare_trades(pd.concat(frames, ignore_index=True))
@@ -236,6 +250,7 @@ def gate_violations(
     fail_on_symbol_overlap: bool,
     require_capital_fields: bool,
 ) -> list[str]:
+    ensure_runtime_dependencies()
     violations = []
     if max_open_positions is not None and max_open_positions < 1:
         raise ValueError("max-open-positions must be >= 1")

@@ -91,6 +91,18 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--min-final-equity",
                 "--max-drawdown-floor",
             ],
+            "portfolio_overlap_report.py": [
+                "--backtests",
+                "--daily-output",
+                "--overlap-output",
+                "--summary-output",
+                "--max-open-positions",
+                "--max-gross-weight",
+                "--max-gross-notional",
+                "--max-cash-reserved",
+                "--fail-on-symbol-overlap",
+                "--require-capital-fields",
+            ],
             "score_candidates.py": [
                 "--input",
                 "--config",
@@ -127,6 +139,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
         portfolio_allocate_script = ROOT / "scripts/allocate_portfolio_candidate_capital.py"
         backtest_script = ROOT / "scripts/backtest_buy_hold.py"
         equity_curve_script = ROOT / "scripts/portfolio_equity_curve.py"
+        overlap_report_script = ROOT / "scripts/portfolio_overlap_report.py"
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "candidates.csv"
@@ -146,6 +159,9 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             portfolio_summary = Path(tmpdir) / "portfolio-summary.json"
             backtest_output = Path(tmpdir) / "backtest.csv"
             equity_output = Path(tmpdir) / "equity.csv"
+            overlap_daily = Path(tmpdir) / "overlap-daily.csv"
+            overlap_rows = Path(tmpdir) / "overlap-rows.csv"
+            overlap_summary = Path(tmpdir) / "overlap-summary.json"
             cases = [
                 [
                     str(validate_script),
@@ -272,6 +288,17 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                     "--output",
                     str(equity_output),
                 ],
+                [
+                    str(overlap_report_script),
+                    "--backtests",
+                    str(Path(tmpdir) / "missing-backtest.csv"),
+                    "--daily-output",
+                    str(overlap_daily),
+                    "--overlap-output",
+                    str(overlap_rows),
+                    "--summary-output",
+                    str(overlap_summary),
+                ],
             ]
             for command in cases:
                 with self.subTest(script=Path(command[0]).name):
@@ -302,3 +329,6 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             self.assertFalse(portfolio_summary.exists())
             self.assertFalse(backtest_output.exists())
             self.assertFalse(equity_output.exists())
+            self.assertFalse(overlap_daily.exists())
+            self.assertFalse(overlap_rows.exists())
+            self.assertFalse(overlap_summary.exists())

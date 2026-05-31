@@ -112,6 +112,16 @@
 - 可接受路径是修复可审计产物并重跑 validator，不能把原失败 run 改写成已通过。
 ```
 
+## Summary 诊断报告未通过
+
+```markdown
+## Summary/组合门禁未通过
+- `qsss_run_summary.json`、`qsss_overlap_summary.json` 或 overlap CSV 已写出，只说明诊断产物可供审计。
+- 退出码非 0、stderr 含 `strict gate failed`、`quality_errors` 非空或 `portfolio_violations>0` 时，不能写成资金曲线、组合容量或 P1 门禁通过。
+- `output_written=true` 表示失败报告已落盘，不代表成功。
+- 必须披露 `final_equity`、`max_drawdown`、`quality_errors` 和组合容量/重叠违规；受控样本的 `final_equity` 不能写成真实收益验证。
+```
+
 ## Drop-invalid 数据口径
 
 ```markdown

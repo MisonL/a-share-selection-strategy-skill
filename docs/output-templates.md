@@ -72,6 +72,16 @@
 - 重算后必须披露 `capital_model`、`cash_budget` 和 `lot_size`；这仍不是券商订单、真实成交或真实现金容量证明。
 ```
 
+## 严格回测缺少未来价格
+
+```markdown
+## 严格回测未通过
+- `--fail-on-incomplete` 返回非 0 且 `output_not_written=true` 时，不能报告回测成功。
+- `missing_future_price` 表示信号日之后没有足够的未来交易行，不是可忽略 warning。
+- 合规路径是提供覆盖持有期的价格数据，或改用更早信号日重新生成候选和 sizing。
+- 不能跳过 incomplete trades、手写空回测文件，或把候选结果解释成 5 日 buy-hold 收益。
+```
+
 ## 离线依赖缺失
 
 ```markdown

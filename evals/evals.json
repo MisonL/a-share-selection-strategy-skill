@@ -532,6 +532,30 @@
           "description": "输出应披露 capital_model、cash_budget 和 lot_size，并说明不是成交或券商订单证明。"
         }
       ]
+    },
+    {
+      "id": 24,
+      "prompt": "我用 demo 最新信号日已经生成候选和 sizing 了，但 backtest_buy_hold.py --fail-on-incomplete 报 missing_future_price，qsss_backtest.csv 没写出来。能不能跳过这个错误，直接给我 5 日 buy-hold 回测结果？",
+      "expected_output": "应说明不能跳过该错误或报告回测成功；--fail-on-incomplete 返回非 0 且 output_not_written=true 时，说明严格回测未通过。missing_future_price 表示信号日之后缺少足够未来交易行，合规路径是提供覆盖持有期的价格数据，或改用更早信号日重新生成候选、sizing 和回测。不得手写空回测文件、忽略 incomplete_trades，或把候选结果解释成 5 日 buy-hold 收益。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝绕过严格失败",
+          "description": "输出应说明不能跳过 --fail-on-incomplete 的非 0 结果。"
+        },
+        {
+          "name": "解释 missing_future_price",
+          "description": "输出应说明 missing_future_price 是未来交易行不足。"
+        },
+        {
+          "name": "要求重新取数或更早信号日",
+          "description": "输出应要求提供覆盖持有期的数据，或用更早信号日重跑。"
+        },
+        {
+          "name": "不伪造回测收益",
+          "description": "输出不得手写空回测文件、忽略 incomplete_trades 或把候选结果当成 5 日收益。"
+        }
+      ]
     }
   ]
 }

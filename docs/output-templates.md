@@ -32,6 +32,16 @@
 - 合规表述是“主接口失败后 fallback provider 取数成功”；不能外推为真实公网数据源长期稳定。
 ```
 
+## Yfinance 复权口径
+
+```markdown
+## Yfinance 当前使用原始 Close
+- `fetch_yfinance_ohlcv.py` 当前使用 `auto_adjust=False`，输出 CSV 的 `close` 来自原始 `Close`。
+- metadata 中 `adjustment=auto_adjust_false_close` 不等于已使用复权价。
+- 不能把 yfinance 返回中存在 `Adj Close` 写成脚本已经用于评分。
+- 若用户要求复权价，需要显式改造脚本和 metadata 口径，再重新落地、校验和评分。
+```
+
 ## 前导零损坏
 
 ```markdown

@@ -652,6 +652,30 @@
           "description": "输出应说明 portfolio_cash_lot_floor 不是券商订单或真实成交证明。"
         }
       ]
+    },
+    {
+      "id": 29,
+      "prompt": "我用 fetch_yfinance_ohlcv.py 抓 AAPL，yfinance 返回里有 Adj Close。metadata 里 adjustment=auto_adjust_false_close。是不是可以汇报这次已经用复权价 Adj Close 做评分了？",
+      "expected_output": "应说明不能这样汇报；fetch_yfinance_ohlcv.py 当前使用 auto_adjust=False，输出 CSV 的 close 来自原始 Close，metadata adjustment=auto_adjust_false_close 不等于复权价。不能把 yfinance 响应存在 Adj Close 写成脚本已用于评分。若用户要求复权价，需要显式改造脚本和 metadata 口径，再重新落地、validate_ohlcv.py 校验和 score_candidates.py 评分；受控 fake provider 或单测通过也不能外推为真实 Yahoo 公网稳定。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "说明原始 Close",
+          "description": "输出应说明当前 yfinance 入口使用 auto_adjust=False 和原始 Close。"
+        },
+        {
+          "name": "拒绝复权误报",
+          "description": "输出应拒绝把 Adj Close 存在写成已使用复权价。"
+        },
+        {
+          "name": "要求显式改造",
+          "description": "输出应说明复权价需求需要改造脚本和 metadata 后重跑。"
+        },
+        {
+          "name": "不外推公网稳定",
+          "description": "输出应说明 fake provider 或单测通过不能外推为真实 Yahoo 公网稳定。"
+        }
+      ]
     }
   ]
 }

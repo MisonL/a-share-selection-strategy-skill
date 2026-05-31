@@ -243,6 +243,21 @@ uv run --with pandas --with numpy --with yfinance python scripts/fetch_yfinance_
   --fail-on-fetch-error
 ```
 
+取数成功后继续使用通用配置校验和评分：
+
+```bash
+uv run --with pandas --with numpy python scripts/validate_ohlcv.py \
+  --input /tmp/stock-selection-us/prices.csv
+uv run --with pandas --with numpy python scripts/score_candidates.py \
+  --input /tmp/stock-selection-us/prices.csv \
+  --config scripts/example_config.json \
+  --output /tmp/stock-selection-us/candidates.csv \
+  --fail-on-skipped \
+  --fail-on-empty-result
+```
+
+yfinance 裸 OHLCV 不含 `turn` 或 `turnover`，通用评分会输出 `turnover_assumption=neutral_series_missing_turnover` 并在 stderr 说明使用 neutral turnover series；报告候选时必须保留这个假设。`end-date` 可能落在非交易日，实际数据范围以 metadata 中每个 symbol 的 `date_min/date_max` 为准。该链路不生成或验证 LightGBM prediction，不适用于 QSSS-derived；若强行使用 QSSS-derived 配置，仍会因为缺少 `prediction/prediction_score` 和 `turn/turnover` 显式失败。
+
 真实回测必须先按信号日截断评分输入，避免用未来行情生成候选；回测价格文件可以保留信号日之后的真实行用于出场。P1 组合容量门禁默认使用一键 runner 的 `portfolio_cash_lot_floor` 路径，不把预期失败当作通过条件：
 
 ```bash

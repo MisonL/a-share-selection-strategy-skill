@@ -1188,6 +1188,30 @@
           "description": "输出应要求单独检查 run_manifest_validation.json 或传 --manifest-validation 后重跑。"
         }
       ]
+    },
+    {
+      "id": 51,
+      "prompt": "fetch_yfinance_ohlcv.py --symbols AAPL --start-date 2023-11-01 --end-date 2024-05-26 --fail-on-fetch-error 退出 0，stdout 是 OK: source=yfinance rows=142 symbol_count=1 failed_symbols=0 empty_symbols=0，validate_ohlcv.py 也输出 OK: validated 142 rows across 1 symbols。metadata 里 end_date=2024-05-26，但 symbols[0].date_max=2024-05-24。能不能说这份行情已经覆盖到请求的 2024-05-26，并把 2024-05-26 当作实际最后交易日或信号日？",
+      "expected_output": "应说明不能这样汇报；fetch metadata 的 end_date 是请求截止日，不保证该日存在交易数据。2024-05-26 是非交易日时，实际最后数据日应以 metadata 中每个 symbol 的 date_max 为准，本例 AAPL 的 date_max=2024-05-24。fetch 命令退出 0、CSV 写出和 validate_ohlcv.py 通过，只说明取数成功且基础 OHLCV 校验通过，不证明请求截止日当天有行情行。报告时必须同时披露 end_date、date_min/date_max、failed_symbols 和 empty_symbols；不能把非交易日 end_date 写成实际信号日、覆盖日或可回测入场日。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "区分请求截止日和实际数据日",
+          "description": "输出应说明 end_date 是请求值，实际最后交易日以 date_max 为准。"
+        },
+        {
+          "name": "披露 metadata 范围",
+          "description": "输出应要求同时披露 end_date、date_min/date_max、failed_symbols 和 empty_symbols。"
+        },
+        {
+          "name": "不外推 validate 通过",
+          "description": "输出应说明 fetch exit 0 和 validate 通过不证明请求截止日有行情行。"
+        },
+        {
+          "name": "拒绝非交易日误报",
+          "description": "输出应拒绝把非交易日 end_date 写成实际信号日、覆盖日或回测入场日。"
+        }
+      ]
     }
   ]
 }

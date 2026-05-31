@@ -22,6 +22,17 @@
 - 只有 `validate_ohlcv.py` 和 `score_candidates.py` 完成后，才能按真实输出解释候选、0 候选或不足 5 只的原因。
 ```
 
+## 联网取数截止日不是实际最后交易日
+
+```markdown
+## 请求截止日未必有交易行
+- fetch metadata 中的 `end_date` 是请求截止日，不保证该日存在交易数据。
+- 当 `end_date` 落在周末、节假日或非交易日时，必须以 metadata 中每个 symbol 的 `date_max` 作为实际最后数据日。
+- fetch 命令退出 0、CSV 写出和 `validate_ohlcv.py` 通过，只说明取数和基础 OHLCV 校验通过，不证明请求截止日当天有行情行。
+- 报告时必须同时披露 `end_date`、每个 symbol 的 `date_min/date_max`、`failed_symbols` 和 `empty_symbols`。
+- 不能把非交易日 `end_date` 写成实际信号日、覆盖日或可回测入场日。
+```
+
 ## Akshare fallback 成功
 
 ```markdown

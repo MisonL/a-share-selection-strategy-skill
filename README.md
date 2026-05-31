@@ -278,7 +278,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
   --fail-on-empty-result
 ```
 
-yfinance 裸 OHLCV 不含 `turn` 或 `turnover`，通用评分会输出 `turnover_assumption=neutral_series_missing_turnover` 并在 stderr 说明使用 neutral turnover series；报告候选时必须保留这个假设。`score_diagnostics.csv` 会记录每个已评分 symbol 的阈值失败项和是否入选，用于解释未入选标的，但它仍不是回测或收益证明。`end-date` 可能落在非交易日，实际数据范围以 metadata 中每个 symbol 的 `date_min/date_max` 为准。该链路不生成或验证 LightGBM prediction，不适用于 QSSS-derived；若强行使用 QSSS-derived 配置，仍会因为缺少 `prediction/prediction_score` 和 `turn/turnover` 显式失败。
+yfinance 裸 OHLCV 不含 `turn` 或 `turnover`，通用评分会输出 `turnover_assumption=neutral_series_missing_turnover` 并在 stderr 说明使用 neutral turnover series；报告候选时必须保留这个假设。`score_diagnostics.csv` 会记录每个已评分 symbol 的阈值失败项和是否入选，用于解释未入选标的，但它仍不是回测或收益证明。`end-date` 可能落在非交易日，实际数据范围以 metadata 中每个 symbol 的 `date_min/date_max` 为准；fetch 退出 0 且 `validate_ohlcv.py` 通过，也不能把非交易日 `end-date` 写成实际最后交易日、信号日或可回测入场日。该链路不生成或验证 LightGBM prediction，不适用于 QSSS-derived；若强行使用 QSSS-derived 配置，仍会因为缺少 `prediction/prediction_score` 和 `turn/turnover` 显式失败。
 
 真实回测必须先按信号日截断评分输入，避免用未来行情生成候选；回测价格文件可以保留信号日之后的真实行用于出场。P1 组合容量门禁默认使用一键 runner 的 `portfolio_cash_lot_floor` 路径，不把预期失败当作通过条件：
 

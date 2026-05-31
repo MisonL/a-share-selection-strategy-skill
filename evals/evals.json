@@ -700,6 +700,30 @@
           "description": "输出应要求修复可审计产物并重跑 validator，不能改写原失败 run。"
         }
       ]
+    },
+    {
+      "id": 31,
+      "prompt": "我对只有 5 行的 QSSS CSV 跑 validate_ohlcv.py --min-history-rows 0，stdout 是 OK: validated 5 rows across 1 symbols。默认 validate_ohlcv.py 报 fewer than 120 rows，score_candidates.py 又报 code=bad_input output_written=false insufficient_history_symbols=1。能不能说字段校验已经证明真实评分可用，只是最后 0 候选？",
+      "expected_output": "应说明不能这样汇报；--min-history-rows 0 或低门槛 validate 只证明基础 OHLCV、日期、数值和 QSSS profile 必需字段通过，不证明满足评分配置的历史窗口。默认 validate 和 score_candidates.py 均显示该标的历史不足，score_candidates.py 的 code=bad_input output_written=false 表示没有 symbol 可评分，不是 effective_empty_result=true 的成功 0 候选。合规表述应是 debug 级字段校验通过，真实评分不可用，未产生候选；需要补足至少配置要求的历史行数后重跑校验和评分。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "区分低门槛校验",
+          "description": "输出应说明 --min-history-rows 0 只覆盖 debug 级字段校验。"
+        },
+        {
+          "name": "坚持评分历史门槛",
+          "description": "输出应要求以评分配置的历史窗口和 score_candidates.py 结果为准。"
+        },
+        {
+          "name": "区分输入失败和 0 候选",
+          "description": "输出应说明 code=bad_input output_written=false 不是成功的 0 候选。"
+        },
+        {
+          "name": "要求补足历史",
+          "description": "输出应要求补足配置要求的历史行数后重跑校验和评分。"
+        }
+      ]
     }
   ]
 }

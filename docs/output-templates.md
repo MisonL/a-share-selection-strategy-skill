@@ -199,6 +199,16 @@
 - 0 候选不是错误退出，也不是收益或策略有效性验证。
 ```
 
+## 历史窗口不足
+
+```markdown
+## 历史窗口不足，不能评分
+- `validate_ohlcv.py --min-history-rows 0` 或低门槛校验通过，只说明基础字段、日期、数值和 profile 必需字段有效。
+- 如果评分配置要求更长历史窗口，仍必须以 `score_candidates.py` 的 `insufficient_history_symbols` 和退出码为准。
+- `code=bad_input output_written=false` 表示没有 symbol 可评分，不是成功的 0 候选结果。
+- 合规表述是“debug 级字段校验通过，真实评分不可用，未产生候选”。
+```
+
 ## 候选结果
 
 ```markdown

@@ -55,6 +55,8 @@ uv run --with pandas --with numpy python scripts/validate_ohlcv.py \
   --config scripts/qsss_profile_config.json
 ```
 
+`--min-history-rows 0` 或显式调低历史门槛只适合 debug 级字段校验。若评分配置仍要求默认 120 行历史，`score_candidates.py` 会按配置重新检查并跳过短历史标的；不能把低门槛 `OK: validated ...` 写成真实评分可用。
+
 ### 3. 使用通用配置评分
 
 ```bash
@@ -357,6 +359,8 @@ python3 scripts/validate_walk_forward_artifacts.py \
 `score_candidates.py` 的 CLI 摘要会报告输入文件名、`input_symbols`、股票池过滤、历史不足、输入异常、单股失败、阈值过滤、`turnover_assumption`、`effective_empty_result`、`empty_result_reason` 和最终候选数量。股票池过滤包含 `market_filtered_symbols`、`prefix_allow_filtered_symbols`、`prefix_excluded_symbols` 分项。`threshold_failures` 是各阈值独立失败计数，不是互斥分类，不能和 `threshold_failed_symbols` 相加对账。QSSS-derived 路径还会标记 `prediction_source=external_unverified`，表示脚本只消费上游预测，不验证该列是否由真实 LightGBM 链路生成。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。
 
 自动化流水线应把 `failed_symbols=0`、`insufficient_history_symbols=0`、`effective_empty_result=false` 作为成功门槛；也可在 CLI 中显式传入 `--fail-on-skipped` 和 `--fail-on-empty-result`，让跳过标的或 0 候选直接返回非 0。`failed_symbols>0` 表示存在单股运行期异常，即使脚本仍输出了其他候选，也应进入人工复核或失败处理。成功摘要会输出截断样例，例如 `failed_symbol_examples`、`insufficient_history_symbol_examples`，用于定位需要复核的标的。
+
+`validate_ohlcv.py --min-history-rows 0` 的成功只覆盖基础字段、日期、数值和 profile 必需字段，不覆盖评分配置的历史窗口。默认 QSSS-derived 评分仍要求 120 行历史；若 `score_candidates.py` 报 `code=bad_input output_written=false` 和 `insufficient_history_symbols>0`，这是输入不可评分，不是 0 候选成功。
 
 配置中的 `output.max_candidates` 大于 0 时限制输出数量；设为 0 表示不截断候选结果。一键 runner 可用 `--max-candidates` 写出 run-scoped 配置，便于在 manifest 中追踪本次 top-N 门禁；也可用 `--allocation-model portfolio_cash_lot_floor` 启用组合级 sizing/cut，并生成 raw、selected、sized、skipped 和 allocation summary 证据。
 

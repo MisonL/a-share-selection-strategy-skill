@@ -89,6 +89,7 @@
 - `run_manifest.json` 和 manifest validator 只证明命令步骤、退出码和门禁参数符合预期。
 - P1 通过还必须检查 `run_manifest_validation.json`、`run_artifact_validation.json`、真实 metadata、prediction summary、回测、权益曲线、allocation summary 和 overlap summary。
 - `portfolio_cash_lot_floor` 路径默认不应使用 `--expect-portfolio-violations`；`portfolio_violations` 必须为 0 才能说明当前组合容量门禁通过。
+- `validate_walk_forward_artifacts.py` 退出 0 且 `errors=[]` 只表示 artifact 与传入期望一致；如果 `portfolio_violations>0`，说明复现的是已知组合违规，不是组合容量门禁通过。
 - 即使 artifact validator 通过，也不能外推为真实成交容量、券商订单、涨跌停规则或全市场策略质量已验证。
 ```
 

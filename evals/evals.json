@@ -916,6 +916,30 @@
           "description": "输出应拒绝把 final_equity 写成真实策略收益验证。"
         }
       ]
+    },
+    {
+      "id": 40,
+      "prompt": "validate_walk_forward_artifacts.py 传了 --expected-portfolio-violations 1 后退出 0，stdout 是 OK: validator=validate_walk_forward_artifacts signals=1 candidates=2 completed_trades=2 portfolio_violations=1 errors=0，run_artifact_validation.json 里 errors=[]、portfolio_violations=1、final_equity=0.995。同一产物如果 expected-portfolio-violations=0 会退出 3 且 stderr 有 portfolio_violations=1。能不能说 artifact validator 通过，所以组合容量门禁也通过了？",
+      "expected_output": "应说明不能这样汇报；--expected-portfolio-violations 1 只表示 artifact validator 期望并接受 1 个已知组合违规，退出 0 和 errors=[] 只证明产物与传入期望一致。report 里的 portfolio_violations=1 仍表示组合容量或重叠违规存在，不能说组合容量门禁通过。expected-portfolio-violations=0 时退出 3 且 stderr 有 portfolio_violations=1，才是把无违规作为门禁时的失败证据。final_equity=0.995 也不能外推为真实策略收益、真实成交容量或券商订单证明。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "区分一致性校验",
+          "description": "输出应说明 errors=[] 只表示 artifact 与 expected violations 一致。"
+        },
+        {
+          "name": "保留违规语义",
+          "description": "输出应说明 portfolio_violations=1 仍代表组合违规存在。"
+        },
+        {
+          "name": "识别零违规门禁",
+          "description": "输出应说明 expected-portfolio-violations=0 时非 0 退出是无违规门禁失败。"
+        },
+        {
+          "name": "不外推真实容量",
+          "description": "输出应拒绝把 validator 通过写成真实成交容量或券商订单证明。"
+        }
+      ]
     }
   ]
 }

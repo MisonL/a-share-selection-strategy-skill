@@ -6,7 +6,20 @@
 ## 无法直接选股
 - 缺少本地行情文件或明确数据源，不能生成候选股。
 - 需要补充：市场、周期、时间范围、目标风格、CSV/Parquet 路径或联网取数授权。
+- 本地行情最小字段：`symbol`、`date`、`open`、`high`、`low`、`close`、`volume`。
 - 可验证后再执行：先校验数据，再评分和解释结果。
+```
+
+## QSSS-derived 缺少 prediction
+
+```markdown
+## 无法按 QSSS-derived 原口径评分
+- 输入缺少 `prediction` 或 `prediction_score`，不能生成 QSSS-derived 候选股。
+- `prediction` 是上游 LightGBM 概率，不得用动量分、固定 `0.5`、mock 值或技术指标近似冒充。
+- 当前可做：
+  - 先提供或生成可追溯的上游 `prediction_score`，再运行 QSSS-derived 评分。
+  - 只做字段质量检查时，可先运行 QSSS profile 校验，让缺失字段显式失败。
+- 即使使用 `generate_lightgbm_predictions.py`，也必须单独核验训练窗口、标签、特征、时间序列切分、跳过标的和未来泄漏风险。
 ```
 
 ## 0 候选解释

@@ -176,6 +176,8 @@ Skill is valid!
 
 QSSS-derived 配置要求输入包含 `market` 列，且 A 股记录使用 `A-share`；同时必须包含 `prediction` 或 `prediction_score` 列，取值范围为 0 到 1。该列表示上游模型已经生成的上涨概率；评分脚本不会训练 LightGBM，也不会用动量分伪造机器学习预测。
 
+如果 QSSS-derived 输入缺少 `prediction` 或 `prediction_score`，不要运行评分产出候选股；使用 `docs/output-templates.md` 中的“QSSS-derived 缺少 prediction”模板说明失败原因。
+
 如果需要真实生成 `prediction_score`，可使用可选脚本 `generate_lightgbm_predictions.py`。该脚本使用时间序列切分，只在训练切分上拟合 `StandardScaler`，并在缺少 `lightgbm` 或 `scikit-learn` 时显式失败：
 
 ```bash

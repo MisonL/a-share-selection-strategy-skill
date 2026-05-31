@@ -11,6 +11,7 @@ from typing import Any
 
 import pandas as pd
 
+from stock_selection_symbols import baostock_code, parse_six_digit_symbols
 from stock_selection_tradability import prefixed_tradability_stats, tradability_stats
 
 
@@ -93,17 +94,7 @@ def fetch_prices(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any]
 
 
 def parse_symbols(text: str) -> list[str]:
-    symbols = [item.strip() for item in text.split(",") if item.strip()]
-    invalid = [symbol for symbol in symbols if not symbol.isdigit() or len(symbol) != 6]
-    if invalid:
-        raise ValueError(f"symbols must be six digits: {','.join(invalid)}")
-    return symbols
-
-
-def baostock_code(symbol: str) -> str:
-    if symbol.startswith(("6", "9")):
-        return f"sh.{symbol}"
-    return f"sz.{symbol}"
+    return parse_six_digit_symbols(text)
 
 
 def collect_rows(result: Any, symbol: str) -> list[dict[str, Any]]:

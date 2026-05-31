@@ -9,9 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
-from fetch_baostock_a_share import baostock_code, parse_symbols
+from stock_selection_symbols import baostock_code, parse_six_digit_symbols
 
 CANDIDATE_FIELDS = ("up_limit", "down_limit", "limit_status", "is_trading", "suspended")
 CONTROL_FIELDS = ("preclose", "pctChg", "tradestatus", "isST", "turn", "volume", "amount")
@@ -218,10 +216,22 @@ def value_counts(values: list[str]) -> dict[str, int]:
 
 
 def numeric_range(values: list[str]) -> tuple[float | None, float | None]:
-    numbers = pd.to_numeric(pd.Series(values), errors="coerce").dropna()
-    if numbers.empty:
+    numbers = []
+    for value in values:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            continue
+        if number != number:
+            continue
+        numbers.append(number)
+    if not numbers:
         return None, None
-    return float(numbers.min()), float(numbers.max())
+    return min(numbers), max(numbers)
+
+
+def parse_symbols(text: str) -> list[str]:
+    return parse_six_digit_symbols(text)
 
 
 def build_report(

@@ -101,7 +101,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py --input /tm
 
 `create_demo_data.py` 只依赖标准库。`validate_ohlcv.py`、`score_candidates.py`、`backtest_buy_hold.py` 和测试需要 `pandas`、`numpy`。Parquet 输入需要 `pyarrow` 或 `fastparquet`。真实 LightGBM 预测生成器需要 `requirements-ml.txt`。
 
-脚本以 CLI 为稳定入口；若在 Python 代码中复用，需要将 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`。脚本读取 CSV/Parquet，但写出的中间产物默认是 CSV；如果用户要求全链路中间产物保持 Parquet，必须显式把每一步 CSV 输出转换成 Parquet 后再传入下一步。
+脚本以 CLI 为稳定入口；若在 Python 代码中复用，需要将 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`。当前脚本支持读取 CSV/Parquet，但中间产物默认写 CSV。若用户要求严格全链路无 CSV，必须说明当前 CLI 链路不支持，不能先写 CSV 再转换成 Parquet 后声称满足无 CSV；只有用户明确允许临时 CSV 时，才可显式转换后继续。
 
 ## 输入数据契约
 

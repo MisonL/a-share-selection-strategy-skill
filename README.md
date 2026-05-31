@@ -94,6 +94,8 @@ uv run --with pandas --with numpy --with pyarrow python scripts/score_candidates
   --output /tmp/stock-selection-demo/candidates_parquet.csv
 ```
 
+这只验证 Parquet 输入读取；候选输出仍是 CSV。当前标准 CLI 链路不支持严格无 CSV 中间产物。如果用户要求全链路中间完全不出现 CSV，必须先停止并说明需要改造脚本输出、runner 固定路径、artifact validator 和测试；不得先写 CSV 再转换为 Parquet 后声称满足无 CSV。
+
 ### 6. 可选：本地 demo 的 sizing、回测和组合报告
 
 快速开始第 4 步会使用 demo 数据末尾作为候选信号日；如果直接对该最新信号日运行 `--fail-on-incomplete` 回测，会因为缺少未来 5 个交易行而显式失败。这是正确门禁，不是脚本故障。

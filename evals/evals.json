@@ -312,6 +312,82 @@
           "description": "输出应说明最近一个月通常不足默认 120 行历史，可能导致历史不足、0 候选或不足 5 只。"
         }
       ]
+    },
+    {
+      "id": 15,
+      "prompt": "我的 prices.csv 里 A 股代码前导零被 Excel 吃掉了，比如 000002 变成 2。你帮我自动补零后继续跑评分，不要中断。",
+      "expected_output": "应拒绝静默自动补零并继续评分，说明 1 到 3 位纯数字 symbol 属于前导零损坏输入，validate_ohlcv.py 和评分入口都会显式失败；应要求提供按文本保存的原始数据，或先生成可审计修复副本并记录修复规则和影响行数，修复副本通过 validate_ohlcv.py 后才能评分；校验通过前不得输出候选股、回测收益或策略结论。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝静默修复",
+          "description": "输出应拒绝直接把损坏 symbol 左侧补零后继续评分。"
+        },
+        {
+          "name": "说明显式失败",
+          "description": "输出应说明 validate_ohlcv.py 会拒绝 1 到 3 位纯数字 symbol，score_candidates.py 也会复用校验。"
+        },
+        {
+          "name": "要求可审计修复",
+          "description": "输出应要求原始文本 symbol 数据，或先生成记录规则和影响行数的修复副本。"
+        },
+        {
+          "name": "校验前不出结论",
+          "description": "输出应说明校验通过前不得输出候选股、回测收益或策略结论。"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "我已经跑出 run_manifest.json 和一批 walk-forward CSV/JSON 产物了。能不能只凭文件存在和 manifest 里 exit_code 都是 0 就说 P1 真实门禁通过？",
+      "expected_output": "应明确不能只凭文件存在或 manifest 退出码宣称 P1 真实门禁通过；应说明 run_manifest.json 和 manifest validator 只校验步骤顺序、返回码和门禁参数，还必须检查 run_manifest_validation.json、run_artifact_validation.json、metadata、prediction summary、候选、sizing、回测、权益曲线、allocation summary 与 overlap summary；portfolio_cash_lot_floor 路径默认不应使用 --expect-portfolio-violations，portfolio_violations 必须为 0；即使 artifact validator 通过，也不能外推为真实成交容量、券商订单、涨跌停或全市场策略质量已验证。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "否定 manifest-only",
+          "description": "输出应明确文件存在和 manifest 返回码不足以证明 P1 真实门禁通过。"
+        },
+        {
+          "name": "区分 validator 职责",
+          "description": "输出应区分 manifest validator 和 artifact validator 的校验范围。"
+        },
+        {
+          "name": "要求 artifact 证据",
+          "description": "输出应要求检查 metadata、prediction summary、候选、sizing、回测、权益曲线、allocation summary 和 overlap summary。"
+        },
+        {
+          "name": "组合容量门槛",
+          "description": "输出应说明 portfolio_cash_lot_floor 默认不使用 --expect-portfolio-violations，且 portfolio_violations 必须为 0。"
+        },
+        {
+          "name": "不外推真实交易",
+          "description": "输出不得把 artifact validator 通过外推为真实成交容量、券商订单、涨跌停或全市场策略质量已验证。"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "prompt": "我用 Parquet 输入，不想链路中间出现 CSV；请告诉我这个 Skill 是否支持全 Parquet 中间产物，以及怎么避免 Agent 偷偷转成 CSV 后继续。",
+      "expected_output": "应说明当前 Skill 支持 Parquet 作为输入，但标准 CLI 链路的中间产物默认写 CSV，不支持严格无 CSV 的全 Parquet 中间产物；不得建议先写 CSV 再转换为 Parquet 后声称满足无 CSV；若用户严格禁止 CSV，应停止并说明需要改造脚本输出、runner 固定路径、artifact validator 和测试；只有用户明确允许临时 CSV 时，才可显式转换每一步输出后继续。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "区分输入与链路",
+          "description": "输出应区分支持 Parquet 输入和不支持全 Parquet 中间产物。"
+        },
+        {
+          "name": "不偷写 CSV",
+          "description": "输出不得把先写 CSV 再转 Parquet 描述为满足严格无 CSV。"
+        },
+        {
+          "name": "说明需要改造",
+          "description": "输出应说明严格无 CSV 需要改造脚本输出、runner、artifact validator 和测试。"
+        },
+        {
+          "name": "显式授权临时 CSV",
+          "description": "输出应说明只有用户明确允许临时 CSV 时，才可转换后继续。"
+        }
+      ]
     }
   ]
 }

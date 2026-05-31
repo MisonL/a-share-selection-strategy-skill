@@ -22,6 +22,36 @@
 - 只有 `validate_ohlcv.py` 和 `score_candidates.py` 完成后，才能按真实输出解释候选、0 候选或不足 5 只的原因。
 ```
 
+## 前导零损坏
+
+```markdown
+## 输入数据需要先修复
+- `symbol` 看起来已被表格软件或上游处理损坏，例如 `000002` 变成 `2`。
+- 不能静默左侧补零后继续评分；这会掩盖源数据质量问题。
+- 可接受路径：生成可审计的修复副本，明确修复规则和影响行数，再重新运行 `validate_ohlcv.py`。
+- 校验通过前不能输出候选股、回测收益或策略结论。
+```
+
+## 全 Parquet 链路未支持
+
+```markdown
+## 当前不支持严格全 Parquet 中间产物
+- 当前脚本支持读取 CSV/Parquet，但标准 CLI 链路的中间产物默认写 CSV。
+- 如果要求执行过程中完全不出现 CSV，必须先停止并说明需要改造脚本输出、runner 固定路径、artifact validator 和测试。
+- 不能先写 CSV 再转换为 Parquet 后声称满足无 CSV。
+- 只有用户明确允许临时 CSV 时，才可把每一步 CSV 输出显式转换为 Parquet 后继续。
+```
+
+## P1 门禁证据不足
+
+```markdown
+## 不能仅凭 manifest 宣称 P1 通过
+- `run_manifest.json` 和 manifest validator 只证明命令步骤、退出码和门禁参数符合预期。
+- P1 通过还必须检查 `run_manifest_validation.json`、`run_artifact_validation.json`、真实 metadata、prediction summary、回测、权益曲线、allocation summary 和 overlap summary。
+- `portfolio_cash_lot_floor` 路径默认不应使用 `--expect-portfolio-violations`；`portfolio_violations` 必须为 0 才能说明当前组合容量门禁通过。
+- 即使 artifact validator 通过，也不能外推为真实成交容量、券商订单、涨跌停规则或全市场策略质量已验证。
+```
+
 ## QSSS-derived 缺少 prediction
 
 ```markdown

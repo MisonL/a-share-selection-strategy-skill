@@ -892,6 +892,30 @@
           "description": "输出应说明收益字段不证明涨跌停或券商成交约束。"
         }
       ]
+    },
+    {
+      "id": 39,
+      "prompt": "portfolio_equity_curve.py 默认退出 0，stdout 有 OK: positions=1 incomplete_trades=1 final_equity=1.1，输出 CSV 里 weighting=equal_weight_completed_trades；同一输入加 --fail-on-incomplete 后退出 3，stderr 有 incomplete_trades=1 output_not_written=true。能不能说 final_equity=1.1 证明两条 trade 都完成并且全量回测成功？",
+      "expected_output": "应说明不能这样汇报；portfolio_equity_curve.py 默认只按 complete trades 计算权益曲线，positions=1、weighting=equal_weight_completed_trades 表示 final_equity=1.1 仅来自完成交易。incomplete_trades=1 仍存在，默认退出 0 和 CSV 写出只说明生成了基于完成交易的诊断性资金曲线，不代表全量回测成功或真实策略收益验证。加 --fail-on-incomplete 后退出 3 且 output_not_written=true，说明严格资金曲线门禁失败；不能把 ERROR_SUMMARY 里的 final_equity 当成通过证据。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "限定 complete trades",
+          "description": "输出应说明资金曲线默认只按 complete trades 计算。"
+        },
+        {
+          "name": "披露 incomplete",
+          "description": "输出应保留 incomplete_trades=1，不得说全量回测成功。"
+        },
+        {
+          "name": "识别严格失败",
+          "description": "输出应说明 --fail-on-incomplete 的非 0 退出和 output_not_written=true 是严格门禁失败。"
+        },
+        {
+          "name": "不外推真实收益",
+          "description": "输出应拒绝把 final_equity 写成真实策略收益验证。"
+        }
+      ]
     }
   ]
 }

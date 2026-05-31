@@ -174,6 +174,16 @@
 - 必须同时披露 `limit_rules_model=not_modeled`。
 ```
 
+## 资金曲线含 incomplete trades
+
+```markdown
+## 资金曲线不是全量回测通过
+- `portfolio_equity_curve.py` 默认只用 complete trades 计算 `mean_return` 和 `final_equity`。
+- `incomplete_trades>0` 时，`OK:`、输出 CSV 存在或 `final_equity` 不代表全部 trade 都参与了资金曲线。
+- CSV 中 `weighting=equal_weight_completed_trades` 表示按完成交易等权计算。
+- 若 incomplete 应作为门禁失败，必须使用 `--fail-on-incomplete`，并按非 0 退出和 `output_not_written=true` 处理；`ERROR_SUMMARY` 中的 `final_equity` 只是失败诊断值，不是通过证据。
+```
+
 ## 离线依赖缺失
 
 ```markdown

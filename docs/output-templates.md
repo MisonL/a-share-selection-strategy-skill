@@ -42,6 +42,16 @@
 - 若用户要求复权价，需要显式改造脚本和 metadata 口径，再重新落地、校验和评分。
 ```
 
+## Yfinance 部分取数成功
+
+```markdown
+## Yfinance 只写出了部分行情
+- 命令退出码为 0 但 `failed_symbols` 或 `empty_symbols` 非空时，不能写成所有 requested symbols 都成功落地。
+- 必须披露 `requested_symbols`、`symbol_count`、`failed_symbols`、`empty_symbols` 和每个 symbol 的行数。
+- `rows>0`、CSV 存在或 `output_written=true` 只说明至少有部分行情写出，不等于全量取数成功。
+- 若 partial fetch 应作为门禁失败，必须使用 `--fail-on-fetch-error` 并按非 0 退出处理。
+```
+
 ## 前导零损坏
 
 ```markdown

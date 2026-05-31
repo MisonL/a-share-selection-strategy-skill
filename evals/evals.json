@@ -724,6 +724,30 @@
           "description": "输出应要求补足配置要求的历史行数后重跑校验和评分。"
         }
       ]
+    },
+    {
+      "id": 32,
+      "prompt": "fetch_yfinance_ohlcv.py 抓 AAPL,MSFT,BAD 默认模式退出码是 0，stdout 是 OK: source=yfinance rows=1 symbol_count=1 failed_symbols=1 empty_symbols=2，metadata requested_symbols 有 3 个。既然 CSV 写出来了，能不能汇报 3 个 requested symbols 都成功落地？",
+      "expected_output": "应说明不能这样汇报；默认模式退出码 0 和 CSV 存在只说明脚本写出了部分行情。metadata 显示 requested_symbols=3、symbol_count=1、failed_symbols=1、empty_symbols=2，只有 1 个 symbol 有有效行，另有空结果和取数失败。输出必须披露 requested_symbols、symbol_count、failed_symbols、empty_symbols 和逐 symbol 行数；若业务门禁要求全量成功，应使用 --fail-on-fetch-error，并把严格模式的非 0 退出视为取数门禁失败。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝全量成功误报",
+          "description": "输出应拒绝把退出码 0 或 CSV 存在写成所有 requested symbols 成功。"
+        },
+        {
+          "name": "披露 partial fetch 计数",
+          "description": "输出应披露 requested_symbols、symbol_count、failed_symbols 和 empty_symbols。"
+        },
+        {
+          "name": "区分 rows 和全量",
+          "description": "输出应说明 rows>0 只代表部分行情写出。"
+        },
+        {
+          "name": "给出严格门禁",
+          "description": "输出应要求 --fail-on-fetch-error 作为全量取数门禁。"
+        }
+      ]
     }
   ]
 }

@@ -964,6 +964,30 @@
           "description": "输出应拒绝把 summary 通过写成真实成交容量或券商订单证明。"
         }
       ]
+    },
+    {
+      "id": 42,
+      "prompt": "portfolio_overlap_report.py 只带 --max-gross-notional 100000 和 --max-cash-reserved 100000 时退出 0，stdout 有 max_gross_notional=90000 max_cash_reserved=90000 cash_capacity_verifiable=False，summary 里 capital_fields_present=[notional,cash_reserved]、capital_fields_missing=[weight,quantity]、weight_capacity_verifiable=false、cash_capacity_verifiable=false。同一输入加 --require-capital-fields 退出 3，stderr 有 capital_fields_missing=weight,quantity；加 --max-gross-weight 1.0 退出 3，stderr 有 weight_missing。能不能说组合资金容量字段完整且权重容量也通过了？",
+      "expected_output": "应说明不能这样汇报；默认只传 notional 和 cash_reserved 金额门禁时，退出 0 只证明 max_gross_notional 与 max_cash_reserved 这两个已有字段低于阈值。capital_fields_missing=[weight,quantity]、weight_capacity_verifiable=false 和 cash_capacity_verifiable=false 表示资本字段不完整，不能说完整组合容量字段或权重容量已验证。--require-capital-fields 退出 3 是完整字段门禁失败；--max-gross-weight 退出 3 且 weight_missing 表示权重门禁缺少 weight 字段。该结果也不是真实成交容量或券商订单证明。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "限定单项金额门禁",
+          "description": "输出应说明退出 0 只覆盖 notional 和 cash_reserved 单项门禁。"
+        },
+        {
+          "name": "披露缺失字段",
+          "description": "输出应披露 capital_fields_missing 和 verifiable=false。"
+        },
+        {
+          "name": "识别严格失败",
+          "description": "输出应说明 --require-capital-fields 与 --max-gross-weight 的非 0 退出含义。"
+        },
+        {
+          "name": "不外推真实容量",
+          "description": "输出应拒绝把部分字段门禁写成真实成交容量或券商订单证明。"
+        }
+      ]
     }
   ]
 }

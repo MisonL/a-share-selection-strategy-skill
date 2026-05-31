@@ -105,6 +105,16 @@
 - 本地 `portfolio_cash_lot_floor` 仍不是券商订单、真实成交或真实现金容量证明。
 ```
 
+## 组合容量字段不完整
+
+```markdown
+## 组合容量只完成部分字段门禁
+- `portfolio_overlap_report.py` 可只针对已传入的单项字段执行门禁；退出码 0 不代表所有资本字段齐全。
+- 必须披露 `capital_fields_present`、`capital_fields_missing`、`weight_capacity_verifiable` 和 `cash_capacity_verifiable`。
+- `max_gross_notional` / `max_cash_reserved` 低于阈值，只证明这两个字段的金额门禁通过；若 `weight` 缺失，不能说权重容量已验证。
+- 若需要完整资本字段门禁，必须使用 `--require-capital-fields`；若需要权重门禁，必须提供 `weight` 并使用 `--max-gross-weight`。
+```
+
 ## 信号日价格不一致
 
 ```markdown

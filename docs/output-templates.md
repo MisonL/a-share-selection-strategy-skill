@@ -207,6 +207,7 @@
   - `failed_symbols>0`：存在单股运行期异常，需要复核。
 - 如果 `failed_symbols>0`，应进入复核或失败处理；`effective_empty_result=true` 只说明脚本完成并无候选。
 - 0 候选不是错误退出，也不是收益或策略有效性验证。
+- 如果同时使用 `--fail-on-empty-result`，`ERROR_SUMMARY` 只是失败摘要；`output_not_written=true` 且退出码非 0 时，不能说候选生成通过。
 ```
 
 ## 历史窗口不足

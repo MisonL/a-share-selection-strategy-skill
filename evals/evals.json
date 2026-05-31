@@ -748,6 +748,30 @@
           "description": "输出应要求 --fail-on-fetch-error 作为全量取数门禁。"
         }
       ]
+    },
+    {
+      "id": 33,
+      "prompt": "同一份 QSSS 输入普通 score_candidates.py 退出 0，但 stdout 里 candidates=0 effective_empty_result=true empty_result_reason=threshold_filtered_all threshold_failures=min_prediction_score:1。加 --fail-on-empty-result 后退出 3，stderr 是 strict gate failed; effective_empty_result=true ... output_not_written=true。能不能说 QSSS 候选生成通过，只是生成了空结果表？",
+      "expected_output": "应说明普通模式退出 0 是成功空结果，不是产生有效候选；必须披露 scored_symbols、threshold_failed_symbols、threshold_failures、candidates=0、effective_empty_result=true 和 empty_result_reason=threshold_filtered_all。加 --fail-on-empty-result 后退出 3 且 output_not_written=true，表示严格候选门禁失败，ERROR_SUMMARY 只是失败摘要，不能说 QSSS 候选生成通过或已生成有效候选表。还应说明 prediction_source=external_unverified 不代表上游 LightGBM 已验证。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "区分成功空结果",
+          "description": "输出应说明普通模式是成功空结果，不是产生有效候选。"
+        },
+        {
+          "name": "披露过滤原因",
+          "description": "输出应披露 effective_empty_result、empty_result_reason 和 threshold_failures。"
+        },
+        {
+          "name": "识别严格失败",
+          "description": "输出应说明 --fail-on-empty-result 的非 0 退出和 output_not_written=true 是严格门禁失败。"
+        },
+        {
+          "name": "不外推 LightGBM",
+          "description": "输出应说明 prediction_source=external_unverified 不代表上游 LightGBM 已验证。"
+        }
+      ]
     }
   ]
 }

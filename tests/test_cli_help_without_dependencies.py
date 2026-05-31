@@ -83,6 +83,14 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--require-tradable-bars",
                 "--fail-on-incomplete",
             ],
+            "portfolio_equity_curve.py": [
+                "--backtests",
+                "--output",
+                "--initial-equity",
+                "--fail-on-incomplete",
+                "--min-final-equity",
+                "--max-drawdown-floor",
+            ],
             "score_candidates.py": [
                 "--input",
                 "--config",
@@ -118,6 +126,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
         allocate_script = ROOT / "scripts/allocate_candidate_capital.py"
         portfolio_allocate_script = ROOT / "scripts/allocate_portfolio_candidate_capital.py"
         backtest_script = ROOT / "scripts/backtest_buy_hold.py"
+        equity_curve_script = ROOT / "scripts/portfolio_equity_curve.py"
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "candidates.csv"
@@ -136,6 +145,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             portfolio_skipped = Path(tmpdir) / "portfolio-skipped.csv"
             portfolio_summary = Path(tmpdir) / "portfolio-summary.json"
             backtest_output = Path(tmpdir) / "backtest.csv"
+            equity_output = Path(tmpdir) / "equity.csv"
             cases = [
                 [
                     str(validate_script),
@@ -255,6 +265,13 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                     "--output",
                     str(backtest_output),
                 ],
+                [
+                    str(equity_curve_script),
+                    "--backtests",
+                    str(Path(tmpdir) / "missing-backtest.csv"),
+                    "--output",
+                    str(equity_output),
+                ],
             ]
             for command in cases:
                 with self.subTest(script=Path(command[0]).name):
@@ -284,3 +301,4 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             self.assertFalse(portfolio_skipped.exists())
             self.assertFalse(portfolio_summary.exists())
             self.assertFalse(backtest_output.exists())
+            self.assertFalse(equity_output.exists())

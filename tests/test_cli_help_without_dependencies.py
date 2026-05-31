@@ -62,6 +62,17 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--lot-size",
                 "--fail-on-unallocated",
             ],
+            "allocate_portfolio_candidate_capital.py": [
+                "--prices",
+                "--raw-candidates",
+                "--candidate-outputs",
+                "--sized-outputs",
+                "--skipped-output",
+                "--summary-output",
+                "--cash-budget",
+                "--hold-days",
+                "--max-open-positions",
+            ],
             "score_candidates.py": [
                 "--input",
                 "--config",
@@ -95,6 +106,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
         lightgbm_script = ROOT / "scripts/generate_lightgbm_predictions.py"
         slice_script = ROOT / "scripts/slice_prices_as_of.py"
         allocate_script = ROOT / "scripts/allocate_candidate_capital.py"
+        portfolio_allocate_script = ROOT / "scripts/allocate_portfolio_candidate_capital.py"
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "candidates.csv"
@@ -108,6 +120,10 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             lightgbm_summary = Path(tmpdir) / "prediction-summary.json"
             slice_output = Path(tmpdir) / "slice.csv"
             allocation_output = Path(tmpdir) / "allocated.csv"
+            portfolio_selected = Path(tmpdir) / "portfolio-selected.csv"
+            portfolio_sized = Path(tmpdir) / "portfolio-sized.csv"
+            portfolio_skipped = Path(tmpdir) / "portfolio-skipped.csv"
+            portfolio_summary = Path(tmpdir) / "portfolio-summary.json"
             cases = [
                 [
                     str(validate_script),
@@ -191,6 +207,33 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                     "--cash-budget",
                     "10000",
                 ],
+                [
+                    str(portfolio_allocate_script),
+                    "--prices",
+                    str(Path(tmpdir) / "missing-prices.csv"),
+                    "--raw-candidates",
+                    str(Path(tmpdir) / "missing-candidates.csv"),
+                    "--candidate-outputs",
+                    str(portfolio_selected),
+                    "--sized-outputs",
+                    str(portfolio_sized),
+                    "--skipped-output",
+                    str(portfolio_skipped),
+                    "--summary-output",
+                    str(portfolio_summary),
+                    "--cash-budget",
+                    "10000",
+                    "--hold-days",
+                    "5",
+                    "--max-open-positions",
+                    "10",
+                    "--max-gross-weight",
+                    "1.0",
+                    "--max-gross-notional",
+                    "10000",
+                    "--max-cash-reserved",
+                    "10000",
+                ],
             ]
             for command in cases:
                 with self.subTest(script=Path(command[0]).name):
@@ -215,3 +258,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             self.assertFalse(lightgbm_summary.exists())
             self.assertFalse(slice_output.exists())
             self.assertFalse(allocation_output.exists())
+            self.assertFalse(portfolio_selected.exists())
+            self.assertFalse(portfolio_sized.exists())
+            self.assertFalse(portfolio_skipped.exists())
+            self.assertFalse(portfolio_summary.exists())

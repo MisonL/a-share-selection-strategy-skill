@@ -16,6 +16,15 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             "run_baostock_walk_forward.py": [],
             "probe_baostock_limit_fields.py": [],
             "validate_ohlcv.py": ["--input", "--config", "--min-history-rows"],
+            "fetch_baostock_a_share.py": [
+                "--symbols",
+                "--start-date",
+                "--end-date",
+                "--output",
+                "--metadata-output",
+                "--fail-on-fetch-error",
+                "--drop-invalid-rows",
+            ],
             "score_candidates.py": [
                 "--input",
                 "--config",
@@ -43,9 +52,12 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
     def test_runtime_paths_still_fail_without_pandas(self) -> None:
         validate_script = ROOT / "scripts/validate_ohlcv.py"
         score_script = ROOT / "scripts/score_candidates.py"
+        fetch_baostock_script = ROOT / "scripts/fetch_baostock_a_share.py"
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "candidates.csv"
+            baostock_output = Path(tmpdir) / "baostock.csv"
+            baostock_metadata = Path(tmpdir) / "baostock-metadata.json"
             cases = [
                 [
                     str(validate_script),
@@ -61,6 +73,19 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                     "--output",
                     str(output),
                 ],
+                [
+                    str(fetch_baostock_script),
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2026-05-20",
+                    "--end-date",
+                    "2026-05-20",
+                    "--output",
+                    str(baostock_output),
+                    "--metadata-output",
+                    str(baostock_metadata),
+                ],
             ]
             for command in cases:
                 with self.subTest(script=Path(command[0]).name):
@@ -75,3 +100,5 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                     self.assertNotEqual(0, result.returncode)
                     self.assertIn("pandas", result.stderr)
             self.assertFalse(output.exists())
+            self.assertFalse(baostock_output.exists())
+            self.assertFalse(baostock_metadata.exists())

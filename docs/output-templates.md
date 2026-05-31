@@ -206,6 +206,17 @@
 - 若 incomplete 应作为门禁失败，必须使用 `--fail-on-incomplete`，并按非 0 退出和 `output_not_written=true` 处理；`ERROR_SUMMARY` 中的 `final_equity` 只是失败诊断值，不是通过证据。
 ```
 
+## 资金曲线等权口径
+
+```markdown
+## 资金曲线未按 sizing 权重计算
+- `portfolio_equity_curve.py` 的 `portfolio_model` 或 CSV `weighting=equal_weight_completed_trades` 表示按完成交易等权计算。
+- 即使输入回测 CSV 含 `weight`、`notional`、`quantity` 和 `cash_reserved`，`final_equity` 也不是按这些 sizing 字段加权后的组合收益。
+- `portfolio_overlap_report.py` 退出 0 且 `capital_fields_missing=[]`，只说明 overlap 报告检查了资本字段和容量阈值，不能反向证明资金曲线使用了权重。
+- 如果按输入 `weight` 重算得到不同收益，应披露差异，不能把等权 `final_equity` 写成真实加权组合收益。
+- 本地资金曲线仍不是真实成交容量、券商订单或真实组合收益证明。
+```
+
 ## 离线依赖缺失
 
 ```markdown

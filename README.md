@@ -148,7 +148,7 @@ uv run --with pandas --with numpy python scripts/portfolio_overlap_report.py \
   --require-capital-fields
 ```
 
-这仍然只是合成 demo 数据上的本地基线 smoke。`prediction_score` 仍是合成输入；回测输出中的 `tradability_model=not_modeled` 和 `limit_rules_model=not_modeled` 仍表示未证明真实可交易性或涨跌停规则；资金曲线的 `final_equity` 不能写成真实收益验证。
+这仍然只是合成 demo 数据上的本地基线 smoke。`prediction_score` 仍是合成输入；回测输出中的 `tradability_model=not_modeled` 和 `limit_rules_model=not_modeled` 仍表示未证明真实可交易性或涨跌停规则；资金曲线的 `final_equity` 不能写成真实收益验证。`portfolio_equity_curve.py` 使用 `equal_weight_completed_trades`，即使回测 CSV 含 `weight` 字段，也不能把 `final_equity` 写成按 sizing 权重计算的组合收益；`portfolio_overlap_report.py` 的资本字段门禁通过也不证明资金曲线使用了这些权重。
 
 ### 7. 可选：校验 Skill 结构
 

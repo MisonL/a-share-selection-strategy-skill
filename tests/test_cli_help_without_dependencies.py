@@ -53,6 +53,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--summary-output",
                 "--fail-on-skipped",
             ],
+            "slice_prices_as_of.py": ["--input", "--output", "--as-of-date"],
             "score_candidates.py": [
                 "--input",
                 "--config",
@@ -84,6 +85,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
         fetch_akshare_script = ROOT / "scripts/fetch_akshare_a_share.py"
         fetch_yfinance_script = ROOT / "scripts/fetch_yfinance_ohlcv.py"
         lightgbm_script = ROOT / "scripts/generate_lightgbm_predictions.py"
+        slice_script = ROOT / "scripts/slice_prices_as_of.py"
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "candidates.csv"
@@ -95,6 +97,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             yfinance_metadata = Path(tmpdir) / "yfinance-metadata.json"
             lightgbm_output = Path(tmpdir) / "predictions.csv"
             lightgbm_summary = Path(tmpdir) / "prediction-summary.json"
+            slice_output = Path(tmpdir) / "slice.csv"
             cases = [
                 [
                     str(validate_script),
@@ -158,6 +161,15 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                     "--summary-output",
                     str(lightgbm_summary),
                 ],
+                [
+                    str(slice_script),
+                    "--input",
+                    str(Path(tmpdir) / "missing-prices.csv"),
+                    "--output",
+                    str(slice_output),
+                    "--as-of-date",
+                    "2026-05-20",
+                ],
             ]
             for command in cases:
                 with self.subTest(script=Path(command[0]).name):
@@ -180,3 +192,4 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             self.assertFalse(yfinance_metadata.exists())
             self.assertFalse(lightgbm_output.exists())
             self.assertFalse(lightgbm_summary.exists())
+            self.assertFalse(slice_output.exists())

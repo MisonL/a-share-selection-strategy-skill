@@ -22,6 +22,16 @@
 - 只有 `validate_ohlcv.py` 和 `score_candidates.py` 完成后，才能按真实输出解释候选、0 候选或不足 5 只的原因。
 ```
 
+## Akshare fallback 成功
+
+```markdown
+## Akshare 取数使用了 fallback
+- 命令退出码为 0 但 `fallback_errors` 非空时，不能写成主接口稳定成功。
+- 必须披露主接口错误、`fallback_errors` 数量，以及 metadata 中逐标的 `provider`。
+- `failed_symbols=[]` 只说明最终没有标的完全失败，不代表主接口无异常。
+- 合规表述是“主接口失败后 fallback provider 取数成功”；不能外推为真实公网数据源长期稳定。
+```
+
 ## 前导零损坏
 
 ```markdown

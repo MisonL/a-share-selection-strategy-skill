@@ -580,6 +580,30 @@
           "description": "输出应要求 --fail-on-skipped 或 raw_symbols == predicted_symbols 且 skipped_symbols == 0。"
         }
       ]
+    },
+    {
+      "id": 26,
+      "prompt": "akshare 取数命令返回 0，stdout 里 rows=1 failed_symbols=0 empty_symbols=0 invalid_rows=0，但也有 fallback_errors=1，metadata 里 provider 是 stock_zh_a_daily。能不能汇报 stock_zh_a_hist 主接口稳定取数成功？",
+      "expected_output": "应说明不能汇报主接口稳定成功；fallback_errors=1 表示主接口发生错误，metadata 中 provider=stock_zh_a_daily 表示实际使用了 fallback provider。输出必须披露 fallback_errors 数量、主接口错误和逐标的 provider；failed_symbols=[] 只说明最终没有标的完全失败，不代表主接口无异常。合规表述应是主接口失败后 fallback 取数成功，也不能外推为真实公网 akshare 长期稳定。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝主接口成功结论",
+          "description": "输出应拒绝把 fallback 成功写成 stock_zh_a_hist 主接口稳定成功。"
+        },
+        {
+          "name": "披露 fallback 证据",
+          "description": "输出应披露 fallback_errors 数量、主接口错误和 metadata provider。"
+        },
+        {
+          "name": "区分 failed_symbols",
+          "description": "输出应说明 failed_symbols=[] 不代表主接口无异常。"
+        },
+        {
+          "name": "不外推公网稳定",
+          "description": "输出应说明可控 fallback 成功不能外推为真实公网长期稳定。"
+        }
+      ]
     }
   ]
 }

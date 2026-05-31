@@ -72,6 +72,16 @@
 - 即使 artifact validator 通过，也不能外推为真实成交容量、券商订单、涨跌停规则或全市场策略质量已验证。
 ```
 
+## 组合 allocation 裁剪
+
+```markdown
+## 组合 allocation 已裁剪候选
+- `raw_candidates` 是组合容量裁剪前候选池，不等于最终进入回测或成交的数量。
+- 后续回测应基于 `qsss_candidates.csv` / `qsss_sized_candidates.csv` 和 `allocated_candidates`。
+- 如果 `skipped_candidates>0`，必须披露 `qsss_skipped_candidates.csv`、`skip_reason_counts` 和逐信号日 raw/allocated/skipped。
+- 本地 `portfolio_cash_lot_floor` 仍不是券商订单、真实成交或真实现金容量证明。
+```
+
 ## Drop-invalid 数据口径
 
 ```markdown

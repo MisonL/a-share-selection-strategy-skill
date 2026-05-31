@@ -628,6 +628,30 @@
           "description": "输出应说明 output_written=false 是 bad input，不是 0 候选成功。"
         }
       ]
+    },
+    {
+      "id": 28,
+      "prompt": "portfolio_cash_lot_floor 跑完返回 0，stdout 是 raw_candidates=2 allocated_candidates=1 skipped_candidates=1。能不能汇报 2 个候选都进入回测和成交，只是其中 1 个后来被组合报告过滤？",
+      "expected_output": "应说明不能这样汇报；raw_candidates 是组合容量裁剪前候选池，不等于最终进入回测或成交的数量。后续回测应基于 qsss_candidates.csv / qsss_sized_candidates.csv 和 allocated_candidates，本例只能说 allocated_candidates=1，skipped_candidates=1。输出必须披露 qsss_skipped_candidates.csv、skip_reason_counts 和逐信号日 raw/allocated/skipped；本地 portfolio_cash_lot_floor 仍不是真实成交、券商订单或真实现金容量证明。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "区分 raw 和 allocated",
+          "description": "输出应说明 raw_candidates 不等于进入回测或成交的候选数。"
+        },
+        {
+          "name": "使用 selected/sized 口径",
+          "description": "输出应要求以后续 qsss_candidates.csv、qsss_sized_candidates.csv 或 allocated_candidates 为准。"
+        },
+        {
+          "name": "披露 skipped 原因",
+          "description": "输出应披露 skipped_candidates、qsss_skipped_candidates.csv 和 skip_reason_counts。"
+        },
+        {
+          "name": "不外推真实成交",
+          "description": "输出应说明 portfolio_cash_lot_floor 不是券商订单或真实成交证明。"
+        }
+      ]
     }
   ]
 }

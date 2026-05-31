@@ -175,6 +175,8 @@ total_score =
 
 真实 P1 组合容量门禁默认使用 `portfolio_cash_lot_floor`。这条路径会在所有信号日评分后统一做组合级 sizing/cut，再回测和校验组合容量；默认不传 `--expect-portfolio-violations`。只有复现已知失败窗口、并且目标是暴露组合风险时，才把 `--expect-portfolio-violations` 放入 runner 和 manifest validator。
 
+`portfolio_cash_lot_floor` 的 `raw_candidates` 只是组合容量裁剪前候选池；进入回测的是 `qsss_candidates.csv` 和 `qsss_sized_candidates.csv`。如果 `skipped_candidates>0`，必须披露 `skip_reason_counts`，不能说全部 raw candidates 都进入回测或成交。
+
 复制执行真实 P1 门禁时，使用 README 的 P1 `portfolio_cash_lot_floor` bash 模板。README 模板会创建唯一 `RUN_DIR`，运行 runner，写出 `run_manifest_validation.json`，再从 `run_manifest.json` 和 `qsss_run_summary.json` 生成 artifact validator 参数。不要把 `RUN_DIR`、`SYMBOLS`、`SIGNAL_DATES`、`CANDIDATE_COUNTS`、`FINAL_EQUITY` 或 `PORTFOLIO_VIOLATIONS` 当字面值传给脚本。
 
 如果 runner 显式使用了 `--max-candidates M`，manifest validator 才同步传 `--expected-max-candidates M`。如果 runner 显式使用了 `--drop-invalid-rows`，summary 和 artifact validator 必须同步传 `--allow-dropped-invalid-rows`。

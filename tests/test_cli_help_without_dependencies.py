@@ -103,6 +103,21 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--fail-on-symbol-overlap",
                 "--require-capital-fields",
             ],
+            "summarize_walk_forward_run.py": [
+                "--run-dir",
+                "--output",
+                "--signal-dates",
+                "--expected-symbol-count",
+                "--required-tradability-model",
+                "--required-limit-rules-model",
+                "--max-open-positions",
+                "--max-gross-weight",
+                "--max-gross-notional",
+                "--max-cash-reserved",
+                "--fail-on-symbol-overlap",
+                "--expect-portfolio-violations",
+                "--allow-dropped-invalid-rows",
+            ],
             "score_candidates.py": [
                 "--input",
                 "--config",
@@ -140,6 +155,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
         backtest_script = ROOT / "scripts/backtest_buy_hold.py"
         equity_curve_script = ROOT / "scripts/portfolio_equity_curve.py"
         overlap_report_script = ROOT / "scripts/portfolio_overlap_report.py"
+        run_summary_script = ROOT / "scripts/summarize_walk_forward_run.py"
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "candidates.csv"
@@ -162,6 +178,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             overlap_daily = Path(tmpdir) / "overlap-daily.csv"
             overlap_rows = Path(tmpdir) / "overlap-rows.csv"
             overlap_summary = Path(tmpdir) / "overlap-summary.json"
+            run_summary = Path(tmpdir) / "run-summary.json"
             cases = [
                 [
                     str(validate_script),
@@ -299,6 +316,13 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                     "--summary-output",
                     str(overlap_summary),
                 ],
+                [
+                    str(run_summary_script),
+                    "--run-dir",
+                    str(Path(tmpdir) / "missing-run"),
+                    "--output",
+                    str(run_summary),
+                ],
             ]
             for command in cases:
                 with self.subTest(script=Path(command[0]).name):
@@ -332,3 +356,4 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             self.assertFalse(overlap_daily.exists())
             self.assertFalse(overlap_rows.exists())
             self.assertFalse(overlap_summary.exists())
+            self.assertFalse(run_summary.exists())

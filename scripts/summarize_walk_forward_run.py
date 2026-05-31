@@ -10,9 +10,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
-from stock_selection_data import read_table
 from walk_forward_metadata_checks import metadata_gate_errors
 
 
@@ -30,6 +27,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     output = Path(args.output)
     try:
+        ensure_runtime_dependencies()
         summary = build_run_summary(Path(args.run_dir), args)
         write_json(summary, output)
         if summary["quality_errors"]:
@@ -69,7 +67,22 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def ensure_runtime_dependencies() -> None:
+    if "pd" in globals():
+        return
+    import pandas as pandas_module
+    import stock_selection_data as data_module
+
+    globals().update(
+        {
+            "pd": pandas_module,
+            "read_table": data_module.read_table,
+        }
+    )
+
+
 def build_run_summary(run_dir: Path, options: argparse.Namespace) -> dict[str, Any]:
+    ensure_runtime_dependencies()
     metadata = load_json(run_dir / "metadata.json")
     signals = [signal_summary(path) for path in signal_dirs(run_dir, options.signal_dates)]
     equity = equity_summary(run_dir / "qsss_equity_curve.csv")
@@ -106,6 +119,7 @@ def signal_base(run_dir: Path) -> Path:
 
 
 def signal_summary(signal_dir: Path) -> dict[str, Any]:
+    ensure_runtime_dependencies()
     prediction = load_json(signal_dir / "prediction_summary.json")
     candidates = read_table(signal_dir / "qsss_candidates.csv")
     backtest = read_table(signal_dir / "qsss_backtest.csv")
@@ -133,6 +147,7 @@ def signal_summary(signal_dir: Path) -> dict[str, Any]:
 
 
 def equity_summary(path: Path) -> dict[str, Any]:
+    ensure_runtime_dependencies()
     frame = read_table(path)
     require_columns(
         frame, ["signal_date", "positions", "incomplete_trades", "equity", "drawdown"]

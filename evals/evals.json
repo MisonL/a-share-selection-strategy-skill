@@ -604,6 +604,30 @@
           "description": "输出应说明可控 fallback 成功不能外推为真实公网长期稳定。"
         }
       ]
+    },
+    {
+      "id": 27,
+      "prompt": "我的 CSV 里同一只股票有两行日期分别是 2026-05-29 和 20260529。既然两种日期格式都支持，是不是可以当成两天数据继续评分？如果 score_candidates.py 没写输出文件，能不能解释成 0 候选？",
+      "expected_output": "应说明不能当成两天数据；YYYY-MM-DD 和 YYYYMMDD 都会解析为同一个真实交易日，同一 symbol/date 重复必须先修复。validate_ohlcv.py 或 score_candidates.py 报 found duplicate symbol/date rows 时应停止评分、修复源文件并重新校验。score_candidates.py 的 code=bad_input 和 output_written=false 表示输入失败，不是 0 候选成功；校验通过前不得输出候选股、回测收益或策略结论。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "说明同日归一化",
+          "description": "输出应说明 YYYY-MM-DD 和 YYYYMMDD 会解析为同一真实日期。"
+        },
+        {
+          "name": "拒绝当作两天",
+          "description": "输出应拒绝把重复 symbol/date 当成两天数据继续评分。"
+        },
+        {
+          "name": "要求先修复校验",
+          "description": "输出应要求修复源文件并重新运行 validate_ohlcv.py。"
+        },
+        {
+          "name": "区分输入失败和 0 候选",
+          "description": "输出应说明 output_written=false 是 bad input，不是 0 候选成功。"
+        }
+      ]
     }
   ]
 }

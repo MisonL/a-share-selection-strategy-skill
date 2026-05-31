@@ -112,7 +112,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py --input /tm
 最小行情字段：
 
 - `symbol`：股票代码，必须按文本保存，避免 `000002` 变成 `2`。
-- `date`：交易日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD`。
+- `date`：交易日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD`；两种格式会归一化为同一日，同一 `symbol/date` 重复必须先修复，不能当成两天数据。
 - `open`、`high`、`low`、`close`：价格字段，必须为正数。
 - `volume`：成交量，不得为负数，单位必须在同一文件内一致。
 - `name`、`market`、`amount`、`turn` 或 `turnover`：可选字段，按策略需要提供。

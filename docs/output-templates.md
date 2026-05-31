@@ -42,6 +42,16 @@
 - 校验通过前不能输出候选股、回测收益或策略结论。
 ```
 
+## 日期格式归一化重复
+
+```markdown
+## 输入日期存在重复
+- `YYYY-MM-DD` 和 `YYYYMMDD` 都是支持格式，但会解析为同一个真实交易日。
+- 同一 `symbol` 下 `2026-05-29` 和 `20260529` 这类重复不能当成两天数据。
+- `validate_ohlcv.py` 或 `score_candidates.py` 返回 duplicate symbol/date 时，应先修复源文件并重新校验。
+- `output_written=false` 不是 0 候选成功，校验通过前不能输出候选或回测结论。
+```
+
 ## 全 Parquet 链路未支持
 
 ```markdown

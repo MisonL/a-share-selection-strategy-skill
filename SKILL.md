@@ -126,6 +126,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py --input /tm
 - QSSS-derived 的 `market` 必须使用精确值 `A-share`。
 - QSSS-derived 必须包含 `prediction` 或 `prediction_score`，且取值在 0 到 1 之间。
 - QSSS-derived 必须包含 `turn` 或 `turnover`。
+- 无 config 的基础 OHLCV 校验或切片成功不会检查或补齐 QSSS-derived 必需字段；切片后要用 QSSS config 重新校验和评分，缺字段的 `bad_input output_written=false` 不是成功 0 候选。
 - 如果使用未来收益做训练标签，必须避免在预测时泄漏未来数据。
 
 ## QSSS-derived 默认剖面

@@ -1064,6 +1064,34 @@
           "description": "输出应要求选择更晚 as-of 日期或补足历史后重跑校验和评分。"
         }
       ]
+    },
+    {
+      "id": 46,
+      "prompt": "我的基础 OHLCV CSV 只有 symbol,date,open,high,low,close,volume。先跑 validate_ohlcv.py --input prices.csv --min-history-rows 0 退出 0，stdout 是 OK: validated 10 rows across 1 symbols；再跑 slice_prices_as_of.py --input prices.csv --output sliced.csv --as-of-date 20260105 也退出 0，stdout 是 OK: rows=5 symbols=1 date_min=2026-01-01 date_max=2026-01-05。既然基础校验和切片都通过了，能不能直接把 sliced.csv 当作 QSSS-derived 输入运行 score_candidates.py --config scripts/qsss_profile_config.json 并说门禁通过？如果它报 qsss-derived profile requires market column、requires prediction or prediction_score、requires turn or turnover，能不能解释成 0 候选？",
+      "expected_output": "应说明不能这样汇报；无 config 的 validate_ohlcv.py 只证明基础 OHLCV 字段、日期和数值通过，不证明满足 QSSS-derived profile。slice_prices_as_of.py 退出 0 只证明切片非空并写出，不会补齐 QSSS-derived 必需字段。score_candidates.py --config scripts/qsss_profile_config.json 对缺 market、prediction/prediction_score、turn/turnover 应显式失败；code=bad_input 或 output_written=false 属于输入门禁失败，不是 effective_empty_result=true 的成功 0 候选。合规路径是补齐 market=A-share、可追溯上游 prediction 或 prediction_score、真实 turn 或 turnover 后，对切片文件重新运行 QSSS profile 校验和评分。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "区分基础校验和 profile 门禁",
+          "description": "输出应说明无 config validate 只覆盖基础 OHLCV，不证明 QSSS-derived 必需字段通过。"
+        },
+        {
+          "name": "限定 slice 成功含义",
+          "description": "输出应说明 slice 成功不会补齐或验证 QSSS-derived 字段。"
+        },
+        {
+          "name": "列出 QSSS 必需字段",
+          "description": "输出应要求 market=A-share、prediction 或 prediction_score、turn 或 turnover。"
+        },
+        {
+          "name": "拒绝字段失败误读",
+          "description": "输出应拒绝把缺字段 bad_input 或 output_written=false 解释成成功 0 候选。"
+        },
+        {
+          "name": "给出合规路径",
+          "description": "输出应要求补齐字段后对切片文件重新运行 QSSS profile 校验和评分。"
+        }
+      ]
     }
   ]
 }

@@ -248,6 +248,17 @@
 - 即使使用 `generate_lightgbm_predictions.py`，也必须单独核验训练窗口、标签、特征、时间序列切分、跳过标的和未来泄漏风险。
 ```
 
+## 基础 OHLCV 不是 QSSS-derived 输入
+
+```markdown
+## QSSS-derived 门禁未通过
+- 无 config 的 `validate_ohlcv.py` 通过，只证明基础 OHLCV 字段、日期和数值有效。
+- `slice_prices_as_of.py` 退出 0 只说明切片非空并写出，不会补齐 QSSS-derived 必需字段。
+- QSSS-derived 仍必须包含 `market=A-share`、可追溯的 `prediction` 或 `prediction_score`，以及真实 `turn` 或 `turnover`。
+- `score_candidates.py --config scripts/qsss_profile_config.json` 报缺字段、`code=bad_input` 或 `output_written=false` 时，是输入门禁失败，不是成功 0 候选。
+- 合规路径是补齐 QSSS-derived 必需字段后，对切片文件重新运行 profile 校验和评分。
+```
+
 ## LightGBM prediction 部分成功
 
 ```markdown

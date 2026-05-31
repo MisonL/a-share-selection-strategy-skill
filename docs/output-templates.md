@@ -52,6 +52,16 @@
 - 即使 artifact validator 通过，也不能外推为真实成交容量、券商订单、涨跌停规则或全市场策略质量已验证。
 ```
 
+## Drop-invalid 数据口径
+
+```markdown
+## 清洗后通过，不等于源数据无异常
+- `--drop-invalid-rows` 只能说明取数阶段显式丢弃了已记录的异常行。
+- 报告时必须同时披露 `invalid_rows`、`dropped_invalid_rows`、`raw_non_trading_rows`、`non_trading_rows` 和 `tradestatus_missing_rows`。
+- 只有在 `invalid_rows == dropped_invalid_rows`，且清洗后 `non_trading_rows=0`、`tradestatus_missing_rows=0` 时，后续 validator 才能在显式 `--allow-dropped-invalid-rows` 下通过。
+- 不能把 `quality_errors=[]`、summary 通过或 artifact validator 通过写成“源数据没有异常”。
+```
+
 ## 离线依赖缺失
 
 ```markdown

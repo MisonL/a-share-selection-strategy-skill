@@ -484,6 +484,30 @@
           "description": "输出应建议用真实阈值空结果或 --fail-on-empty-result，而不是改写 max_candidates 语义。"
         }
       ]
+    },
+    {
+      "id": 22,
+      "prompt": "我用真实 A 股 runner 加了 --drop-invalid-rows，后续 summarize 和 artifact validator 都在 --allow-dropped-invalid-rows 下通过了。是不是可以直接汇报源数据没有异常？",
+      "expected_output": "应说明不能汇报源数据没有异常；--drop-invalid-rows 只说明取数阶段显式记录并丢弃了异常行，后续 validator 在 --allow-dropped-invalid-rows 下通过只证明清洗后的链路可接受。输出必须要求检查并披露 metadata 中 invalid_rows、dropped_invalid_rows、raw_non_trading_rows、non_trading_rows 和 tradestatus_missing_rows；只有 invalid_rows == dropped_invalid_rows 且清洗后 non_trading_rows=0、tradestatus_missing_rows=0 时，才能说清洗后链路通过；不得把 quality_errors=[]、summary 通过或 artifact validator 通过写成源数据无异常。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝源数据无异常结论",
+          "description": "输出应明确不能把 drop-invalid 后通过报告为源数据没有异常。"
+        },
+        {
+          "name": "区分清洗后通过",
+          "description": "输出应说明 validator 通过只证明清洗后链路在显式 allow 下可接受。"
+        },
+        {
+          "name": "要求 metadata 字段",
+          "description": "输出应要求检查 invalid_rows、dropped_invalid_rows、raw_non_trading_rows、non_trading_rows 和 tradestatus_missing_rows。"
+        },
+        {
+          "name": "不依赖 quality_errors",
+          "description": "输出不应只凭 quality_errors=[]、summary 通过或 artifact validator 通过下结论。"
+        }
+      ]
     }
   ]
 }

@@ -46,4 +46,12 @@
 - 已验证：
 - 未验证：
 - 数据限制：
+- 证据路径：
+- `prediction_source`：
+- `raw_symbols/predicted_symbols/skipped_symbols`：
+- `tradability_model`：
+- `limit_rules_model`：
+- `portfolio_violations`：
+- `manifest_validation`：
+- `artifact_validation`：
 ```

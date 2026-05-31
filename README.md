@@ -130,7 +130,9 @@ python3 scripts/create_demo_data.py --output /tmp/stock-selection-ml-demo --days
 uv run --with pandas --with numpy --with scikit-learn --with lightgbm \
   python scripts/generate_lightgbm_predictions.py \
   --input /tmp/stock-selection-ml-demo/prices.csv \
-  --output /tmp/stock-selection-ml-demo/prices_generated_prediction.csv
+  --output /tmp/stock-selection-ml-demo/prices_generated_prediction.csv \
+  --summary-output /tmp/stock-selection-ml-demo/prediction_summary.json \
+  --fail-on-skipped
 ```
 
 真实 A 股行情可先落地为本地文件，再进入同一链路。下面示例使用 baostock，输出行情 CSV 和元数据 JSON；真实环境失败时命令会非 0，不应改用 mock 数据。门禁不能只看命令退出码，还必须检查 metadata 中 `rows > 0`、`symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`、`invalid_rows == 0`、`non_trading_rows == 0`。脚本会输出 `preclose/pctChg/tradestatus/isST`；若 baostock 返回停牌或异常行导致不可交易或 `volume/amount/turn` 为空，脚本默认失败；只有显式加 `--drop-invalid-rows` 时才会丢弃异常行，并在 metadata 记录 `dropped_invalid_rows` 和示例。
@@ -170,40 +172,80 @@ uv run --with pandas --with numpy --with yfinance python scripts/fetch_yfinance_
   --fail-on-fetch-error
 ```
 
-真实回测必须先按信号日截断评分输入，避免用未来行情生成候选；回测价格文件可以保留信号日之后的真实行用于出场：
+真实回测必须先按信号日截断评分输入，避免用未来行情生成候选；回测价格文件可以保留信号日之后的真实行用于出场。P1 组合容量门禁默认使用一键 runner 的 `portfolio_cash_lot_floor` 路径，不把预期失败当作通过条件：
 
 ```bash
-uv run --with pandas --with numpy --with baostock --with-requirements requirements-ml.txt python scripts/run_baostock_walk_forward.py --symbols 000001,000333,000651,002594,300059,300750,600000,600036,600519,601318,603288,688111 --start-date 2024-01-01 --end-date 2026-05-29 --signal-dates 2026-04-24 2026-05-12 2026-05-15 2026-05-20 --output-dir /tmp/stock-selection-p1-qsss-run --cash-budget 1000000 --max-open-positions 10 --max-gross-weight 1.0 --max-gross-notional 1000000 --max-cash-reserved 1000000 --fail-on-symbol-overlap --expect-portfolio-violations
-uv run --with pandas --with numpy python scripts/slice_prices_as_of.py \
-  --input /tmp/stock-selection-a-share/prices.csv \
-  --output /tmp/stock-selection-a-share/prices_signal_window.csv \
-  --as-of-date 2026-05-20
-uv run --with-requirements requirements-ml.txt python scripts/generate_lightgbm_predictions.py \
-  --input /tmp/stock-selection-a-share/prices_signal_window.csv \
-  --output /tmp/stock-selection-a-share/predictions_signal_window.csv \
-  --summary-output /tmp/stock-selection-a-share/prediction_summary.json \
-  --fail-on-skipped
-uv run --with pandas --with numpy python scripts/validate_ohlcv.py \
-  --input /tmp/stock-selection-a-share/predictions_signal_window.csv \
-  --config scripts/qsss_profile_config.json
-uv run --with pandas --with numpy python scripts/score_candidates.py \
-  --input /tmp/stock-selection-a-share/predictions_signal_window.csv \
-  --config scripts/qsss_profile_config.json \
-  --output /tmp/stock-selection-a-share/qsss_candidates.csv \
-  --fail-on-skipped \
-  --fail-on-empty-result
-uv run --with pandas --with numpy python scripts/allocate_candidate_capital.py --prices /tmp/stock-selection-a-share/prices.csv --candidates /tmp/stock-selection-a-share/qsss_candidates.csv --output /tmp/stock-selection-a-share/qsss_sized_candidates.csv --cash-budget 1000000 --lot-size 100 --fail-on-unallocated
-uv run --with pandas --with numpy python scripts/backtest_buy_hold.py \
-  --prices /tmp/stock-selection-a-share/prices.csv \
-  --candidates /tmp/stock-selection-a-share/qsss_sized_candidates.csv \
-  --output /tmp/stock-selection-a-share/qsss_backtest.csv \
-  --hold-days 5 \
-  --cost-bps 10 --slippage-bps 5 \
-  --fail-on-incomplete
-uv run --with pandas --with numpy python scripts/portfolio_equity_curve.py --backtests /tmp/stock-selection-a-share/qsss_backtest.csv --output /tmp/stock-selection-a-share/qsss_equity_curve.csv
-uv run --with pandas --with numpy python scripts/portfolio_overlap_report.py --backtests /tmp/stock-selection-a-share/qsss_backtest.csv --daily-output /tmp/stock-selection-a-share/qsss_daily_positions.csv --overlap-output /tmp/stock-selection-a-share/qsss_overlap.csv --summary-output /tmp/stock-selection-a-share/qsss_overlap_summary.json --max-gross-weight 1.0 --max-gross-notional 1000000 --max-cash-reserved 1000000 --require-capital-fields
+set -euo pipefail
+RUN_ID=$(date -u +%Y%m%dT%H%M%SZ)
+RUN_DIR="/tmp/stock-selection-p1-portfolio-capacity-$RUN_ID"
+SYMBOLS=000009,000021,000039,000060,000069,000100,000157,000301,000338,000400,000423,000568,000625,000661,000708,000768,000786,000895,000963,001979,002001,002007,002024,002129,002179,002230,002236,002241,002252,002271,002304,002311,002352,002410,002459,002460,002466,002493,002508,002555
+SIGNAL_DATES=(2025-03-20 2025-06-20 2025-09-19 2025-12-19 2026-04-17 2026-05-20)
+uv run --with pandas --with numpy --with baostock --with-requirements requirements-ml.txt python scripts/run_baostock_walk_forward.py \
+  --symbols "$SYMBOLS" \
+  --start-date 2024-01-01 \
+  --end-date 2026-05-29 \
+  --signal-dates "${SIGNAL_DATES[@]}" \
+  --output-dir "$RUN_DIR" \
+  --allocation-model portfolio_cash_lot_floor \
+  --cash-budget 3000000 \
+  --max-open-positions 10 \
+  --max-gross-weight 1.0 \
+  --max-gross-notional 3000000 \
+  --max-cash-reserved 3000000 \
+  --fail-on-symbol-overlap \
+  --drop-invalid-rows
+python3 scripts/validate_walk_forward_manifest.py \
+  --manifest "$RUN_DIR/run_manifest.json" \
+  --output "$RUN_DIR/run_manifest_validation.json" \
+  --signal-dates "${SIGNAL_DATES[@]}" \
+  --expected-symbol-count 40 \
+  --required-tradability-model tradestatus_entry_exit_only \
+  --required-limit-rules-model not_modeled
 ```
-`allocate_candidate_capital.py` 用信号日 close、现金预算和 lot size 生成可追溯 sizing 字段，模型为 `equal_cash_budget_lot_floor`。上例回测是未启用 `--require-tradable-bars` 的 close-to-close 基线；如需回测级可交易门禁，价格文件必须含 `tradestatus`，并显式加该参数。回测只透传资金字段；组合报告检查并发、同标的重叠、权重、名义金额和预留现金门禁；这些脚本仍不证明真实成交容量或判断涨跌停规则。当前真实门禁优先级以 `docs/reviews/REAL-SCENARIO-GATES-2026-05-30.md` 为准；复验目录可用 `scripts/summarize_walk_forward_run.py` 生成机器可检摘要，并用 `scripts/validate_walk_forward_artifacts.py` 交叉校验真实 CSV/JSON artifact 内容。
+
+artifact validator 的期望值从刚生成的 `run_manifest.json` 和 `qsss_run_summary.json` 提取，避免手填导致假绿或假失败：
+
+```bash
+eval "$(
+RUN_DIR="$RUN_DIR" python3 - <<'PY'
+import json
+import os
+import shlex
+from pathlib import Path
+
+
+def bash_array(name, values):
+    words = " ".join(shlex.quote(str(value)) for value in values)
+    print(f"{name}=({words})")
+
+
+run = Path(os.environ["RUN_DIR"])
+manifest = json.loads((run / "run_manifest.json").read_text())
+summary = json.loads((run / "qsss_run_summary.json").read_text())
+bash_array("VALIDATION_SIGNAL_DATES", manifest["signal_dates"])
+bash_array("VALIDATION_SYMBOLS", manifest["symbols"])
+bash_array("VALIDATION_CANDIDATES", [item["candidates"] for item in summary["signals"]])
+print("FINAL_EQUITY=" + shlex.quote(str(summary["equity"]["final_equity"])))
+print("PORTFOLIO_VIOLATIONS=" + shlex.quote(str(len(summary["portfolio"]["violations"]))))
+PY
+)"
+python3 scripts/validate_walk_forward_artifacts.py \
+  --run-dir "$RUN_DIR" \
+  --output "$RUN_DIR/run_artifact_validation.json" \
+  --signal-dates "${VALIDATION_SIGNAL_DATES[@]}" \
+  --expected-symbols "${VALIDATION_SYMBOLS[@]}" \
+  --expected-candidates "${VALIDATION_CANDIDATES[@]}" \
+  --expected-final-equity "$FINAL_EQUITY" \
+  --expected-portfolio-violations "$PORTFOLIO_VIOLATIONS" \
+  --required-allocation-model portfolio_cash_lot_floor \
+  --required-tradability-model tradestatus_entry_exit_only \
+  --required-limit-rules-model not_modeled \
+  --manifest-validation "$RUN_DIR/run_manifest_validation.json" \
+  --cash-budget 3000000 \
+  --allow-dropped-invalid-rows
+```
+
+若目标是复现已知组合风险暴露，而不是证明当前门禁通过，才在 runner 和 manifest validator 中同时使用 `--expect-portfolio-violations`。若 runner 显式设置 `--max-candidates M`，manifest validator 才同步传 `--expected-max-candidates M`。`portfolio_cash_lot_floor` 生成 `qsss_raw_candidates.csv`、`qsss_candidates.csv`、`qsss_sized_candidates.csv`、`qsss_skipped_candidates.csv` 和 `qsss_allocation_summary.json`；artifact validator 会交叉校验 allocation 与 overlap 的容量摘要。当前脚本仍不证明真实成交容量、券商订单或涨跌停规则。当前真实门禁优先级以 `docs/reviews/REAL-SCENARIO-GATES-2026-05-30.md` 为准。
 输入约定：`symbol` 必须按文本保存以保留前导零；校验脚本会拒绝 1 到 3 位纯数字代码，避免把 `000001` 这类 A 股代码被表格软件损坏后的值当作有效输入。`date` 支持 `YYYY-MM-DD` 或 `YYYYMMDD`；`volume` 单位必须在同一文件内保持一致，脚本只能校验数值和非负，无法从纯数值可靠判断“股/手/张/成交额”是否混用。QSSS-derived 的 `market` 只接受精确值 `A-share`，不会自动归一化 `A股`、`China` 等别名。
 
 常见字段映射：akshare 中文列需映射为 `股票代码 -> symbol`、`日期 -> date`、`成交量 -> volume`、`成交额 -> amount`、`换手率 -> turn`，`stock_zh_a_daily` 英文字段需映射 `volume -> volume`、`amount -> amount`、`turnover -> turn`，其中 `成交额` 或 `amount` 不得映射为 `volume`；tushare 需将 `ts_code` 去掉 `.SZ`/`.SH` 后写入 `symbol`，`trade_date -> date`，`vol -> volume`，`amount -> amount`，`turnover_rate -> turn`；yfinance 需将 `Date/Symbol/Open/High/Low/Close/Volume` 映射为小写标准字段。yfinance 映射后只满足通用 OHLCV；若用于 QSSS-derived，还必须外部补齐 `market=A-share`、真实上游 `prediction_score`、以及 `turn` 或 `turnover`，不能从 yfinance OHLCV 自动推断。不要把 `Adj Close` 静默替换为 `close`；使用复权价时要记录复权口径。多源合并时统一保留一个预测列，推荐先生成 `prediction_score = coalesce(prediction_score, prediction)`。

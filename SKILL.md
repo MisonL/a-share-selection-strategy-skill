@@ -77,7 +77,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `validate_ohlcv.py`：校验本地 CSV/Parquet 行情文件。
 - `score_candidates.py`：读取本地行情文件并输出候选股 CSV。
 - `generate_lightgbm_predictions.py`：可选 LightGBM 预测生成器，输出 `prediction_score`。
-- `allocate_candidate_capital.py`：可选候选资金分配脚本，按信号日 close、现金预算和 lot size 生成可追溯 sizing 字段。
+- `allocate_candidate_capital.py`：可选候选资金分配脚本，按信号日 close、现金预算和 lot size 生成可追溯 sizing 字段；候选表已有资金字段时默认拒绝，只有显式 `--overwrite-capital-fields` 才重算覆盖。
 - `backtest_buy_hold.py`：可选 close-to-close buy-hold 基线回测，可透传候选表资金字段。
 - `portfolio_equity_curve.py`：可选等权组合资金曲线生成器，读取一个或多个回测 CSV，并支持 final equity / max drawdown 失败门槛。
 - `portfolio_overlap_report.py`：可选组合并发持仓、同标的重叠、资金字段完整性，以及权重、名义金额和预留现金容量门禁报告。

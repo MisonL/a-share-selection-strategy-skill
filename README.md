@@ -94,7 +94,58 @@ uv run --with pandas --with numpy --with pyarrow python scripts/score_candidates
   --output /tmp/stock-selection-demo/candidates_parquet.csv
 ```
 
-### 6. 可选：校验 Skill 结构
+### 6. 可选：本地 demo 的 sizing、回测和组合报告
+
+快速开始第 4 步会使用 demo 数据末尾作为候选信号日；如果直接对该最新信号日运行 `--fail-on-incomplete` 回测，会因为缺少未来 5 个交易行而显式失败。这是正确门禁，不是脚本故障。
+
+下面的本地 smoke 先把评分窗口截到较早的 `2025-06-20`，再用完整 demo 行情做 sizing、5 日 close-to-close 基线回测、等权资金曲线和组合容量报告：
+
+```bash
+uv run --with pandas --with numpy python scripts/slice_prices_as_of.py \
+  --input /tmp/stock-selection-demo/prices_with_prediction.csv \
+  --output /tmp/stock-selection-demo/prices_signal_window_2025-06-20.csv \
+  --as-of-date 2025-06-20
+uv run --with pandas --with numpy python scripts/score_candidates.py \
+  --input /tmp/stock-selection-demo/prices_signal_window_2025-06-20.csv \
+  --config scripts/qsss_profile_config.json \
+  --output /tmp/stock-selection-demo/qsss_candidates_2025-06-20.csv \
+  --fail-on-skipped \
+  --fail-on-empty-result
+uv run --with pandas --with numpy python scripts/allocate_candidate_capital.py \
+  --prices /tmp/stock-selection-demo/prices.csv \
+  --candidates /tmp/stock-selection-demo/qsss_candidates_2025-06-20.csv \
+  --output /tmp/stock-selection-demo/qsss_sized_candidates_2025-06-20.csv \
+  --cash-budget 1000000 \
+  --lot-size 100 \
+  --fail-on-unallocated
+uv run --with pandas --with numpy python scripts/backtest_buy_hold.py \
+  --prices /tmp/stock-selection-demo/prices.csv \
+  --candidates /tmp/stock-selection-demo/qsss_sized_candidates_2025-06-20.csv \
+  --output /tmp/stock-selection-demo/qsss_backtest_2025-06-20.csv \
+  --hold-days 5 \
+  --cost-bps 10 \
+  --slippage-bps 5 \
+  --fail-on-incomplete
+uv run --with pandas --with numpy python scripts/portfolio_equity_curve.py \
+  --backtests /tmp/stock-selection-demo/qsss_backtest_2025-06-20.csv \
+  --output /tmp/stock-selection-demo/qsss_equity_curve_2025-06-20.csv \
+  --fail-on-incomplete
+uv run --with pandas --with numpy python scripts/portfolio_overlap_report.py \
+  --backtests /tmp/stock-selection-demo/qsss_backtest_2025-06-20.csv \
+  --daily-output /tmp/stock-selection-demo/qsss_daily_positions_2025-06-20.csv \
+  --overlap-output /tmp/stock-selection-demo/qsss_overlap_2025-06-20.csv \
+  --summary-output /tmp/stock-selection-demo/qsss_overlap_summary_2025-06-20.json \
+  --max-open-positions 10 \
+  --max-gross-weight 1.0 \
+  --max-gross-notional 1000000 \
+  --max-cash-reserved 1000000 \
+  --fail-on-symbol-overlap \
+  --require-capital-fields
+```
+
+这仍然只是合成 demo 数据上的本地基线 smoke。`prediction_score` 仍是合成输入；回测输出中的 `tradability_model=not_modeled` 和 `limit_rules_model=not_modeled` 仍表示未证明真实可交易性或涨跌停规则；资金曲线的 `final_equity` 不能写成真实收益验证。
+
+### 7. 可选：校验 Skill 结构
 
 `quick_validate.py` 来自本机安装的 skill-creator 工具，不随本仓库发布。维护者或 Skill 开发者可运行该检查；第三方环境没有校验器时可跳过。把下面的 `QUICK_VALIDATE` 替换为你机器上的校验器路径：
 

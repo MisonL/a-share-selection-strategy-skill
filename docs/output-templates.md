@@ -94,6 +94,17 @@
 - 即使 artifact validator 通过，也不能外推为真实成交容量、券商订单、涨跌停规则或全市场策略质量已验证。
 ```
 
+## Artifact 未校验 manifest 报告
+
+```markdown
+## Manifest 门禁未纳入 artifact 复验
+- `validate_walk_forward_artifacts.py` 未传 `--manifest-validation` 时，不会读取或校验 `run_manifest_validation.json`。
+- `artifact_validation.json` 中 `manifest_checked=false` 是明确证据，不能说 manifest 门禁也通过。
+- `exit 0` 和 `errors=[]` 只表示当前 artifact 内容与传入期望一致，不覆盖 manifest validator 的步骤顺序、退出码或门禁参数。
+- 如果同一 run 的 manifest validation 报告有 errors，只有传入 `--manifest-validation` 后 artifact validator 才会暴露 `manifest_errors`。
+- 合规路径是单独检查 `run_manifest_validation.json`，或把它传给 `--manifest-validation` 后重跑 artifact validator。
+```
+
 ## 组合 allocation 裁剪
 
 ```markdown

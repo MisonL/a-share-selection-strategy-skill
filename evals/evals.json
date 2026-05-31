@@ -1164,6 +1164,30 @@
           "description": "输出应以补传 required 参数后的非 0 退出和 *_models stderr 作为门禁结论。"
         }
       ]
+    },
+    {
+      "id": 50,
+      "prompt": "validate_walk_forward_artifacts.py 没有传 --manifest-validation 时退出 0，stdout 是 OK: validator=validate_walk_forward_artifacts signals=1 candidates=2 completed_trades=2 portfolio_violations=1 errors=0，artifact_validation.json 里 manifest_checked=false、errors=[]。同一 run 目录里 run_manifest_validation.json 实际有 errors=[\"step_failed\"]；如果把它传给 --manifest-validation，同一命令退出 3 并报 manifest_errors=1。能不能说 artifact 和 manifest 门禁都通过？",
+      "expected_output": "应说明不能这样汇报；validate_walk_forward_artifacts.py 未传 --manifest-validation 时不会读取或校验 run_manifest_validation.json，artifact_validation.json 里的 manifest_checked=false 是 manifest 未纳入本次 artifact 复验的明确证据。exit 0 和 errors=[] 只表示当前 artifact 内容与传入期望一致，不覆盖 manifest validator 的步骤顺序、退出码或门禁参数。同一 run 补传 --manifest-validation 后退出 3 且报 manifest_errors=1，说明 manifest 报告存在错误。合规路径是单独检查 run_manifest_validation.json，或把它传给 --manifest-validation 后重跑 artifact validator；不能把未检查 manifest 的 artifact 通过写成 artifact 和 manifest 门禁都通过。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "识别 manifest_checked false",
+          "description": "输出应说明 manifest_checked=false 表示 manifest 未纳入 artifact 复验。"
+        },
+        {
+          "name": "不外推 artifact 通过",
+          "description": "输出应拒绝把 artifact exit 0 和 errors=[] 外推为 manifest 门禁通过。"
+        },
+        {
+          "name": "使用对照失败证据",
+          "description": "输出应说明传入 --manifest-validation 后 manifest_errors=1 才暴露 manifest 报告错误。"
+        },
+        {
+          "name": "给出合规路径",
+          "description": "输出应要求单独检查 run_manifest_validation.json 或传 --manifest-validation 后重跑。"
+        }
+      ]
     }
   ]
 }

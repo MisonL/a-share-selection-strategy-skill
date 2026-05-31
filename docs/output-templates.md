@@ -92,6 +92,16 @@
 - 本地 `portfolio_cash_lot_floor` 仍不是券商订单、真实成交或真实现金容量证明。
 ```
 
+## 信号日价格不一致
+
+```markdown
+## Artifact 价格一致性门禁未通过
+- 候选 `close` 和 sized `signal_close` 必须等于 `prices_signal_window.csv` 的原始信号日 close。
+- `validate_walk_forward_artifacts.py` 返回非 0 且出现 `*_close_raw_mismatch` 或 `*_signal_close_raw_mismatch` 时，应按真实门禁失败处理。
+- `artifact_validation.json` 被写出不代表通过；必须看退出码、`errors=[]` 和 stdout 的 `errors=0`。
+- 可接受路径是修复可审计产物并重跑 validator，不能把原失败 run 改写成已通过。
+```
+
 ## Drop-invalid 数据口径
 
 ```markdown

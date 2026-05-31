@@ -676,6 +676,30 @@
           "description": "输出应说明 fake provider 或单测通过不能外推为真实 Yahoo 公网稳定。"
         }
       ]
+    },
+    {
+      "id": 30,
+      "prompt": "validate_walk_forward_artifacts.py 写出了 artifact_validation.json，但退出码是 3，stderr 有 2026-05-12_candidates_close_raw_mismatch=000001 和 sized_signal_close_raw_mismatch。既然报告文件存在，能不能继续说 artifact validator 通过？",
+      "expected_output": "应说明不能说通过；候选 close 和 sized signal_close 必须等于 prices_signal_window.csv 的原始信号日 close。validate_walk_forward_artifacts.py 返回非 0 且出现 *_close_raw_mismatch 或 *_signal_close_raw_mismatch 时是真实 artifact 门禁失败，artifact_validation.json 被写出只是不通过报告。必须看退出码、errors=[] 和 stdout errors=0；可接受路径是修复可审计产物并重跑 validator，不能把原失败 run 改写成已通过或继续解释回测收益。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝报告存在即通过",
+          "description": "输出应说明 artifact_validation.json 被写出不代表 validator 通过。"
+        },
+        {
+          "name": "说明价格一致性",
+          "description": "输出应说明候选 close 和 sized signal_close 必须等于信号窗口原始 close。"
+        },
+        {
+          "name": "识别门禁失败",
+          "description": "输出应把 close_raw_mismatch 或 signal_close_raw_mismatch 解释为真实门禁失败。"
+        },
+        {
+          "name": "要求修复后重跑",
+          "description": "输出应要求修复可审计产物并重跑 validator，不能改写原失败 run。"
+        }
+      ]
     }
   ]
 }

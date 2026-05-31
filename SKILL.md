@@ -177,6 +177,8 @@ total_score =
 
 `portfolio_cash_lot_floor` 的 `raw_candidates` 只是组合容量裁剪前候选池；进入回测的是 `qsss_candidates.csv` 和 `qsss_sized_candidates.csv`。如果 `skipped_candidates>0`，必须披露 `skip_reason_counts`，不能说全部 raw candidates 都进入回测或成交。
 
+候选 `close` 和 sized `signal_close` 必须等于对应 `prices_signal_window.csv` 中的原始信号日 close。`validate_walk_forward_artifacts.py` 对价格不一致返回非 0 时，应按真实门禁失败处理，不能因报告 JSON 已写出而解释为通过。
+
 复制执行真实 P1 门禁时，使用 README 的 P1 `portfolio_cash_lot_floor` bash 模板。README 模板会创建唯一 `RUN_DIR`，运行 runner，写出 `run_manifest_validation.json`，再从 `run_manifest.json` 和 `qsss_run_summary.json` 生成 artifact validator 参数。不要把 `RUN_DIR`、`SYMBOLS`、`SIGNAL_DATES`、`CANDIDATE_COUNTS`、`FINAL_EQUITY` 或 `PORTFOLIO_VIOLATIONS` 当字面值传给脚本。
 
 如果 runner 显式使用了 `--max-candidates M`，manifest validator 才同步传 `--expected-max-candidates M`。如果 runner 显式使用了 `--drop-invalid-rows`，summary 和 artifact validator 必须同步传 `--allow-dropped-invalid-rows`。

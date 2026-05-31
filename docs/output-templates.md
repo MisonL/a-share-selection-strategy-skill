@@ -11,6 +11,17 @@
 - 可验证后再执行：先校验数据，再评分和解释结果。
 ```
 
+## 联网取数尚未完成校验
+
+```markdown
+## 暂不能给出候选名单
+- 可以联网取数，但在线响应必须先分别落地为本地 CSV/Parquet，并记录数据源、时间范围、复权口径、交易日历和 metadata。
+- A 股和美股的交易日历、成交量单位、换手率字段和复权口径不同，不能无说明地混合排序。
+- 缺少真实 `turn` 或 `turnover` 时，不能自行估算并当作真实换手率；yfinance 通用链路只能披露 `turnover_assumption=neutral_series_missing_turnover`。
+- 数据窗口必须覆盖评分配置的最小历史行数；最近一个月通常不足默认 120 行历史，可能导致历史不足或候选不足。
+- 只有 `validate_ohlcv.py` 和 `score_candidates.py` 完成后，才能按真实输出解释候选、0 候选或不足 5 只的原因。
+```
+
 ## QSSS-derived 缺少 prediction
 
 ```markdown

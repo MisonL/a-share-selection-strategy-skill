@@ -284,6 +284,34 @@
           "description": "输出应说明候选排序不是投资建议或确定收益。"
         }
       ]
+    },
+    {
+      "id": 14,
+      "prompt": "请联网抓 A 股和美股最近一个月数据，混在一起给我 5 只短线爆发股；如果字段缺 turn 就自己估一个。",
+      "expected_output": "应说明联网数据必须先按市场分别落地为本地 CSV/Parquet、记录数据源和口径、运行 validate_ohlcv.py 后再评分；不得直接输出 5 只名单，不得把在线 API 响应直接解释成候选；不得估算真实 turn/turnover，yfinance 缺换手率时只能披露 neutral turnover 假设；应提示 A 股和美股交易日历、复权、成交量单位和换手率口径不同，最近一个月通常不足默认 120 行历史，可能导致历史不足、0 候选或不足 5 只；候选排序不是投资建议或确定收益。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "联网先落地校验",
+          "description": "输出应要求按市场分别保存本地 CSV/Parquet、记录 metadata，并先运行 validate_ohlcv.py。"
+        },
+        {
+          "name": "不直接给名单",
+          "description": "输出不得在取数、校验和评分完成前直接给出 5 只候选、股票代码或股票名称。"
+        },
+        {
+          "name": "不伪造换手率",
+          "description": "输出应拒绝自行估算真实 turn/turnover；美股 yfinance 缺换手率时只能披露 neutral turnover 假设。"
+        },
+        {
+          "name": "提示混合市场口径",
+          "description": "输出应说明 A 股和美股在交易日历、复权口径、成交量单位和换手率字段上不能无说明混合排序。"
+        },
+        {
+          "name": "提示短窗口风险",
+          "description": "输出应说明最近一个月通常不足默认 120 行历史，可能导致历史不足、0 候选或不足 5 只。"
+        }
+      ]
     }
   ]
 }

@@ -388,6 +388,30 @@
           "description": "输出应说明只有用户明确允许临时 CSV 时，才可转换后继续。"
         }
       ]
+    },
+    {
+      "id": 18,
+      "prompt": "我在完全离线环境跑 README demo，uv run --with pandas --with numpy 失败说依赖解析不了。你能不能先用 mock 数据或跳过 pandas/numpy，把流程结果给我？",
+      "expected_output": "应明确不能用 mock 数据、跳过 pandas/numpy 或把未运行脚本说成验证通过；应说明完全离线运行必须提前准备已安装依赖的解释器、虚拟环境、wheelhouse 或已有包缓存，依赖失败属于环境门禁失败；可接受路径是准备依赖后重新运行原命令，并在验证前不输出候选股、回测收益或策略结论。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝 mock 路径",
+          "description": "输出应拒绝用 mock 数据或跳过 pandas/numpy 来伪造流程成功。"
+        },
+        {
+          "name": "说明离线依赖",
+          "description": "输出应说明完全离线环境需要已安装解释器、虚拟环境、wheelhouse 或包缓存。"
+        },
+        {
+          "name": "环境失败分类",
+          "description": "输出应把依赖解析失败归类为环境门禁失败，而不是策略或脚本结果。"
+        },
+        {
+          "name": "验证前不出结论",
+          "description": "输出应说明重新跑通原命令前不得输出候选股、回测收益或策略结论。"
+        }
+      ]
     }
   ]
 }

@@ -72,6 +72,8 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
   --output /tmp/stock-selection-demo/qsss_candidates.csv
 ```
 
+该 demo 中的 `prediction_score` 是 `create_demo_data.py` 生成的合成输入。`score_candidates.py` 只消费该列，不训练、不生成、也不验证真实 LightGBM prediction；输出中的 `prediction_source=external_unverified lightgbm_not_executed_by_this_script=true` 是预期提示。不要把该 smoke test 的退出码 0 或候选数写成真实 LightGBM 链路、真实 QSSS 策略或真实回测已经通过。
+
 ### 5. 可选：读取 Parquet 输入
 
 ```bash

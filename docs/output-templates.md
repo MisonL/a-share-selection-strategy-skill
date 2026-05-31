@@ -164,6 +164,16 @@
 - 不能跳过 incomplete trades、手写空回测文件，或把候选结果解释成 5 日 buy-hold 收益。
 ```
 
+## Entry/exit-only 可交易性
+
+```markdown
+## 可交易性门禁范围
+- `tradability_model=tradestatus_entry_exit_only` 只说明入场日和退出日 `tradestatus=1`。
+- `--require-tradable-bars` 不扫描中间持有期每一行；中间日期 `tradestatus=0` 时仍可能得到 `status=complete`。
+- `completed_trades>0` 和收益字段只属于 close-to-close 基线，不证明全持有期每天可交易、涨跌停可成交或券商成交约束。
+- 必须同时披露 `limit_rules_model=not_modeled`。
+```
+
 ## 离线依赖缺失
 
 ```markdown

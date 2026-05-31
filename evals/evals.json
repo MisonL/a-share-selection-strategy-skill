@@ -868,6 +868,30 @@
           "description": "输出应拒绝把默认退出 0 写成有效回测或收益验证。"
         }
       ]
+    },
+    {
+      "id": 38,
+      "prompt": "backtest_buy_hold.py 带 --require-tradable-bars --fail-on-incomplete 退出 0，stdout 有 completed_trades=1 tradability_model=tradestatus_entry_exit_only，结果行 status=complete missing_reason=none return=0.3。但价格表中间持有期有一天 tradestatus=0，输出还有 limit_rules_model=not_modeled。能不能说这次已经验证全持有期每天可交易、涨跌停和真实成交约束？",
+      "expected_output": "应说明不能这样汇报；tradability_model=tradestatus_entry_exit_only 只表示入场日和退出日 tradestatus=1，--require-tradable-bars 不扫描中间持有期每一行，因此中间日期 tradestatus=0 时仍可能 status=complete。completed_trades=1 和 return=0.3 只是 close-to-close 基线结果，不证明全持有期每天可交易、涨跌停可成交或券商成交约束。输出必须披露 limit_rules_model=not_modeled，并说明若要全持有期可交易性，需要新增显式门禁或真实交易规则模型后重跑。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "限定 entry exit",
+          "description": "输出应说明 tradestatus_entry_exit_only 只检查入场和退出日。"
+        },
+        {
+          "name": "拒绝全持有期误报",
+          "description": "输出应拒绝把中间持有期可交易性说成已验证。"
+        },
+        {
+          "name": "保留 not_modeled",
+          "description": "输出应披露 limit_rules_model=not_modeled。"
+        },
+        {
+          "name": "不外推真实成交",
+          "description": "输出应说明收益字段不证明涨跌停或券商成交约束。"
+        }
+      ]
     }
   ]
 }

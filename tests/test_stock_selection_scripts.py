@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -254,6 +255,45 @@ class StockSelectionScriptTests(unittest.TestCase):
             self.assertIn("turnover_assumption=neutral_series_missing_turnover", stdout)
             self.assertIn("generic mode: turn/turnover missing", stderr)
             self.assertIn("no QSSS turnover gate is applied", stderr)
+
+    def test_cli_writes_threshold_diagnostics_csv(self) -> None:
+        config = load_config("example_config.json")
+        config["thresholds"]["min_total_score"] = 999
+        frame = build_frame(include_turn=False)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            config_path = Path(tmpdir) / "config.json"
+            output_path = Path(tmpdir) / "candidates.csv"
+            diagnostics_path = Path(tmpdir) / "diagnostics.csv"
+            frame.to_csv(input_path, index=False)
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = scorer.main(
+                    [
+                        "--input",
+                        str(input_path),
+                        "--config",
+                        str(config_path),
+                        "--output",
+                        str(output_path),
+                        "--diagnostics-output",
+                        str(diagnostics_path),
+                    ]
+                )
+            diagnostics = pd.read_csv(diagnostics_path)
+            output_exists = output_path.exists()
+
+        self.assertEqual(0, code, stderr.getvalue())
+        self.assertTrue(output_exists)
+        self.assertEqual(2, len(diagnostics))
+        self.assertEqual({False}, set(diagnostics["passed_thresholds"]))
+        self.assertEqual({False}, set(diagnostics["selected_candidate"]))
+        self.assertTrue(
+            diagnostics["failed_thresholds"].str.contains("min_total_score").all()
+        )
+        self.assertIn("effective_empty_result=true", stdout.getvalue())
 
     def test_cli_missing_qsss_prediction_returns_error(self) -> None:
         frame = build_frame(include_turn=True)

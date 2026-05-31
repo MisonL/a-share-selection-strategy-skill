@@ -3,11 +3,33 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 from stock_selection_metrics import is_qsss_mode
+
+
+DIAGNOSTIC_COLUMNS = [
+    "symbol",
+    "name",
+    "market",
+    "date",
+    "close",
+    "volume",
+    "rsi",
+    "volatility",
+    "momentum_score",
+    "trend_score",
+    "prediction_score",
+    "explosion_score",
+    "risk_score",
+    "total_score",
+    "passed_thresholds",
+    "selected_candidate",
+    "failed_thresholds",
+]
 
 
 def threshold_masks(
@@ -106,6 +128,76 @@ def add_threshold_summary(
         "threshold_failed_symbols": int(len(scored) - len(thresholded)),
         "threshold_failures": threshold_failure_counts(scored, config),
     }
+
+
+def threshold_diagnostics(
+    *,
+    scored: pd.DataFrame,
+    ranked: pd.DataFrame,
+    config: dict[str, Any],
+) -> list[dict[str, Any]]:
+    if scored.empty:
+        return []
+    masks = threshold_masks(scored, config["thresholds"])
+    selected_symbols = set(ranked["symbol"].astype(str)) if not ranked.empty else set()
+    rows = []
+    for index, row in scored.iterrows():
+        failed = [
+            name for name, mask in masks.items() if not bool(mask.loc[index])
+        ]
+        rows.append(diagnostic_row(row, failed, selected_symbols))
+    return rows
+
+
+def diagnostic_row(
+    row: pd.Series,
+    failed_thresholds: list[str],
+    selected_symbols: set[str],
+) -> dict[str, Any]:
+    symbol = str(row["symbol"])
+    return {
+        "symbol": symbol,
+        "name": row.get("name", symbol),
+        "market": row.get("market", ""),
+        "date": row.get("date", ""),
+        "close": row.get("close"),
+        "volume": row.get("volume"),
+        "rsi": row.get("rsi"),
+        "volatility": row.get("volatility"),
+        "momentum_score": row.get("momentum_score"),
+        "trend_score": row.get("trend_score"),
+        "prediction_score": row.get("prediction_score"),
+        "explosion_score": row.get("explosion_score"),
+        "risk_score": row.get("risk_score"),
+        "total_score": row.get("total_score"),
+        "passed_thresholds": not failed_thresholds,
+        "selected_candidate": symbol in selected_symbols,
+        "failed_thresholds": ";".join(failed_thresholds),
+    }
+
+
+def write_threshold_diagnostics(rows: list[dict[str, Any]], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows, columns=DIAGNOSTIC_COLUMNS).to_csv(path, index=False)
+
+
+def strict_gate_errors(
+    summary: dict[str, Any],
+    *,
+    fail_on_skipped: bool,
+    fail_on_empty_result: bool,
+) -> list[str]:
+    errors = []
+    if fail_on_skipped and summary.get("failed_symbols", 0):
+        errors.append(f"failed_symbols={summary['failed_symbols']}")
+    if fail_on_skipped and summary.get("insufficient_history_symbols", 0):
+        errors.append(
+            f"insufficient_history_symbols={summary['insufficient_history_symbols']}"
+        )
+    if fail_on_empty_result and summary.get("effective_empty_result"):
+        reason = summary.get("empty_result_reason", "unknown")
+        errors.append(f"effective_empty_result=true empty_result_reason={reason}")
+    return errors
 
 
 def complete_summary(summary: dict[str, Any], candidates: int) -> dict[str, Any]:

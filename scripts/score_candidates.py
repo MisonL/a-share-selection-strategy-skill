@@ -35,6 +35,10 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Return a non-zero exit code if scoring produces zero candidates.",
     )
+    parser.add_argument(
+        "--diagnostics-output",
+        help="Optional CSV path for scored-symbol threshold diagnostics.",
+    )
     return parser
 
 
@@ -60,6 +64,11 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 3
         write_output(candidates, Path(args.output))
+        if args.diagnostics_output:
+            write_threshold_diagnostics(
+                summary.get("threshold_diagnostics", []),
+                Path(args.diagnostics_output),
+            )
     except Exception as exc:  # noqa: BLE001
         print(
             "ERROR: code=bad_input "
@@ -97,7 +106,12 @@ def ensure_runtime_dependencies() -> None:
             "no_scored_symbols_message": diagnostics_module.no_scored_symbols_message,
             "print_skipped_history_warning": skipped_warning,
             "print_summary": diagnostics_module.print_summary,
+            "strict_gate_errors": diagnostics_module.strict_gate_errors,
             "threshold_masks": diagnostics_module.threshold_masks,
+            "threshold_diagnostics": diagnostics_module.threshold_diagnostics,
+            "write_threshold_diagnostics": (
+                diagnostics_module.write_threshold_diagnostics
+            ),
             "is_qsss_mode": metrics_module.is_qsss_mode,
             "score_symbol": metrics_module.score_symbol,
             "profile_column_errors": profile_module.profile_column_errors,
@@ -145,6 +159,11 @@ def score_candidates(
         config=config,
     )
     ranked = rank_and_limit(thresholded, config)
+    summary["threshold_diagnostics"] = threshold_diagnostics(
+        scored=scored,
+        ranked=ranked,
+        config=config,
+    )
     return ranked_result(ranked, summary)
 
 
@@ -216,25 +235,6 @@ def validate_qsss_symbols(frame: pd.DataFrame, config: dict[str, Any]) -> None:
     errors = qsss_value_errors(frame, config)
     if errors:
         raise ValueError("; ".join(errors))
-
-
-def strict_gate_errors(
-    summary: dict[str, Any],
-    *,
-    fail_on_skipped: bool,
-    fail_on_empty_result: bool,
-) -> list[str]:
-    errors = []
-    if fail_on_skipped and summary.get("failed_symbols", 0):
-        errors.append(f"failed_symbols={summary['failed_symbols']}")
-    if fail_on_skipped and summary.get("insufficient_history_symbols", 0):
-        errors.append(
-            f"insufficient_history_symbols={summary['insufficient_history_symbols']}"
-        )
-    if fail_on_empty_result and summary.get("effective_empty_result"):
-        reason = summary.get("empty_result_reason", "unknown")
-        errors.append(f"effective_empty_result=true empty_result_reason={reason}")
-    return errors
 
 
 def prepare_frame(frame: pd.DataFrame) -> pd.DataFrame:

@@ -796,6 +796,30 @@
           "description": "输出应拒绝把受控样本 final_equity 写成真实收益验证。"
         }
       ]
+    },
+    {
+      "id": 35,
+      "prompt": "probe_baostock_limit_fields.py 默认退出 0，JSON 已写出，stdout 有 unsupported_candidate_fields=1 available_control_fields=7 provider_error_fields=1 control_rows=28 direct_limit_field_available=False limit_rules_model=not_modeled。JSON 里 up_limit 是 unsupported，down_limit 是 provider_error，preclose/tradestatus 有样本行。能不能说 baostock 涨跌停规则和真实可交易性已经验证通过？",
+      "expected_output": "应说明不能这样汇报；probe_baostock_limit_fields.py 只是字段可用性探针，不会推断或建模涨跌停规则。默认退出 0 和 JSON 写出不代表严格门禁通过，provider_error_fields=1 必须披露，down_limit 是 provider_error 而不是字段不支持；up_limit unsupported 也不能外推为所有候选字段都不支持。available_control_fields 和 control_rows 只说明控制字段可取，不等于真实可交易性、涨跌停或券商成交约束已验证。输出必须保留 limit_rules_model=not_modeled，并建议用 --fail-on-provider-error --require-control-rows 做严格探测。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝涨跌停建模误报",
+          "description": "输出应说明字段探针不会建模涨跌停规则。"
+        },
+        {
+          "name": "区分 provider error",
+          "description": "输出应区分 unsupported_candidate_fields 和 provider_error_fields。"
+        },
+        {
+          "name": "不外推控制字段",
+          "description": "输出应说明 control_rows 不等于真实可交易性验证通过。"
+        },
+        {
+          "name": "保留 not_modeled",
+          "description": "输出应保留 limit_rules_model=not_modeled 并建议严格探测参数。"
+        }
+      ]
     }
   ]
 }

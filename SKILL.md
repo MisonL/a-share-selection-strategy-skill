@@ -205,7 +205,7 @@ P1 `portfolio_cash_lot_floor` 复验的完整示例见 README 对应小节。该
 
 若真实源数据存在已知不可交易或缺失数值行，只能在取数时显式传入 `--drop-invalid-rows`。后续 summary 和 artifact validator 必须同时显式传入 `--allow-dropped-invalid-rows`，并确认 metadata 满足 `invalid_rows == dropped_invalid_rows`、清洗后 `non_trading_rows=0` 且 `tradestatus_missing_rows=0`。该模式不等于源数据无异常。
 
-涨跌停规则仍未建模；如需确认 baostock 字段能力，只能用 `probe_baostock_limit_fields.py` 做字段可用性探测并记录真实错误码。
+涨跌停规则仍未建模；如需确认 baostock 字段能力，只能用 `probe_baostock_limit_fields.py` 做字段可用性探测并记录真实错误码。探针默认退出 0 时仍必须检查 `provider_error_fields`、`unsupported_candidate_fields`、`control_rows` 和 `limit_rules_model=not_modeled`；真实报告优先使用 `--fail-on-provider-error --require-control-rows`。控制字段可取不等于涨跌停规则或真实可交易性已建模。
 
 ## Agent 工作流
 

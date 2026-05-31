@@ -122,6 +122,16 @@
 - 必须披露 `final_equity`、`max_drawdown`、`quality_errors` 和组合容量/重叠违规；受控样本的 `final_equity` 不能写成真实收益验证。
 ```
 
+## Baostock 涨跌停字段探针
+
+```markdown
+## Baostock 字段探针结果
+- `probe_baostock_limit_fields.py` 是字段可用性探测，不会推断或建模涨跌停规则。
+- 默认退出码为 0 时仍必须披露 `unsupported_candidate_fields`、`provider_error_fields`、`available_control_fields`、`control_rows` 和 `limit_rules_model`。
+- `provider_error_fields` 不是字段不支持；应保留 provider 错误码和错误信息，必要时用 `--fail-on-provider-error --require-control-rows` 作为严格门禁。
+- 控制字段有样本行不等于真实可交易性、涨跌停或券商成交约束已验证。
+```
+
 ## Drop-invalid 数据口径
 
 ```markdown

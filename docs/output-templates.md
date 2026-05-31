@@ -124,6 +124,16 @@
 - 即使使用 `generate_lightgbm_predictions.py`，也必须单独核验训练窗口、标签、特征、时间序列切分、跳过标的和未来泄漏风险。
 ```
 
+## LightGBM prediction 部分成功
+
+```markdown
+## LightGBM prediction 门禁未完整通过
+- 非严格模式退出码为 0 但 `skipped_symbols>0` 时，只能说明部分标的写出了预测。
+- 必须披露 `raw_symbols`、`predicted_symbols`、`skipped_symbols` 和 `skipped_symbol_examples`。
+- 下游 `validate_ohlcv.py` 或 `score_candidates.py` 通过，只覆盖已写出的预测文件，不能反推上游全部标的通过。
+- 完整门禁应使用 `--fail-on-skipped`，或显式确认 `raw_symbols == predicted_symbols` 且 `skipped_symbols == 0`。
+```
+
 ## 0 候选解释
 
 ```markdown

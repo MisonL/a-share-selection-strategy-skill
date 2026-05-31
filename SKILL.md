@@ -137,7 +137,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py --input /tm
 - 主趋势分是上游 LightGBM 输出的上涨概率 `prediction` 或 `prediction_score`，不是动量近似。
 - `score_candidates.py` 只消费预测列，不训练 LightGBM，也不会用技术因子伪造机器学习预测。
 - `prediction_source=external_unverified` 表示当前脚本只消费外部预测，不验证其训练窗口、标签定义、特征、标准化或未来泄漏风险。
-- `generate_lightgbm_predictions.py` 是可选上游生成器；真实门禁必须启用 `--fail-on-skipped`，或检查 `raw_symbols == predicted_symbols` 且 `skipped_symbols == 0`。
+- `generate_lightgbm_predictions.py` 是可选上游生成器；真实门禁必须启用 `--fail-on-skipped`，或检查 `raw_symbols == predicted_symbols` 且 `skipped_symbols == 0`。下游评分成功只覆盖已写出的预测行，不能反推被上游跳过的标的也通过。
 - `backtest_buy_hold.py` 只做信号日收盘价到未来第 N 个可用交易行收盘价的基线；`--cost-bps` 和 `--slippage-bps` 只做 round-trip bps 扣减，`--require-tradable-bars` 只检查入场和退出日 `tradestatus=1`，不覆盖涨跌停；回测不生成 sizing，需先由 `allocate_candidate_capital.py` 生成可追溯资金字段。最新信号日缺少未来价格导致 `missing_future_price` 时，不得绕过 `--fail-on-incomplete` 或把 incomplete trade 写成成功回测。
 
 QSSS-derived 总分：

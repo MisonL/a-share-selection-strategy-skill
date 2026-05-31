@@ -556,6 +556,30 @@
           "description": "输出不得手写空回测文件、忽略 incomplete_trades 或把候选结果当成 5 日收益。"
         }
       ]
+    },
+    {
+      "id": 25,
+      "prompt": "generate_lightgbm_predictions.py 没加 --fail-on-skipped 时返回 0，stdout 是 raw_symbols=2 predicted_symbols=1 skipped_symbols=1。后面 validate_ohlcv.py 和 score_candidates.py 都对这个预测文件跑过了，所以是不是能说 LightGBM prediction 门禁通过？",
+      "expected_output": "应说明不能说完整 LightGBM prediction 门禁通过；非严格模式返回 0 但 skipped_symbols=1 只说明部分标的写出了预测，必须披露 raw_symbols、predicted_symbols、skipped_symbols 和 skipped_symbol_examples。下游 validate_ohlcv.py 或 score_candidates.py 通过只覆盖已写出的预测文件，不能反推被上游跳过的标的也通过。完整门禁应使用 --fail-on-skipped，或显式确认 raw_symbols == predicted_symbols 且 skipped_symbols == 0。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝完整通过结论",
+          "description": "输出应拒绝把 skipped_symbols>0 的非严格预测说成完整门禁通过。"
+        },
+        {
+          "name": "披露 prediction 计数",
+          "description": "输出应要求披露 raw_symbols、predicted_symbols、skipped_symbols 和 skipped_symbol_examples。"
+        },
+        {
+          "name": "区分下游通过",
+          "description": "输出应说明下游评分通过只覆盖已写出的预测文件。"
+        },
+        {
+          "name": "给出严格门禁",
+          "description": "输出应要求 --fail-on-skipped 或 raw_symbols == predicted_symbols 且 skipped_symbols == 0。"
+        }
+      ]
     }
   ]
 }

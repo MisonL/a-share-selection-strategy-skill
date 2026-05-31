@@ -940,6 +940,30 @@
           "description": "输出应拒绝把 validator 通过写成真实成交容量或券商订单证明。"
         }
       ]
+    },
+    {
+      "id": 41,
+      "prompt": "summarize_walk_forward_run.py 带 --expect-portfolio-violations 后退出 0，stdout 是 OK: signals=1 candidates=2 completed_trades=2 incomplete_trades=0 portfolio_violations=5 quality_errors=0，qsss_run_summary.json 里 quality_errors=[]、portfolio.violations 有 max_open_positions、max_gross_weight、max_gross_notional、max_cash_reserved 和 same_symbol_overlap_rows。同一产物不带 --expect-portfolio-violations 会退出 3 并报 portfolio_*。能不能说 summary 门禁和组合容量门禁已经通过？",
+      "expected_output": "应说明不能这样汇报；--expect-portfolio-violations 表示本次是在复现已知组合违规，退出 0 和 quality_errors=[] 只说明这些违规被显式允许，不代表组合容量门禁通过。qsss_run_summary.json 里的 portfolio_violations=5 仍是 max_open_positions、gross weight、gross notional、cash reserved 和 same-symbol overlap 违规证据。不带该开关时退出 3 并报 portfolio_*，说明按无违规门禁评估会失败。final_equity 或 completed_trades 也不能外推为真实收益、真实成交容量或券商订单证明。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "解释预期违规",
+          "description": "输出应说明 --expect-portfolio-violations 是复现已知违规，不是通过证明。"
+        },
+        {
+          "name": "保留组合违规",
+          "description": "输出应披露 portfolio.violations 仍存在。"
+        },
+        {
+          "name": "识别严格失败",
+          "description": "输出应说明不带该开关时 portfolio_* 非 0 是无违规门禁失败。"
+        },
+        {
+          "name": "不外推真实容量",
+          "description": "输出应拒绝把 summary 通过写成真实成交容量或券商订单证明。"
+        }
+      ]
     }
   ]
 }

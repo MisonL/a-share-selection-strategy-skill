@@ -9,19 +9,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-import pandas as pd
-
-from stock_selection_data import parse_dates, read_table
-from lightgbm_prediction_summary import (
-    build_summary,
-    skipped_summary,
-    symbol_summary,
-    write_json_summary,
-)
-from stock_selection_metrics import calculate_macd, calculate_rsi
-from validate_ohlcv import validate_frame
-
 
 FEATURE_COLUMNS = [
     "momentum_1m",
@@ -58,6 +45,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fail-on-skipped", action="store_true")
     args = parser.parse_args(argv)
     try:
+        ensure_runtime_dependencies()
         result, summary = generate_predictions(
             read_table(Path(args.input)),
             horizon=args.horizon,
@@ -86,6 +74,33 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def ensure_runtime_dependencies() -> None:
+    if "pd" in globals():
+        return
+    import numpy as numpy_module
+    import pandas as pandas_module
+    import lightgbm_prediction_summary as summary_module
+    import stock_selection_data as data_module
+    import stock_selection_metrics as metrics_module
+    import validate_ohlcv as validator_module
+
+    globals().update(
+        {
+            "np": numpy_module,
+            "pd": pandas_module,
+            "parse_dates": data_module.parse_dates,
+            "read_table": data_module.read_table,
+            "build_summary": summary_module.build_summary,
+            "skipped_summary": summary_module.skipped_summary,
+            "symbol_summary": summary_module.symbol_summary,
+            "write_json_summary": summary_module.write_json_summary,
+            "calculate_macd": metrics_module.calculate_macd,
+            "calculate_rsi": metrics_module.calculate_rsi,
+            "validate_frame": validator_module.validate_frame,
+        }
+    )
+
+
 def generate_predictions(
     frame: pd.DataFrame,
     *,
@@ -94,6 +109,7 @@ def generate_predictions(
     min_history_rows: int,
     model_deps: dict[str, Any] | None = None,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
+    ensure_runtime_dependencies()
     validate_options(horizon, train_ratio, min_history_rows)
     errors = validate_frame(frame, min_history_rows=0)
     if errors:

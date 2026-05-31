@@ -44,6 +44,15 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--timeout-seconds",
                 "--fail-on-fetch-error",
             ],
+            "generate_lightgbm_predictions.py": [
+                "--input",
+                "--output",
+                "--horizon",
+                "--train-ratio",
+                "--min-history-rows",
+                "--summary-output",
+                "--fail-on-skipped",
+            ],
             "score_candidates.py": [
                 "--input",
                 "--config",
@@ -68,12 +77,13 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 for option in expected_options:
                     self.assertIn(option, result.stdout)
 
-    def test_runtime_paths_still_fail_without_pandas(self) -> None:
+    def test_runtime_paths_still_fail_without_dataframe_dependencies(self) -> None:
         validate_script = ROOT / "scripts/validate_ohlcv.py"
         score_script = ROOT / "scripts/score_candidates.py"
         fetch_baostock_script = ROOT / "scripts/fetch_baostock_a_share.py"
         fetch_akshare_script = ROOT / "scripts/fetch_akshare_a_share.py"
         fetch_yfinance_script = ROOT / "scripts/fetch_yfinance_ohlcv.py"
+        lightgbm_script = ROOT / "scripts/generate_lightgbm_predictions.py"
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "candidates.csv"
@@ -83,6 +93,8 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             akshare_metadata = Path(tmpdir) / "akshare-metadata.json"
             yfinance_output = Path(tmpdir) / "yfinance.csv"
             yfinance_metadata = Path(tmpdir) / "yfinance-metadata.json"
+            lightgbm_output = Path(tmpdir) / "predictions.csv"
+            lightgbm_summary = Path(tmpdir) / "prediction-summary.json"
             cases = [
                 [
                     str(validate_script),
@@ -137,6 +149,15 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                     "--metadata-output",
                     str(yfinance_metadata),
                 ],
+                [
+                    str(lightgbm_script),
+                    "--input",
+                    str(Path(tmpdir) / "missing-prices.csv"),
+                    "--output",
+                    str(lightgbm_output),
+                    "--summary-output",
+                    str(lightgbm_summary),
+                ],
             ]
             for command in cases:
                 with self.subTest(script=Path(command[0]).name):
@@ -149,7 +170,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                     )
 
                     self.assertNotEqual(0, result.returncode)
-                    self.assertIn("pandas", result.stderr)
+                    self.assertRegex(result.stderr, "pandas|numpy")
             self.assertFalse(output.exists())
             self.assertFalse(baostock_output.exists())
             self.assertFalse(baostock_metadata.exists())
@@ -157,3 +178,5 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             self.assertFalse(akshare_metadata.exists())
             self.assertFalse(yfinance_output.exists())
             self.assertFalse(yfinance_metadata.exists())
+            self.assertFalse(lightgbm_output.exists())
+            self.assertFalse(lightgbm_summary.exists())

@@ -137,7 +137,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py --input /tm
 
 - 默认市场为 A 股日线，只保留 `60`、`68`、`00`、`30` 开头的标的，并排除 `8`、`4` 开头的标的。
 - 主趋势分是上游 LightGBM 输出的上涨概率 `prediction` 或 `prediction_score`，不是动量近似。
-- `score_candidates.py` 只消费预测列，不训练 LightGBM，也不会用技术因子伪造机器学习预测。
+- `score_candidates.py` 只消费预测列，不训练 LightGBM，也不会用技术因子伪造机器学习预测。若 `prediction_score` 和 `prediction` 同时存在，当前评分优先消费 `prediction_score`；冲突时不能用较高的 `prediction` 解释阈值通过，应先统一或审计预测列。
 - `prediction_source=external_unverified` 表示当前脚本只消费外部预测，不验证其训练窗口、标签定义、特征、标准化或未来泄漏风险。
 - `generate_lightgbm_predictions.py` 是可选上游生成器；真实门禁必须启用 `--fail-on-skipped`，或检查 `raw_symbols == predicted_symbols` 且 `skipped_symbols == 0`。下游评分成功只覆盖已写出的预测行，不能反推被上游跳过的标的也通过。
 - `prediction_scope=latest_probability_repeated_for_scoring` 表示生成器把最新预测概率重复写入该标的所有行，供评分脚本消费当前概率；这不是逐日历史预测序列。

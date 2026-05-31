@@ -181,7 +181,7 @@ Skill is valid!
 | `close` | 收盘价 |
 | `volume` | 成交量 |
 
-QSSS-derived 配置要求输入包含 `market` 列，且 A 股记录使用 `A-share`；同时必须包含 `prediction` 或 `prediction_score` 列，取值范围为 0 到 1。该列表示上游模型已经生成的上涨概率；评分脚本不会训练 LightGBM，也不会用动量分伪造机器学习预测。
+QSSS-derived 配置要求输入包含 `market` 列，且 A 股记录使用 `A-share`；同时必须包含 `prediction` 或 `prediction_score` 列，取值范围为 0 到 1。该列表示上游模型已经生成的上涨概率；评分脚本不会训练 LightGBM，也不会用动量分伪造机器学习预测。若输入同时包含 `prediction_score` 和 `prediction`，当前评分优先使用 `prediction_score`；两列冲突时，不能因为 `prediction` 更高就认定应通过阈值，必须先统一或审计预测列。
 
 如果 QSSS-derived 输入缺少 `prediction` 或 `prediction_score`，不要运行评分产出候选股；使用 `docs/output-templates.md` 中的“QSSS-derived 缺少 prediction”模板说明失败原因。
 

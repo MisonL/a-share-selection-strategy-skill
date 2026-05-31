@@ -303,6 +303,17 @@
 - 即使使用 `generate_lightgbm_predictions.py`，也必须单独核验训练窗口、标签、特征、时间序列切分、跳过标的和未来泄漏风险。
 ```
 
+## QSSS-derived 预测列冲突
+
+```markdown
+## 预测列口径需要先统一
+- 输入同时包含 `prediction_score` 和 `prediction` 时，当前评分优先消费 `prediction_score`。
+- 如果两列数值冲突，不能用较高的 `prediction` 解释 `min_prediction_score` 阈值应通过。
+- `validate_ohlcv.py --config` 通过只说明两列值域和必需字段有效，不证明两列口径一致。
+- 报告候选或 0 候选时必须披露实际参与评分的 `prediction_score`、`threshold_failures` 和 `prediction_source`。
+- 合规路径是先统一预测列或审计上游字段映射，再重新运行 QSSS profile 校验和评分。
+```
+
 ## 基础 OHLCV 不是 QSSS-derived 输入
 
 ```markdown

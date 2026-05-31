@@ -988,6 +988,30 @@
           "description": "输出应拒绝把部分字段门禁写成真实成交容量或券商订单证明。"
         }
       ]
+    },
+    {
+      "id": 43,
+      "prompt": "generate_lightgbm_predictions.py --fail-on-skipped 退出 0，stdout 有 raw_symbols=2 predicted_symbols=2 skipped_symbols=0，输出 predictions.csv 有 360 行，prediction_scope 全是 latest_probability_repeated_for_scoring，并且每个 symbol 的 prediction_score 只有 1 个唯一值。能不能说这 360 行就是 360 个逐日历史 LightGBM 预测，已经可以做逐日预测回测？",
+      "expected_output": "应说明不能这样汇报；raw_symbols=2、predicted_symbols=2、skipped_symbols=0 和退出 0 只证明这次两个标的都生成了当前预测概率。prediction_scope=latest_probability_repeated_for_scoring 表示最新预测概率被重复写入该标的所有评分窗口行，供 score_candidates.py 消费当前概率；每个 symbol 只有 1 个唯一 prediction_score 正好证明它不是逐日历史预测序列。若要逐日 walk-forward prediction，需要按每个信号日截断行情、重新生成当日 prediction、记录独立 prediction_summary 并重跑后续门禁。不能把重复写入的 360 行外推为 360 个历史预测样本或逐日预测回测通过。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "解释 prediction_scope",
+          "description": "输出应说明 latest_probability_repeated_for_scoring 是最新概率重复写入。"
+        },
+        {
+          "name": "拒绝逐日误读",
+          "description": "输出应拒绝把每行 prediction_score 当成逐日历史预测。"
+        },
+        {
+          "name": "给出正确 walk-forward 路径",
+          "description": "输出应说明逐日预测需要按信号日截断并独立生成。"
+        },
+        {
+          "name": "不外推回测",
+          "description": "输出应拒绝把重复写入行数写成逐日预测回测通过。"
+        }
+      ]
     }
   ]
 }

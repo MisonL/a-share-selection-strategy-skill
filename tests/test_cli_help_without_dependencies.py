@@ -54,6 +54,14 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--fail-on-skipped",
             ],
             "slice_prices_as_of.py": ["--input", "--output", "--as-of-date"],
+            "allocate_candidate_capital.py": [
+                "--prices",
+                "--candidates",
+                "--output",
+                "--cash-budget",
+                "--lot-size",
+                "--fail-on-unallocated",
+            ],
             "score_candidates.py": [
                 "--input",
                 "--config",
@@ -86,6 +94,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
         fetch_yfinance_script = ROOT / "scripts/fetch_yfinance_ohlcv.py"
         lightgbm_script = ROOT / "scripts/generate_lightgbm_predictions.py"
         slice_script = ROOT / "scripts/slice_prices_as_of.py"
+        allocate_script = ROOT / "scripts/allocate_candidate_capital.py"
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "candidates.csv"
@@ -98,6 +107,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             lightgbm_output = Path(tmpdir) / "predictions.csv"
             lightgbm_summary = Path(tmpdir) / "prediction-summary.json"
             slice_output = Path(tmpdir) / "slice.csv"
+            allocation_output = Path(tmpdir) / "allocated.csv"
             cases = [
                 [
                     str(validate_script),
@@ -170,6 +180,17 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                     "--as-of-date",
                     "2026-05-20",
                 ],
+                [
+                    str(allocate_script),
+                    "--prices",
+                    str(Path(tmpdir) / "missing-prices.csv"),
+                    "--candidates",
+                    str(Path(tmpdir) / "missing-candidates.csv"),
+                    "--output",
+                    str(allocation_output),
+                    "--cash-budget",
+                    "10000",
+                ],
             ]
             for command in cases:
                 with self.subTest(script=Path(command[0]).name):
@@ -193,3 +214,4 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             self.assertFalse(lightgbm_output.exists())
             self.assertFalse(lightgbm_summary.exists())
             self.assertFalse(slice_output.exists())
+            self.assertFalse(allocation_output.exists())

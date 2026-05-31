@@ -34,6 +34,16 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--fail-on-fetch-error",
                 "--drop-invalid-rows",
             ],
+            "fetch_yfinance_ohlcv.py": [
+                "--symbols",
+                "--start-date",
+                "--end-date",
+                "--output",
+                "--metadata-output",
+                "--market",
+                "--timeout-seconds",
+                "--fail-on-fetch-error",
+            ],
             "score_candidates.py": [
                 "--input",
                 "--config",
@@ -63,6 +73,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
         score_script = ROOT / "scripts/score_candidates.py"
         fetch_baostock_script = ROOT / "scripts/fetch_baostock_a_share.py"
         fetch_akshare_script = ROOT / "scripts/fetch_akshare_a_share.py"
+        fetch_yfinance_script = ROOT / "scripts/fetch_yfinance_ohlcv.py"
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "candidates.csv"
@@ -70,6 +81,8 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             baostock_metadata = Path(tmpdir) / "baostock-metadata.json"
             akshare_output = Path(tmpdir) / "akshare.csv"
             akshare_metadata = Path(tmpdir) / "akshare-metadata.json"
+            yfinance_output = Path(tmpdir) / "yfinance.csv"
+            yfinance_metadata = Path(tmpdir) / "yfinance-metadata.json"
             cases = [
                 [
                     str(validate_script),
@@ -111,6 +124,19 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                     "--metadata-output",
                     str(akshare_metadata),
                 ],
+                [
+                    str(fetch_yfinance_script),
+                    "--symbols",
+                    "AAPL",
+                    "--start-date",
+                    "2026-05-20",
+                    "--end-date",
+                    "2026-05-20",
+                    "--output",
+                    str(yfinance_output),
+                    "--metadata-output",
+                    str(yfinance_metadata),
+                ],
             ]
             for command in cases:
                 with self.subTest(script=Path(command[0]).name):
@@ -129,3 +155,5 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             self.assertFalse(baostock_metadata.exists())
             self.assertFalse(akshare_output.exists())
             self.assertFalse(akshare_metadata.exists())
+            self.assertFalse(yfinance_output.exists())
+            self.assertFalse(yfinance_metadata.exists())

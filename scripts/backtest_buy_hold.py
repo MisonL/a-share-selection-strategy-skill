@@ -9,19 +9,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
-from stock_selection_data import parse_dates, read_table
-from stock_selection_backtest_rows import (
-    LIMIT_RULES_MODEL,
-    build_summary,
-    completed_row,
-    incomplete_row,
-)
-from stock_selection_capital import add_candidate_capital_fields
-from stock_selection_tradability import tradability_failure_reason
-from validate_ohlcv import validate_frame
-
 
 @dataclass(frozen=True)
 class BacktestOptions:
@@ -45,6 +32,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fail-on-incomplete", action="store_true")
     args = parser.parse_args(argv)
     try:
+        ensure_runtime_dependencies()
         result, summary = run_backtest(
             read_table(Path(args.prices)),
             read_table(Path(args.candidates)),
@@ -75,6 +63,32 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def ensure_runtime_dependencies() -> None:
+    if "pd" in globals():
+        return
+    import pandas as pandas_module
+    import stock_selection_backtest_rows as row_module
+    import stock_selection_capital as capital_module
+    import stock_selection_data as data_module
+    import stock_selection_tradability as tradability_module
+    import validate_ohlcv as validator_module
+
+    globals().update(
+        {
+            "pd": pandas_module,
+            "LIMIT_RULES_MODEL": row_module.LIMIT_RULES_MODEL,
+            "add_candidate_capital_fields": capital_module.add_candidate_capital_fields,
+            "build_summary": row_module.build_summary,
+            "completed_row": row_module.completed_row,
+            "incomplete_row": row_module.incomplete_row,
+            "parse_dates": data_module.parse_dates,
+            "read_table": data_module.read_table,
+            "tradability_failure_reason": tradability_module.tradability_failure_reason,
+            "validate_frame": validator_module.validate_frame,
+        }
+    )
+
+
 def run_backtest(
     prices: pd.DataFrame,
     candidates: pd.DataFrame,
@@ -84,6 +98,7 @@ def run_backtest(
     slippage_bps: float = 0.0,
     require_tradable_bars: bool = False,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
+    ensure_runtime_dependencies()
     if hold_days < 1:
         raise ValueError("hold-days must be >= 1")
     if cost_bps < 0:

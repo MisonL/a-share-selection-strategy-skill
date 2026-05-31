@@ -73,6 +73,16 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--hold-days",
                 "--max-open-positions",
             ],
+            "backtest_buy_hold.py": [
+                "--prices",
+                "--candidates",
+                "--output",
+                "--hold-days",
+                "--cost-bps",
+                "--slippage-bps",
+                "--require-tradable-bars",
+                "--fail-on-incomplete",
+            ],
             "score_candidates.py": [
                 "--input",
                 "--config",
@@ -107,6 +117,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
         slice_script = ROOT / "scripts/slice_prices_as_of.py"
         allocate_script = ROOT / "scripts/allocate_candidate_capital.py"
         portfolio_allocate_script = ROOT / "scripts/allocate_portfolio_candidate_capital.py"
+        backtest_script = ROOT / "scripts/backtest_buy_hold.py"
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "candidates.csv"
@@ -124,6 +135,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             portfolio_sized = Path(tmpdir) / "portfolio-sized.csv"
             portfolio_skipped = Path(tmpdir) / "portfolio-skipped.csv"
             portfolio_summary = Path(tmpdir) / "portfolio-summary.json"
+            backtest_output = Path(tmpdir) / "backtest.csv"
             cases = [
                 [
                     str(validate_script),
@@ -234,6 +246,15 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                     "--max-cash-reserved",
                     "10000",
                 ],
+                [
+                    str(backtest_script),
+                    "--prices",
+                    str(Path(tmpdir) / "missing-prices.csv"),
+                    "--candidates",
+                    str(Path(tmpdir) / "missing-candidates.csv"),
+                    "--output",
+                    str(backtest_output),
+                ],
             ]
             for command in cases:
                 with self.subTest(script=Path(command[0]).name):
@@ -262,3 +283,4 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             self.assertFalse(portfolio_sized.exists())
             self.assertFalse(portfolio_skipped.exists())
             self.assertFalse(portfolio_summary.exists())
+            self.assertFalse(backtest_output.exists())

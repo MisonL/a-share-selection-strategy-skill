@@ -218,7 +218,7 @@ uv run --with pandas --with numpy --with baostock python scripts/fetch_baostock_
   --fail-on-fetch-error
 ```
 
-akshare A 股入口会先尝试 `stock_zh_a_hist` 中文列；该接口失败或空结果时，会在 metadata 中记录 `fallback_errors` 并转用 `stock_zh_a_daily` 英文字段。真实环境失败时命令应非 0，不得改用 mock 或缓存样例冒充成功。
+akshare A 股入口会先尝试 `stock_zh_a_hist` 中文列；该接口失败或空结果时，会在 metadata 中记录 `fallback_errors` 并转用 `stock_zh_a_daily` 英文字段。真实环境失败时命令应非 0，不得改用 mock 或缓存样例冒充成功。取数窗口必须覆盖评分配置的最小历史行数；默认通用配置需要每个标的至少 `120` 行，`2024-01-01` 到 `2024-06-30` 这类半年窗口可能不足。
 
 ```bash
 uv run --with pandas --with numpy --with akshare python scripts/fetch_akshare_a_share.py \
@@ -229,6 +229,20 @@ uv run --with pandas --with numpy --with akshare python scripts/fetch_akshare_a_
   --metadata-output /tmp/stock-selection-akshare/metadata.json \
   --fail-on-fetch-error
 ```
+
+取数成功后继续使用通用配置校验和评分，并保留逐标的阈值诊断：
+
+```bash
+uv run --with pandas --with numpy python scripts/validate_ohlcv.py \
+  --input /tmp/stock-selection-akshare/prices.csv
+uv run --with pandas --with numpy python scripts/score_candidates.py \
+  --input /tmp/stock-selection-akshare/prices.csv \
+  --config scripts/example_config.json \
+  --output /tmp/stock-selection-akshare/candidates.csv \
+  --diagnostics-output /tmp/stock-selection-akshare/score_diagnostics.csv
+```
+
+如果 `candidates=0` 且 `effective_empty_result=true`，这表示脚本成功运行但没有标的通过当前阈值；不要写成“产生候选股”。用 `score_diagnostics.csv` 查看每个已评分 symbol 的 `failed_thresholds`。如果 metadata 中 `fallback_errors` 非空，必须说明主接口失败且已使用 fallback provider；fallback 成功不等于主接口稳定可用。akshare 输出可满足通用 OHLCV 和 `turn` 口径，但仍不生成真实 `prediction/prediction_score`，不能直接解释成 QSSS-derived 或 LightGBM 链路通过。
 
 美股等通用 OHLCV 可先通过 yfinance 落地，再走通用校验和评分。真实环境失败时命令会非 0，不得改用 mock 或缓存样例冒充成功；门禁还必须检查 metadata 中 `rows > 0`、`symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`。该脚本写入原始 `Close`，不会用 `Adj Close` 静默替代 `close`；`--timeout-seconds` 用于限制每票拉取超时。
 

@@ -9,8 +9,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
 
 OUTPUT_COLUMNS = ["symbol", "name", "market", "date", "open", "high", "low", "close", "volume", "amount", "turn"]
 NUMERIC_COLUMNS = ["open", "high", "low", "close", "volume", "amount", "turn"]
@@ -51,7 +49,16 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def ensure_runtime_dependencies() -> None:
+    if "pd" in globals():
+        return
+    import pandas as pandas_module
+
+    globals().update({"pd": pandas_module})
+
+
 def fetch_prices(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any]]:
+    ensure_runtime_dependencies()
     try:
         import akshare as ak
     except Exception as exc:  # noqa: BLE001
@@ -203,6 +210,7 @@ def apply_quality_policy(
     metadata: dict[str, Any],
     drop_invalid_rows: bool,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
+    ensure_runtime_dependencies()
     invalid = invalid_row_details(frame)
     metadata = dict(metadata)
     metadata["invalid_rows"] = len(invalid)
@@ -233,6 +241,7 @@ def invalid_row_details(frame: pd.DataFrame) -> list[dict[str, Any]]:
 
 
 def invalid_numeric_columns(row: pd.Series) -> list[str]:
+    ensure_runtime_dependencies()
     invalid = []
     for column in NUMERIC_COLUMNS:
         value = pd.to_numeric(pd.Series([row.get(column)]), errors="coerce").iloc[0]

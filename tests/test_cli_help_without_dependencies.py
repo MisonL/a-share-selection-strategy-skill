@@ -25,6 +25,15 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--fail-on-fetch-error",
                 "--drop-invalid-rows",
             ],
+            "fetch_akshare_a_share.py": [
+                "--symbols",
+                "--start-date",
+                "--end-date",
+                "--output",
+                "--metadata-output",
+                "--fail-on-fetch-error",
+                "--drop-invalid-rows",
+            ],
             "score_candidates.py": [
                 "--input",
                 "--config",
@@ -53,11 +62,14 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
         validate_script = ROOT / "scripts/validate_ohlcv.py"
         score_script = ROOT / "scripts/score_candidates.py"
         fetch_baostock_script = ROOT / "scripts/fetch_baostock_a_share.py"
+        fetch_akshare_script = ROOT / "scripts/fetch_akshare_a_share.py"
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "candidates.csv"
             baostock_output = Path(tmpdir) / "baostock.csv"
             baostock_metadata = Path(tmpdir) / "baostock-metadata.json"
+            akshare_output = Path(tmpdir) / "akshare.csv"
+            akshare_metadata = Path(tmpdir) / "akshare-metadata.json"
             cases = [
                 [
                     str(validate_script),
@@ -86,6 +98,19 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                     "--metadata-output",
                     str(baostock_metadata),
                 ],
+                [
+                    str(fetch_akshare_script),
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2026-05-20",
+                    "--end-date",
+                    "2026-05-20",
+                    "--output",
+                    str(akshare_output),
+                    "--metadata-output",
+                    str(akshare_metadata),
+                ],
             ]
             for command in cases:
                 with self.subTest(script=Path(command[0]).name):
@@ -102,3 +127,5 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             self.assertFalse(output.exists())
             self.assertFalse(baostock_output.exists())
             self.assertFalse(baostock_metadata.exists())
+            self.assertFalse(akshare_output.exists())
+            self.assertFalse(akshare_metadata.exists())

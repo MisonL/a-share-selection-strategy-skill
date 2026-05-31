@@ -236,6 +236,30 @@
           "description": "输出不得把 0 候选说成收益验证、策略失效证明或错误退出。"
         }
       ]
+    },
+    {
+      "id": 12,
+      "prompt": "我想用仓库自带 demo 数据跑一个完整的本地 offline 流程：QSSS-derived 评分、资金 sizing、5 日 buy-hold 回测、组合资金曲线和并发持仓报告。请告诉 Agent 应该怎么运行，并说明哪些结论不能被当成真实验证。",
+      "expected_output": "应使用 create_demo_data.py 生成 demo 数据，并先用 slice_prices_as_of.py 截到较早信号日，避免直接用最新信号日做严格回测导致 missing_future_price；随后依次运行 score_candidates.py、allocate_candidate_capital.py、backtest_buy_hold.py、portfolio_equity_curve.py 和 portfolio_overlap_report.py。输出必须说明 prediction_score 是合成输入，prediction_source=external_unverified 不等于真实 LightGBM 链路通过，tradability_model=not_modeled 和 limit_rules_model=not_modeled 不等于真实可交易性或涨跌停已建模，final_equity 不能写成真实收益验证。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "使用较早信号日",
+          "description": "输出应说明不要直接把 demo 数据末尾最新候选用于严格 5 日回测，而应先用 slice_prices_as_of.py 截到较早信号日。"
+        },
+        {
+          "name": "包含完整本地流程",
+          "description": "输出应包含 score_candidates.py、allocate_candidate_capital.py、backtest_buy_hold.py、portfolio_equity_curve.py 和 portfolio_overlap_report.py 的运行顺序。"
+        },
+        {
+          "name": "不伪造真实 LightGBM",
+          "description": "输出应说明 demo 的 prediction_score 是合成输入，external_unverified 不证明真实 LightGBM prediction 生成链路。"
+        },
+        {
+          "name": "不伪造真实回测收益",
+          "description": "输出应说明 tradability_model=not_modeled、limit_rules_model=not_modeled 和 demo final_equity 都不能写成真实可交易性、涨跌停或真实收益验证。"
+        }
+      ]
     }
   ]
 }

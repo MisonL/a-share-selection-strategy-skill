@@ -190,6 +190,22 @@ uv run --with pandas --with numpy --with scikit-learn --with lightgbm \
   --fail-on-skipped
 ```
 
+生成后可用 QSSS-derived 配置继续校验和评分，形成本地 demo 的 prediction 生成闭环：
+
+```bash
+uv run --with pandas --with numpy python scripts/validate_ohlcv.py \
+  --input /tmp/stock-selection-ml-demo/prices_generated_prediction.csv \
+  --config scripts/qsss_profile_config.json
+uv run --with pandas --with numpy python scripts/score_candidates.py \
+  --input /tmp/stock-selection-ml-demo/prices_generated_prediction.csv \
+  --config scripts/qsss_profile_config.json \
+  --output /tmp/stock-selection-ml-demo/qsss_candidates.csv \
+  --fail-on-skipped \
+  --fail-on-empty-result
+```
+
+该闭环只证明合成 demo 数据上的本地脚本可执行。`prediction_scope=latest_probability_repeated_for_scoring` 表示最新预测概率被重复写入该标的所有行，供评分脚本消费当前概率，不是逐日历史预测序列。评分摘要中的 `prediction_source=external_unverified lightgbm_not_executed_by_this_script=true` 表示评分脚本本身不验证上游训练过程；即使上一条命令刚生成了 `prediction_score`，仍需单独核验训练窗口、标签、特征、时间序列切分、跳过标的和未来泄漏风险，不能把候选数或退出码写成真实策略收益、真实可交易性或真实 A 股全市场有效性证明。
+
 真实 A 股行情可先落地为本地文件，再进入同一链路。下面示例使用 baostock，输出行情 CSV 和元数据 JSON；真实环境失败时命令会非 0，不应改用 mock 数据。门禁不能只看命令退出码，还必须检查 metadata 中 `rows > 0`、`symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`、`invalid_rows == 0`、`non_trading_rows == 0`。脚本会输出 `preclose/pctChg/tradestatus/isST`；若 baostock 返回停牌或异常行导致不可交易或 `volume/amount/turn` 为空，脚本默认失败；只有显式加 `--drop-invalid-rows` 时才会丢弃异常行，并在 metadata 记录 `dropped_invalid_rows` 和示例。
 
 ```bash

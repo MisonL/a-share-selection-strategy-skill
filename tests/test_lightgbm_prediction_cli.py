@@ -92,21 +92,66 @@ class LightgbmPredictionCliTests(unittest.TestCase):
 
     def test_cli_reports_missing_lightgbm_dependency_without_output(self) -> None:
         frame = build_frame(days=180, include_turn=True)
-        with tempfile.TemporaryDirectory() as tmpdir:
-            input_path = Path(tmpdir) / "prices.csv"
-            output_path = Path(tmpdir) / "predictions.csv"
-            frame.to_csv(input_path, index=False)
-            stderr = StringIO()
-            with redirect_stderr(stderr):
-                code = generator.main(
-                    ["--input", str(input_path), "--output", str(output_path)]
-                )
-        if code == 0:
-            self.assertTrue(output_path.exists())
-            return
-        self.assertEqual(2, code)
-        self.assertFalse(output_path.exists())
-        self.assertIn("lightgbm and scikit-learn", stderr.getvalue())
+        original_loader = generator.load_model_dependencies
+        generator.load_model_dependencies = lambda: (_ for _ in ()).throw(
+            RuntimeError("LightGBM prediction requires lightgbm and scikit-learn")
+        )
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                input_path = Path(tmpdir) / "prices.csv"
+                output_path = Path(tmpdir) / "predictions.csv"
+                summary_path = Path(tmpdir) / "summary.json"
+                frame.to_csv(input_path, index=False)
+                stderr = StringIO()
+                with redirect_stderr(stderr):
+                    code = generator.main(
+                        [
+                            "--input",
+                            str(input_path),
+                            "--output",
+                            str(output_path),
+                            "--summary-output",
+                            str(summary_path),
+                        ]
+                    )
+            self.assertEqual(2, code)
+            self.assertFalse(output_path.exists())
+            self.assertFalse(summary_path.exists())
+            self.assertIn("lightgbm and scikit-learn", stderr.getvalue())
+        finally:
+            generator.load_model_dependencies = original_loader
+
+    def test_cli_all_skipped_reports_reasons_without_output(self) -> None:
+        frame = build_frame(days=120, include_turn=True)
+        deps = {"classifier": RecordingClassifier, "scaler": RecordingScaler}
+        original_loader = generator.load_model_dependencies
+        generator.load_model_dependencies = lambda: deps
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                input_path = Path(tmpdir) / "prices.csv"
+                output_path = Path(tmpdir) / "predictions.csv"
+                summary_path = Path(tmpdir) / "summary.json"
+                frame.to_csv(input_path, index=False)
+                stderr = StringIO()
+                with redirect_stderr(stderr):
+                    code = generator.main(
+                        [
+                            "--input",
+                            str(input_path),
+                            "--output",
+                            str(output_path),
+                            "--summary-output",
+                            str(summary_path),
+                            "--min-history-rows",
+                            "150",
+                        ]
+                    )
+            self.assertEqual(2, code)
+            self.assertFalse(output_path.exists())
+            self.assertFalse(summary_path.exists())
+            self.assertIn("skipped_reasons=insufficient_history:2", stderr.getvalue())
+        finally:
+            generator.load_model_dependencies = original_loader
 
     def test_cli_fail_on_skipped_returns_error_without_output(self) -> None:
         full_history = build_frame(days=180, include_turn=True)

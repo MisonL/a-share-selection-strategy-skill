@@ -133,7 +133,15 @@ def generate_predictions(
             skipped.append(f"{symbol}:{exc}")
             symbol_summaries.append(skipped_summary(group, str(exc)))
     if not outputs:
-        raise ValueError(f"no symbols predicted; skipped_symbols={','.join(skipped)}")
+        reason_counts = skipped_reason_counts(symbol_summaries)
+        reason_text = ",".join(
+            f"{reason}:{count}" for reason, count in reason_counts.items()
+        )
+        reason_detail = f"; skipped_reasons={reason_text}" if reason_text else ""
+        raise ValueError(
+            f"no symbols predicted; skipped_symbols={','.join(skipped)}"
+            f"{reason_detail}"
+        )
     result = pd.concat(outputs, ignore_index=True)
     return result, build_summary(
         prepared,
@@ -152,6 +160,16 @@ def validate_options(horizon: int, train_ratio: float, min_history_rows: int) ->
         raise ValueError("train-ratio must be >= 0.5 and < 1.0")
     if min_history_rows < 100:
         raise ValueError("min-history-rows must be >= 100")
+
+
+def skipped_reason_counts(symbol_summaries: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in symbol_summaries:
+        if item.get("status") != "skipped":
+            continue
+        reason = str(item.get("skipped_reason") or "unknown")
+        counts[reason] = counts.get(reason, 0) + 1
+    return counts
 
 
 def load_model_dependencies() -> dict[str, Any]:

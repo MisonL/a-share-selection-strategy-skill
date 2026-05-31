@@ -81,7 +81,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `backtest_buy_hold.py`：可选 close-to-close buy-hold 基线回测，可透传候选表资金字段。
 - `portfolio_equity_curve.py`：可选等权组合资金曲线生成器，读取一个或多个回测 CSV，并支持 final equity / max drawdown 失败门槛。默认只按 complete trades 等权计算权益曲线，不使用输入 `weight` 加权；`incomplete_trades>0` 时 `OK` 和 `final_equity` 不代表全量回测通过，严格门禁需显式使用 `--fail-on-incomplete`。
 - `portfolio_overlap_report.py`：可选组合并发持仓、同标的重叠、资金字段完整性，以及权重、名义金额和预留现金容量门禁报告。未传 `--require-capital-fields` 时，单项金额门禁可只验证自身字段；若 `capital_fields_missing` 非空或 `weight_capacity_verifiable=false`，不能说完整组合容量字段已验证。
-- `summarize_walk_forward_run.py`：汇总 walk-forward run 目录，输出 `qsss_run_summary.json` 并执行 metadata、prediction、回测、资金曲线和组合容量门禁。`--expect-portfolio-violations` 只用于复现已知组合风险；退出 0 且 `quality_errors=[]` 时如果 `portfolio_violations>0`，仍不能说组合容量门禁通过。
+- `summarize_walk_forward_run.py`：汇总 walk-forward run 目录，输出 `qsss_run_summary.json` 并执行 metadata、prediction、回测、资金曲线和组合容量门禁。`--required-tradability-model` 和 `--required-limit-rules-model` 只有传入时才检查模型口径；省略后 `quality_errors=[]` 不能说明这些模型门禁通过。`--expect-portfolio-violations` 只用于复现已知组合风险；退出 0 且 `quality_errors=[]` 时如果 `portfolio_violations>0`，仍不能说组合容量门禁通过。
 - `validate_walk_forward_manifest.py`：校验一键 runner manifest 的步骤顺序、退出码和门禁参数；不替代真实行情、prediction 或回测执行。
 - `validate_walk_forward_artifacts.py`：校验 walk-forward 复验目录中的真实 CSV/JSON artifact 内容，包括信号窗口、候选原始信号日 close、sizing 的 signal close、回测、资金曲线、组合 summary 和 manifest 校验报告。`--expected-portfolio-violations` 只校验违规数量符合预期；即使退出 0 且 `errors=[]`，`portfolio_violations>0` 仍表示组合容量门禁存在违规。
 - `slice_prices_as_of.py`：按信号日截断本地行情，防止用未来行情生成候选。`--as-of-date` 是包含该日及之前的截止日期，不保证输出存在该日期；候选信号日应以切片后的真实 `date_max` 或候选 CSV 的 `date` 为准。
@@ -186,7 +186,7 @@ total_score =
 
 复制执行真实 P1 门禁时，使用 README 的 P1 `portfolio_cash_lot_floor` bash 模板。README 模板会创建唯一 `RUN_DIR`，运行 runner，写出 `run_manifest_validation.json`，再从 `run_manifest.json` 和 `qsss_run_summary.json` 生成 artifact validator 参数。不要把 `RUN_DIR`、`SYMBOLS`、`SIGNAL_DATES`、`CANDIDATE_COUNTS`、`FINAL_EQUITY` 或 `PORTFOLIO_VIOLATIONS` 当字面值传给脚本。
 
-如果 runner 显式使用了 `--max-candidates M`，manifest validator 才同步传 `--expected-max-candidates M`。如果 runner 显式使用了 `--drop-invalid-rows`，summary 和 artifact validator 必须同步传 `--allow-dropped-invalid-rows`。
+如果 runner 显式使用了 `--max-candidates M`，manifest validator 才同步传 `--expected-max-candidates M`。如果 runner 显式使用了 `--drop-invalid-rows`，summary 和 artifact validator 必须同步传 `--allow-dropped-invalid-rows`。手工运行 summary 时必须显式传入 `--required-tradability-model` 和 `--required-limit-rules-model` 才能把 `quality_errors=[]` 用作模型口径门禁证据。
 
 `portfolio_overlap_report.py` 和 `summarize_walk_forward_run.py` 可在严格门禁失败时写出诊断文件。退出码非 0、stderr 含 `strict gate failed` 或 `quality_errors` 非空时，`output_written=true` 只表示失败报告已落盘，不代表组合容量、资金曲线或 P1 门禁通过。
 

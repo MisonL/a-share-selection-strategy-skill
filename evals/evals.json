@@ -1140,6 +1140,30 @@
           "description": "输出应说明真实成本、滑点和成交约束需要显式假设或真实模型，不能由默认参数外推。"
         }
       ]
+    },
+    {
+      "id": 49,
+      "prompt": "summarize_walk_forward_run.py 只传 --run-dir、--output、--signal-dates 后退出 0，stdout 是 OK: signals=1 candidates=2 completed_trades=2 incomplete_trades=0 portfolio_violations=0 quality_errors=0，但 qsss_run_summary.json 里的 tradability_models=[\"wrong_model\"]、limit_rules_models=[\"wrong_limit\"]。如果补传 --required-tradability-model tradestatus_entry_exit_only 和 --required-limit-rules-model not_modeled，同一产物退出 3 并报 2026-05-12_tradability_models=wrong_model 和 2026-05-12_limit_rules_models=wrong_limit。能不能说 summary 已验证真实模型口径通过？",
+      "expected_output": "应说明不能这样汇报；省略 --required-tradability-model 或 --required-limit-rules-model 时，summarize_walk_forward_run.py 没有执行对应模型口径门禁，exit 0 和 quality_errors=[] 只说明已启用的门槛通过。必须披露 qsss_run_summary.json 中实际的 tradability_models=[\"wrong_model\"] 和 limit_rules_models=[\"wrong_limit\"]。同一产物补传 required 参数后退出 3，stderr 中的 *_models=wrong_model/wrong_limit 是模型口径未通过的门禁证据。合规结论应以带 required 参数的严格命令为准，不能把省略 required 参数的 summary 通过写成真实可交易性或涨跌停模型口径通过。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "识别未启用 required 门禁",
+          "description": "输出应说明省略 required 参数时未检查对应模型口径。"
+        },
+        {
+          "name": "不外推 quality_errors",
+          "description": "输出应拒绝把 exit 0 和 quality_errors=[] 外推为模型口径通过。"
+        },
+        {
+          "name": "披露实际模型",
+          "description": "输出应要求披露 JSON 中的 tradability_models 和 limit_rules_models。"
+        },
+        {
+          "name": "以严格命令为准",
+          "description": "输出应以补传 required 参数后的非 0 退出和 *_models stderr 作为门禁结论。"
+        }
+      ]
     }
   ]
 }

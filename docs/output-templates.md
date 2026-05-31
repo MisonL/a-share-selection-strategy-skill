@@ -145,6 +145,17 @@
 - 必须披露 `final_equity`、`max_drawdown`、`quality_errors` 和组合容量/重叠违规；受控样本的 `final_equity` 不能写成真实收益验证。
 ```
 
+## Summary 模型口径门禁未启用
+
+```markdown
+## Summary 未验证模型口径
+- `summarize_walk_forward_run.py` 省略 `--required-tradability-model` 或 `--required-limit-rules-model` 时，不会对对应模型口径执行严格门禁。
+- 此时 `exit 0` 和 `quality_errors=[]` 只说明已启用的门槛通过，不能证明真实可交易性或涨跌停规则模型符合预期。
+- 必须披露 summary JSON 中实际的 `tradability_models` 和 `limit_rules_models`。
+- 若同一产物补传 required 参数后返回非 0，stderr 中的 `*_models=...` 才是模型口径未通过的门禁证据。
+- 合规路径是用 required 参数重跑 summary，并以该严格命令的退出码、`quality_errors` 和 stderr 作为模型口径结论。
+```
+
 ## Baostock 涨跌停字段探针
 
 ```markdown

@@ -285,6 +285,17 @@
 - 合规表述是“debug 级字段校验通过，真实评分不可用，未产生候选”。
 ```
 
+## 切片后历史窗口不足
+
+```markdown
+## 切片后仍不能评分
+- 原始 QSSS-derived 文件通过 `validate_ohlcv.py`，不代表 `slice_prices_as_of.py` 截断后的文件仍满足评分历史窗口。
+- `slice_prices_as_of.py` 退出 0 只说明切片结果非空并已写出；必须披露切片 stdout 中的 `rows`、`date_min` 和 `date_max`。
+- 对切片后的文件重新运行校验和评分；最终以 `score_candidates.py` 的退出码、`insufficient_history_symbols` 和 `output_written` 为准。
+- `code=bad_input output_written=false` 或 `insufficient_history_symbols>0` 表示切片后不可评分，不是成功 0 候选。
+- 合规表述是“原始文件校验通过、切片步骤成功，但切片后历史窗口未通过；需要选择更晚 as-of 日期或补足历史后重跑”。
+```
+
 ## 候选结果
 
 ```markdown

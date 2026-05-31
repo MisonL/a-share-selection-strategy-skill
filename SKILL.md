@@ -171,6 +171,7 @@ total_score =
 - `empty_result_reason` 会区分 `universe_filtered_all`、`threshold_filtered_all` 等成功空结果原因。
 - 所有股票都因历史不足或输入异常无法评分时，脚本应显式失败。
 - `validate_ohlcv.py --min-history-rows 0` 或低于评分配置的历史门槛，只能证明基础字段和 profile 字段校验通过；不能证明 `score_candidates.py` 可按配置评分。
+- `slice_prices_as_of.py` 退出 0 只说明切片文件写出且非空；如果切到较早日期，仍要对切片后的文件重新校验并以 `score_candidates.py` 的历史窗口、退出码和 `insufficient_history_symbols` 为准。
 - `threshold_failures` 是各阈值独立失败计数，不是互斥分类。
 - 自动化门禁可传入 `--fail-on-skipped` 和 `--fail-on-empty-result`，让跳过标的或 0 候选以非 0 退出。
 - `failed_symbols>0` 表示存在单股运行期异常，即使输出其他候选，也应进入复核或失败处理。

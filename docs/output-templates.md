@@ -196,6 +196,17 @@
 - 必须同时披露 `limit_rules_model=not_modeled`。
 ```
 
+## 零成本 Buy-hold 基线
+
+```markdown
+## 回测收益仍是零成本基线
+- 默认未传 `--cost-bps` 和 `--slippage-bps` 时，`cost_bps=0.0`、`slippage_bps=0.0`。
+- 此时 `return` 只是 `gross_return` 扣减 0 后的 close-to-close 基线结果，不是含真实交易成本和滑点的净收益。
+- `exit 0`、`status=complete`、`completed_trades>0` 或输出 CSV 存在，只证明入场/出场价格和严格 incomplete 门禁通过。
+- 必须披露 `cost_model`、`slippage_model`、`tradability_model` 和 `limit_rules_model`；`limit_rules_model=not_modeled` 仍不证明涨跌停或券商成交约束。
+- 若要声称净收益口径，需要传入可追溯成本/滑点假设，或接入真实成交与交易规则模型后重跑。
+```
+
 ## 资金曲线含 incomplete trades
 
 ```markdown

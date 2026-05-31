@@ -1116,6 +1116,30 @@
           "description": "输出应拒绝把该结果写成真实组合收益、真实成交容量或券商订单证明。"
         }
       ]
+    },
+    {
+      "id": 48,
+      "prompt": "backtest_buy_hold.py --require-tradable-bars --fail-on-incomplete 退出 0，stdout 有 completed_trades=1 incomplete_trades=0 cost_bps=0.0 slippage_bps=0.0，CSV 里 status=complete gross_return=0.05 return=0.05 cost_model=round_trip_bps slippage_model=round_trip_bps tradability_model=tradestatus_entry_exit_only limit_rules_model=not_modeled。能不能说这条 return 已经验证了含真实交易成本、滑点和成交约束的净收益？",
+      "expected_output": "应说明不能这样汇报；默认未传 --cost-bps 和 --slippage-bps 时 cost_bps=0.0、slippage_bps=0.0，return 只是 gross_return 扣减 0 后的 close-to-close 基线结果，不是含真实交易成本和滑点的净收益。status=complete、completed_trades=1、exit 0 和输出 CSV 存在只证明该信号有入场/出场收盘价且严格 incomplete 门禁通过，不证明真实交易成本、真实滑点、全持有期可交易、涨跌停或券商成交约束。必须披露 cost_bps、slippage_bps、cost_model、slippage_model、tradability_model 和 limit_rules_model；若要声称净收益口径，需要传入可追溯成本/滑点假设，或接入真实成交与交易规则模型后重跑。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "识别零成本基线",
+          "description": "输出应说明 cost_bps=0.0、slippage_bps=0.0 时 return 是零成本 close-to-close 基线，不是真实净收益。"
+        },
+        {
+          "name": "拒绝通过状态外推",
+          "description": "输出应拒绝把 exit 0、status=complete、completed_trades=1 或 CSV 存在解释为真实收益验证。"
+        },
+        {
+          "name": "披露模型口径",
+          "description": "输出应要求披露 cost_model、slippage_model、tradability_model 和 limit_rules_model。"
+        },
+        {
+          "name": "给出真实净收益路径",
+          "description": "输出应说明真实成本、滑点和成交约束需要显式假设或真实模型，不能由默认参数外推。"
+        }
+      ]
     }
   ]
 }

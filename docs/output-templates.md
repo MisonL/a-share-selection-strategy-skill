@@ -389,6 +389,8 @@
 - 下游 `validate_ohlcv.py` 或 `score_candidates.py` 通过，只覆盖已写出的预测文件，不能反推上游全部标的通过。
 - 完整门禁应使用 `--fail-on-skipped`，或显式确认 `raw_symbols == predicted_symbols` 且 `skipped_symbols == 0`。
 - `prediction_summary.json` 中的 `feature_columns`、`split_method`、`scaler_fit_scope`、`label_definition`、训练日期窗口和标签分布只是本次生成链路审计字段。
+- `label_definition=target_return = close.shift(-horizon) / close - 1; class = target_return > train_mean` 只是相对训练集均值的二分类标签口径。
+- `target_positive_labels` 和 `target_negative_labels` 非空只证明训练切分内两类标签都存在，不证明标签业务合理性、概率校准、holdout AUC/IC、跨窗口稳定性或样本外泛化。
 - `prediction_scope=latest_probability_repeated_for_scoring` 不是逐日历史预测序列；它表示最新预测概率被重复写入该标的评分窗口。
 - 即使 summary 字段完整，也不能写成 LightGBM 模型质量、样本外泛化、AUC/IC、分层收益或全市场策略质量已证明。
 ```

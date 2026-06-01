@@ -231,6 +231,36 @@ P2 真实涨跌停规则门禁当前仍是 `not_modeled`:
 - `probe_baostock_limit_fields.py` 只做字段可用性探针，不做规则推断；读取结果时必须看 `summary.supported_direct_limit_fields`、`summary.direct_limit_field_available` 和 `rule_inference_performed=false`，不能只看控制字段可用或候选字段列表。
 - walk-forward 命令中的 `--required-limit-rules-model not_modeled` 只是在 runner、manifest validator 和 artifact validator 中锁定并校验“未建模”口径保持一致，不是 P2 通过。
 
+可复制的 P2A 完整控制字段严格探针如下。若返回 `provider_error_fields`，例如 `turn/volume/amount`，即使 JSON 已写出，也只能记录为严格探针失败，不能写成 P2A 严格通过:
+
+```bash
+uv run --with pandas --with numpy --with baostock python scripts/probe_baostock_limit_fields.py \
+  --symbols 000001,600000,300750,688981 \
+  --start-date 2025-08-25 \
+  --end-date 2025-09-10 \
+  --adjust 3 \
+  --candidate-fields up_limit,down_limit,limit_status,is_trading,suspended \
+  --control-fields preclose,pctChg,tradestatus,isST,turn,volume,amount \
+  --output /tmp/stock-selection-p2a-limit-field-refresh/baostock_limit_field_probe.json \
+  --fail-on-provider-error \
+  --require-control-rows
+```
+
+若要只复验核心控制字段可取，可收窄到 `preclose,pctChg,tradestatus,isST`。该命令返回 0 也只证明核心控制字段和直接候选字段可用性口径，不证明真实涨跌停规则已建模:
+
+```bash
+uv run --with pandas --with numpy --with baostock python scripts/probe_baostock_limit_fields.py \
+  --symbols 000001,600000,300750,688981 \
+  --start-date 2025-08-25 \
+  --end-date 2025-09-10 \
+  --adjust 3 \
+  --candidate-fields up_limit,down_limit,limit_status,is_trading,suspended \
+  --control-fields preclose,pctChg,tradestatus,isST \
+  --output /tmp/stock-selection-p2a-limit-field-core/baostock_limit_field_probe.json \
+  --fail-on-provider-error \
+  --require-control-rows
+```
+
 akshare A 股入口会先尝试 `stock_zh_a_hist` 中文列；该接口失败或空结果时，会在 metadata 中记录 `fallback_errors` 并转用 `stock_zh_a_daily` 英文字段。真实环境失败时命令应非 0，不得改用 mock 或缓存样例冒充成功。取数窗口必须覆盖评分配置的最小历史行数；默认通用配置需要每个标的至少 `120` 行，`2024-01-01` 到 `2024-06-30` 这类半年窗口可能不足。
 
 ```bash

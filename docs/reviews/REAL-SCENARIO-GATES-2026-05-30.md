@@ -263,6 +263,16 @@
 - P2: 真实涨跌停规则门禁。P2a 已确认当前 baostock 日 K 无直接 `up_limit/down_limit/limit_status/is_trading/suspended` 字段；未取得可靠直接字段或另起明确规则建模任务前，不得把 `preclose/pctChg/isST` 粗推写成已建模。
 - P3: 外部源稳定性观察。akshare `stock_zh_a_hist`、yfinance/Yahoo 和 baostock 长期稳定性只能按固定脚本持续复验，不优先于 P1 的 A 股真实策略门禁。
 
+## 真实使用反馈验收锚点 / 2026-06-01
+
+本节记录 2026-06-01 真实使用反馈对应的后续验收边界。本轮只沉淀文档和 eval 口径，不表示已经实现新的总控 CLI、实时全市场扫描或低价超短 profile。
+
+- 今日真实选股如果按 QSSS-derived 口径执行，输入仍必须包含 `market=A-share`、`prediction` 或 `prediction_score`，以及 `turn` 或 `turnover`。缺少 `prediction_score` 时，标准决策树是先停止 QSSS-derived 评分并暴露缺口；若用户要保留 QSSS 口径，应先运行真实可审计的 `generate_lightgbm_predictions.py --fail-on-skipped` 或提供外部预测列；不得用动量分、爆发分、固定 0.5 或人工判断替代 LightGBM prediction。
+- 如果用户明确接受非 QSSS 的通用技术评分，才可以在本地 OHLCV 已落地并通过 `validate_ohlcv.py` 后走 `scripts/example_config.json` 或后续明确命名的通用 profile。该输出必须写明 `prediction_score` 未参与、不是 QSSS-derived 复刻、缺 `turn/turnover` 时只能披露 neutral turnover 假设，并且不能把候选排序写成真实收益、真实 LightGBM 或全市场策略质量证明。
+- 实时样本池或联网抓取的少量股票只证明该固定 `requested_symbols`、数据源、参数、网络窗口和实际 `date_max` 下的局部样本可复跑。即使 runner、manifest validator 和 artifact validator 均通过，也不能写成“全市场扫描完成”。要宣称全市场扫描，必须先定义全市场 universe 生成规则，披露请求标的数、实际落地标的数、`failed_symbols`、`empty_symbols`、股票池过滤数、历史不足数、预测跳过数和最终候选数。
+- 低价超短意图应作为后续脚本化 profile 或总控 CLI 任务处理，而不是在当前 QSSS 评分中临时手工筛选。验收锚点应包括可配置阈值、至少 `close`/`ma15`/`explosion_score`/`volume_ratio`/`turnover_ratio`/`signal_tier` 字段、诊断输出、0 候选原因、低价风险披露，以及 QSSS prediction 依赖与通用技术评分模式的明确分流。
+- 后续总控 CLI 的最小可审计路径应串联取数或本地输入、`validate_ohlcv.py`、可选 `generate_lightgbm_predictions.py`、`score_candidates.py`、可选 sizing/backtest/portfolio validators，并写出 run-scoped metadata、命令 manifest、summary 和失败原因。CLI 不得吞掉任一步非 0 退出，也不得在缺少真实预测、真实行情或严格回测时生成候选名单或收益结论。
+
 ## 当前结论
 
 已证明:

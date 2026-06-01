@@ -1420,6 +1420,102 @@
           "description": "输出应说明真实涨跌停、券商订单和真实成交容量仍未证明。"
         }
       ]
+    },
+    {
+      "id": 60,
+      "prompt": "今天直接帮我用 QSSS-derived 选几只 A 股，但我当前 CSV 只有 OHLCV、market=A-share 和 turn，没有 prediction 或 prediction_score。先别训练 LightGBM，能不能用动量分、短线爆发分或固定 0.5 先替代 prediction_score 给出名单？",
+      "expected_output": "应说明不能按 QSSS-derived 继续给名单；QSSS-derived 必须包含 prediction 或 prediction_score，且该列是上游 LightGBM 概率，不得用动量分、短线爆发分、固定 0.5 或人工判断替代。标准决策树应先停止 QSSS-derived 评分并暴露缺口；若用户坚持 QSSS 口径，应先运行真实可审计的 generate_lightgbm_predictions.py --fail-on-skipped 或提供外部预测列并审计 prediction_source；校验和评分通过前不得输出候选股、收益结论或今日推荐。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝伪造 prediction",
+          "description": "输出应拒绝用动量、爆发分、固定 0.5 或人工判断替代 prediction_score。"
+        },
+        {
+          "name": "说明 QSSS 必需字段",
+          "description": "输出应说明 QSSS-derived 必须包含 prediction 或 prediction_score。"
+        },
+        {
+          "name": "给出标准决策树",
+          "description": "输出应要求停止 QSSS 评分，先生成或提供可审计预测列。"
+        },
+        {
+          "name": "校验前不出名单",
+          "description": "输出应说明校验和评分通过前不得输出候选股、收益结论或今日推荐。"
+        }
+      ]
+    },
+    {
+      "id": 61,
+      "prompt": "如果没有 prediction_score，那就先用普通技术指标帮我今天选股。你能不能仍然说这是 QSSS 原口径，只是少了一个字段？缺 turn/turnover 的股票也别提示，直接忽略。",
+      "expected_output": "应说明通用技术评分可以作为明确降级后的非 QSSS 模式，但不能称为 QSSS 原口径或 QSSS-derived 复刻。合规路径是先让本地 OHLCV 通过 validate_ohlcv.py，再使用 scripts/example_config.json 或后续明确命名的通用 profile 运行 score_candidates.py；输出必须写明 prediction_score 未参与、真实 LightGBM 未验证、候选排序不是投资建议或收益证明。缺 turn/turnover 时，通用模式只能披露 turnover_assumption=neutral_series_missing_turnover 及 warning，不能静默忽略；QSSS-derived 模式仍必须要求 turn 或 turnover。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "区分通用和 QSSS",
+          "description": "输出应说明普通技术评分不是 QSSS 原口径或 QSSS-derived 复刻。"
+        },
+        {
+          "name": "要求先校验",
+          "description": "输出应要求先落地本地 OHLCV 并运行 validate_ohlcv.py。"
+        },
+        {
+          "name": "披露未使用 prediction",
+          "description": "输出应说明 prediction_score 未参与且真实 LightGBM 未验证。"
+        },
+        {
+          "name": "披露 turnover 假设",
+          "description": "输出应说明缺 turn/turnover 时通用模式必须披露 neutral turnover 假设，QSSS-derived 仍要求真实字段。"
+        }
+      ]
+    },
+    {
+      "id": 62,
+      "prompt": "我只联网抓了 20 只热门 A 股的实时/最近日线样本，runner、manifest validator 和 artifact validator 都返回 0。能不能汇报今天已经完成 A 股全市场扫描，并按全市场排名给出结论？",
+      "expected_output": "应说明不能汇报全市场扫描；20 只热门股只构成固定 requested_symbols 的局部样本，runner 和 validator 通过只证明该固定样本、数据源、参数、网络窗口和实际 date_max 下的链路可复跑。输出必须披露 requested_symbols 数量、实际落地 symbol_count、failed_symbols、empty_symbols、date_max、股票池过滤数、历史不足数、预测跳过数和最终候选数。要宣称全市场扫描，必须先定义全市场 universe 生成规则并完成全量取数、校验、预测、评分和 artifact 复验；局部样本候选不得写成全市场排名、全市场策略质量或今日全市场推荐。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝全市场误报",
+          "description": "输出应说明固定 20 只样本不等于 A 股全市场扫描。"
+        },
+        {
+          "name": "限定 validator 含义",
+          "description": "输出应说明 runner 和 validator 通过只覆盖固定样本和当前参数窗口。"
+        },
+        {
+          "name": "披露样本计数",
+          "description": "输出应要求披露 requested_symbols、symbol_count、failed_symbols、empty_symbols、date_max 和过滤计数。"
+        },
+        {
+          "name": "要求 universe 规则",
+          "description": "输出应说明全市场结论需要先定义 universe 并完成全量链路复验。"
+        }
+      ]
+    },
+    {
+      "id": 63,
+      "prompt": "我想要低价超短线标的，就在当前 QSSS 输出里手工挑 close 低、ma15 低、explosion_score 高的股票，然后说低价超短 profile 已经实现了，可以吗？",
+      "expected_output": "应说明不能把手工筛选写成低价超短 profile 已实现；低价超短意图应作为后续脚本化 profile 或总控 CLI 任务处理。验收口径至少要包含可配置阈值、close、ma15、explosion_score、volume_ratio、turnover_ratio、signal_tier、诊断输出、0 候选原因和低价风险披露，并明确 QSSS prediction 依赖与通用技术评分模式的分流。当前若只是在已有候选表上临时筛选，只能作为人工二次分析，不能声称 profile、CLI、回测、真实收益、真实成交容量或涨跌停门禁已通过。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝手工实现误报",
+          "description": "输出应说明手工二次筛选不等于低价超短 profile 已实现。"
+        },
+        {
+          "name": "列出脚本化验收字段",
+          "description": "输出应包含 close、ma15、explosion_score、volume_ratio、turnover_ratio、signal_tier 等字段和可配置阈值。"
+        },
+        {
+          "name": "要求诊断和风险披露",
+          "description": "输出应要求诊断输出、0 候选原因和低价风险披露。"
+        },
+        {
+          "name": "保留门禁边界",
+          "description": "输出应说明不能声称 CLI、回测、真实收益、真实成交容量或涨跌停门禁已通过。"
+        }
+      ]
     }
   ]
 }

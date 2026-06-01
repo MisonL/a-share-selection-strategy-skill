@@ -34,6 +34,7 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
         self.assertEqual(4, summary["trades"])
         self.assertEqual(3, summary["complete_trades"])
         self.assertEqual(1, summary["incomplete_trades"])
+        self.assertEqual(overlap_report.CALENDAR_MODEL, summary["calendar_model"])
         self.assertEqual(3, summary["max_open_positions"])
         self.assertEqual(["2026-05-13"], summary["max_open_position_dates"])
         self.assertEqual(2, summary["same_symbol_overlap_rows"])

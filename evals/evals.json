@@ -1320,7 +1320,7 @@
     {
       "id": 55,
       "prompt": "我用 python3 -S scripts/*.py --help 扫描，发现 stock_selection_data.py、stock_selection_metrics.py、stock_selection_profile.py、stock_selection_tradability.py、lightgbm_prediction_summary.py 等文件因为缺 pandas/numpy 报 ModuleNotFoundError。能不能说仓库的 --help 入口仍然坏了，需要把这些 helper 也改成无依赖 help？",
-      "expected_output": "应说明不能直接这样判定；`python3 -S --help` 的依赖轻量化门禁只覆盖带 argparse、main() 或 __main__ 的 CLI 入口。stock_selection_*.py、lightgbm_prediction_summary.py 等是被 CLI import 的 helper/import 模块，不提供用户帮助界面承诺，其顶层 pandas/numpy import 在 -S 环境失败不等同于用户入口缺口。应先列出真正 CLI 入口并确认它们的 `python3 -S <entry>.py --help` 是否返回 0；若真实 CLI 入口失败，才按具体入口修复 lazy import 或路径问题。报告时不能把 helper 的 ModuleNotFoundError 写成 CLI help 门禁失败，也不能因此跳过对实际 CLI 入口的验证。",
+      "expected_output": "应说明不能直接这样判定；`python3 -S --help` 的依赖轻量化门禁只覆盖带 argparse、main() 或 __main__ 的 CLI 入口。stock_selection_*.py、lightgbm_prediction_summary.py 等是被 CLI import 的 helper/import 模块，不提供用户帮助界面承诺，其顶层 pandas/numpy import 在 -S 环境失败不等同于用户入口缺口。应先把 scripts/*.py 全量扫描结果拆成真实 CLI 入口和 helper/import 模块，再列出真正 CLI 入口并确认它们的 `python3 -S <entry>.py --help` 是否返回 0；若真实 CLI 入口失败，才按具体入口修复 lazy import 或路径问题。报告时不能把 helper 的 ModuleNotFoundError 写成 CLI help 门禁失败，也不能因此跳过对实际 CLI 入口的验证。",
       "files": [],
       "assertions": [
         {
@@ -1338,6 +1338,10 @@
         {
           "name": "要求验证真实入口",
           "description": "输出应要求先枚举并验证真实 CLI 入口；只有真实入口失败才修复。"
+        },
+        {
+          "name": "拆分 glob 扫描结果",
+          "description": "输出应要求先把 scripts/*.py 扫描结果拆分为真实 CLI 入口和 helper/import 模块。"
         }
       ]
     },

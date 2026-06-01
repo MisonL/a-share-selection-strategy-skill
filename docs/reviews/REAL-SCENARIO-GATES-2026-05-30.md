@@ -41,6 +41,7 @@
 - 连续 3 次正式入口复验产物在 `/tmp/akshare-a-share-stability-20260530103633-49722`；三次 `stock_zh_a_hist` 均被远端断开并记录 1 条 `fallback_errors`，三次均 fallback 到 `stock_zh_a_daily`，`rows=177`、`symbol_count=1`、`failed_symbols=[]`、`empty_symbols=[]`，通用 `validate_ohlcv.py` 均返回 0。
 - 当前外部源复验产物在 `/tmp/stock-selection-external-sources-current-20260530T125716/akshare/`；正式入口返回 0，metadata 记录 `rows=177`、`symbol_count=1`、`failed_symbols=[]`、`empty_symbols=[]`、`symbols[0].provider=stock_zh_a_daily`、`len(fallback_errors)=1`，后续 `validate_ohlcv.py` 和通用 `score_candidates.py` 均返回 0。
 - P3 固定总控脚本复验产物在 `/tmp/stock-selection-p3-external-source-stability-20260601T063044Z/`；3 轮 akshare run 均返回 0，`rows=177`、`symbol_count=1`、`failed_symbols=[]`、`empty_symbols=[]`、`date_max=2026-05-29`，但每轮仍有 1 条 `fallback_errors`，summary 记录 `observation_failed_checks.hist_provider_clean=3`。
+- P3 固定总控脚本追加复验产物在 `/tmp/stock-selection-p3-external-20260601T080703Z/`；3 轮 akshare run 均返回 0，`rows=177`、`symbol_count=1`、`failed_symbols=[]`、`empty_symbols=[]`、`date_max=2026-05-29`，但每轮仍有 1 条 `fallback_errors`，summary 继续记录 `observation_failed_checks.hist_provider_clean=3`。
 - QSSS-derived 校验按预期拒绝 `market=A股`、`000001.SZ`、缺 `prediction_score`、缺 `turn`。
 - 补齐外部 `prediction_score` 后，`score_candidates.py` 返回 0，并输出 `prediction_source=external_unverified lightgbm_not_executed_by_this_script=true`。
 
@@ -76,6 +77,7 @@
 - 再次连续 3 次受控复验产物在 `/tmp/stock-selection-yfinance-stability-20260530T111830-76636/`；三次 `fetch_yfinance_ohlcv.py`、通用 `validate_ohlcv.py` 和通用 `score_candidates.py` 均返回 0，metadata 均记录 `rows=1206`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`、`timeout_seconds=10.0`。
 - 当前外部源复验产物在 `/tmp/stock-selection-external-sources-current-20260530T125716/yfinance/`；`fetch_yfinance_ohlcv.py --timeout-seconds 10` 返回 0，metadata 记录 `rows=1206`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`、`timeout_seconds=10.0`，后续 `validate_ohlcv.py` 和通用 `score_candidates.py` 均返回 0。
 - P3 固定总控脚本复验产物在 `/tmp/stock-selection-p3-external-source-stability-20260601T063044Z/`；3 轮 yfinance run 均返回 0，metadata 均记录 `rows=1206`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`、`timeout_seconds=10.0`、`adjustment=auto_adjust_false_close`，AAPL/MSFT 的 `date_max` 均为 `2026-05-28`。
+- P3 固定总控脚本追加复验产物在 `/tmp/stock-selection-p3-external-20260601T080703Z/`；3 轮 yfinance run 均返回 0，metadata 均记录 `rows=1206`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`、`timeout_seconds=10.0`、`adjustment=auto_adjust_false_close`，AAPL/MSFT 的 `date_max` 均为 `2026-05-28`。
 
 边界:
 
@@ -179,6 +181,7 @@
 - 同一短窗口显式 `--drop-invalid-rows` 后返回 0，metadata 为 `rows=9`、`dropped_invalid_rows=6`、`raw_non_trading_rows=6`、`non_trading_rows=0`；用 `validate_ohlcv.py --min-history-rows 1` 校验返回 0。默认校验返回 1 是因为短窗口只有 9 行，低于 120 行历史门槛。
 - 正常长窗口复验产物在 `/tmp/stock-selection-baostock-tradability-normal-20260530T104829/`；000001/600000 取数返回 0，metadata 记录 `rows=354`、`symbol_count=2`、`invalid_rows=0`、`non_trading_rows=0`、`tradestatus_missing_rows=0`，默认 `validate_ohlcv.py` 返回 0。
 - P3 固定总控脚本复验产物在 `/tmp/stock-selection-p3-external-source-stability-20260601T063044Z/`；3 轮 baostock run 均返回 0，metadata 均记录 `rows=1160`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`、`non_trading_rows=0`、`tradestatus_missing_rows=0`、`adjustflag=3`，000001/600000 的 `date_max` 均为 `2026-05-29`。
+- P3 固定总控脚本追加复验产物在 `/tmp/stock-selection-p3-external-20260601T080703Z/`；3 轮 baostock run 均返回 0，metadata 均记录 `rows=1160`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`、`non_trading_rows=0`、`tradestatus_missing_rows=0`、`adjustflag=3`，000001/600000 的 `date_max` 均为 `2026-05-29`。
 - 涨跌停只读探测产物在 `/tmp/stock-selection-limit-rule-probe-20260530T105951/`；000001、600000、300750、688981 窗口样例显示可用 `preclose/pctChg/isST` 做理论候选研究，但没有直接 `up_limit/down_limit/limit_status` 字段，也未发现可证明规则实现的精确涨跌停样例。
 - current-code walk-forward 复验产物在 `/tmp/stock-selection-oos-20260530T130952/`；重新用当前 baostock 入口拉取同一 12-symbol 固定池，metadata 为 `rows=6960`、`symbol_count=12`、`invalid_rows=0`、`non_trading_rows=0`、`tradestatus_missing_rows=0`、`adjustflag=3`。
 - 同一复验固定信号日 `2026-05-12/2026-05-15/2026-05-20`、`hold_days=5`、`cost_bps=10`、`slippage_bps=5`，逐日信号窗口截断、LightGBM 生成、QSSS 评分、sizing 和 `--require-tradable-bars --fail-on-incomplete` 回测均返回 0。
@@ -286,6 +289,7 @@
 - akshare 正式联网入口的 hist/daily fallback、metadata 和严格失败契约。
 - yfinance 正式联网入口的 metadata、内置 timeout、空结果和严格失败契约；本轮带 `--timeout-seconds 10` 的 AAPL/MSFT 取数、校验和通用评分通过。
 - P3 固定总控脚本在 2026-06-01 复验 akshare、yfinance 和 baostock 共 3 轮 9 次 source run，`passed_runs=9`、`all_sources_all_iterations_passed=true`，但 `long_term_stability_claim=not_proven`；akshare 仍记录 `hist_provider_clean=3` 的观察失败，只能说明 fallback provider 在本次窗口可用。
+- P3 固定总控脚本在 `/tmp/stock-selection-p3-external-20260601T080703Z/` 追加复验 akshare、yfinance 和 baostock 共 3 轮 9 次 source run，`passed_runs=9`、`all_sources_all_iterations_passed=true`，但 `long_term_stability_claim=not_proven`；akshare 仍记录 `hist_provider_clean=3` 的观察失败，只能说明 fallback provider 在本次窗口可用。
 - LightGBM prediction 生成器的本地契约、失败边界和合成 demo 真模型运行链路。
 - buy-hold 基线回测脚本的本地契约、失败边界、round-trip bps 成本/滑点扣减、可选 `tradestatus` 入场/退出门禁、等权资金曲线、组合阈值失败门槛、并发持仓门禁、候选资金字段透传、equal-cash/lot-floor sizing 产物，以及权重、名义金额、预留现金容量失败门禁。
 - 2-symbol baostock 真实依赖 smoke 链路: 真实行情落地、真实 LightGBM prediction 生成、QSSS 最新日评分。

@@ -244,6 +244,7 @@
 - P1 新增深市主板 40-symbol 零交集池组合容量复验，详见 `docs/reviews/P1-PORTFOLIO-CAPACITY-SZ-MAINBOARD-2026-06-01.md`。产物在 `/tmp/stock-selection-p1-portfolio-capacity-sz-mainboard-20260601T055752Z/`，runner、manifest validator 和 artifact validator 均返回 0；artifact validator 记录 `signals_checked=6`、`total_candidates=52`、`total_completed_trades=52`、`final_equity=1.0072173506529436`、`portfolio_violations=0`、`errors=[]`。
 - P1 新增创业板 40-symbol 零交集池组合容量复验，详见 `docs/reviews/P1-PORTFOLIO-CAPACITY-CYB-2026-06-01.md`。产物在 `/tmp/stock-selection-p1-portfolio-capacity-cyb-20260601T065750Z/`，runner、manifest validator 和 artifact validator 均返回 0；artifact validator 记录 `signals_checked=6`、`total_candidates=49`、`total_completed_trades=49`、`final_equity=1.0057629234541754`、`portfolio_violations=0`、`errors=[]`。
 - P1 新增科创板 40-symbol 零交集池组合容量复验，详见 `docs/reviews/P1-PORTFOLIO-CAPACITY-STAR-MARKET-2026-06-01.md`。初始池含 `688086` 的严格 fetch 在 `/tmp/stock-selection-p1-portfolio-capacity-star-market-20260601T100438Z/` 因 `empty_symbols=["688086"]` 返回 3，不能作为通过证据；最终池使用实探可取数的 `688102` 替换后，产物在 `/tmp/stock-selection-p1-portfolio-capacity-star-market-20260601T100924Z/`，runner、manifest validator 和 artifact validator 均返回 0；artifact validator 记录 `signals_checked=6`、`total_candidates=46`、`total_completed_trades=46`、`final_equity=0.9711787769119758`、`portfolio_violations=0`、`manifest_checked=true`、`errors=[]`。
+- P1 新增沪市 603 号段 40-symbol、2025 下半年到 2026 年初窗口组合容量复验，详见 `docs/reviews/P1-PORTFOLIO-CAPACITY-SSE603-LATEWINDOW-2026-06-01.md`。取数探针在 `/tmp/stock-selection-p1-sse603-probe-20260601T105709Z/` 返回 0 且 `failed_symbols=[]`、`empty_symbols=[]`；最终产物在 `/tmp/stock-selection-p1-portfolio-capacity-sse603-latewindow-20260601T105911Z/`，runner、manifest validator 和 artifact validator 均返回 0；artifact validator 记录 `signals_checked=6`、`total_candidates=52`、`total_completed_trades=52`、`final_equity=0.9885268093529102`、`portfolio_violations=0`、`manifest_checked=true`、`errors=[]`。
 
 边界:
 
@@ -251,7 +252,7 @@
 - 12-symbol 三信号日回测证明了真实候选和真实 OHLCV 能进入 close-to-close 基线回测；当前代码支持 round-trip bps 扣减、等权资金曲线、取数阶段 `tradestatus` 门禁、回测级 `--require-tradable-bars` 门禁、组合并发持仓报告和测试资金字段权重容量门禁，但仍不覆盖真实现金容量、涨跌停或全市场泛化能力。
 - current-code 复验只证明固定 12-symbol、三信号日、5 日持有、10 bps 成本、5 bps 滑点和 `tradestatus` 入场/退出门禁下的可复跑边界；不能外推为全市场样本外收益有效。
 - P1 四信号日扩展复验只证明同一固定池新增 `2026-04-24` 后仍能按固定门禁复跑；不能外推为策略正期望、全市场泛化、真实成交容量或涨跌停规则已覆盖。
-- P1 40-symbol/6 信号日扩容复验只证明两个既有 40 支股票池、一组新增沪市 40-symbol 月末窗口、深市主板/创业板/科创板零交集月末窗口、多个 6 信号日窗口、显式丢弃源数据异常、`cash_budget=3000000`、5 日持有、10 bps 成本、5 bps 滑点和 `tradestatus` 入场/退出门禁下的可复跑边界；不能外推为全市场样本外收益有效，也不能证明 100 万现金预算适合更大候选集。
+- P1 40-symbol/6 信号日扩容复验只证明两个既有 40 支股票池、一组新增沪市 40-symbol 月末窗口、深市主板/创业板/科创板零交集月末窗口、一组沪市 603 号段 late-window 窗口、多个 6 信号日窗口、显式丢弃源数据异常、`cash_budget=3000000`、5 日持有、10 bps 成本、5 bps 滑点和 `tradestatus` 入场/退出门禁下的可复跑边界；不能外推为全市场样本外收益有效，也不能证明固定 300 万现金预算适合更大候选集。
 - P1 独立 40-symbol/6 信号日 top-N=2 复验只证明 `--max-candidates` 能把每期候选显式截断并通过现有固定组合门禁；它不证明跨信号日滚动现金占用、同标的组合级去重或真实订单容量已建模。
 - P1 `portfolio_cash_lot_floor` 复验证明了当前代码能按固定持有期滚动处理现金占用、并发仓位和同标的重叠，并输出 raw/selected/sized/skipped/allocation summary 证据；但仍只是本地 close-to-close + lot-floor 模型，不证明真实涨跌停、真实订单成交、券商容量或全市场策略质量。
 - P1 各复验中的 `final_equity` 和 `total_return` 均为本地 close-to-close、完成交易等权资金曲线，不是按 `portfolio_cash_lot_floor` sizing 权重、真实成交或券商容量计算的收益。
@@ -267,7 +268,7 @@
 
 ## Current Next Gates / 下一步门禁
 
-- P1: 继续扩大 A 股真实 QSSS 门禁。当前已有两个既有 40-symbol 池、一组沪市 40-symbol 月末窗口、一组深市主板 40-symbol 零交集月末窗口、一组创业板 40-symbol 零交集月末窗口和一组科创板 40-symbol 零交集月末窗口复验，并已在五个 40-symbol 池/窗口上复验 `portfolio_cash_lot_floor` 组合级 sizing/cut；下一轮 P1 应优先推进更真实的订单容量/涨跌停规则门禁，或继续扩大到更多独立池和更长窗口。
+- P1: 继续扩大 A 股真实 QSSS 门禁。当前已有两个既有 40-symbol 池、一组沪市 40-symbol 月末窗口、一组深市主板 40-symbol 零交集月末窗口、一组创业板 40-symbol 零交集月末窗口、一组科创板 40-symbol 零交集月末窗口和一组沪市 603 号段 late-window 窗口复验，并已在六个 40-symbol 池/窗口上复验 `portfolio_cash_lot_floor` 组合级 sizing/cut；下一轮 P1 应优先推进更真实的订单容量/涨跌停规则门禁，或继续扩大到更多独立池和更长窗口。
 - P2: 真实涨跌停规则门禁。P2a 已确认当前 baostock 日 K 无直接 `up_limit/down_limit/limit_status/is_trading/suspended` 字段；未取得可靠直接字段或另起明确规则建模任务前，不得把 `preclose/pctChg/isST` 粗推写成已建模。
 - P3: 外部源稳定性观察。akshare `stock_zh_a_hist`、yfinance/Yahoo 和 baostock 长期稳定性只能按固定脚本持续复验，不优先于 P1 的 A 股真实策略门禁。
 
@@ -312,6 +313,7 @@
 - P1 深市主板 40-symbol/6 月末信号日 `portfolio_cash_lot_floor` 复验与已展开池集合交集为 `[]`，可在不使用 `--expect-portfolio-violations` 的情况下完整通过，raw 候选 61 个、组合 cut 后 52 个、跳过 9 个且原因均为 `max_open_positions`，完成 52 笔交易、`final_equity=1.0072173506529436`，组合 `portfolio_violations=0`。
 - P1 创业板 40-symbol/6 月末信号日 `portfolio_cash_lot_floor` 复验与已展开池集合交集为 `[]`，可在不使用 `--expect-portfolio-violations` 的情况下完整通过，raw 候选 60 个、组合 cut 后 49 个、跳过 11 个且原因均为 `max_open_positions`，完成 49 笔交易、`final_equity=1.0057629234541754`，组合 `portfolio_violations=0`。
 - P1 科创板 40-symbol/6 月末信号日 `portfolio_cash_lot_floor` 复验与已展开池集合交集为 `[]`，可在不使用 `--expect-portfolio-violations` 的情况下完整通过；初始 `688086` 空结果 run 已按失败边界排除，最终池 raw 候选 50 个、组合 cut 后 46 个、跳过 4 个且原因均为 `max_open_positions`，完成 46 笔交易、`final_equity=0.9711787769119758`，组合 `portfolio_violations=0`。
+- P1 沪市 603 号段 40-symbol/6 late-window 信号日 `portfolio_cash_lot_floor` 复验可在不使用 `--expect-portfolio-violations` 的情况下完整通过；取数探针和最终 runner 均记录 `failed_symbols=[]`、`empty_symbols=[]`，raw 候选 56 个、组合 cut 后 52 个、跳过 4 个且原因均为 `max_open_positions`，完成 52 笔交易、`final_equity=0.9885268093529102`，组合 `portfolio_violations=0`。
 - P1 `portfolio_cash_lot_floor` artifact validator 已交叉校验 `qsss_allocation_summary.json` 与 `qsss_overlap_summary.json` 的最大持仓、权重、名义金额和预留现金容量字段，真实复验目录 `run_artifact_validation_crosscheck.json` 通过且 `errors=0`。
 - 真实 12-symbol/3 信号日样本已经暴露最大 12 笔并发持仓和同标的重复持仓冲突风险，并已可由 `portfolio_overlap_report.py` 自动化失败。
 - 信号日截断防未来泄漏门禁。

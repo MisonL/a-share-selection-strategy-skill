@@ -230,6 +230,7 @@
 - 默认退出码为 0 时仍必须披露 `unsupported_candidate_fields`、`provider_error_fields`、`available_control_fields`、`control_rows` 和 `limit_rules_model`。
 - `provider_error_fields` 不是字段不支持；应保留 provider 错误码和错误信息，必要时用 `--fail-on-provider-error --require-control-rows` 作为严格门禁。
 - 控制字段有样本行不等于真实可交易性、涨跌停或券商成交约束已验证。
+- `preclose/pctChg/tradestatus/isST` 只是控制或诊断字段，不得用 `preclose + pctChg`、股票前缀或 `isST` 粗推真实涨跌停规则。
 - `supported_direct_limit_fields` 只统计 `up_limit/down_limit/limit_status`；`is_trading` 或 `suspended` 即使可用，也只能作为交易状态或停牌字段线索，不能让 `limit_rules_model=not_modeled` 变成已建模。
 ```
 

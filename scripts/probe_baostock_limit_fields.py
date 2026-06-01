@@ -13,6 +13,8 @@ from stock_selection_symbols import baostock_code, parse_six_digit_symbols
 
 CANDIDATE_FIELDS = ("up_limit", "down_limit", "limit_status", "is_trading", "suspended")
 CONTROL_FIELDS = ("preclose", "pctChg", "tradestatus", "isST", "turn", "volume", "amount")
+DIRECT_LIMIT_FIELDS = frozenset(("up_limit", "down_limit", "limit_status"))
+TRADING_STATE_FIELDS = frozenset(("is_trading", "suspended"))
 BASE_FIELDS = ("date", "code")
 PARAMETER_ERROR_CODES = {"10004012"}
 SAMPLE_ROWS = 3
@@ -243,7 +245,7 @@ def build_report(
     results: list[dict[str, Any]],
 ) -> dict[str, Any]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "source": "baostock",
         "probe_type": "limit_field_availability",
         "requested_symbols": symbols,
@@ -264,6 +266,8 @@ def summary(results: list[dict[str, Any]]) -> dict[str, Any]:
     candidate = [item for item in results if item["field_role"] == "candidate_field"]
     control = [item for item in results if item["field_role"] == "control_field"]
     supported_candidate = [item["field"] for item in candidate if item["overall_status"] == "supported"]
+    supported_direct_limit = [field for field in supported_candidate if field in DIRECT_LIMIT_FIELDS]
+    supported_trading_state = [field for field in supported_candidate if field in TRADING_STATE_FIELDS]
     provider_error = [item["field"] for item in results if any(detail["status"] == "provider_error" for detail in item["symbol_results"])]
     return {
         "supported_candidate_fields": supported_candidate,
@@ -271,7 +275,10 @@ def summary(results: list[dict[str, Any]]) -> dict[str, Any]:
         "provider_error_fields": provider_error,
         "available_control_fields": [item["field"] for item in control if item["overall_status"] == "supported"],
         "control_rows": sum(int(item["rows"]) for item in control),
-        "direct_limit_field_available": bool(supported_candidate),
+        "supported_direct_limit_fields": supported_direct_limit,
+        "supported_trading_state_fields": supported_trading_state,
+        "direct_limit_field_available": bool(supported_direct_limit),
+        "trading_state_field_available": bool(supported_trading_state),
     }
 
 
@@ -297,10 +304,13 @@ def print_summary(report: dict[str, Any], prefix: str = "OK") -> None:
         f"symbols={len(report['requested_symbols'])} "
         f"supported_candidate_fields={len(data['supported_candidate_fields'])} "
         f"unsupported_candidate_fields={len(data['unsupported_candidate_fields'])} "
+        f"supported_direct_limit_fields={len(data['supported_direct_limit_fields'])} "
+        f"supported_trading_state_fields={len(data['supported_trading_state_fields'])} "
         f"available_control_fields={len(data['available_control_fields'])} "
         f"provider_error_fields={len(data['provider_error_fields'])} "
         f"control_rows={data['control_rows']} "
         f"direct_limit_field_available={data['direct_limit_field_available']} "
+        f"trading_state_field_available={data['trading_state_field_available']} "
         f"limit_rules_model={report['limit_rules_model']}"
     )
 

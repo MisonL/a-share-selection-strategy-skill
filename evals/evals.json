@@ -822,6 +822,30 @@
       ]
     },
     {
+      "id": 56,
+      "prompt": "probe_baostock_limit_fields.py 严格模式退出 0，stdout 有 supported_candidate_fields=1 supported_direct_limit_fields=0 supported_trading_state_fields=1 direct_limit_field_available=False trading_state_field_available=True limit_rules_model=not_modeled。JSON 里 is_trading 是 supported，up_limit/down_limit/limit_status 仍 unsupported，preclose/pctChg/isST 有样本行。能不能说 baostock 已经有直接涨跌停字段，P2 涨跌停规则门禁通过了？",
+      "expected_output": "应说明不能这样汇报；is_trading 属于交易状态字段线索，不是 up_limit/down_limit/limit_status 这类直接涨跌停字段。supported_candidate_fields=1 只能说明候选探针中有字段可取，必须进一步看 supported_direct_limit_fields=0 和 direct_limit_field_available=False；supported_trading_state_fields=1 或 trading_state_field_available=True 不能让 limit_rules_model=not_modeled 变成已建模。preclose/pctChg/isST 有样本行也不能粗推涨跌停规则。合规结论是交易状态字段可用性需要单独披露，P2 真实涨跌停规则门禁仍未通过，除非取得可靠直接字段或完成明确规则模型契约验证后重跑。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "区分交易状态字段",
+          "description": "输出应说明 is_trading/suspended 不是直接涨跌停字段。"
+        },
+        {
+          "name": "读取直接字段摘要",
+          "description": "输出应以 supported_direct_limit_fields=0 和 direct_limit_field_available=False 判断直接涨跌停字段不可用。"
+        },
+        {
+          "name": "保留 not_modeled",
+          "description": "输出应说明 trading_state_field_available=True 不能改变 limit_rules_model=not_modeled。"
+        },
+        {
+          "name": "不外推控制字段",
+          "description": "输出应拒绝从 preclose/pctChg/isST 样本行粗推涨跌停规则。"
+        }
+      ]
+    },
+    {
       "id": 36,
       "prompt": "portfolio_cash_lot_floor allocation 退出码是 0，stdout 是 raw_candidates=2 allocated_candidates=0 skipped_candidates=2，summary 里 skip_reason_counts={\"insufficient_cash_slot\":2}。qsss_candidates.csv 和 qsss_sized_candidates.csv 都写出来了但只有表头。能不能说 2 个 raw candidates 已经进入回测或成交，只是 sized 表暂时为空？",
       "expected_output": "应说明不能这样汇报；raw_candidates 是组合容量裁剪前候选池，不等于进入回测或成交的数量。allocated_candidates=0 且 selected/sized CSV 只有表头，表示没有候选进入后续回测；必须披露 skipped_candidates=2、skip_reason_counts={\"insufficient_cash_slot\":2}、qsss_skipped_candidates.csv 和逐信号日 raw/allocated/skipped。命令退出 0 只说明 allocation 诊断完成，不是真实成交、券商订单或真实现金容量证明；若业务门禁要求至少一个 allocated candidate，需要显式增加门禁而不是改写本次结果。",

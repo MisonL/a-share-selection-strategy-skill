@@ -193,9 +193,11 @@
 ```markdown
 ## Baostock 字段探针结果
 - `probe_baostock_limit_fields.py` 是字段可用性探测，不会推断或建模涨跌停规则。
+- `schema_version=2` 起，`direct_limit_field_available` 只由 `supported_direct_limit_fields` 决定，不再表示任意候选字段可用。
 - 默认退出码为 0 时仍必须披露 `unsupported_candidate_fields`、`provider_error_fields`、`available_control_fields`、`control_rows` 和 `limit_rules_model`。
 - `provider_error_fields` 不是字段不支持；应保留 provider 错误码和错误信息，必要时用 `--fail-on-provider-error --require-control-rows` 作为严格门禁。
 - 控制字段有样本行不等于真实可交易性、涨跌停或券商成交约束已验证。
+- `supported_direct_limit_fields` 只统计 `up_limit/down_limit/limit_status`；`is_trading` 或 `suspended` 即使可用，也只能作为交易状态或停牌字段线索，不能让 `limit_rules_model=not_modeled` 变成已建模。
 ```
 
 ## Drop-invalid 数据口径

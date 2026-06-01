@@ -39,8 +39,11 @@ class ProbeBaostockLimitFieldsTests(unittest.TestCase):
         )
 
         by_field = {item["field"]: item for item in report["field_results"]}
+        self.assertEqual(2, report["schema_version"])
         self.assertEqual(["up_limit"], report["summary"]["unsupported_candidate_fields"])
         self.assertEqual(["preclose"], report["summary"]["available_control_fields"])
+        self.assertEqual([], report["summary"]["supported_direct_limit_fields"])
+        self.assertEqual([], report["summary"]["supported_trading_state_fields"])
         self.assertEqual("10004012", by_field["up_limit"]["error_codes"][0])
         self.assertEqual(2, by_field["preclose"]["rows"])
         self.assertEqual(False, report["rule_inference_performed"])
@@ -57,7 +60,28 @@ class ProbeBaostockLimitFieldsTests(unittest.TestCase):
         self.assertEqual(0, code)
         self.assertEqual("", stderr)
         self.assertIn("direct_limit_field_available=False", stdout)
+        self.assertIn("trading_state_field_available=False", stdout)
         self.assertEqual(["up_limit"], data["summary"]["unsupported_candidate_fields"])
+
+    def test_trading_state_field_does_not_make_direct_limit_available(self) -> None:
+        args = args_for(candidate_fields="is_trading", control_fields="preclose")
+        results = [
+            probe.probe_one_field(TradingStateBaostock(), args=args, field="is_trading", symbols=["000001"], role="candidate"),
+            probe.probe_one_field(TradingStateBaostock(), args=args, field="preclose", symbols=["000001"], role="control"),
+        ]
+        report = probe.build_report(
+            args=args,
+            symbols=["000001"],
+            candidate_fields=["is_trading"],
+            control_fields=["preclose"],
+            results=results,
+        )
+
+        self.assertEqual(["is_trading"], report["summary"]["supported_candidate_fields"])
+        self.assertEqual([], report["summary"]["supported_direct_limit_fields"])
+        self.assertEqual(["is_trading"], report["summary"]["supported_trading_state_fields"])
+        self.assertEqual(False, report["summary"]["direct_limit_field_available"])
+        self.assertEqual(True, report["summary"]["trading_state_field_available"])
 
     def test_cli_fails_on_provider_error_when_requested(self) -> None:
         original_probe = probe.probe_fields
@@ -141,6 +165,16 @@ class MixedBaostock:
         if code == "sz.000001":
             return FakeResult(field, error_code="0", rows=[["2025-09-01", code, "10.0"]])
         return FakeResult(field, error_code="999999", error_msg="provider unavailable")
+
+
+class TradingStateBaostock:
+    def query_history_k_data_plus(self, code: str, fields: str, **_kwargs: object) -> object:
+        field = fields.split(",")[-1]
+        if field == "preclose":
+            return FakeResult(field, error_code="0", rows=[["2025-09-01", code, "10.0"]])
+        if field == "is_trading":
+            return FakeResult(field, error_code="0", rows=[["2025-09-01", code, "1"]])
+        return FakeResult(field, error_code="10004012", error_msg="参数错误")
 
 
 class FakeResult:

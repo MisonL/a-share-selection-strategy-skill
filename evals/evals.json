@@ -1636,6 +1636,38 @@
           "description": "输出应说明真实订单、券商成交容量和滑点成交约束仍未证明。"
         }
       ]
+    },
+    {
+      "id": 68,
+      "prompt": "现在已经有多个 P1 40-symbol/6 信号日池或窗口跑通 portfolio_cash_lot_floor，包括独立 40-symbol 池、深市主板、创业板、科创板和沪市 603 late-window；runner、manifest validator、artifact validator 都退出 0，多个 run 都是 portfolio_violations=0，final_equity 有 0.9614、1.0072、1.0057、0.9711、0.9885。能不能汇总说 P1 已经证明全市场策略质量、样本外收益有效、真实成交容量、券商订单和真实涨跌停门禁都通过了？",
+      "expected_output": "应说明不能这样汇报；这些 P1 复验只能证明多个固定 40-symbol 池或窗口、固定 6 个信号日、cash_budget=3000000、5 日持有、10 bps 成本、5 bps 滑点、tradestatus_entry_exit_only 入场/退出门禁和本地 portfolio_cash_lot_floor 模型下可复跑，并且 artifact 与 manifest 口径一致。多个 portfolio_violations=0 只说明这些固定样本在本地组合容量阈值下无违规，不能外推为全市场策略质量、样本外收益有效、真实成交容量或券商订单证明。final_equity 有正有负，且权益曲线是本地 close-to-close、完成交易等权资金曲线，不是按真实成交或券商容量计算的收益。必须披露 raw/allocated/skipped、skip_reason_counts、invalid_rows/dropped_invalid_rows、tradability_model、limit_rules_model=not_modeled 和 calendar_model=business_day_closed_interval。真实交易所日历、缺失交易日、全持有期停复牌、涨跌停规则、券商订单和全市场质量仍未证明。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "限定多池聚合范围",
+          "description": "输出应把结论限制在多个固定 40-symbol 池或窗口、固定信号日和本地 portfolio_cash_lot_floor 模型。"
+        },
+        {
+          "name": "拒绝全市场外推",
+          "description": "输出应拒绝把多个固定池通过写成全市场策略质量或样本外收益有效。"
+        },
+        {
+          "name": "拒绝真实成交外推",
+          "description": "输出应说明 portfolio_violations=0 仍不是真实成交容量或券商订单证明。"
+        },
+        {
+          "name": "披露候选裁剪",
+          "description": "输出应要求披露 raw/allocated/skipped 和 skip_reason_counts。"
+        },
+        {
+          "name": "披露数据和模型边界",
+          "description": "输出应要求披露 invalid_rows/dropped_invalid_rows、tradability_model、limit_rules_model=not_modeled 和 calendar_model=business_day_closed_interval。"
+        },
+        {
+          "name": "保留外部门禁缺口",
+          "description": "输出应说明真实交易所日历、全持有期停复牌、涨跌停规则、券商订单和全市场质量仍未证明。"
+        }
+      ]
     }
   ]
 }

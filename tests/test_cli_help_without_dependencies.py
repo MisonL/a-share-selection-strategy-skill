@@ -112,6 +112,9 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--max-cash-reserved",
                 "--fail-on-symbol-overlap",
                 "--require-capital-fields",
+                "business_day_closed_interval",
+                "pandas.bdate_range",
+                "not an exchange trading calendar",
             ],
             "summarize_walk_forward_run.py": [
                 "--run-dir",

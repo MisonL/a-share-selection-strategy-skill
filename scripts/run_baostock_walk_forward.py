@@ -220,7 +220,8 @@ def allocate_command(args: argparse.Namespace, prices: Path, paths: dict[str, Pa
     return script_command("allocate_candidate_capital.py", "--prices", prices, "--candidates", paths["candidates"], "--output", paths["sized"], "--cash-budget", args.cash_budget, "--lot-size", args.lot_size, "--fail-on-unallocated")
 
 def backtest_command(args: argparse.Namespace, prices: Path, paths: dict[str, Path]) -> list[str]:
-    command = script_command("backtest_buy_hold.py", "--prices", prices, "--candidates", paths["sized"], "--output", paths["backtest"], "--hold-days", args.hold_days, "--cost-bps", args.cost_bps, "--slippage-bps", args.slippage_bps, "--require-tradable-bars", "--fail-on-incomplete")
+    signal_date = paths["backtest"].parent.name
+    command = script_command("backtest_buy_hold.py", "--prices", prices, "--candidates", paths["sized"], "--output", paths["backtest"], "--hold-days", args.hold_days, "--cost-bps", args.cost_bps, "--slippage-bps", args.slippage_bps, "--require-tradable-bars", "--expected-signal-date", signal_date, "--fail-on-incomplete")
     if args.require_tradable_holding_period:
         command.append("--require-tradable-holding-period")
     return command

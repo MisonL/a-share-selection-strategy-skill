@@ -124,6 +124,20 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         self.assertTrue(bool(result["missing_data"].iloc[0]))
         self.assertEqual("missing_entry_price", result["missing_reason"].iloc[0])
 
+    def test_expected_signal_date_rejects_mixed_candidate_dates(self) -> None:
+        prices = build_frame(days=130)
+        history = prices[prices["symbol"] == "000002"].reset_index(drop=True)
+        candidates = history.iloc[[20, 21]][["symbol", "date"]]
+
+        expected = str(history.loc[20, "date"])
+        with self.assertRaisesRegex(ValueError, f"expected-signal-date={expected}"):
+            backtest.run_backtest(
+                prices,
+                candidates,
+                hold_days=5,
+                expected_signal_date=expected,
+            )
+
     def test_negative_cost_or_slippage_is_rejected(self) -> None:
         prices = build_frame(days=130)
         candidate = prices[prices["symbol"] == "000002"].iloc[[20]][
@@ -300,6 +314,36 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         self.assertIn("cost_bps=10.0", stdout.getvalue())
         self.assertIn("slippage_bps=5.0", stdout.getvalue())
         self.assertIn("incomplete_trades=1", stderr.getvalue())
+
+    def test_cli_expected_signal_date_returns_error_without_output(self) -> None:
+        prices = build_frame(days=130)
+        history = prices[prices["symbol"] == "000002"].reset_index(drop=True)
+        candidate = history.iloc[[20, 21]][["symbol", "date"]]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            prices_path = Path(tmpdir) / "prices.csv"
+            candidates_path = Path(tmpdir) / "candidates.csv"
+            output_path = Path(tmpdir) / "backtest.csv"
+            prices.to_csv(prices_path, index=False)
+            candidate.to_csv(candidates_path, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = backtest.main(
+                    [
+                        "--prices",
+                        str(prices_path),
+                        "--candidates",
+                        str(candidates_path),
+                        "--output",
+                        str(output_path),
+                        "--expected-signal-date",
+                        str(history.loc[20, "date"]),
+                    ]
+                )
+        self.assertEqual(2, code)
+        self.assertFalse(output_path.exists())
+        self.assertEqual("", stdout.getvalue())
+        self.assertIn("expected-signal-date", stderr.getvalue())
 
     def test_cli_require_tradable_bars_returns_error_without_output(self) -> None:
         prices = build_frame(days=130)

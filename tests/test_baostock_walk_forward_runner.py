@@ -105,6 +105,8 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
         self.assertIn("--fail-on-empty-result", commands["2026-05-12:score"])
         self.assertIn("--fail-on-unallocated", commands["2026-05-12:allocate"])
         self.assertIn("--require-tradable-bars", commands["2026-05-12:backtest"])
+        self.assertIn("--expected-signal-date", commands["2026-05-12:backtest"])
+        self.assertIn("2026-05-12", commands["2026-05-12:backtest"])
         self.assertNotIn("--require-tradable-holding-period", commands["2026-05-12:backtest"])
         self.assertIn("--fail-on-incomplete", commands["2026-05-12:backtest"])
         self.assertIn("--require-capital-fields", commands["portfolio_overlap"])
@@ -199,6 +201,9 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
         self.assertLess(steps.index("portfolio_allocate"), steps.index("2026-05-12:backtest"))
         self.assertLess(steps.index("portfolio_allocate"), steps.index("2026-05-20:backtest"))
         self.assertIn("allocate_portfolio_candidate_capital.py", commands["portfolio_allocate"][1])
+        self.assertIn("--expected-signal-dates", commands["portfolio_allocate"])
+        self.assertIn("2026-05-12", commands["portfolio_allocate"])
+        self.assertIn("2026-05-20", commands["portfolio_allocate"])
         self.assertIn("qsss_raw_candidates.csv", " ".join(commands["2026-05-12:score"]))
         self.assertEqual("portfolio_cash_lot_floor", manifest["allocation_model"])
 

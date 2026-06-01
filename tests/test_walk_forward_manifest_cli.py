@@ -62,6 +62,19 @@ class WalkForwardManifestCliTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertIn("2026-05-12:score_missing_--fail-on-empty-result", stderr)
 
+    def test_cli_requires_expected_signal_date_on_backtest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest = Path(tmpdir) / "run_manifest.json"
+            data = build_manifest(["2026-05-12"])
+            backtest = next(item for item in data["steps"] if item["step"] == "2026-05-12:backtest")
+            backtest["command"].remove("--expected-signal-date")
+            write_json(manifest, data)
+
+            code, _stdout, stderr = call_cli(manifest, None, [])
+
+        self.assertEqual(3, code)
+        self.assertIn("2026-05-12:backtest_missing_--expected-signal-date", stderr)
+
     def test_cli_rejects_missing_steps_schema(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             manifest = Path(tmpdir) / "run_manifest.json"
@@ -102,6 +115,19 @@ class WalkForwardManifestCliTests(unittest.TestCase):
         self.assertIn("OK:", stdout)
         self.assertEqual("", stderr)
         self.assertEqual([], report["errors"])
+
+    def test_cli_requires_expected_signal_dates_on_portfolio_allocate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest = Path(tmpdir) / "run_manifest.json"
+            data = build_manifest(["2026-05-12"], allocation_model="portfolio_cash_lot_floor")
+            allocate = next(item for item in data["steps"] if item["step"] == "portfolio_allocate")
+            allocate["command"].remove("--expected-signal-dates")
+            write_json(manifest, data)
+
+            code, _stdout, stderr = call_cli(manifest, None, [])
+
+        self.assertEqual(3, code)
+        self.assertIn("portfolio_allocate_missing_--expected-signal-dates", stderr)
 
     def test_holding_period_model_requires_backtest_flag(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -190,7 +216,7 @@ def build_manifest(
     if allocation_model == "portfolio_cash_lot_floor":
         steps.append(step("portfolio_allocate", portfolio_allocate_command()))
         steps.extend(
-            step(f"{signal_date}:backtest", backtest_command(tradability_model))
+            step(f"{signal_date}:backtest", backtest_command(signal_date, tradability_model))
             for signal_date in signal_dates
         )
     steps.extend(
@@ -235,7 +261,7 @@ def signal_steps(
     ]
     if allocation_model != "portfolio_cash_lot_floor":
         steps.append(step(f"{signal_date}:allocate", command("allocate_candidate_capital.py", "--cash-budget", "1000000", "--lot-size", "100", "--fail-on-unallocated")))
-        steps.append(step(f"{signal_date}:backtest", backtest_command(tradability_model)))
+        steps.append(step(f"{signal_date}:backtest", backtest_command(signal_date, tradability_model)))
     return steps
 
 
@@ -248,11 +274,14 @@ def overlap_command() -> list[str]:
 
 
 def portfolio_allocate_command() -> list[str]:
-    return command("allocate_portfolio_candidate_capital.py", "--raw-candidates", "raw.csv", "--candidate-outputs", "candidates.csv", "--sized-outputs", "sized.csv", "--skipped-output", "skipped.csv", "--summary-output", "allocation.json", "--max-open-positions", "10", "--max-gross-weight", "1.0", "--max-gross-notional", "1000000", "--max-cash-reserved", "1000000", "--fail-on-symbol-overlap")
+    return command("allocate_portfolio_candidate_capital.py", "--raw-candidates", "raw.csv", "--expected-signal-dates", "2026-05-12", "--candidate-outputs", "candidates.csv", "--sized-outputs", "sized.csv", "--skipped-output", "skipped.csv", "--summary-output", "allocation.json", "--max-open-positions", "10", "--max-gross-weight", "1.0", "--max-gross-notional", "1000000", "--max-cash-reserved", "1000000", "--fail-on-symbol-overlap")
 
 
-def backtest_command(tradability_model: str = TRADABILITY_MODEL_ENTRY_EXIT) -> list[str]:
-    parts = ["--require-tradable-bars", "--fail-on-incomplete"]
+def backtest_command(
+    signal_date: str,
+    tradability_model: str = TRADABILITY_MODEL_ENTRY_EXIT,
+) -> list[str]:
+    parts = ["--require-tradable-bars", "--expected-signal-date", signal_date, "--fail-on-incomplete"]
     if tradability_model == TRADABILITY_MODEL_HOLDING_PERIOD:
         parts.append("--require-tradable-holding-period")
     return command("backtest_buy_hold.py", *parts)

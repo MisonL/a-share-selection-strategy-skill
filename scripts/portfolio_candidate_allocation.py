@@ -22,6 +22,7 @@ def allocate_portfolio(
     prices: pd.DataFrame,
     candidate_frames: list[pd.DataFrame],
     *,
+    expected_signal_dates: list[str] | None = None,
     cash_budget: float,
     lot_size: int,
     hold_days: int,
@@ -32,9 +33,9 @@ def allocate_portfolio(
     fail_on_symbol_overlap: bool,
     close_tolerance: float = 0.000001,
 ) -> tuple[list[pd.DataFrame], list[pd.DataFrame], pd.DataFrame, dict[str, Any]]:
-    validate_args(candidate_frames, cash_budget, lot_size, hold_days, max_open_positions, max_gross_weight, max_gross_notional, max_cash_reserved, close_tolerance)
+    validate_args(candidate_frames, expected_signal_dates, cash_budget, lot_size, hold_days, max_open_positions, max_gross_weight, max_gross_notional, max_cash_reserved, close_tolerance)
     price_frame = prepare_prices(prices)
-    raw = prepare_candidates(candidate_frames)
+    raw = prepare_candidates(candidate_frames, expected_signal_dates)
     validate_candidate_closes(raw, price_frame, close_tolerance)
     selected_rows: list[dict[str, Any]] = []
     sized_rows: list[dict[str, Any]] = []
@@ -61,9 +62,11 @@ def allocate_portfolio(
     return partition_outputs(candidate_frames, selected_rows, sized_rows, skipped_rows, raw, daily, options)
 
 
-def validate_args(candidate_frames: list[pd.DataFrame], cash_budget: float, lot_size: int, hold_days: int, max_open_positions: int, max_gross_weight: float, max_gross_notional: float, max_cash_reserved: float, close_tolerance: float) -> None:
+def validate_args(candidate_frames: list[pd.DataFrame], expected_signal_dates: list[str] | None, cash_budget: float, lot_size: int, hold_days: int, max_open_positions: int, max_gross_weight: float, max_gross_notional: float, max_cash_reserved: float, close_tolerance: float) -> None:
     if not candidate_frames:
         raise ValueError("at least one candidate file is required")
+    if expected_signal_dates is not None and len(expected_signal_dates) != len(candidate_frames):
+        raise ValueError("expected-signal-dates count must match candidate file count")
     checks = {
         "cash-budget": cash_budget,
         "max-gross-weight": max_gross_weight,
@@ -95,7 +98,7 @@ def prepare_prices(prices: pd.DataFrame) -> pd.DataFrame:
     return result.sort_values(["symbol", "date"]).reset_index(drop=True)
 
 
-def prepare_candidates(frames: list[pd.DataFrame]) -> pd.DataFrame:
+def prepare_candidates(frames: list[pd.DataFrame], expected_signal_dates: list[str] | None = None) -> pd.DataFrame:
     rows = []
     for source_index, frame in enumerate(frames):
         missing = [column for column in ["symbol", "date"] if column not in frame]
@@ -106,6 +109,7 @@ def prepare_candidates(frames: list[pd.DataFrame]) -> pd.DataFrame:
         current["_source_index"] = source_index
         current["_row_order"] = range(len(current))
         current["_signal_date"] = parse_dates(current["date"])
+        validate_source_signal_date(current, source_index, expected_signal_dates)
         rows.append(current)
     raw = pd.concat(rows, ignore_index=True)
     if raw.empty:
@@ -116,6 +120,28 @@ def prepare_candidates(frames: list[pd.DataFrame]) -> pd.DataFrame:
         raise ValueError("candidates contain duplicate symbol/date rows")
     sort_columns = [name for name in ["_signal_date", "rank", "_source_index", "_row_order"] if name in raw]
     return raw.sort_values(sort_columns).reset_index(drop=True)
+
+
+def validate_source_signal_date(
+    frame: pd.DataFrame,
+    source_index: int,
+    expected_signal_dates: list[str] | None,
+) -> None:
+    if expected_signal_dates is None:
+        return
+    actual_dates = frame["_signal_date"]
+    if actual_dates.isna().any():
+        raise ValueError("candidate dates must be parseable")
+    expected = parse_dates(pd.Series([expected_signal_dates[source_index]])).iloc[0]
+    if pd.isna(expected):
+        raise ValueError("expected-signal-dates must be parseable")
+    expected_text = expected.date().isoformat()
+    actual = sorted(actual_dates.dt.date.astype(str).unique())
+    if actual != [expected_text]:
+        raise ValueError(
+            f"candidate file {source_index} dates must match expected-signal-date={expected_text}; "
+            f"found={','.join(actual)}"
+        )
 
 
 def validate_candidate_closes(raw: pd.DataFrame, prices: pd.DataFrame, tolerance: float) -> None:

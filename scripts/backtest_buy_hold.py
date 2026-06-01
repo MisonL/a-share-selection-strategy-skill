@@ -35,6 +35,10 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Require tradestatus=1 for every observed bar from entry through exit.",
     )
+    parser.add_argument(
+        "--expected-signal-date",
+        help="Require every candidate date to match this signal date.",
+    )
     parser.add_argument("--fail-on-incomplete", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -47,6 +51,7 @@ def main(argv: list[str] | None = None) -> int:
             slippage_bps=args.slippage_bps,
             require_tradable_bars=args.require_tradable_bars,
             require_holding_period_tradable=args.require_tradable_holding_period,
+            expected_signal_date=args.expected_signal_date,
         )
         if args.fail_on_incomplete and summary["incomplete_trades"]:
             print_summary(summary, args.output, prefix="ERROR_SUMMARY")
@@ -105,6 +110,7 @@ def run_backtest(
     slippage_bps: float = 0.0,
     require_tradable_bars: bool = False,
     require_holding_period_tradable: bool = False,
+    expected_signal_date: str | None = None,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     ensure_runtime_dependencies()
     if hold_days < 1:
@@ -117,6 +123,7 @@ def run_backtest(
     if price_errors:
         raise ValueError("; ".join(price_errors))
     validate_candidates(candidates)
+    validate_expected_signal_date(candidates, expected_signal_date)
     prepared = prepare_prices(prices)
     options = BacktestOptions(
         holding_days=hold_days,
@@ -146,6 +153,24 @@ def validate_candidates(candidates: pd.DataFrame) -> None:
         raise ValueError(f"candidates missing required columns: {', '.join(missing)}")
     if candidates.empty:
         raise ValueError("candidates data is empty")
+
+
+def validate_expected_signal_date(candidates: pd.DataFrame, expected: str | None) -> None:
+    if expected is None:
+        return
+    expected_date = parse_dates(pd.Series([expected])).iloc[0]
+    if pd.isna(expected_date):
+        raise ValueError("expected-signal-date must be parseable")
+    actual_dates = parse_dates(candidates["date"])
+    if actual_dates.isna().any():
+        raise ValueError("candidate dates must be parseable")
+    expected_text = expected_date.date().isoformat()
+    actual = sorted(actual_dates.dt.date.astype(str).unique())
+    if actual != [expected_text]:
+        raise ValueError(
+            f"candidate dates must match expected-signal-date={expected_text}; "
+            f"found={','.join(actual)}"
+        )
 
 
 def prepare_prices(prices: pd.DataFrame) -> pd.DataFrame:

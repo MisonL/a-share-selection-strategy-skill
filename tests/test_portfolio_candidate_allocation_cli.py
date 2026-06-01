@@ -68,6 +68,21 @@ class PortfolioCandidateAllocationCliTests(unittest.TestCase):
         self.assertEqual(0, summary["allocated_candidates"])
         self.assertEqual(0.0, summary["max_gross_weight"])
 
+    def test_expected_signal_dates_reject_mixed_candidate_file_dates(self) -> None:
+        prices = build_frame(days=40)
+        first = signal_date(prices, 20)
+        second = signal_date(prices, 21)
+        frame = pd.concat(
+            [
+                candidates(prices, first, ["000002"]),
+                candidates(prices, second, ["600001"]),
+            ],
+            ignore_index=True,
+        )
+
+        with self.assertRaisesRegex(ValueError, f"expected-signal-date={first}"):
+            allocate(prices, [frame], expected_signal_dates=[first])
+
     def test_cli_writes_selected_sized_skipped_and_summary(self) -> None:
         prices = build_frame(days=40)
         date = signal_date(prices, 20)
@@ -93,6 +108,34 @@ class PortfolioCandidateAllocationCliTests(unittest.TestCase):
         self.assertEqual(["max_open_positions"], skipped["skip_reason"].tolist())
         self.assertEqual(2, summary["raw_candidates"])
 
+    def test_cli_expected_signal_dates_returns_error_without_outputs(self) -> None:
+        prices = build_frame(days=40)
+        first = signal_date(prices, 20)
+        second = signal_date(prices, 21)
+        frame = pd.concat(
+            [
+                candidates(prices, first, ["000002"]),
+                candidates(prices, second, ["600001"]),
+            ],
+            ignore_index=True,
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            paths = write_inputs(root, prices, frame)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = cli.main(
+                    cli_args(root, paths, max_open_positions=1)
+                    + ["--expected-signal-dates", first]
+                )
+            selected_exists = (root / "candidates.csv").exists()
+
+        self.assertEqual(2, code)
+        self.assertEqual("", stdout.getvalue())
+        self.assertIn("expected-signal-date", stderr.getvalue())
+        self.assertFalse(selected_exists)
+
 
 def allocate(
     prices: pd.DataFrame,
@@ -101,10 +144,12 @@ def allocate(
     cash_budget: float = 10000.0,
     max_open_positions: int = 10,
     fail_on_symbol_overlap: bool = False,
+    expected_signal_dates: list[str] | None = None,
 ) -> tuple[list[pd.DataFrame], list[pd.DataFrame], pd.DataFrame, dict[str, object]]:
     return allocation.allocate_portfolio(
         prices,
         frames,
+        expected_signal_dates=expected_signal_dates,
         cash_budget=cash_budget,
         lot_size=100,
         hold_days=5,

@@ -189,7 +189,7 @@ def signal_command_errors(
         "predict": ["generate_lightgbm_predictions.py", "--summary-output", "--fail-on-skipped"],
         "validate": ["validate_ohlcv.py", "--config", "qsss_profile_config.json"],
         "score": ["score_candidates.py", "--fail-on-skipped", "--fail-on-empty-result"],
-        "backtest": backtest_requirements(required_tradability_model),
+        "backtest": backtest_requirements(signal_date, required_tradability_model),
     }
     if allocation_model != "portfolio_cash_lot_floor":
         checks["allocate"] = ["allocate_candidate_capital.py", "--cash-budget", "--lot-size", "--fail-on-unallocated"]
@@ -199,8 +199,14 @@ def signal_command_errors(
     return errors
 
 
-def backtest_requirements(required_tradability_model: str) -> list[str]:
-    required = ["backtest_buy_hold.py", "--require-tradable-bars", "--fail-on-incomplete"]
+def backtest_requirements(signal_date: str, required_tradability_model: str) -> list[str]:
+    required = [
+        "backtest_buy_hold.py",
+        "--require-tradable-bars",
+        "--expected-signal-date",
+        signal_date,
+        "--fail-on-incomplete",
+    ]
     if required_tradability_model == TRADABILITY_MODEL_HOLDING_PERIOD:
         required.append("--require-tradable-holding-period")
     return required
@@ -235,6 +241,7 @@ def portfolio_allocate_errors(command: list[str]) -> list[str]:
     required = [
         "allocate_portfolio_candidate_capital.py",
         "--raw-candidates",
+        "--expected-signal-dates",
         "--candidate-outputs",
         "--sized-outputs",
         "--skipped-output",

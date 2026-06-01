@@ -167,6 +167,9 @@ def raw_candidate_errors(run_dir: Path, date: str, selected_count: int, args: An
 
 def backtest_errors(rows: list[dict[str, str]], date: str, expected: int, args: Any) -> list[str]:
     errors = required_column_errors(rows, (*CAPITAL_FIELDS, "status", "missing_data"), f"{date}_backtest")
+    bad_dates = [row.get("signal_date") for row in rows if row.get("signal_date") != date]
+    if bad_dates:
+        errors.append(f"{date}_backtest_signal_date_mismatch={bad_dates[0]}")
     if count_complete(rows) != expected:
         errors.append(f"{date}_completed_trades={count_complete(rows)} expected={expected}")
     for row in rows:

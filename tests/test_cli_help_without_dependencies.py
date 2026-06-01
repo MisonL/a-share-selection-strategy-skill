@@ -44,6 +44,14 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--timeout-seconds",
                 "--fail-on-fetch-error",
             ],
+            "probe_external_source_stability.py": [
+                "--output-dir",
+                "--summary-output",
+                "--iterations",
+                "--akshare-symbols",
+                "--yfinance-symbols",
+                "--baostock-symbols",
+            ],
             "generate_lightgbm_predictions.py": [
                 "--input",
                 "--output",

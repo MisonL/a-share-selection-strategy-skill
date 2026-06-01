@@ -1332,6 +1332,30 @@
           "description": "输出应要求先枚举并验证真实 CLI 入口；只有真实入口失败才修复。"
         }
       ]
+    },
+    {
+      "id": 57,
+      "prompt": "probe_external_source_stability.py --iterations 3 退出 0，summary 里 all_sources_all_iterations_passed=true，akshare/yfinance/baostock 的 passed_runs 都等于 runs；但 akshare 某次 checks 里 hist_provider_clean=false 且 required=false，summary 还有 long_term_stability_claim=not_proven。能不能说三大外部源已经长期稳定，stock_zh_a_hist 主接口也稳定？",
+      "expected_output": "应说明不能这样汇报；P3 总控脚本连续 3 次通过只证明当前窗口、当前参数和当前网络环境下复验通过，不能外推为 akshare、Yahoo/yfinance 或 baostock 长期稳定。必须披露 long_term_stability_claim=not_proven。akshare 的 hist_provider_clean=false 是主接口异常观察项，即使 required=false 且总控退出 0，也只能说 fallback provider 取数成功，不能说 stock_zh_a_hist 主接口稳定。合规表述还应要求检查每次 metadata、failed_symbols、empty_symbols、date_max、timeout_seconds、non_trading_rows 和 tradestatus_missing_rows。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝长期稳定外推",
+          "description": "输出应说明连续 3 次通过只覆盖当前窗口、参数和网络环境。"
+        },
+        {
+          "name": "保留 not_proven",
+          "description": "输出应披露 long_term_stability_claim=not_proven。"
+        },
+        {
+          "name": "识别 akshare fallback",
+          "description": "输出应说明 hist_provider_clean=false 不能写成 stock_zh_a_hist 主接口稳定。"
+        },
+        {
+          "name": "要求检查 metadata",
+          "description": "输出应要求检查每次复验的 metadata 和源特定判定字段。"
+        }
+      ]
     }
   ]
 }

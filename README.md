@@ -280,6 +280,19 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
 
 yfinance 裸 OHLCV 不含 `turn` 或 `turnover`，通用评分会输出 `turnover_assumption=neutral_series_missing_turnover` 并在 stderr 说明使用 neutral turnover series；报告候选时必须保留这个假设。`score_diagnostics.csv` 会记录每个已评分 symbol 的阈值失败项和是否入选，用于解释未入选标的，但它仍不是回测或收益证明。`end-date` 可能落在非交易日，实际数据范围以 metadata 中每个 symbol 的 `date_min/date_max` 为准；fetch 退出 0 且 `validate_ohlcv.py` 通过，也不能把非交易日 `end-date` 写成实际最后交易日、信号日或可回测入场日。该链路不生成或验证 LightGBM prediction，不适用于 QSSS-derived；若强行使用 QSSS-derived 配置，仍会因为缺少 `prediction/prediction_score` 和 `turn/turnover` 显式失败。
 
+P3 外部源稳定性观察使用固定总控脚本重复调用 akshare、yfinance 和 baostock 取数入口。该脚本只证明当前窗口、当前参数和当前网络环境下的连续复验结果；即使 `all_sources_all_iterations_passed=true`，也不能写成公网数据源长期稳定。
+
+```bash
+RUN_DIR=/tmp/stock-selection-p3-external-$(date -u +%Y%m%dT%H%M%SZ)
+uv run --with pandas --with numpy --with akshare --with yfinance --with baostock \
+  python scripts/probe_external_source_stability.py \
+    --output-dir "$RUN_DIR/runs" \
+    --summary-output "$RUN_DIR/external_source_stability.json" \
+    --iterations 3
+```
+
+读取 `external_source_stability.json` 时必须检查 `summary.sources.*.all_passed`、逐次 `metadata`、`checks` 和 `long_term_stability_claim=not_proven`。akshare 的 `hist_provider_clean` 是观察项：若该项为 false 而其他必需检查通过，只能说明主接口失败后 fallback provider 成功，不能写成 `stock_zh_a_hist` 稳定。yfinance 的实际最后交易日仍看每个 symbol 的 `date_max`；baostock 仍需检查 `non_trading_rows=0`、`tradestatus_missing_rows=0` 和 `adjustflag=3`。
+
 真实回测必须先按信号日截断评分输入，避免用未来行情生成候选；回测价格文件可以保留信号日之后的真实行用于出场。P1 组合容量门禁默认使用一键 runner 的 `portfolio_cash_lot_floor` 路径，不把预期失败当作通过条件：
 
 ```bash

@@ -73,6 +73,17 @@
 - 若 partial fetch 应作为门禁失败，必须使用 `--fail-on-fetch-error` 并按非 0 退出处理。
 ```
 
+## P3 外部源复验不是长期稳定证明
+
+```markdown
+## 外部源稳定性仍未证明
+- `probe_external_source_stability.py` 的 `all_sources_all_iterations_passed=true` 只说明当前窗口、当前参数和当前网络环境下连续复验通过。
+- 必须披露 `long_term_stability_claim=not_proven`，不能写成 akshare、Yahoo/yfinance 或 baostock 长期稳定。
+- akshare 的 `hist_provider_clean=false` 是主接口异常观察项；即使总控脚本退出 0，也只能写“fallback provider 成功”，不能写 `stock_zh_a_hist` 稳定。
+- yfinance 的实际最后交易日仍以每个 symbol 的 `date_max` 为准；`timeout_seconds` 只记录本次等待上限，不证明公网稳定。
+- baostock fetch 通过仍只覆盖本次 symbols、日期范围、`adjustflag` 和 metadata 门禁；不证明涨跌停规则、券商成交或长期服务稳定。
+```
+
 ## 前导零损坏
 
 ```markdown

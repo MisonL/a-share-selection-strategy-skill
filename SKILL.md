@@ -88,6 +88,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `fetch_baostock_a_share.py`：可选 baostock A 股日线取数脚本，输出本地行情 CSV 和 metadata JSON，包含 `tradestatus/preclose/pctChg/isST` 门禁字段。
 - `fetch_akshare_a_share.py`：可选 akshare A 股日线取数脚本，先尝试中文列接口，失败时记录 fallback 并转用 `stock_zh_a_daily`。
 - `fetch_yfinance_ohlcv.py`：可选 yfinance 日线取数脚本，输出本地通用 OHLCV CSV 和 metadata JSON；用 `--timeout-seconds` 显式限制每票拉取超时。非严格模式可能写出部分 symbol，门禁必须检查 `symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`，或使用 `--fail-on-fetch-error`。fetch metadata 的 `end_date` 是请求截止日；实际最后交易日必须看每个 symbol 的 `date_max`。`--market` 只是写入输出标签，不证明 yfinance 数据源、交易所或交易日历变成对应市场。
+- `probe_external_source_stability.py`：P3 外部源稳定性观察总控脚本，重复调用 akshare、yfinance 和 baostock 取数入口并写出 summary JSON。`all_sources_all_iterations_passed=true` 只说明当前窗口、参数和网络环境下连续复验通过；`long_term_stability_claim` 必须保持 `not_proven`。
 - `stock_selection_*.py`、`lightgbm_prediction_summary.py`：评分脚本使用的配置、数据读取、指标、输出、profile、股票池、可交易性元数据和诊断辅助函数；它们不是用户 CLI 入口，`python3 -S <helper>.py --help` 的顶层 pandas/numpy import 失败不属于 `--help` 入口缺口。`python3 -S --help` 依赖轻量化门禁只适用于带 `argparse`/`main()`/`__main__` 的脚本入口。
 
 使用方式：

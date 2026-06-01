@@ -225,6 +225,12 @@ uv run --with pandas --with numpy --with baostock python scripts/fetch_baostock_
   --fail-on-fetch-error
 ```
 
+P2 真实涨跌停规则门禁当前仍是 `not_modeled`:
+
+- `preclose/pctChg/tradestatus/isST` 只是行情控制和诊断字段，不是 `up_limit/down_limit/limit_status` 这类直接涨跌停字段；不得用 `preclose + pctChg`、股票前缀或 `isST` 粗推真实涨跌停规则。
+- `probe_baostock_limit_fields.py` 只做字段可用性探针，不做规则推断；读取结果时必须看 `summary.supported_direct_limit_fields`、`summary.direct_limit_field_available` 和 `rule_inference_performed=false`，不能只看控制字段可用或候选字段列表。
+- walk-forward 命令中的 `--required-limit-rules-model not_modeled` 只是在 runner、manifest validator 和 artifact validator 中锁定并校验“未建模”口径保持一致，不是 P2 通过。
+
 akshare A 股入口会先尝试 `stock_zh_a_hist` 中文列；该接口失败或空结果时，会在 metadata 中记录 `fallback_errors` 并转用 `stock_zh_a_daily` 英文字段。真实环境失败时命令应非 0，不得改用 mock 或缓存样例冒充成功。取数窗口必须覆盖评分配置的最小历史行数；默认通用配置需要每个标的至少 `120` 行，`2024-01-01` 到 `2024-06-30` 这类半年窗口可能不足。
 
 ```bash

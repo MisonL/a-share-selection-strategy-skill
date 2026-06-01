@@ -116,6 +116,31 @@ class WalkForwardManifestCliTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertIn("2026-05-12:backtest_missing_--require-tradable-holding-period", stderr)
 
+    def test_holding_period_model_accepts_required_backtest_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest = Path(tmpdir) / "run_manifest.json"
+            output = Path(tmpdir) / "manifest_report.json"
+            write_json(
+                manifest,
+                build_manifest(
+                    ["2026-05-12"],
+                    tradability_model="tradestatus_holding_period_bars",
+                ),
+            )
+
+            code, stdout, stderr = call_cli(
+                manifest,
+                output,
+                [],
+                tradability_model="tradestatus_holding_period_bars",
+            )
+            report = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(0, code)
+        self.assertIn("OK:", stdout)
+        self.assertEqual("", stderr)
+        self.assertEqual([], report["errors"])
+
 
 def call_cli(
     manifest: Path,

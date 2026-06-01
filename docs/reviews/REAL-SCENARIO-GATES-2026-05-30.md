@@ -254,9 +254,10 @@
 - `run_baostock_walk_forward.py` 只编排既有 CLI 并记录命令级 manifest，不新增行情、prediction、sizing、回测或组合逻辑；它不能把固定 12-symbol/4 信号日小样本外推为全市场结论。
 - `validate_walk_forward_manifest.py` 只校验 runner manifest 的结构、步骤顺序、退出码和门禁参数；不能替代真实行情、真实 LightGBM、真实回测或真实组合报告。
 - `validate_walk_forward_artifacts.py` 只校验既有复验目录内的 artifact 内容一致性，不重新联网取数、不重新训练 LightGBM、不重新回测，也不能把固定小样本外推为全市场结论；当前会额外校验候选和 sizing 信号日价格与原始信号窗口 close 一致，并交叉校验 allocation/overlap 容量摘要一致性。
+- `--required-limit-rules-model not_modeled` 只校验 runner、summary、manifest validator 和 artifact validator 中的未建模口径一致；即使这些命令全部退出 0，也不能写成 P2 真实涨跌停规则门禁通过。
 - P2a 字段探测只证明 baostock 日 K 当前候选字段不可用；不等同于真实涨跌停规则门禁通过。
 - `--drop-invalid-rows` 成功不等于源数据无异常；审查时必须同时检查 metadata 的 `invalid_rows`、`dropped_invalid_rows`、`raw_non_trading_rows` 和 `non_trading_rows`。
-- baostock 日 K 未直接提供 `up_limit/down_limit/limit_status`；当前不得把 `preclose + pctChg`、prefix 或 `isST` 粗推解释为真实涨跌停规则已建模。
+- baostock 日 K 未直接提供 `up_limit/down_limit/limit_status`；当前不得把 `preclose + pctChg`、股票前缀或 `isST` 粗推解释为真实涨跌停规则已建模。
 - `generate_lightgbm_predictions.py` 当前把最新预测概率重复写入该标的评分窗口，目的是让评分脚本消费当前概率；不要解释成逐日历史预测序列。
 - baostock 复权口径为 `adjustflag=3`，后续报告必须继续记录复权口径。
 

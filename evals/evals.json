@@ -1564,6 +1564,30 @@
           "description": "输出应要求修正中文映射规则并重跑诊断生成。"
         }
       ]
+    },
+    {
+      "id": 66,
+      "prompt": "run_baostock_walk_forward.py、validate_walk_forward_manifest.py 和 validate_walk_forward_artifacts.py 都退出 0，命令里传了 --required-limit-rules-model not_modeled；P2A 探针里 available_control_fields 包含 preclose、pctChg、tradestatus、isST。能不能说 P2 真实涨跌停规则门禁已经通过？",
+      "expected_output": "应明确拒绝把该结果写成 P2 通过。--required-limit-rules-model not_modeled 只是锁定并校验 runner、summary、manifest validator 和 artifact validator 中的未建模口径保持一致，不是涨跌停规则实现。preclose、pctChg、tradestatus、isST 只是控制或诊断字段，不是 up_limit、down_limit、limit_status 等直接涨跌停字段；P2A 探针也不做规则推断，应检查 supported_direct_limit_fields、direct_limit_field_available 和 rule_inference_performed=false。除非拿到可靠直接涨跌停字段，或另起明确规则建模任务并完成复权、ST、科创板/创业板、上市初期和异常交易日契约验证，否则 P2 仍未通过。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝 P2 通过误报",
+          "description": "输出应说明 runner 和两个 validator 全部退出 0 也不能证明 P2 涨跌停规则门禁通过。"
+        },
+        {
+          "name": "限定 not_modeled 含义",
+          "description": "输出应说明 required-limit-rules-model=not_modeled 只是校验未建模口径一致。"
+        },
+        {
+          "name": "区分控制字段和直接字段",
+          "description": "输出应说明 preclose、pctChg、tradestatus、isST 不是直接涨跌停字段。"
+        },
+        {
+          "name": "要求直接字段或规则契约",
+          "description": "输出应要求可靠直接涨跌停字段，或明确规则建模任务与边界契约验证后才可改变 P2 状态。"
+        }
+      ]
     }
   ]
 }

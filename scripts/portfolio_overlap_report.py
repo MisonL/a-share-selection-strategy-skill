@@ -11,6 +11,7 @@ from typing import Any
 
 
 REQUIRED_COLUMNS = ["symbol", "signal_date", "entry_date", "exit_date", "missing_data", "status"]
+CALENDAR_MODEL = "business_day_closed_interval"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -219,7 +220,7 @@ def build_summary(
         "trades": int(len(combined)),
         "complete_trades": int(len(complete)),
         "incomplete_trades": int(len(combined) - len(complete)),
-        "calendar_model": "business_day_closed_interval",
+        "calendar_model": CALENDAR_MODEL,
         "daily_rows": int(len(daily)),
         "max_open_positions": max_open,
         "max_open_position_dates": max_dates,

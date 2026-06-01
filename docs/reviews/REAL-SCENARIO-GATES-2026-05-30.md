@@ -277,6 +277,12 @@
 - `generate_lightgbm_predictions.py` 当前把最新预测概率重复写入该标的评分窗口，目的是让评分脚本消费当前概率；不要解释成逐日历史预测序列。
 - baostock 复权口径为 `adjustflag=3`，后续报告必须继续记录复权口径。
 
+## PR 合并闭环 / 2026-06-01
+
+- `codex/portfolio-allocation-validator-crosscheck` 已通过 PR #1 `[codex] Harden stock selection real-scenario gates` 合并到 `main`；`gh pr view 1` 记录 `state=MERGED`、`mergedAt=2026-06-01T07:59:45Z`、merge commit `4d67a3ded29a13a3c9f65dec0adb05657a6c870c`、head `0269cec3892f3238f28a2a2ac49144f8f9af7b8e`。
+- 2026-06-01 复验 `git merge-base --is-ancestor origin/codex/portfolio-allocation-validator-crosscheck origin/main` 和 `git merge-base --is-ancestor 4d67a3ded29a13a3c9f65dec0adb05657a6c870c origin/main` 均返回 0；`git rev-list --left-right --count origin/main...origin/codex/portfolio-allocation-validator-crosscheck` 为 `25 0`，说明该分支 head 已包含于 `origin/main`。
+- GitHub 当前列出 PR #1 commits 数量为 74；不应再把早期 60 个提交未闭环作为当前未完成风险，当前无需再次 merge PR #1 或该分支。
+
 ## Current Next Gates / 下一步门禁
 
 - P1: 继续扩大 A 股真实 QSSS 门禁。当前已有两个既有 40-symbol 池、一组沪市 40-symbol 月末窗口、一组深市主板 40-symbol 零交集月末窗口、一组创业板 40-symbol 零交集月末窗口、一组科创板 40-symbol 零交集月末窗口和一组沪市 603 号段 late-window 窗口复验，并已在六个 40-symbol 池/窗口上复验 `portfolio_cash_lot_floor` 组合级 sizing/cut；下一轮 P1 应优先推进更真实的订单容量/涨跌停规则门禁，或继续扩大到更多独立池和更长窗口。

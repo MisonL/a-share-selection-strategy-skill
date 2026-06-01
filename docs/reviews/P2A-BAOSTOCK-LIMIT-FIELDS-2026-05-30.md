@@ -270,6 +270,53 @@ OK: source=baostock probe_type=limit_field_availability symbols=4 supported_cand
 
 本次核心控制字段严格复验通过，但只能证明 `preclose/pctChg/tradestatus/isST` 可取、直接涨跌停字段仍不可用。核心控制字段可取不等于真实涨跌停规则已建模，P2 仍必须保留 `limit_rules_model=not_modeled`。
 
+## 2026-06-01 15:16 UTC 核心控制字段严格复验
+
+命令:
+
+```bash
+uv run --with pandas --with numpy --with baostock python scripts/probe_baostock_limit_fields.py \
+  --symbols 000001,600000,300750,688981 \
+  --start-date 2025-08-25 \
+  --end-date 2025-09-10 \
+  --adjust 3 \
+  --candidate-fields up_limit,down_limit,limit_status,is_trading,suspended \
+  --control-fields preclose,pctChg,tradestatus,isST \
+  --output /tmp/stock-selection-p2a-limit-field-core-20260601T151610Z/baostock_limit_field_probe.json \
+  --fail-on-provider-error \
+  --require-control-rows
+```
+
+退出码: `0`。
+
+标准输出摘要:
+
+```text
+OK: source=baostock probe_type=limit_field_availability symbols=4 supported_candidate_fields=0 unsupported_candidate_fields=5 supported_direct_limit_fields=0 supported_trading_state_fields=0 available_control_fields=4 provider_error_fields=0 control_rows=208 direct_limit_field_available=False trading_state_field_available=False limit_rules_model=not_modeled
+```
+
+产物:
+
+- `/tmp/stock-selection-p2a-limit-field-core-20260601T151610Z/baostock_limit_field_probe.json`
+
+关键 JSON 事实:
+
+- `limit_rules_model=not_modeled`
+- `rule_inference_performed=false`
+- `summary.supported_candidate_fields=[]`
+- `summary.unsupported_candidate_fields=up_limit,down_limit,limit_status,is_trading,suspended`
+- `summary.provider_error_fields=[]`
+- `summary.available_control_fields=preclose,pctChg,tradestatus,isST`
+- `summary.control_rows=208`
+- `summary.supported_direct_limit_fields=[]`
+- `summary.supported_trading_state_fields=[]`
+- `summary.direct_limit_field_available=false`
+- `summary.trading_state_field_available=false`
+
+字段结果与上一轮核心控制字段严格复验一致: `up_limit/down_limit/limit_status/is_trading/suspended` 均为 `unsupported`，错误码均为 `10004012`，行数均为 `0`；`preclose/pctChg/tradestatus/isST` 均可作为控制字段返回。控制字段中 `tradestatus` 计数为 `0=6, 1=46`，`isST` 计数为 `0=52`，`pctChg` 有 `6` 个缺失值。
+
+本次核心控制字段严格复验通过，但只能证明 `preclose/pctChg/tradestatus/isST` 可取、直接涨跌停字段仍不可用。核心控制字段可取不等于真实涨跌停规则已建模，P2 仍必须保留 `limit_rules_model=not_modeled`。
+
 ## 结论
 
 本次 P2a 只证明当前 baostock 日 K 接口在指定窗口内没有可直接消费的 `up_limit/down_limit/limit_status` 直接涨跌停字段，也没有可作为候选字段取到的 `is_trading/suspended` 交易状态字段。`preclose/pctChg/tradestatus/isST` 可作为行情诊断和停牌/交易状态控制字段，但不能被解释为真实涨跌停规则已建模。

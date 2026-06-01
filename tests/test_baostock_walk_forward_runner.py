@@ -13,6 +13,10 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import run_baostock_walk_forward as runner  # noqa: E402
+from stock_selection_model_contracts import (  # noqa: E402
+    LIMIT_RULES_MODEL_NOT_MODELED,
+    TRADABILITY_MODEL_HOLDING_PERIOD,
+)
 
 
 class BaostockWalkForwardRunnerTests(unittest.TestCase):
@@ -59,7 +63,7 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
         summary_command = data["steps"][-1]["command"]
         self.assertIn("--expect-portfolio-violations", summary_command)
         self.assertIn("--required-limit-rules-model", summary_command)
-        self.assertIn("not_modeled", summary_command)
+        self.assertIn(LIMIT_RULES_MODEL_NOT_MODELED, summary_command)
 
     def test_offline_plan_fails_fast_and_records_failed_step(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -125,9 +129,9 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
             runner.run_pipeline(context)
             commands = {item["step"]: item["command"] for item in manifest["steps"]}
 
-        self.assertEqual("tradestatus_holding_period_bars", manifest["tradability_model"])
+        self.assertEqual(TRADABILITY_MODEL_HOLDING_PERIOD, manifest["tradability_model"])
         self.assertIn("--require-tradable-holding-period", commands["2026-05-12:backtest"])
-        self.assertIn("tradestatus_holding_period_bars", commands["summary"])
+        self.assertIn(TRADABILITY_MODEL_HOLDING_PERIOD, commands["summary"])
 
     def test_drop_invalid_rows_marks_summary_allowance_explicitly(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

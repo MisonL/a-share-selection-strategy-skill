@@ -122,7 +122,7 @@ def run_backtest(
         holding_days=hold_days,
         cost_bps=cost_bps,
         slippage_bps=slippage_bps,
-        require_tradable_bars=require_tradable_bars or require_holding_period_tradable,
+        require_tradable_bars=require_tradable_bars,
         require_holding_period_tradable=require_holding_period_tradable,
     )
     rows = [
@@ -136,7 +136,7 @@ def run_backtest(
         cost_bps,
         slippage_bps,
         options.require_tradable_bars,
-        require_holding_period_tradable=require_holding_period_tradable,
+        require_holding_period_tradable=options.require_holding_period_tradable,
     )
 
 
@@ -258,7 +258,7 @@ def future_or_tradability_failure(
     exit_pos = entry_pos + options.holding_days
     if exit_pos >= len(history):
         return {"reason": "missing_future_price", "exit_pos": exit_pos}
-    if options.require_tradable_bars:
+    if options.require_tradable_bars or options.require_holding_period_tradable:
         reason = tradability_failure_reason(
             history,
             entry_pos,

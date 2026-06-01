@@ -14,6 +14,11 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import validate_walk_forward_manifest as manifest_cli  # noqa: E402
+from stock_selection_model_contracts import (  # noqa: E402
+    LIMIT_RULES_MODEL_NOT_MODELED,
+    TRADABILITY_MODEL_ENTRY_EXIT,
+    TRADABILITY_MODEL_HOLDING_PERIOD,
+)
 
 
 class WalkForwardManifestCliTests(unittest.TestCase):
@@ -101,7 +106,7 @@ class WalkForwardManifestCliTests(unittest.TestCase):
     def test_holding_period_model_requires_backtest_flag(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             manifest = Path(tmpdir) / "run_manifest.json"
-            data = build_manifest(["2026-05-12"], tradability_model="tradestatus_holding_period_bars")
+            data = build_manifest(["2026-05-12"], tradability_model=TRADABILITY_MODEL_HOLDING_PERIOD)
             backtest = next(item for item in data["steps"] if item["step"] == "2026-05-12:backtest")
             backtest["command"].remove("--require-tradable-holding-period")
             write_json(manifest, data)
@@ -110,7 +115,7 @@ class WalkForwardManifestCliTests(unittest.TestCase):
                 manifest,
                 None,
                 [],
-                tradability_model="tradestatus_holding_period_bars",
+                tradability_model=TRADABILITY_MODEL_HOLDING_PERIOD,
             )
 
         self.assertEqual(3, code)
@@ -124,7 +129,7 @@ class WalkForwardManifestCliTests(unittest.TestCase):
                 manifest,
                 build_manifest(
                     ["2026-05-12"],
-                    tradability_model="tradestatus_holding_period_bars",
+                    tradability_model=TRADABILITY_MODEL_HOLDING_PERIOD,
                 ),
             )
 
@@ -132,7 +137,7 @@ class WalkForwardManifestCliTests(unittest.TestCase):
                 manifest,
                 output,
                 [],
-                tradability_model="tradestatus_holding_period_bars",
+                tradability_model=TRADABILITY_MODEL_HOLDING_PERIOD,
             )
             report = json.loads(output.read_text(encoding="utf-8"))
 
@@ -146,7 +151,7 @@ def call_cli(
     manifest: Path,
     output: Path | None,
     extra: list[str],
-    tradability_model: str = "tradestatus_entry_exit_only",
+    tradability_model: str = TRADABILITY_MODEL_ENTRY_EXIT,
 ) -> tuple[int, str, str]:
     args = [
         "--manifest",
@@ -158,7 +163,7 @@ def call_cli(
         "--required-tradability-model",
         tradability_model,
         "--required-limit-rules-model",
-        "not_modeled",
+        LIMIT_RULES_MODEL_NOT_MODELED,
         *extra,
     ]
     if output:
@@ -177,7 +182,7 @@ def build_manifest(
     failed_step: str = "",
     max_candidates: int | None = None,
     allocation_model: str = "equal_cash_budget_lot_floor",
-    tradability_model: str = "tradestatus_entry_exit_only",
+    tradability_model: str = TRADABILITY_MODEL_ENTRY_EXIT,
 ) -> dict[str, object]:
     steps = [step("fetch", fetch_command())]
     for signal_date in signal_dates:
@@ -205,7 +210,7 @@ def build_manifest(
         "symbols": ["000001", "600000"],
         "signal_dates": signal_dates,
         "tradability_model": tradability_model,
-        "limit_rules_model": "not_modeled",
+        "limit_rules_model": LIMIT_RULES_MODEL_NOT_MODELED,
         "max_candidates": max_candidates,
         "allocation_model": allocation_model,
         "steps": steps,
@@ -246,15 +251,15 @@ def portfolio_allocate_command() -> list[str]:
     return command("allocate_portfolio_candidate_capital.py", "--raw-candidates", "raw.csv", "--candidate-outputs", "candidates.csv", "--sized-outputs", "sized.csv", "--skipped-output", "skipped.csv", "--summary-output", "allocation.json", "--max-open-positions", "10", "--max-gross-weight", "1.0", "--max-gross-notional", "1000000", "--max-cash-reserved", "1000000", "--fail-on-symbol-overlap")
 
 
-def backtest_command(tradability_model: str = "tradestatus_entry_exit_only") -> list[str]:
+def backtest_command(tradability_model: str = TRADABILITY_MODEL_ENTRY_EXIT) -> list[str]:
     parts = ["--require-tradable-bars", "--fail-on-incomplete"]
-    if tradability_model == "tradestatus_holding_period_bars":
+    if tradability_model == TRADABILITY_MODEL_HOLDING_PERIOD:
         parts.append("--require-tradable-holding-period")
     return command("backtest_buy_hold.py", *parts)
 
 
-def summary_command(signal_dates: list[str], tradability_model: str = "tradestatus_entry_exit_only") -> list[str]:
-    return command("summarize_walk_forward_run.py", "--signal-dates", *signal_dates, "--expected-symbol-count", "2", "--required-tradability-model", tradability_model, "--required-limit-rules-model", "not_modeled", "--fail-on-symbol-overlap", "--expect-portfolio-violations")
+def summary_command(signal_dates: list[str], tradability_model: str = TRADABILITY_MODEL_ENTRY_EXIT) -> list[str]:
+    return command("summarize_walk_forward_run.py", "--signal-dates", *signal_dates, "--expected-symbol-count", "2", "--required-tradability-model", tradability_model, "--required-limit-rules-model", LIMIT_RULES_MODEL_NOT_MODELED, "--fail-on-symbol-overlap", "--expect-portfolio-violations")
 
 
 def command(script: str, *parts: str) -> list[str]:

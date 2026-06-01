@@ -12,14 +12,18 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from stock_selection_model_contracts import (
+    LIMIT_RULES_MODEL_NOT_MODELED,
+    TRADABILITY_MODEL_ENTRY_EXIT,
+    TRADABILITY_MODEL_HOLDING_PERIOD,
+)
 from stock_selection_symbols import parse_six_digit_symbols
 from walk_forward_portfolio_commands import ALLOCATION_MODEL_EQUAL, ALLOCATION_MODEL_PORTFOLIO, portfolio_allocate_command
 
 SCRIPTS = Path(__file__).resolve().parent
 CONFIG_PATH = SCRIPTS / "qsss_profile_config.json"
-TRADABILITY_MODEL = "tradestatus_entry_exit_only"
-TRADABILITY_MODEL_HOLDING_PERIOD = "tradestatus_holding_period_bars"
-LIMIT_RULES_MODEL = "not_modeled"
+TRADABILITY_MODEL = TRADABILITY_MODEL_ENTRY_EXIT
+LIMIT_RULES_MODEL = LIMIT_RULES_MODEL_NOT_MODELED
 Executor = Callable[[list[str]], subprocess.CompletedProcess[str]]
 
 @dataclass(frozen=True)

@@ -9,12 +9,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from stock_selection_model_contracts import TRADABILITY_MODEL_HOLDING_PERIOD
 
 SIGNAL_SUFFIXES = ("slice", "predict", "validate", "score", "allocate", "backtest")
 PORTFOLIO_SIGNAL_SUFFIXES = ("slice", "predict", "validate", "score")
 RUNNER = "run_baostock_walk_forward"
 SOURCE = "baostock"
-TRADABILITY_MODEL_HOLDING_PERIOD = "tradestatus_holding_period_bars"
 
 
 def main(argv: list[str] | None = None) -> int:

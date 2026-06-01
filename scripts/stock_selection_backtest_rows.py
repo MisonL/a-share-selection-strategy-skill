@@ -6,11 +6,16 @@ from typing import Any
 
 import pandas as pd
 
+from stock_selection_model_contracts import (
+    LIMIT_RULES_MODEL_NOT_MODELED,
+    TRADABILITY_MODEL_ENTRY_EXIT,
+    TRADABILITY_MODEL_HOLDING_PERIOD,
+    TRADABILITY_MODEL_NONE,
+    tradability_model,
+)
 
-TRADABILITY_MODEL_NONE = "not_modeled"
-TRADABILITY_MODEL_STATUS = "tradestatus_entry_exit_only"
-TRADABILITY_MODEL_HOLDING_PERIOD = "tradestatus_holding_period_bars"
-LIMIT_RULES_MODEL = "not_modeled"
+TRADABILITY_MODEL_STATUS = TRADABILITY_MODEL_ENTRY_EXIT
+LIMIT_RULES_MODEL = LIMIT_RULES_MODEL_NOT_MODELED
 
 
 def completed_row(
@@ -125,7 +130,9 @@ def build_summary(
         "hold_days": int(holding_days),
         "cost_bps": float(cost_bps),
         "slippage_bps": float(slippage_bps),
-        "tradability_required": bool(require_tradable_bars),
+        "tradability_required": bool(
+            require_tradable_bars or require_holding_period_tradable
+        ),
         "tradability_model": tradability_model(
             require_tradable_bars,
             require_holding_period_tradable=require_holding_period_tradable,
@@ -136,18 +143,6 @@ def build_summary(
 
 def bps_to_ratio(value: float) -> float:
     return float(value) / 10000.0
-
-
-def tradability_model(
-    require_tradable_bars: bool,
-    *,
-    require_holding_period_tradable: bool = False,
-) -> str:
-    if require_holding_period_tradable:
-        return TRADABILITY_MODEL_HOLDING_PERIOD
-    if require_tradable_bars:
-        return TRADABILITY_MODEL_STATUS
-    return TRADABILITY_MODEL_NONE
 
 
 def missing_reason_counts(result: pd.DataFrame) -> str:

@@ -16,6 +16,10 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import validate_walk_forward_artifacts as artifact_cli  # noqa: E402
+from stock_selection_model_contracts import (  # noqa: E402
+    LIMIT_RULES_MODEL_NOT_MODELED,
+    TRADABILITY_MODEL_ENTRY_EXIT,
+)
 
 
 class WalkForwardArtifactCliTests(unittest.TestCase):
@@ -97,9 +101,9 @@ def call_cli(root: Path, output: Path, extra_args: list[str] | None = None) -> t
         "--expected-portfolio-violations",
         "1",
         "--required-tradability-model",
-        "tradestatus_entry_exit_only",
+        TRADABILITY_MODEL_ENTRY_EXIT,
         "--required-limit-rules-model",
-        "not_modeled",
+        LIMIT_RULES_MODEL_NOT_MODELED,
         "--manifest-validation",
         str(root / "run_manifest_validation.json"),
     ]
@@ -209,8 +213,8 @@ def backtest_rows() -> list[dict[str, object]]:
                 "signal_date": "2026-05-12",
                 "status": "complete",
                 "missing_data": False,
-                "tradability_model": "tradestatus_entry_exit_only",
-                "limit_rules_model": "not_modeled",
+                "tradability_model": TRADABILITY_MODEL_ENTRY_EXIT,
+                "limit_rules_model": LIMIT_RULES_MODEL_NOT_MODELED,
                 "hold_days_requested": 5,
                 "cost_bps": 10.0,
                 "slippage_bps": 5.0,

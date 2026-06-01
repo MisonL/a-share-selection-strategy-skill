@@ -14,6 +14,7 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import probe_baostock_limit_fields as probe  # noqa: E402
+from stock_selection_model_contracts import LIMIT_RULES_MODEL_NOT_MODELED  # noqa: E402
 
 
 class ProbeBaostockLimitFieldsTests(unittest.TestCase):
@@ -47,7 +48,7 @@ class ProbeBaostockLimitFieldsTests(unittest.TestCase):
         self.assertEqual("10004012", by_field["up_limit"]["error_codes"][0])
         self.assertEqual(2, by_field["preclose"]["rows"])
         self.assertEqual(False, report["rule_inference_performed"])
-        self.assertEqual("not_modeled", report["limit_rules_model"])
+        self.assertEqual(LIMIT_RULES_MODEL_NOT_MODELED, report["limit_rules_model"])
 
     def test_cli_allows_unsupported_candidate_fields(self) -> None:
         original_probe = probe.probe_fields

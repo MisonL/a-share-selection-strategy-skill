@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from stock_selection_model_contracts import LIMIT_RULES_MODEL_NOT_MODELED
 from stock_selection_symbols import baostock_code, parse_six_digit_symbols
 
 CANDIDATE_FIELDS = ("up_limit", "down_limit", "limit_status", "is_trading", "suspended")
@@ -255,7 +256,7 @@ def build_report(
         "adjustflag": str(args.adjust),
         "candidate_fields": candidate_fields,
         "control_fields": control_fields,
-        "limit_rules_model": "not_modeled",
+        "limit_rules_model": LIMIT_RULES_MODEL_NOT_MODELED,
         "rule_inference_performed": False,
         "field_results": results,
         "summary": summary(results),

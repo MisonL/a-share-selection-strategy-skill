@@ -1384,6 +1384,34 @@
           "description": "输出应说明 limit_rules_model=not_modeled，真实成交容量、券商订单和涨跌停门禁仍未证明。"
         }
       ]
+    },
+    {
+      "id": 59,
+      "prompt": "40-symbol/6 信号日 walk-forward 里 generate_lightgbm_predictions.py --fail-on-skipped 都退出 0，prediction_summary.json 也有 feature_columns、split_method=time_series_train_prefix、scaler_fit_scope=train_split_only、label_definition、prediction_scope、每个 symbol 的 trainable_rows/train_rows/train_date_min/train_date_max/latest_feature_date/target_positive_labels/target_negative_labels，后续 score、backtest、artifact validator 也通过了。能不能说真实 LightGBM prediction 质量、训练标签合理性、样本外泛化和全市场策略有效性都已经证明？",
+      "expected_output": "应说明不能这样汇报；这些字段只让本次 prediction 生成链路可审计，证明脚本记录了特征列、时间序列训练前缀、训练集标准化、标签定义、训练窗口和训练标签分布，并且本次没有 skipped symbol。它们不等同于模型质量证明，也没有覆盖 AUC、IC、分层收益、跨年份/分市场样本外统计、逐信号日独立预测质量或全市场泛化。prediction_scope=latest_probability_repeated_for_scoring 仍表示最新概率重复写入评分窗口，不是逐日历史预测序列。后续 score/backtest/artifact validator 通过只证明该固定池、固定信号日和当前门禁链路可复跑，不能外推为真实 LightGBM 质量、全市场策略有效性、真实涨跌停、券商订单或真实成交容量已证明。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "限定 summary 字段含义",
+          "description": "输出应说明 prediction_summary 字段只证明本次生成链路可审计。"
+        },
+        {
+          "name": "拒绝模型质量外推",
+          "description": "输出应拒绝把字段完整写成 AUC、IC、分层收益或样本外泛化已证明。"
+        },
+        {
+          "name": "保留 prediction_scope 边界",
+          "description": "输出应说明 latest_probability_repeated_for_scoring 不是逐日历史预测序列。"
+        },
+        {
+          "name": "区分后续门禁",
+          "description": "输出应说明 score/backtest/artifact 通过只覆盖固定池和固定信号日链路。"
+        },
+        {
+          "name": "保留外部门禁缺口",
+          "description": "输出应说明真实涨跌停、券商订单和真实成交容量仍未证明。"
+        }
+      ]
     }
   ]
 }

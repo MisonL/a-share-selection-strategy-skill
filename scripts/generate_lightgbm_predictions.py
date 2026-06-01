@@ -150,6 +150,7 @@ def generate_predictions(
         horizon,
         train_ratio,
         symbol_summaries,
+        FEATURE_COLUMNS,
     )
 
 
@@ -209,7 +210,8 @@ def predict_symbol(
         raise ValueError("fewer than 50 trainable rows after feature cleanup")
     train_size = max(1, int(len(trainable) * train_ratio))
     train = trainable.iloc[:train_size]
-    target_label = train["target_return"] > train["target_return"].mean()
+    target_threshold = float(train["target_return"].mean())
+    target_label = train["target_return"] > target_threshold
     if target_label.nunique() < 2:
         raise ValueError("training target has fewer than two classes")
     scaler = model_deps["scaler"]()
@@ -222,9 +224,13 @@ def predict_symbol(
     return with_prediction(group, probability, horizon), symbol_summary(
         group,
         trainable,
-        train_size,
+        train,
+        latest,
         probability,
         horizon,
+        target_threshold,
+        int(target_label.sum()),
+        int(len(target_label) - target_label.sum()),
     )
 
 

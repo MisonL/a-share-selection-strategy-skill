@@ -148,4 +148,6 @@ overlap summary:
 
 它不证明全市场策略质量、样本外收益、真实订单成交、券商容量或真实涨跌停规则。`invalid_rows=20` 和 `dropped_invalid_rows=20` 必须在报告中披露；`skip_reason_counts={"max_open_positions": 9}` 表示有 9 个 raw candidates 未进入回测，不能写成全部候选成交。
 
+`final_equity` 和 `total_return` 是本地 close-to-close、完成交易等权资金曲线，不是按 `portfolio_cash_lot_floor` sizing 权重、真实成交或券商容量计算的收益。
+
 `calendar_model=business_day_closed_interval` 只表示 `portfolio_overlap_report.py` 用 pandas 工作日闭区间展开持仓日期；它不是 A 股交易所日历、节假日、停复牌或全持有期真实可交易性门禁。

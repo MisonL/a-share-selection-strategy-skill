@@ -405,6 +405,7 @@
 - `label_definition=target_return = close.shift(-horizon) / close - 1; class = target_return > train_mean` 只是相对训练集均值的二分类标签口径。
 - `target_positive_labels` 和 `target_negative_labels` 非空只证明训练切分内两类标签都存在，不证明标签业务合理性、概率校准、holdout AUC/IC、跨窗口稳定性或样本外泛化。
 - `prediction_scope=latest_probability_repeated_for_scoring` 不是逐日历史预测序列；它表示最新预测概率被重复写入该标的评分窗口。
+- `model_quality_scope=generation_audit_only` 和 `model_quality_metrics` 里的 `not_computed/not_evaluated/not_proven` 是机器可读边界声明，不是质量指标通过证明。
 - 即使 summary 字段完整，也不能写成 LightGBM 模型质量、样本外泛化、AUC/IC、分层收益或全市场策略质量已证明。
 ```
 

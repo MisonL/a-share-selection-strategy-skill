@@ -91,6 +91,17 @@ class LightgbmPredictionCliTests(unittest.TestCase):
         self.assertEqual("time_series_train_prefix", saved["split_method"])
         self.assertEqual("train_split_only", saved["scaler_fit_scope"])
         self.assertEqual("latest_probability_repeated_for_scoring", saved["prediction_scope"])
+        self.assertEqual("generation_audit_only", saved["model_quality_scope"])
+        self.assertEqual("not_computed", saved["model_quality_metrics"]["holdout_auc"])
+        self.assertEqual("not_computed", saved["model_quality_metrics"]["holdout_ic"])
+        self.assertEqual(
+            "not_evaluated",
+            saved["model_quality_metrics"]["probability_calibration"],
+        )
+        self.assertEqual(
+            "not_proven",
+            saved["model_quality_metrics"]["full_market_generalization"],
+        )
         self.assertIn("close.shift(-horizon)", saved["label_definition"])
         self.assertEqual("predicted", saved["symbols"][0]["status"])
         self.assertGreater(saved["symbols"][0]["train_rows"], 0)

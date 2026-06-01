@@ -147,3 +147,5 @@ overlap summary:
 本次复验只证明该深市主板 40-symbol 池、6 个 2025 月末信号日、`cash_budget=3000000`、5 日持有、10 bps 成本、5 bps 滑点、`tradestatus` 入场/退出门禁和本地 `portfolio_cash_lot_floor` 模型下，现有 runner 和 artifact validator 能完整通过。
 
 它不证明全市场策略质量、样本外收益、真实订单成交、券商容量或真实涨跌停规则。`invalid_rows=20` 和 `dropped_invalid_rows=20` 必须在报告中披露；`skip_reason_counts={"max_open_positions": 9}` 表示有 9 个 raw candidates 未进入回测，不能写成全部候选成交。
+
+`calendar_model=business_day_closed_interval` 只表示 `portfolio_overlap_report.py` 用 pandas 工作日闭区间展开持仓日期；它不是 A 股交易所日历、节假日、停复牌或全持有期真实可交易性门禁。

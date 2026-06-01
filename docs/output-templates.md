@@ -33,6 +33,27 @@
 - 不能把非交易日 `end_date` 写成实际信号日、覆盖日或可回测入场日。
 ```
 
+## 东方财富实时快照部分成功
+
+```markdown
+## 实时快照只覆盖部分分页
+- 东方财富或其他实时快照源发生分页断连、超时或部分页失败时，不能写成全市场实时扫描完成。
+- 必须披露 `source`、`source_scope`、`requested_pages`、`successful_pages`、`failed_pages`、`raw_items`、`filtered_items`、`snapshot_time` 和 `partial_result`。
+- 如果后续评分只使用已成功落地的快照或前 N 个标的，只能称为固定实时样本池，不是全市场 universe。
+- 使用已落地快照继续历史日线、校验和评分时，应同时披露快照时间、样本池来源、落地标的数、历史日线 `symbol_count`、`failed_symbols`、`empty_symbols` 和实际 `date_max`。
+- 不能把分页失败后的 partial result、缓存快照或已落地旧快照翻译成实时全市场成功。
+```
+
+## 中文诊断只作展示层
+
+```markdown
+## 中文诊断不替代机器字段
+- `failed_thresholds_zh`、`selection_status`、`short_reason` 等中文字段只能从原始机器字段派生。
+- 必须保留 `failed_thresholds`、`threshold_failures`、`effective_empty_result`、`empty_result_reason`、`failed_symbols`、`empty_symbols`、`fallback_errors`、`partial_result`、`output_written` 等可审计字段。
+- 中文摘要不能改变退出码、strict gate、fallback、partial fetch、0 候选或 output_not_written 的真实含义。
+- 如果英文机器字段显示 `strict gate failed`、`partial_result=true`、`output_written=false` 或 `fallback_errors` 非空，中文摘要必须同步写成失败、部分结果或 fallback，而不是写成成功。
+```
+
 ## Akshare fallback 成功
 
 ```markdown

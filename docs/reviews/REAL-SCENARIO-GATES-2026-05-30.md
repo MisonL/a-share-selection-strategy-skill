@@ -105,11 +105,13 @@
 - 本地真实依赖复验已通过: `uv run --with-requirements requirements-ml.txt python scripts/generate_lightgbm_predictions.py --input /tmp/stock-selection-ml-local/prices.csv --output /tmp/stock-selection-ml-local/prices_generated_prediction.csv` 返回 0。
 - 生成结果继续通过 `validate_ohlcv.py --config scripts/qsss_profile_config.json`，再进入 `score_candidates.py --config scripts/qsss_profile_config.json`，最终 `scored_symbols=2`、`candidates=1`。
 - 本次合成 demo 的 `prediction_score` 范围为 `0.0107376151670856` 到 `0.9479974705646024`，生成器 stderr 为空。
+- 2026-06-01 真实 SSE603 late-window 复验产物在 `/tmp/stock-selection-p1-portfolio-capacity-sse603-latewindow-20260601T105911Z/`；6 个信号日的 `prediction_summary.json` 均记录 `raw_symbols=40`、`predicted_symbols=40`、`skipped_symbols=0`，并包含 `feature_columns`、`split_method=time_series_train_prefix`、`scaler_fit_scope=train_split_only`、`label_definition=target_return = close.shift(-horizon) / close - 1; class = target_return > train_mean`、`prediction_scope=latest_probability_repeated_for_scoring`、训练日期窗口和正负训练标签计数。
+- 同一 SSE603 真实产物的 summary 字段只证明 40-symbol/6 信号日生成链路可审计；当前 `prediction_summary.json` 不包含 holdout AUC/IC、概率校准、分层收益、跨窗口稳定性、跨年份或分市场样本外统计，也不证明逐信号日独立预测质量或全市场泛化。
 
 边界:
 
 - 单元测试使用受控假模型验证契约；合成 demo 使用真实 LightGBM 依赖验证运行链路，但仍不等同于真实 A 股行情上的训练结果。
-- 2-symbol 与 12-symbol baostock 证据只证明当前生成器能在有限真实行情样本上运行，并接入 `validate_ohlcv.py --config scripts/qsss_profile_config.json` 与 `score_candidates.py`；不证明全市场样本外泛化能力。
+- 2-symbol、12-symbol 和 40-symbol baostock 证据只证明当前生成器能在有限真实行情样本上运行，并接入 `validate_ohlcv.py --config scripts/qsss_profile_config.json` 与 `score_candidates.py`；不证明概率校准、holdout AUC/IC、分层收益、跨窗口稳定性、逐信号日独立预测质量或全市场样本外泛化能力。
 
 ## 场景 M: buy-hold 基线回测
 
@@ -331,4 +333,5 @@
 - yfinance/Yahoo 在当前环境长期稳定取数。
 - baostock、akshare 或 yfinance 任一外部源的长期服务稳定性。
 - 真实交易所日历、节假日、特殊交易日、临时休市和全持有期停复牌可交易性。
+- 真实 LightGBM 质量指标，包括概率校准、holdout AUC/IC、分层收益、跨窗口稳定性、跨年份或分市场样本外统计、逐信号日独立预测质量。
 - 全市场级 QSSS 策略质量、样本外收益、真实涨跌停规则、真实成交容量和券商订单证明。

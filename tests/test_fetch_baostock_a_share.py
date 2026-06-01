@@ -15,6 +15,10 @@ import fetch_baostock_a_share as fetcher  # noqa: E402
 
 
 class FetchBaostockAShareTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        fetcher.ensure_runtime_dependencies()
+
     def test_parse_symbols_requires_six_digits(self) -> None:
         self.assertEqual(["000001", "600000"], fetcher.parse_symbols("000001,600000"))
         with self.assertRaisesRegex(ValueError, "six digits"):

@@ -9,15 +9,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
-from portfolio_candidate_allocation import allocate_portfolio
-from stock_selection_data import read_table
-
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        ensure_runtime_dependencies()
         selected, sized, skipped, summary = allocate_portfolio(
             read_table(Path(args.prices)),
             [read_table(Path(path)) for path in args.raw_candidates],
@@ -60,6 +56,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fail-on-symbol-overlap", action="store_true")
     parser.add_argument("--close-tolerance", type=float, default=0.000001)
     return parser
+
+
+def ensure_runtime_dependencies() -> None:
+    if "pd" in globals():
+        return
+    import pandas as pandas_module
+    import portfolio_candidate_allocation as allocation_module
+    import stock_selection_data as data_module
+
+    globals().update(
+        {
+            "pd": pandas_module,
+            "allocate_portfolio": allocation_module.allocate_portfolio,
+            "read_table": data_module.read_table,
+        }
+    )
 
 
 def write_signal_outputs(frames: list[pd.DataFrame], paths: list[str]) -> None:

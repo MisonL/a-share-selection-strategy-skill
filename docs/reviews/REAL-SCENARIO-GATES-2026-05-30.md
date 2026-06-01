@@ -40,6 +40,7 @@
 - 正式入口复验产物在 `/tmp/stock-selection-akshare-cli-real-20260530T093800/`；取数返回 0，metadata 记录 `rows=177`、`symbols[0].provider=stock_zh_a_daily`、`len(fallback_errors)=1`，随后通用校验和评分均返回 0。
 - 连续 3 次正式入口复验产物在 `/tmp/akshare-a-share-stability-20260530103633-49722`；三次 `stock_zh_a_hist` 均被远端断开并记录 1 条 `fallback_errors`，三次均 fallback 到 `stock_zh_a_daily`，`rows=177`、`symbol_count=1`、`failed_symbols=[]`、`empty_symbols=[]`，通用 `validate_ohlcv.py` 均返回 0。
 - 当前外部源复验产物在 `/tmp/stock-selection-external-sources-current-20260530T125716/akshare/`；正式入口返回 0，metadata 记录 `rows=177`、`symbol_count=1`、`failed_symbols=[]`、`empty_symbols=[]`、`symbols[0].provider=stock_zh_a_daily`、`len(fallback_errors)=1`，后续 `validate_ohlcv.py` 和通用 `score_candidates.py` 均返回 0。
+- P3 固定总控脚本复验产物在 `/tmp/stock-selection-p3-external-source-stability-20260601T063044Z/`；3 轮 akshare run 均返回 0，`rows=177`、`symbol_count=1`、`failed_symbols=[]`、`empty_symbols=[]`、`date_max=2026-05-29`，但每轮仍有 1 条 `fallback_errors`，summary 记录 `observation_failed_checks.hist_provider_clean=3`。
 - QSSS-derived 校验按预期拒绝 `market=A股`、`000001.SZ`、缺 `prediction_score`、缺 `turn`。
 - 补齐外部 `prediction_score` 后，`score_candidates.py` 返回 0，并输出 `prediction_source=external_unverified lightgbm_not_executed_by_this_script=true`。
 
@@ -74,6 +75,7 @@
 - 连续 3 次受控复验产物在 `/tmp/stock-selection-yfinance-repeat-20260530T100324/`；三次 fetch 均返回 0，耗时分别为 2.644 秒、2.006 秒、1.738 秒，metadata 均记录 `rows=1206`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`、`timeout_seconds=10.0`，后续校验和评分均返回 0。
 - 再次连续 3 次受控复验产物在 `/tmp/stock-selection-yfinance-stability-20260530T111830-76636/`；三次 `fetch_yfinance_ohlcv.py`、通用 `validate_ohlcv.py` 和通用 `score_candidates.py` 均返回 0，metadata 均记录 `rows=1206`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`、`timeout_seconds=10.0`。
 - 当前外部源复验产物在 `/tmp/stock-selection-external-sources-current-20260530T125716/yfinance/`；`fetch_yfinance_ohlcv.py --timeout-seconds 10` 返回 0，metadata 记录 `rows=1206`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`、`timeout_seconds=10.0`，后续 `validate_ohlcv.py` 和通用 `score_candidates.py` 均返回 0。
+- P3 固定总控脚本复验产物在 `/tmp/stock-selection-p3-external-source-stability-20260601T063044Z/`；3 轮 yfinance run 均返回 0，metadata 均记录 `rows=1206`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`、`timeout_seconds=10.0`、`adjustment=auto_adjust_false_close`，AAPL/MSFT 的 `date_max` 均为 `2026-05-28`。
 
 边界:
 
@@ -130,7 +132,7 @@
 - 当前代码复跑产物在 `/tmp/stock-selection-backtest-tradability-current-20260530T124812/`；baostock 000001/600000 短窗口取数 36 行，`non_trading_rows=0`、`tradestatus_missing_rows=0`，启用 `--require-tradable-bars --fail-on-incomplete` 返回 0，回测 CSV 记录 `tradability_model=tradestatus_entry_exit_only` 且 `limit_rules_model=not_modeled`。
 - 历史只读字段审查确认 `/tmp/stock-selection-ashare-scan-20260530-032723/prices.csv` 有 OHLCV 和 `turn`，但没有 `tradestatus`、`suspended`、`is_trading`、`limit_status`、`up_limit`、`down_limit`、`pre_close` 等字段；候选和回测产物也没有可交易/停牌/涨跌停字段。
 - 只读并发持仓审查确认 `/tmp/stock-selection-backtest-costs-20260530T101000/` 的 15 笔真实 complete 交易最大同时打开 12 笔，发生在 `2026-05-15`、`2026-05-18`、`2026-05-19`；同一 symbol 跨信号日重复持仓冲突共有 21 个 `date-symbol` 组合，涉及 `002594`、`300059`、`300750`、`601318`、`000333`。
-- 新增 `portfolio_overlap_report.py`，读取多个回测 CSV，按 business-day 闭区间统计 `daily_open_positions`、`max_open_positions`、同标的重叠和资金字段可验证性。
+- 新增 `portfolio_overlap_report.py`，读取多个回测 CSV，按 business-day 闭区间统计 `daily_open_positions`、`max_open_positions`、同标的重叠和资金字段可验证性。该 business-day 闭区间不是 A 股交易所日历、节假日、停复牌或全持有期真实可交易性门禁。
 - 真实并发门禁复验产物在 `/tmp/stock-selection-overlap-gate-20260530T112415/`；对三份真实成本/滑点回测设置 `--max-open-positions 10 --fail-on-symbol-overlap --require-capital-fields` 返回 3，并写出 `daily.csv`、`overlap.csv` 和 `summary.json`。summary 记录 `trades=15`、`complete_trades=15`、`max_open_positions=12`、`same_symbol_overlap_rows=21`、`cash_capacity_verifiable=false`、`capital_fields_missing=weight,notional,quantity,cash_reserved`。
 - 新增候选资金字段透传和 `--max-gross-weight` 权重容量门禁。复验产物在 `/tmp/stock-selection-capacity-gate-20260530T114644/`；基于同一真实 12-symbol/3 信号日候选和价格，额外写入测试用等权 `weight/notional/quantity/cash_reserved` 后复跑回测。
 - 同一复验中，`--max-gross-weight 1.0 --require-capital-fields` 返回 3，并写出 `summary_fail.json`；`--max-gross-weight 3.0 --require-capital-fields` 返回 0。summary 记录 `capital_fields_present=weight,notional,quantity,cash_reserved`、`capital_fields_missing=[]`、`cash_capacity_verifiable=true`、`weight_capacity_verifiable=true`、`max_gross_weight=2.0`、`max_gross_weight_dates=2026-05-20,2026-05-21,2026-05-22`。
@@ -176,6 +178,7 @@
 - 新门禁复验产物在 `/tmp/stock-selection-baostock-tradability-gate-20260530T104739/`；688981 短窗口严格 fetch 返回 3，metadata 为 `raw_rows=15`、`invalid_rows=6`、`raw_non_trading_rows=6`、`non_trading_rows=6`、`tradestatus_missing_rows=0`，错误包含 `invalid_rows=6; non_trading_rows=6`。
 - 同一短窗口显式 `--drop-invalid-rows` 后返回 0，metadata 为 `rows=9`、`dropped_invalid_rows=6`、`raw_non_trading_rows=6`、`non_trading_rows=0`；用 `validate_ohlcv.py --min-history-rows 1` 校验返回 0。默认校验返回 1 是因为短窗口只有 9 行，低于 120 行历史门槛。
 - 正常长窗口复验产物在 `/tmp/stock-selection-baostock-tradability-normal-20260530T104829/`；000001/600000 取数返回 0，metadata 记录 `rows=354`、`symbol_count=2`、`invalid_rows=0`、`non_trading_rows=0`、`tradestatus_missing_rows=0`，默认 `validate_ohlcv.py` 返回 0。
+- P3 固定总控脚本复验产物在 `/tmp/stock-selection-p3-external-source-stability-20260601T063044Z/`；3 轮 baostock run 均返回 0，metadata 均记录 `rows=1160`、`symbol_count=2`、`failed_symbols=[]`、`empty_symbols=[]`、`non_trading_rows=0`、`tradestatus_missing_rows=0`、`adjustflag=3`，000001/600000 的 `date_max` 均为 `2026-05-29`。
 - 涨跌停只读探测产物在 `/tmp/stock-selection-limit-rule-probe-20260530T105951/`；000001、600000、300750、688981 窗口样例显示可用 `preclose/pctChg/isST` 做理论候选研究，但没有直接 `up_limit/down_limit/limit_status` 字段，也未发现可证明规则实现的精确涨跌停样例。
 - current-code walk-forward 复验产物在 `/tmp/stock-selection-oos-20260530T130952/`；重新用当前 baostock 入口拉取同一 12-symbol 固定池，metadata 为 `rows=6960`、`symbol_count=12`、`invalid_rows=0`、`non_trading_rows=0`、`tradestatus_missing_rows=0`、`adjustflag=3`。
 - 同一复验固定信号日 `2026-05-12/2026-05-15/2026-05-20`、`hold_days=5`、`cost_bps=10`、`slippage_bps=5`，逐日信号窗口截断、LightGBM 生成、QSSS 评分、sizing 和 `--require-tradable-bars --fail-on-incomplete` 回测均返回 0。
@@ -225,6 +228,15 @@
 - 同一组合容量复验 allocation summary 同时记录约束与实际最大值：`cash_budget=3000000`、`lot_size=100`、`hold_days=5`、`max_open_positions=10` 且 limit 为 `10`、`max_gross_weight=0.99571` 且 limit 为 `1.0`、`max_gross_notional=2987130.0` 且 limit 为 `3000000.0`、`max_cash_reserved=2987130.0` 且 limit 为 `3000000.0`、`fail_on_symbol_overlap=true`。
 - 同一组合容量复验 `qsss_run_summary.json` 记录 `quality_errors=[]`、`completed_trades=48`、`incomplete_trades=0`、资金曲线 `final_equity=0.9614512632665976`、`total_return=-0.03854873673340242`、`max_drawdown=-0.0494320515108941`；portfolio summary 记录 `max_open_positions=10`、`max_gross_weight=0.9957099999999997`、`max_gross_notional=2987130.0`、`max_cash_reserved=2987130.0`、`same_symbol_overlap_rows=0`、`violations=[]`。
 - 对同一组合容量复验执行 `validate_walk_forward_manifest.py` 返回 0，报告在 `/tmp/stock-selection-p1-portfolio-capacity-20260530T165104/run_manifest_validation.json`，结果为 `steps_checked=35`、`errors=[]`；执行 `validate_walk_forward_artifacts.py --required-allocation-model portfolio_cash_lot_floor --allow-dropped-invalid-rows` 返回 0，报告在 `/tmp/stock-selection-p1-portfolio-capacity-20260530T165104/run_artifact_validation.json`，结果为 `signals_checked=6`、`total_candidates=48`、`total_completed_trades=48`、`final_equity=0.9614512632665976`、`portfolio_violations=0`、`errors=[]`。
+- P1 沪市 40-symbol/6 信号日组合容量复验首次尝试在 `/tmp/stock-selection-p1-portfolio-capacity-sse-20260601T020224Z/` 暴露 signal date 与实际 artifact 日期错位：runner 本身返回 0，manifest validator 返回 0 且 `steps_checked=35`、`errors=[]`，但 artifact validator 返回 3，报告在 `/tmp/stock-selection-p1-portfolio-capacity-sse-20260601T020224Z/run_artifact_validation.json`，核心错误包括 `2026-02-20_candidates_date_mismatch=2026-02-13`、`2026-02-20_sized_date_mismatch=2026-02-13`、多条 `2026-02-20_*_missing_raw_close=...` 和 `equity_signal_dates_mismatch`。该 run 只能作为 validator 捕捉日期错位的反例，不能记录为 P1 通过证据。
+- P1 同一沪市 40-symbol 池的更早交易日窗口尝试在 `/tmp/stock-selection-p1-portfolio-capacity-sse-tradingdays-20260601T021130Z/` 于第一期 `2024-08-23:predict` 失败，`generate_lightgbm_predictions.py` 返回 2，stderr 记录 `no symbols predicted` 且 `skipped_reasons=fewer than 50 trainable rows after feature cleanup:40`。该失败说明过早信号日可能没有足够可训练历史，不能通过放宽预测失败门禁包装为成功。
+- P1 同一沪市 40-symbol 池改用 6 个已确认 40/40 当日行且有训练历史的月末窗口后完成组合容量复验，产物在 `/tmp/stock-selection-p1-portfolio-capacity-sse-monthends-20260601T021449Z/`。固定池为 `600009,600010,600011,600015,600016,600018,600019,600028,600030,600031,600050,600104,600150,600196,600340,600436,600489,600690,600703,600887,600900,601012,601088,601111,601138,601211,601225,601288,601398,601601,601668,601688,601766,601788,601857,601899,601988,601989,603259,603501`，信号日为 `2025-02-28/2025-03-31/2025-04-30/2025-05-30/2025-06-30/2025-07-31`。该池与既有第一组 40-symbol 池交集为 `600030,600031,600050,600104,600196,600690,601012`，与既有独立 40-symbol 池交集为 `[]`，因此只能记录为新增沪市 40-symbol 月末窗口复验，不能写成与全部既有 40-symbol 池零交集的第三独立池。
+- 同一沪市月末组合容量复验 runner 未传入 `--expect-portfolio-violations`，manifest 记录 `allocation_model=portfolio_cash_lot_floor`、`symbol_count=40`、`tradability_model=tradestatus_entry_exit_only`、`limit_rules_model=not_modeled`、`steps_count=35` 且失败步骤为 `[]`。metadata 记录 `rows=22956`、`raw_rows=23027`、`symbol_count=40`、`invalid_rows=71`、`dropped_invalid_rows=71`、`raw_non_trading_rows=71`、`non_trading_rows=0`、`raw_tradestatus_missing_rows=0`、`tradestatus_missing_rows=0`、`failed_symbols=[]`、`empty_symbols=[]`、`adjustflag=3`。
+- 同一沪市月末组合容量复验 `qsss_allocation_summary.json` 记录 `raw_candidates=69`、`allocated_candidates=56`、`skipped_candidates=13`、`skip_reason_counts={'max_open_positions': 13}`，各信号日 raw/allocated/skipped 为 `9/9/0`、`11/10/1`、`13/10/3`、`14/10/4`、`15/10/5`、`7/7/0`。allocation 与 overlap summary 的最大容量一致：`max_open_positions=10`、`max_gross_weight=0.9971263333333333`、`max_gross_notional=2991379.0`、`max_cash_reserved=2991379.0`，limit 分别为 `10`、`1.0`、`3000000.0`、`3000000.0`。
+- 同一沪市月末组合容量复验 `qsss_run_summary.json` 记录 `quality_errors=[]`、`completed_trades=56`、`incomplete_trades=0`、资金曲线 `final_equity=0.9972785699903136`、`total_return=-0.0027214300096863875`、`max_drawdown=-0.0654355170559202`；portfolio summary 记录 `same_symbol_overlap_rows=0`、`same_symbol_overlap_symbols=[]`、`capital_fields_present=weight,notional,quantity,cash_reserved`、`capital_fields_missing=[]`、`cash_capacity_verifiable=true`、`weight_capacity_verifiable=true`、`violations=[]`。
+- 对同一沪市月末组合容量复验执行 `validate_walk_forward_manifest.py` 返回 0，报告在 `/tmp/stock-selection-p1-portfolio-capacity-sse-monthends-20260601T021449Z/run_manifest_validation.json`，结果为 `steps_checked=35`、`errors=[]`；执行 `validate_walk_forward_artifacts.py --required-allocation-model portfolio_cash_lot_floor --allow-dropped-invalid-rows` 返回 0，报告在 `/tmp/stock-selection-p1-portfolio-capacity-sse-monthends-20260601T021449Z/run_artifact_validation.json`，结果为 `signals_checked=6`、`total_candidates=56`、`total_completed_trades=56`、`final_equity=0.9972785699903136`、`portfolio_violations=0`、`manifest_checked=true`、`errors=[]`。
+- P1 新增深市主板 40-symbol 零交集池组合容量复验，详见 `docs/reviews/P1-PORTFOLIO-CAPACITY-SZ-MAINBOARD-2026-06-01.md`。产物在 `/tmp/stock-selection-p1-portfolio-capacity-sz-mainboard-20260601T055752Z/`，runner、manifest validator 和 artifact validator 均返回 0；artifact validator 记录 `signals_checked=6`、`total_candidates=52`、`total_completed_trades=52`、`final_equity=1.0072173506529436`、`portfolio_violations=0`、`errors=[]`。
+- P1 新增创业板 40-symbol 零交集池组合容量复验，详见 `docs/reviews/P1-PORTFOLIO-CAPACITY-CYB-2026-06-01.md`。产物在 `/tmp/stock-selection-p1-portfolio-capacity-cyb-20260601T065750Z/`，runner、manifest validator 和 artifact validator 均返回 0；artifact validator 记录 `signals_checked=6`、`total_candidates=49`、`total_completed_trades=49`、`final_equity=1.0057629234541754`、`portfolio_violations=0`、`errors=[]`。
 
 边界:
 
@@ -232,12 +244,13 @@
 - 12-symbol 三信号日回测证明了真实候选和真实 OHLCV 能进入 close-to-close 基线回测；当前代码支持 round-trip bps 扣减、等权资金曲线、取数阶段 `tradestatus` 门禁、回测级 `--require-tradable-bars` 门禁、组合并发持仓报告和测试资金字段权重容量门禁，但仍不覆盖真实现金容量、涨跌停或全市场泛化能力。
 - current-code 复验只证明固定 12-symbol、三信号日、5 日持有、10 bps 成本、5 bps 滑点和 `tradestatus` 入场/退出门禁下的可复跑边界；不能外推为全市场样本外收益有效。
 - P1 四信号日扩展复验只证明同一固定池新增 `2026-04-24` 后仍能按固定门禁复跑；不能外推为策略正期望、全市场泛化、真实成交容量或涨跌停规则已覆盖。
-- P1 40-symbol/6 信号日扩容复验只证明两个 40 支股票池、多个 6 信号日窗口、显式丢弃 10 行源数据异常、`cash_budget=3000000`、5 日持有、10 bps 成本、5 bps 滑点和 `tradestatus` 入场/退出门禁下的可复跑边界；不能外推为全市场样本外收益有效，也不能证明 100 万现金预算适合更大候选集。
+- P1 40-symbol/6 信号日扩容复验只证明两个既有 40 支股票池和一组新增沪市 40-symbol 月末窗口、多个 6 信号日窗口、显式丢弃源数据异常、`cash_budget=3000000`、5 日持有、10 bps 成本、5 bps 滑点和 `tradestatus` 入场/退出门禁下的可复跑边界；不能外推为全市场样本外收益有效，也不能证明 100 万现金预算适合更大候选集。
 - P1 独立 40-symbol/6 信号日 top-N=2 复验只证明 `--max-candidates` 能把每期候选显式截断并通过现有固定组合门禁；它不证明跨信号日滚动现金占用、同标的组合级去重或真实订单容量已建模。
 - P1 `portfolio_cash_lot_floor` 复验证明了当前代码能按固定持有期滚动处理现金占用、并发仓位和同标的重叠，并输出 raw/selected/sized/skipped/allocation summary 证据；但仍只是本地 close-to-close + lot-floor 模型，不证明真实涨跌停、真实订单成交、券商容量或全市场策略质量。
+- P1 各复验中的 `final_equity` 和 `total_return` 均为本地 close-to-close、完成交易等权资金曲线，不是按 `portfolio_cash_lot_floor` sizing 权重、真实成交或券商容量计算的收益。
 - `run_baostock_walk_forward.py` 只编排既有 CLI 并记录命令级 manifest，不新增行情、prediction、sizing、回测或组合逻辑；它不能把固定 12-symbol/4 信号日小样本外推为全市场结论。
 - `validate_walk_forward_manifest.py` 只校验 runner manifest 的结构、步骤顺序、退出码和门禁参数；不能替代真实行情、真实 LightGBM、真实回测或真实组合报告。
-- `validate_walk_forward_artifacts.py` 只校验既有复验目录内的 artifact 内容一致性，不重新联网取数、不重新训练 LightGBM、不重新回测，也不能把固定小样本外推为全市场结论；当前会额外校验候选和 sizing 信号日价格与原始信号窗口 close 一致。
+- `validate_walk_forward_artifacts.py` 只校验既有复验目录内的 artifact 内容一致性，不重新联网取数、不重新训练 LightGBM、不重新回测，也不能把固定小样本外推为全市场结论；当前会额外校验候选和 sizing 信号日价格与原始信号窗口 close 一致，并交叉校验 allocation/overlap 容量摘要一致性。
 - P2a 字段探测只证明 baostock 日 K 当前候选字段不可用；不等同于真实涨跌停规则门禁通过。
 - `--drop-invalid-rows` 成功不等于源数据无异常；审查时必须同时检查 metadata 的 `invalid_rows`、`dropped_invalid_rows`、`raw_non_trading_rows` 和 `non_trading_rows`。
 - baostock 日 K 未直接提供 `up_limit/down_limit/limit_status`；当前不得把 `preclose + pctChg`、prefix 或 `isST` 粗推解释为真实涨跌停规则已建模。
@@ -246,9 +259,21 @@
 
 ## Current Next Gates / 下一步门禁
 
-- P1: 继续扩大 A 股真实 QSSS 门禁。当前已有两个 40-symbol 池的 6 信号日复验，已证明 top-N=2 可在独立池通过固定组合门禁，并已实现 `portfolio_cash_lot_floor` 组合级 sizing/cut。下一轮 P1 应优先在更多独立池/窗口复验该组合模型，或推进更真实的订单容量/涨跌停规则门禁。
+- P1: 继续扩大 A 股真实 QSSS 门禁。当前已有两个既有 40-symbol 池、一组沪市 40-symbol 月末窗口、一组深市主板 40-symbol 零交集月末窗口和一组创业板 40-symbol 零交集月末窗口复验，并已在四个 40-symbol 池/窗口上复验 `portfolio_cash_lot_floor` 组合级 sizing/cut；下一轮 P1 应优先推进更真实的订单容量/涨跌停规则门禁，或继续扩大到更多独立池和更长窗口。
 - P2: 真实涨跌停规则门禁。P2a 已确认当前 baostock 日 K 无直接 `up_limit/down_limit/limit_status/is_trading/suspended` 字段；未取得可靠直接字段或另起明确规则建模任务前，不得把 `preclose/pctChg/isST` 粗推写成已建模。
 - P3: 外部源稳定性观察。akshare `stock_zh_a_hist`、yfinance/Yahoo 和 baostock 长期稳定性只能按固定脚本持续复验，不优先于 P1 的 A 股真实策略门禁。
+
+## 真实使用反馈验收锚点 / 2026-06-01
+
+本节记录 2026-06-01 真实使用反馈对应的后续验收边界。本轮只沉淀文档和 eval 口径，不表示已经实现新的总控 CLI、实时全市场扫描或低价超短 profile。
+
+- 今日真实选股如果按 QSSS-derived 口径执行，输入仍必须包含 `market=A-share`、`prediction` 或 `prediction_score`，以及 `turn` 或 `turnover`。缺少 `prediction_score` 时，标准决策树是先停止 QSSS-derived 评分并暴露缺口；若用户要保留 QSSS 口径，应先运行真实可审计的 `generate_lightgbm_predictions.py --fail-on-skipped` 或提供外部预测列；不得用动量分、爆发分、固定 0.5 或人工判断替代 LightGBM prediction。
+- 如果用户明确接受非 QSSS 的通用技术评分，才可以在本地 OHLCV 已落地并通过 `validate_ohlcv.py` 后走 `scripts/example_config.json` 或后续明确命名的通用 profile。该输出必须写明 `prediction_score` 未参与、不是 QSSS-derived 复刻、缺 `turn/turnover` 时只能披露 neutral turnover 假设，并且不能把候选排序写成真实收益、真实 LightGBM 或全市场策略质量证明。
+- 实时样本池或联网抓取的少量股票只证明该固定 `requested_symbols`、数据源、参数、网络窗口和实际 `date_max` 下的局部样本可复跑。即使 runner、manifest validator 和 artifact validator 均通过，也不能写成“全市场扫描完成”。要宣称全市场扫描，必须先定义全市场 universe 生成规则，披露请求标的数、实际落地标的数、`failed_symbols`、`empty_symbols`、股票池过滤数、历史不足数、预测跳过数和最终候选数。
+- 如果后续引入东方财富或其他实时快照源，必须把分页完整性写入 metadata，包括 source、source_scope、requested_pages、successful_pages、failed_pages、raw_items、filtered_items、snapshot_time 和 partial_result。分页断连、部分页成功或只使用已落地快照时，只能称为局部实时样本池或历史快照复用，不能写成今日全市场实时扫描完成。
+- 低价超短意图应作为后续脚本化 profile 或总控 CLI 任务处理，而不是在当前 QSSS 评分中临时手工筛选。验收锚点应包括可配置阈值、至少 `close`/`ma15`/`explosion_score`/`volume_ratio`/`turnover_ratio`/`signal_tier` 字段、诊断输出、0 候选原因、低价风险披露，以及 QSSS prediction 依赖与通用技术评分模式的明确分流。
+- 中文诊断字段如果后续加入，只能作为展示层派生字段，例如 `failed_thresholds_zh`、`selection_status`、`short_reason`。这些字段必须从机器可读的 `failed_thresholds`、`threshold_failures`、summary 计数和取数 metadata 派生，不得替代原始字段，也不得把 fallback、partial result、strict gate failed 或 output_not_written 翻译成成功。
+- 后续总控 CLI 的最小可审计路径应串联取数或本地输入、`validate_ohlcv.py`、可选 `generate_lightgbm_predictions.py`、`score_candidates.py`、可选 sizing/backtest/portfolio validators，并写出 run-scoped metadata、命令 manifest、summary 和失败原因。CLI 不得吞掉任一步非 0 退出，也不得在缺少真实预测、真实行情或严格回测时生成候选名单或收益结论。
 
 ## 当前结论
 
@@ -260,6 +285,7 @@
 - akshare A 股 `stock_zh_a_daily` 在 2026-05-30 指定窗口曾可拉取，并可映射到本地文件后进入通用校验和评分；`stock_zh_a_hist` 稳定性未证明。
 - akshare 正式联网入口的 hist/daily fallback、metadata 和严格失败契约。
 - yfinance 正式联网入口的 metadata、内置 timeout、空结果和严格失败契约；本轮带 `--timeout-seconds 10` 的 AAPL/MSFT 取数、校验和通用评分通过。
+- P3 固定总控脚本在 2026-06-01 复验 akshare、yfinance 和 baostock 共 3 轮 9 次 source run，`passed_runs=9`、`all_sources_all_iterations_passed=true`，但 `long_term_stability_claim=not_proven`；akshare 仍记录 `hist_provider_clean=3` 的观察失败，只能说明 fallback provider 在本次窗口可用。
 - LightGBM prediction 生成器的本地契约、失败边界和合成 demo 真模型运行链路。
 - buy-hold 基线回测脚本的本地契约、失败边界、round-trip bps 成本/滑点扣减、可选 `tradestatus` 入场/退出门禁、等权资金曲线、组合阈值失败门槛、并发持仓门禁、候选资金字段透传、equal-cash/lot-floor sizing 产物，以及权重、名义金额、预留现金容量失败门禁。
 - 2-symbol baostock 真实依赖 smoke 链路: 真实行情落地、真实 LightGBM prediction 生成、QSSS 最新日评分。
@@ -272,6 +298,10 @@
 - P1 独立 40-symbol/6 信号日复验与上一组 40-symbol 池交集为 0，可完整跑到组合严格门禁，摘要质量错误为 0，完成 59 笔交易、`final_equity=0.9604703366149994`，并暴露 3 个组合容量 violation。
 - P1 独立 40-symbol/6 信号日 top-N=2 复验可在不使用 `--expect-portfolio-violations` 的情况下完整通过，摘要质量错误为 0，完成 12 笔交易、`final_equity=0.8990438382018885`，组合 `portfolio_violations=0`。
 - P1 独立 40-symbol/6 信号日 `portfolio_cash_lot_floor` 复验可在不使用 `--expect-portfolio-violations` 的情况下完整通过，raw 候选 59 个、组合 cut 后 48 个、跳过 11 个且原因均为 `max_open_positions`，完成 48 笔交易、`final_equity=0.9614512632665976`，组合 `portfolio_violations=0`。
+- P1 沪市 40-symbol/6 月末信号日 `portfolio_cash_lot_floor` 复验可在不使用 `--expect-portfolio-violations` 的情况下完整通过，raw 候选 69 个、组合 cut 后 56 个、跳过 13 个且原因均为 `max_open_positions`，完成 56 笔交易、`final_equity=0.9972785699903136`，组合 `portfolio_violations=0`；该池与既有第一组 40-symbol 池有 7 个交集，不能写成第三个全独立池。
+- P1 深市主板 40-symbol/6 月末信号日 `portfolio_cash_lot_floor` 复验与已展开池集合交集为 `[]`，可在不使用 `--expect-portfolio-violations` 的情况下完整通过，raw 候选 61 个、组合 cut 后 52 个、跳过 9 个且原因均为 `max_open_positions`，完成 52 笔交易、`final_equity=1.0072173506529436`，组合 `portfolio_violations=0`。
+- P1 创业板 40-symbol/6 月末信号日 `portfolio_cash_lot_floor` 复验与已展开池集合交集为 `[]`，可在不使用 `--expect-portfolio-violations` 的情况下完整通过，raw 候选 60 个、组合 cut 后 49 个、跳过 11 个且原因均为 `max_open_positions`，完成 49 笔交易、`final_equity=1.0057629234541754`，组合 `portfolio_violations=0`。
+- P1 `portfolio_cash_lot_floor` artifact validator 已交叉校验 `qsss_allocation_summary.json` 与 `qsss_overlap_summary.json` 的最大持仓、权重、名义金额和预留现金容量字段，真实复验目录 `run_artifact_validation_crosscheck.json` 通过且 `errors=0`。
 - 真实 12-symbol/3 信号日样本已经暴露最大 12 笔并发持仓和同标的重复持仓冲突风险，并已可由 `portfolio_overlap_report.py` 自动化失败。
 - 信号日截断防未来泄漏门禁。
 - CI 证据必须绑定具体 `headSha` 和 GitHub Actions run；不得把旧提交的绿色 CI 外推为当前代码已验证。
@@ -280,4 +310,5 @@
 
 - akshare `stock_zh_a_hist` 中文列接口在当前环境可稳定取数。
 - yfinance/Yahoo 在当前环境长期稳定取数。
+- baostock、akshare 或 yfinance 任一外部源的长期服务稳定性。
 - 全市场级 QSSS 策略质量、样本外收益、真实涨跌停规则、真实成交容量和券商订单证明。

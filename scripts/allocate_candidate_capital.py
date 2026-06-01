@@ -8,12 +8,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
-from stock_selection_capital import CAPITAL_FIELDS
-from stock_selection_data import parse_dates, read_table
-from validate_ohlcv import validate_frame
-
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Allocate capital fields for candidates.")
@@ -27,6 +21,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fail-on-unallocated", action="store_true")
     args = parser.parse_args(argv)
     try:
+        ensure_runtime_dependencies()
         result, summary = allocate_capital(
             read_table(Path(args.prices)),
             read_table(Path(args.candidates)),
@@ -56,6 +51,25 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def ensure_runtime_dependencies() -> None:
+    if "pd" in globals():
+        return
+    import pandas as pandas_module
+    import stock_selection_capital as capital_module
+    import stock_selection_data as data_module
+    import validate_ohlcv as validator_module
+
+    globals().update(
+        {
+            "pd": pandas_module,
+            "CAPITAL_FIELDS": capital_module.CAPITAL_FIELDS,
+            "parse_dates": data_module.parse_dates,
+            "read_table": data_module.read_table,
+            "validate_frame": validator_module.validate_frame,
+        }
+    )
+
+
 def allocate_capital(
     prices: pd.DataFrame,
     candidates: pd.DataFrame,
@@ -65,6 +79,7 @@ def allocate_capital(
     close_tolerance: float = 0.000001,
     overwrite_capital_fields: bool = False,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
+    ensure_runtime_dependencies()
     validate_inputs(prices, candidates, cash_budget, lot_size, close_tolerance)
     reject_existing_capital_fields(candidates, overwrite_capital_fields)
     quotes = signal_quotes(prices)

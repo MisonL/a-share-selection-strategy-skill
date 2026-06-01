@@ -14,7 +14,7 @@ uv run --with pandas --with numpy --with baostock python scripts/probe_baostock_
   --adjust 3 \
   --candidate-fields up_limit,down_limit,limit_status,is_trading,suspended \
   --control-fields preclose,pctChg,tradestatus,isST,turn,volume,amount \
-  --output /tmp/stock-selection-p2a-limit-field-probe-20260530T135328/baostock_limit_field_probe.json \
+  --output /tmp/stock-selection-p2a-limit-field-probe-20260601T064758Z/baostock_limit_field_probe.json \
   --fail-on-provider-error \
   --require-control-rows
 ```
@@ -24,18 +24,18 @@ uv run --with pandas --with numpy --with baostock python scripts/probe_baostock_
 标准输出摘要:
 
 ```text
-OK: source=baostock probe_type=limit_field_availability symbols=4 supported_candidate_fields=0 unsupported_candidate_fields=5 available_control_fields=7 provider_error_fields=0 control_rows=364 direct_limit_field_available=False limit_rules_model=not_modeled
+OK: source=baostock probe_type=limit_field_availability symbols=4 supported_candidate_fields=0 unsupported_candidate_fields=5 supported_direct_limit_fields=0 supported_trading_state_fields=0 available_control_fields=7 provider_error_fields=0 control_rows=364 direct_limit_field_available=False trading_state_field_available=False limit_rules_model=not_modeled
 ```
 
 产物:
 
-- `/tmp/stock-selection-p2a-limit-field-probe-20260530T135328/baostock_limit_field_probe.json`
+- `/tmp/stock-selection-p2a-limit-field-probe-20260601T064758Z/baostock_limit_field_probe.json`
 
 ## JSON 契约
 
 关键字段:
 
-- `schema_version=1`
+- `schema_version=2`
 - `source=baostock`
 - `probe_type=limit_field_availability`
 - `requested_symbols=000001,600000,300750,688981`
@@ -53,7 +53,10 @@ OK: source=baostock probe_type=limit_field_availability symbols=4 supported_cand
 - `provider_error_fields=[]`
 - `available_control_fields=preclose,pctChg,tradestatus,isST,turn,volume,amount`
 - `control_rows=364`
+- `supported_direct_limit_fields=[]`
+- `supported_trading_state_fields=[]`
 - `direct_limit_field_available=false`
+- `trading_state_field_available=false`
 
 ## 字段结果
 
@@ -77,6 +80,6 @@ OK: source=baostock probe_type=limit_field_availability symbols=4 supported_cand
 
 ## 结论
 
-本次 P2a 只证明当前 baostock 日 K 接口在指定窗口内没有可直接消费的 `up_limit/down_limit/limit_status/is_trading/suspended` 字段。`preclose/pctChg/tradestatus/isST` 可作为行情诊断和停牌/交易状态控制字段，但不能被解释为真实涨跌停规则已建模。
+本次 P2a 只证明当前 baostock 日 K 接口在指定窗口内没有可直接消费的 `up_limit/down_limit/limit_status` 直接涨跌停字段，也没有可作为候选字段取到的 `is_trading/suspended` 交易状态字段。`preclose/pctChg/tradestatus/isST` 可作为行情诊断和停牌/交易状态控制字段，但不能被解释为真实涨跌停规则已建模。
 
 P2 仍未通过。后续只有拿到可靠数据源的直接涨跌停字段，或另起明确建模任务并完成规则、复权、ST、科创板/创业板、上市初期和异常交易日契约验证后，才允许改变 `limit_rules_model=not_modeled`。

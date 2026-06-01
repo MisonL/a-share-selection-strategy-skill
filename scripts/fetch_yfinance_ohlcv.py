@@ -9,8 +9,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
 
 OUTPUT_COLUMNS = [
     "symbol",
@@ -61,7 +59,16 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def ensure_runtime_dependencies() -> None:
+    if "pd" in globals():
+        return
+    import pandas as pandas_module
+
+    globals().update({"pd": pandas_module})
+
+
 def fetch_prices(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any]]:
+    ensure_runtime_dependencies()
     try:
         import yfinance as yf
     except Exception as exc:  # noqa: BLE001
@@ -99,6 +106,7 @@ def parse_symbols(text: str) -> list[str]:
 
 
 def history_rows(history: pd.DataFrame, symbol: str, *, market: str) -> list[dict[str, Any]]:
+    ensure_runtime_dependencies()
     if history.empty:
         return []
     columns = resolve_columns(history)

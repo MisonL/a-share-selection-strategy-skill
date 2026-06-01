@@ -8,61 +8,20 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
-from stock_selection_config import load_config
-from stock_selection_data import parse_dates, read_table
-from stock_selection_diagnostics import (
-    add_threshold_summary,
-    build_summary,
-    complete_summary,
-    no_scored_symbols_message,
-    print_skipped_history_warning,
-    print_summary,
-    threshold_masks,
-)
-from stock_selection_metrics import is_qsss_mode, score_symbol
-from stock_selection_profile import profile_column_errors, qsss_value_errors
-from stock_selection_universe import apply_universe_filter
-from validate_ohlcv import validate_frame
-
 
 BASE_COLUMNS = ["symbol", "date", "open", "high", "low", "close", "volume"]
 OUTPUT_COLUMNS = [
-    "rank",
-    "symbol",
-    "name",
-    "market",
-    "date",
-    "close",
-    "volume",
-    "turn",
-    "rsi",
-    "volatility",
-    "macd",
-    "macd_status",
-    "momentum_score",
-    "trend_score",
-    "prediction_score",
-    "explosion_score",
-    "risk_score",
-    "total_score",
-    "ma15",
-    "low_ma15_flag",
-    "explosion_focus_flag",
-    "low_price_explosion_flag",
-    "signal_tier",
-    "recommendation",
-    "key_reasons",
-    "risk_notes",
-    "data_window",
+    "rank", "symbol", "name", "market", "date", "close", "volume", "turn",
+    "rsi", "volatility", "macd", "macd_status", "momentum_score", "trend_score",
+    "prediction_score", "explosion_score", "risk_score", "total_score", "ma15",
+    "low_ma15_flag", "explosion_focus_flag", "low_price_explosion_flag",
+    "signal_tier", "recommendation", "key_reasons", "risk_notes", "data_window",
 ]
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Score stock candidates from local CSV or Parquet OHLCV data."
-    )
+def build_parser() -> argparse.ArgumentParser:
+    description = "Score stock candidates from local CSV or Parquet OHLCV data."
+    parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--input", required=True, help="Path to CSV or Parquet file.")
     parser.add_argument("--config", required=True, help="Path to JSON config file.")
     parser.add_argument("--output", required=True, help="Path to output CSV file.")
@@ -76,8 +35,18 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Return a non-zero exit code if scoring produces zero candidates.",
     )
+    parser.add_argument(
+        "--diagnostics-output",
+        help="Optional CSV path for scored-symbol threshold diagnostics.",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        ensure_runtime_dependencies()
         config = load_config(Path(args.config))
         candidates, summary = score_candidates(read_table(Path(args.input)), config)
         summary["input"] = Path(args.input).name
@@ -95,6 +64,11 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 3
         write_output(candidates, Path(args.output))
+        if args.diagnostics_output:
+            write_threshold_diagnostics(
+                summary.get("threshold_diagnostics", []),
+                Path(args.diagnostics_output),
+            )
     except Exception as exc:  # noqa: BLE001
         print(
             "ERROR: code=bad_input "
@@ -106,9 +80,52 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def ensure_runtime_dependencies() -> None:
+    if "pd" in globals():
+        return
+
+    import pandas as pandas_module
+    import stock_selection_config as config_module
+    import stock_selection_data as data_module
+    import stock_selection_diagnostics as diagnostics_module
+    import stock_selection_metrics as metrics_module
+    import stock_selection_profile as profile_module
+    import stock_selection_universe as universe_module
+    import validate_ohlcv as validator_module
+
+    skipped_warning = diagnostics_module.print_skipped_history_warning
+    globals().update(
+        {
+            "pd": pandas_module,
+            "load_config": config_module.load_config,
+            "parse_dates": data_module.parse_dates,
+            "read_table": data_module.read_table,
+            "add_threshold_summary": diagnostics_module.add_threshold_summary,
+            "build_summary": diagnostics_module.build_summary,
+            "complete_summary": diagnostics_module.complete_summary,
+            "no_scored_symbols_message": diagnostics_module.no_scored_symbols_message,
+            "print_skipped_history_warning": skipped_warning,
+            "print_summary": diagnostics_module.print_summary,
+            "strict_gate_errors": diagnostics_module.strict_gate_errors,
+            "threshold_masks": diagnostics_module.threshold_masks,
+            "threshold_diagnostics": diagnostics_module.threshold_diagnostics,
+            "write_threshold_diagnostics": (
+                diagnostics_module.write_threshold_diagnostics
+            ),
+            "is_qsss_mode": metrics_module.is_qsss_mode,
+            "score_symbol": metrics_module.score_symbol,
+            "profile_column_errors": profile_module.profile_column_errors,
+            "qsss_value_errors": profile_module.qsss_value_errors,
+            "apply_universe_filter": universe_module.apply_universe_filter,
+            "validate_frame": validator_module.validate_frame,
+        }
+    )
+
+
 def score_candidates(
     frame: pd.DataFrame, config: dict[str, Any]
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
+    ensure_runtime_dependencies()
     validate_input_frame(frame, config)
     validate_profile_requirements(frame, config)
     prepared = prepare_frame(frame)
@@ -142,6 +159,11 @@ def score_candidates(
         config=config,
     )
     ranked = rank_and_limit(thresholded, config)
+    summary["threshold_diagnostics"] = threshold_diagnostics(
+        scored=scored,
+        ranked=ranked,
+        config=config,
+    )
     return ranked_result(ranked, summary)
 
 
@@ -213,25 +235,6 @@ def validate_qsss_symbols(frame: pd.DataFrame, config: dict[str, Any]) -> None:
     errors = qsss_value_errors(frame, config)
     if errors:
         raise ValueError("; ".join(errors))
-
-
-def strict_gate_errors(
-    summary: dict[str, Any],
-    *,
-    fail_on_skipped: bool,
-    fail_on_empty_result: bool,
-) -> list[str]:
-    errors = []
-    if fail_on_skipped and summary.get("failed_symbols", 0):
-        errors.append(f"failed_symbols={summary['failed_symbols']}")
-    if fail_on_skipped and summary.get("insufficient_history_symbols", 0):
-        errors.append(
-            f"insufficient_history_symbols={summary['insufficient_history_symbols']}"
-        )
-    if fail_on_empty_result and summary.get("effective_empty_result"):
-        reason = summary.get("empty_result_reason", "unknown")
-        errors.append(f"effective_empty_result=true empty_result_reason={reason}")
-    return errors
 
 
 def prepare_frame(frame: pd.DataFrame) -> pd.DataFrame:

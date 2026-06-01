@@ -7,11 +7,6 @@ import argparse
 import sys
 from pathlib import Path
 
-import pandas as pd
-
-from stock_selection_data import parse_dates, read_table
-from validate_ohlcv import validate_frame
-
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Slice local OHLCV data by date.")
@@ -20,6 +15,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--as-of-date", required=True, help="Inclusive YYYY-MM-DD date.")
     args = parser.parse_args(argv)
     try:
+        ensure_runtime_dependencies()
         sliced = slice_prices(read_table(Path(args.input)), as_of_date=args.as_of_date)
         write_output(sliced, Path(args.output))
     except Exception as exc:  # noqa: BLE001
@@ -33,7 +29,25 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def ensure_runtime_dependencies() -> None:
+    if "pd" in globals():
+        return
+    import pandas as pandas_module
+    import stock_selection_data as data_module
+    import validate_ohlcv as validator_module
+
+    globals().update(
+        {
+            "pd": pandas_module,
+            "parse_dates": data_module.parse_dates,
+            "read_table": data_module.read_table,
+            "validate_frame": validator_module.validate_frame,
+        }
+    )
+
+
 def slice_prices(frame: pd.DataFrame, *, as_of_date: str) -> pd.DataFrame:
+    ensure_runtime_dependencies()
     errors = validate_frame(frame, min_history_rows=0)
     if errors:
         raise ValueError("; ".join(errors))
@@ -50,6 +64,7 @@ def slice_prices(frame: pd.DataFrame, *, as_of_date: str) -> pd.DataFrame:
 
 
 def parse_cutoff(value: str) -> pd.Timestamp:
+    ensure_runtime_dependencies()
     parsed = pd.to_datetime(value, errors="coerce")
     if pd.isna(parsed):
         raise ValueError("as-of-date must be parseable")
@@ -62,6 +77,7 @@ def write_output(frame: pd.DataFrame, path: Path) -> None:
 
 
 def print_summary(frame: pd.DataFrame, as_of_date: str, output: str) -> None:
+    ensure_runtime_dependencies()
     dates = parse_dates(frame["date"])
     print(
         f"OK: rows={len(frame)} symbols={frame['symbol'].nunique()} "

@@ -77,17 +77,19 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `validate_ohlcv.py`：校验本地 CSV/Parquet 行情文件。
 - `score_candidates.py`：读取本地行情文件并输出候选股 CSV。
 - `generate_lightgbm_predictions.py`：可选 LightGBM 预测生成器，输出 `prediction_score`。
-- `allocate_candidate_capital.py`：可选候选资金分配脚本，按信号日 close、现金预算和 lot size 生成可追溯 sizing 字段。
+- `allocate_candidate_capital.py`：可选候选资金分配脚本，按信号日 close、现金预算和 lot size 生成可追溯 sizing 字段；候选表已有资金字段时默认拒绝，只有显式 `--overwrite-capital-fields` 才重算覆盖。
 - `backtest_buy_hold.py`：可选 close-to-close buy-hold 基线回测，可透传候选表资金字段。
-- `portfolio_equity_curve.py`：可选等权组合资金曲线生成器，读取一个或多个回测 CSV，并支持 final equity / max drawdown 失败门槛。
-- `portfolio_overlap_report.py`：可选组合并发持仓、同标的重叠、资金字段完整性，以及权重、名义金额和预留现金容量门禁报告。
+- `portfolio_equity_curve.py`：可选等权组合资金曲线生成器，读取一个或多个回测 CSV，并支持 final equity / max drawdown 失败门槛。默认只按 complete trades 等权计算权益曲线，不使用输入 `weight` 加权；`incomplete_trades>0` 时 `OK` 和 `final_equity` 不代表全量回测通过，严格门禁需显式使用 `--fail-on-incomplete`。
+- `portfolio_overlap_report.py`：可选组合并发持仓、同标的重叠、资金字段完整性，以及权重、名义金额和预留现金容量门禁报告。未传 `--require-capital-fields` 时，单项金额门禁可只验证自身字段；若 `capital_fields_missing` 非空或 `weight_capacity_verifiable=false`，不能说完整组合容量字段已验证。`calendar_model=business_day_closed_interval` 来自 pandas 工作日闭区间，不是交易所日历、节假日、停复牌或真实可交易日历门禁。
+- `summarize_walk_forward_run.py`：汇总 walk-forward run 目录，输出 `qsss_run_summary.json` 并执行 metadata、prediction、回测、资金曲线和组合容量门禁。`--required-tradability-model` 和 `--required-limit-rules-model` 只有传入时才检查模型口径；省略后 `quality_errors=[]` 不能说明这些模型门禁通过。`--expect-portfolio-violations` 只用于复现已知组合风险；退出 0 且 `quality_errors=[]` 时如果 `portfolio_violations>0`，仍不能说组合容量门禁通过。
 - `validate_walk_forward_manifest.py`：校验一键 runner manifest 的步骤顺序、退出码和门禁参数；不替代真实行情、prediction 或回测执行。
-- `validate_walk_forward_artifacts.py`：校验 walk-forward 复验目录中的真实 CSV/JSON artifact 内容，包括信号窗口、候选原始信号日 close、sizing 的 signal close、回测、资金曲线、组合 summary 和 manifest 校验报告。
-- `slice_prices_as_of.py`：按信号日截断本地行情，防止用未来行情生成候选。
+- `validate_walk_forward_artifacts.py`：校验 walk-forward 复验目录中的真实 CSV/JSON artifact 内容，包括信号窗口、候选原始信号日 close、sizing 的 signal close、回测、资金曲线、组合 summary 和可选 manifest 校验报告。只有传入 `--manifest-validation` 时才检查 `run_manifest_validation.json`；报告中 `manifest_checked=false` 时不能说 manifest 门禁已纳入 artifact 复验。`--expected-portfolio-violations` 只校验违规数量符合预期；即使退出 0 且 `errors=[]`，`portfolio_violations>0` 仍表示组合容量门禁存在违规。
+- `slice_prices_as_of.py`：按信号日截断本地行情，防止用未来行情生成候选。`--as-of-date` 是包含该日及之前的截止日期，不保证输出存在该日期；候选信号日应以切片后的真实 `date_max` 或候选 CSV 的 `date` 为准。
 - `fetch_baostock_a_share.py`：可选 baostock A 股日线取数脚本，输出本地行情 CSV 和 metadata JSON，包含 `tradestatus/preclose/pctChg/isST` 门禁字段。
 - `fetch_akshare_a_share.py`：可选 akshare A 股日线取数脚本，先尝试中文列接口，失败时记录 fallback 并转用 `stock_zh_a_daily`。
-- `fetch_yfinance_ohlcv.py`：可选 yfinance 日线取数脚本，输出本地通用 OHLCV CSV 和 metadata JSON；用 `--timeout-seconds` 显式限制每票拉取超时。
-- `stock_selection_*.py`、`lightgbm_prediction_summary.py`：评分脚本使用的配置、数据读取、指标、输出、profile、股票池、可交易性元数据和诊断辅助函数。
+- `fetch_yfinance_ohlcv.py`：可选 yfinance 日线取数脚本，输出本地通用 OHLCV CSV 和 metadata JSON；用 `--timeout-seconds` 显式限制每票拉取超时。非严格模式可能写出部分 symbol，门禁必须检查 `symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`，或使用 `--fail-on-fetch-error`。fetch metadata 的 `end_date` 是请求截止日；实际最后交易日必须看每个 symbol 的 `date_max`。`--market` 只是写入输出标签，不证明 yfinance 数据源、交易所或交易日历变成对应市场。
+- `probe_external_source_stability.py`：P3 外部源稳定性观察总控脚本，重复调用 akshare、yfinance 和 baostock 取数入口并写出 summary JSON。`all_sources_all_iterations_passed=true` 只说明当前窗口、参数和网络环境下连续复验通过；`long_term_stability_claim` 必须保持 `not_proven`。
+- `stock_selection_*.py`、`lightgbm_prediction_summary.py`：评分脚本使用的配置、数据读取、指标、输出、profile、股票池、可交易性元数据和诊断辅助函数；它们不是用户 CLI 入口，`python3 -S <helper>.py --help` 的顶层 pandas/numpy import 失败不属于 `--help` 入口缺口。`python3 -S --help` 依赖轻量化门禁只适用于带 `argparse`/`main()`/`__main__` 的脚本入口。
 
 使用方式：
 
@@ -101,7 +103,9 @@ uv run --with pandas --with numpy python scripts/score_candidates.py --input /tm
 
 `create_demo_data.py` 只依赖标准库。`validate_ohlcv.py`、`score_candidates.py`、`backtest_buy_hold.py` 和测试需要 `pandas`、`numpy`。Parquet 输入需要 `pyarrow` 或 `fastparquet`。真实 LightGBM 预测生成器需要 `requirements-ml.txt`。
 
-脚本以 CLI 为稳定入口；若在 Python 代码中复用，需要将 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`。脚本读取 CSV/Parquet，但写出的中间产物默认是 CSV；如果用户要求全链路中间产物保持 Parquet，必须显式把每一步 CSV 输出转换成 Parquet 后再传入下一步。
+完全离线运行时，必须使用已经安装好依赖的解释器、虚拟环境、wheelhouse 或已有包缓存。若 `uv run --with ...` 因无法解析依赖失败，应显式报告环境问题；不得用 mock 数据、跳过依赖或把未运行的脚本说成验证通过。
+
+脚本以 CLI 为稳定入口；若在 Python 代码中复用，需要将 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`。不要把 `from scripts.<name> import ...` 这类 package-style import 当成稳定 API；它可能在 import 阶段看似成功，但调用时因脚本内部顶层依赖未在路径中而失败。`python3 -S scripts/<name>.py --help` 只要求真实 CLI 入口在缺少 pandas/numpy 时可展示帮助；helper/import 模块没有帮助界面承诺，必须通过调用它们的 CLI 入口验证。当前脚本支持读取 CSV/Parquet，但中间产物默认写 CSV。若用户要求严格全链路无 CSV，必须说明当前 CLI 链路不支持，不能先写 CSV 再转换成 Parquet 后声称满足无 CSV；只有用户明确允许临时 CSV 时，才可显式转换后继续。
 
 ## 输入数据契约
 
@@ -110,7 +114,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py --input /tm
 最小行情字段：
 
 - `symbol`：股票代码，必须按文本保存，避免 `000002` 变成 `2`。
-- `date`：交易日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD`。
+- `date`：交易日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD`；两种格式会归一化为同一日，同一 `symbol/date` 重复必须先修复，不能当成两天数据。
 - `open`、`high`、`low`、`close`：价格字段，必须为正数。
 - `volume`：成交量，不得为负数，单位必须在同一文件内一致。
 - `name`、`market`、`amount`、`turn` 或 `turnover`：可选字段，按策略需要提供。
@@ -123,6 +127,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py --input /tm
 - QSSS-derived 的 `market` 必须使用精确值 `A-share`。
 - QSSS-derived 必须包含 `prediction` 或 `prediction_score`，且取值在 0 到 1 之间。
 - QSSS-derived 必须包含 `turn` 或 `turnover`。
+- 无 config 的基础 OHLCV 校验或切片成功不会检查或补齐 QSSS-derived 必需字段；切片后要用 QSSS config 重新校验和评分，缺字段的 `bad_input output_written=false` 不是成功 0 候选。
 - 如果使用未来收益做训练标签，必须避免在预测时泄漏未来数据。
 
 ## QSSS-derived 默认剖面
@@ -133,10 +138,12 @@ uv run --with pandas --with numpy python scripts/score_candidates.py --input /tm
 
 - 默认市场为 A 股日线，只保留 `60`、`68`、`00`、`30` 开头的标的，并排除 `8`、`4` 开头的标的。
 - 主趋势分是上游 LightGBM 输出的上涨概率 `prediction` 或 `prediction_score`，不是动量近似。
-- `score_candidates.py` 只消费预测列，不训练 LightGBM，也不会用技术因子伪造机器学习预测。
+- `score_candidates.py` 只消费预测列，不训练 LightGBM，也不会用技术因子伪造机器学习预测。若 `prediction_score` 和 `prediction` 同时存在，当前评分优先消费 `prediction_score`；冲突时不能用较高的 `prediction` 解释阈值通过，应先统一或审计预测列。
 - `prediction_source=external_unverified` 表示当前脚本只消费外部预测，不验证其训练窗口、标签定义、特征、标准化或未来泄漏风险。
-- `generate_lightgbm_predictions.py` 是可选上游生成器；真实门禁必须启用 `--fail-on-skipped`，或检查 `raw_symbols == predicted_symbols` 且 `skipped_symbols == 0`。
-- `backtest_buy_hold.py` 只做信号日收盘价到未来第 N 个可用交易行收盘价的基线；`--cost-bps` 和 `--slippage-bps` 只做 round-trip bps 扣减，`--require-tradable-bars` 只检查入场和退出日 `tradestatus=1`，不覆盖涨跌停；回测不生成 sizing，需先由 `allocate_candidate_capital.py` 生成可追溯资金字段。
+- `generate_lightgbm_predictions.py` 是可选上游生成器；真实门禁必须启用 `--fail-on-skipped`，或检查 `raw_symbols == predicted_symbols` 且 `skipped_symbols == 0`。下游评分成功只覆盖已写出的预测行，不能反推被上游跳过的标的也通过。
+- `prediction_summary.json` 应审计 `feature_columns`、`split_method`、`scaler_fit_scope`、`label_definition`、`prediction_scope`，以及每个 symbol 的训练日期窗口、训练标签分布和 `skipped_reason`；字段完整只证明本次生成链路可审计，不证明 AUC、IC、分层收益、样本外泛化或全市场策略质量。
+- `prediction_scope=latest_probability_repeated_for_scoring` 表示生成器把最新预测概率重复写入该标的所有行，供评分脚本消费当前概率；这不是逐日历史预测序列。
+- `backtest_buy_hold.py` 只做信号日收盘价到未来第 N 个可用交易行收盘价的基线；候选信号日必须精确存在于价格表，不会自动顺延到下一交易日，缺入场价会记为 `missing_entry_price`。`--cost-bps` 和 `--slippage-bps` 只做 round-trip bps 扣减；默认未传时两者都是 0，`return` 仍是零成本 close-to-close 基线，不是真实净收益。`--require-tradable-bars` 只检查入场和退出日 `tradestatus=1`，不扫描中间持有期行，也不覆盖涨跌停；回测不生成 sizing，需先由 `allocate_candidate_capital.py` 生成可追溯资金字段。最新信号日缺少未来价格导致 `missing_future_price` 时，不得绕过 `--fail-on-incomplete` 或把 incomplete trade 写成成功回测。
 
 QSSS-derived 总分：
 
@@ -166,16 +173,28 @@ total_score =
 - `effective_empty_result=true` 表示脚本成功运行但阈值或股票池过滤后没有候选。
 - `empty_result_reason` 会区分 `universe_filtered_all`、`threshold_filtered_all` 等成功空结果原因。
 - 所有股票都因历史不足或输入异常无法评分时，脚本应显式失败。
+- `validate_ohlcv.py --min-history-rows 0` 或低于评分配置的历史门槛，只能证明基础字段和 profile 字段校验通过；不能证明 `score_candidates.py` 可按配置评分。
+- `slice_prices_as_of.py` 退出 0 只说明切片文件写出且非空；如果切到较早日期，仍要对切片后的文件重新校验并以 `score_candidates.py` 的历史窗口、退出码和 `insufficient_history_symbols` 为准。
 - `threshold_failures` 是各阈值独立失败计数，不是互斥分类。
 - 自动化门禁可传入 `--fail-on-skipped` 和 `--fail-on-empty-result`，让跳过标的或 0 候选以非 0 退出。
 - `failed_symbols>0` 表示存在单股运行期异常，即使输出其他候选，也应进入复核或失败处理。
+- `output.max_candidates > 0` 才做 top-N 截断；设为 `0` 表示不截断，不是输出 0 个候选。top-N 截断不计入 `threshold_failed_symbols`。
 
-真实链路建议顺序：
+真实 P1 组合容量门禁默认使用 `portfolio_cash_lot_floor`。这条路径会在所有信号日评分后统一做组合级 sizing/cut，再回测和校验组合容量；默认不传 `--expect-portfolio-violations`。只有复现已知失败窗口、并且目标是暴露组合风险时，才把 `--expect-portfolio-violations` 放入 runner 和 manifest validator。
+
+`portfolio_cash_lot_floor` 的 `raw_candidates` 只是组合容量裁剪前候选池；进入回测的是 `qsss_candidates.csv` 和 `qsss_sized_candidates.csv`。如果 `skipped_candidates>0`，必须披露 `skip_reason_counts`，不能说全部 raw candidates 都进入回测或成交。`allocated_candidates=0` 仍可能退出 0 并写出只有表头的 selected/sized CSV；这表示没有候选进入后续回测。
+
+候选 `close` 和 sized `signal_close` 必须等于对应 `prices_signal_window.csv` 中的原始信号日 close。`validate_walk_forward_artifacts.py` 对价格不一致返回非 0 时，应按真实门禁失败处理，不能因报告 JSON 已写出而解释为通过。
+
+复制执行真实 P1 门禁时，使用 README 的 P1 `portfolio_cash_lot_floor` bash 模板。README 模板会创建唯一 `RUN_DIR`，运行 runner，写出 `run_manifest_validation.json`，再从 `run_manifest.json` 和 `qsss_run_summary.json` 生成 artifact validator 参数。不要把 `RUN_DIR`、`SYMBOLS`、`SIGNAL_DATES`、`CANDIDATE_COUNTS`、`FINAL_EQUITY` 或 `PORTFOLIO_VIOLATIONS` 当字面值传给脚本。
+
+如果 runner 显式使用了 `--max-candidates M`，manifest validator 才同步传 `--expected-max-candidates M`。如果 runner 显式使用了 `--drop-invalid-rows`，summary 和 artifact validator 必须同步传 `--allow-dropped-invalid-rows`。手工运行 summary 时必须显式传入 `--required-tradability-model` 和 `--required-limit-rules-model` 才能把 `quality_errors=[]` 用作模型口径门禁证据。
+
+`portfolio_overlap_report.py` 和 `summarize_walk_forward_run.py` 可在严格门禁失败时写出诊断文件。退出码非 0、stderr 含 `strict gate failed` 或 `quality_errors` 非空时，`output_written=true` 只表示失败报告已落盘，不代表组合容量、资金曲线或 P1 门禁通过。
+
+单信号日手工链路只用于定位具体步骤，不替代 P1 组合容量门禁：
 
 ```bash
-uv run --with pandas --with numpy --with baostock --with-requirements requirements-ml.txt python scripts/run_baostock_walk_forward.py --symbols SYMBOLS --start-date START --end-date END --signal-dates YYYY-MM-DD --output-dir RUN_DIR --cash-budget 1000000 --max-open-positions 10 --max-gross-weight 1.0 --max-gross-notional 1000000 --max-cash-reserved 1000000 --fail-on-symbol-overlap --expect-portfolio-violations
-python scripts/validate_walk_forward_manifest.py --manifest RUN_DIR/run_manifest.json --signal-dates YYYY-MM-DD --expected-symbol-count N --required-tradability-model tradestatus_entry_exit_only --required-limit-rules-model not_modeled --expected-max-candidates N --expect-portfolio-violations
-python scripts/validate_walk_forward_artifacts.py --run-dir RUN_DIR --output RUN_DIR/run_artifact_validation.json --signal-dates YYYY-MM-DD --expected-symbols SYMBOLS --expected-candidates CANDIDATE_COUNTS --expected-final-equity FINAL_EQUITY --expected-portfolio-violations N --required-allocation-model equal_cash_budget_lot_floor --required-tradability-model tradestatus_entry_exit_only --required-limit-rules-model not_modeled --manifest-validation RUN_DIR/run_manifest_validation.json
 uv run --with pandas --with numpy python scripts/slice_prices_as_of.py --input prices.csv --output prices_signal_window.csv --as-of-date YYYY-MM-DD
 uv run --with-requirements requirements-ml.txt python scripts/generate_lightgbm_predictions.py --input prices_signal_window.csv --output predictions_signal_window.csv --summary-output prediction_summary.json --fail-on-skipped
 uv run --with pandas --with numpy python scripts/validate_ohlcv.py --input predictions_signal_window.csv --config scripts/qsss_profile_config.json
@@ -187,9 +206,11 @@ uv run --with pandas --with numpy python scripts/portfolio_overlap_report.py --b
 uv run --with pandas python scripts/summarize_walk_forward_run.py --run-dir RUN_DIR --output RUN_DIR/qsss_run_summary.json --expected-symbol-count N --required-tradability-model tradestatus_entry_exit_only --required-limit-rules-model not_modeled
 ```
 
+P1 `portfolio_cash_lot_floor` 复验的完整示例见 README 对应小节。该场景下，`--expected-symbols` 和 `--signal-dates` 应与 `run_manifest.json` 保持一致。
+
 若真实源数据存在已知不可交易或缺失数值行，只能在取数时显式传入 `--drop-invalid-rows`。后续 summary 和 artifact validator 必须同时显式传入 `--allow-dropped-invalid-rows`，并确认 metadata 满足 `invalid_rows == dropped_invalid_rows`、清洗后 `non_trading_rows=0` 且 `tradestatus_missing_rows=0`。该模式不等于源数据无异常。
 
-涨跌停规则仍未建模；如需确认 baostock 字段能力，只能用 `probe_baostock_limit_fields.py` 做字段可用性探测并记录真实错误码。
+涨跌停规则仍未建模；如需确认 baostock 字段能力，只能用 `probe_baostock_limit_fields.py` 做字段可用性探测并记录真实错误码。探针默认退出 0 时仍必须检查 `provider_error_fields`、`unsupported_candidate_fields`、`supported_direct_limit_fields`、`supported_trading_state_fields`、`control_rows` 和 `limit_rules_model=not_modeled`；真实报告优先使用 `--fail-on-provider-error --require-control-rows`。控制字段可取不等于涨跌停规则或真实可交易性已建模；`is_trading` 或 `suspended` 即使可取，也只能作为交易状态或停牌字段线索，不能证明 `up_limit/down_limit/limit_status` 这类直接涨跌停字段可用。
 
 ## Agent 工作流
 

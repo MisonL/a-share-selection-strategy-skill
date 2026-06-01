@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from fetch_baostock_a_share import parse_symbols
+from stock_selection_symbols import parse_six_digit_symbols
 from walk_forward_portfolio_commands import ALLOCATION_MODEL_EQUAL, ALLOCATION_MODEL_PORTFOLIO, portfolio_allocate_command
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -254,6 +254,10 @@ def initial_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "tradability_model": TRADABILITY_MODEL,
         "steps": [],
     }
+
+
+def parse_symbols(text: str) -> list[str]:
+    return parse_six_digit_symbols(text)
 
 def write_json(data: dict[str, Any], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)

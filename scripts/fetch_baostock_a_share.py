@@ -9,9 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
-from stock_selection_tradability import prefixed_tradability_stats, tradability_stats
+from stock_selection_symbols import baostock_code, parse_six_digit_symbols
 
 
 FIELDS = "date,code,open,high,low,close,preclose,pctChg,volume,amount,turn,tradestatus,isST"
@@ -57,7 +55,23 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def ensure_runtime_dependencies() -> None:
+    if "pd" in globals():
+        return
+    import pandas as pandas_module
+    import stock_selection_tradability as tradability_module
+
+    globals().update(
+        {
+            "pd": pandas_module,
+            "prefixed_tradability_stats": tradability_module.prefixed_tradability_stats,
+            "tradability_stats": tradability_module.tradability_stats,
+        }
+    )
+
+
 def fetch_prices(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any]]:
+    ensure_runtime_dependencies()
     try:
         import baostock as bs
     except Exception as exc:  # noqa: BLE001
@@ -93,17 +107,7 @@ def fetch_prices(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any]
 
 
 def parse_symbols(text: str) -> list[str]:
-    symbols = [item.strip() for item in text.split(",") if item.strip()]
-    invalid = [symbol for symbol in symbols if not symbol.isdigit() or len(symbol) != 6]
-    if invalid:
-        raise ValueError(f"symbols must be six digits: {','.join(invalid)}")
-    return symbols
-
-
-def baostock_code(symbol: str) -> str:
-    if symbol.startswith(("6", "9")):
-        return f"sh.{symbol}"
-    return f"sz.{symbol}"
+    return parse_six_digit_symbols(text)
 
 
 def collect_rows(result: Any, symbol: str) -> list[dict[str, Any]]:
@@ -176,6 +180,7 @@ def apply_quality_policy(
     *,
     drop_invalid_rows: bool,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
+    ensure_runtime_dependencies()
     invalid = invalid_row_details(frame)
     metadata = dict(metadata)
     metadata["invalid_rows"] = len(invalid)

@@ -8,12 +8,6 @@ import sys
 from pathlib import Path
 from typing import Iterable
 
-import pandas as pd
-
-from stock_selection_config import load_config
-from stock_selection_data import parse_dates, read_table
-from stock_selection_profile import profile_column_errors, qsss_value_errors
-
 
 REQUIRED_COLUMNS = ["symbol", "date", "open", "high", "low", "close", "volume"]
 PRICE_COLUMNS = ["open", "high", "low", "close"]
@@ -37,6 +31,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        ensure_runtime_dependencies()
         frame = read_table(Path(args.input))
         config = load_config(Path(args.config)) if args.config else None
         errors = validate_frame(frame, min_history_rows=args.min_history_rows)
@@ -56,7 +51,27 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def ensure_runtime_dependencies() -> None:
+    if "pd" in globals():
+        return
+    global pd, load_config, parse_dates, read_table, profile_column_errors, qsss_value_errors
+    import pandas as pandas_module
+    from stock_selection_config import load_config as load_config_fn
+    from stock_selection_data import parse_dates as parse_dates_fn
+    from stock_selection_data import read_table as read_table_fn
+    from stock_selection_profile import profile_column_errors as profile_column_errors_fn
+    from stock_selection_profile import qsss_value_errors as qsss_value_errors_fn
+
+    pd = pandas_module
+    load_config = load_config_fn
+    parse_dates = parse_dates_fn
+    read_table = read_table_fn
+    profile_column_errors = profile_column_errors_fn
+    qsss_value_errors = qsss_value_errors_fn
+
+
 def validate_frame(frame: pd.DataFrame, min_history_rows: int) -> list[str]:
+    ensure_runtime_dependencies()
     errors: list[str] = []
     missing = [column for column in REQUIRED_COLUMNS if column not in frame.columns]
     if missing:

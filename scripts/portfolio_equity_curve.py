@@ -8,10 +8,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
-from stock_selection_data import parse_dates, read_table
-
 
 REQUIRED_COLUMNS = ["signal_date", "return", "missing_data", "status"]
 MIN_DRAWDOWN_FLOOR = -1.0
@@ -40,6 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     try:
+        ensure_runtime_dependencies()
         validate_gate_thresholds(args.min_final_equity, args.max_drawdown_floor)
         frames = [read_table(Path(path)) for path in args.backtests]
         curve, summary = build_equity_curve(
@@ -71,6 +68,21 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     print_summary(summary, args.output)
     return 0
+
+
+def ensure_runtime_dependencies() -> None:
+    if "pd" in globals():
+        return
+    import pandas as pandas_module
+    import stock_selection_data as data_module
+
+    globals().update(
+        {
+            "pd": pandas_module,
+            "parse_dates": data_module.parse_dates,
+            "read_table": data_module.read_table,
+        }
+    )
 
 
 def validate_gate_thresholds(
@@ -111,6 +123,7 @@ def build_equity_curve(
     *,
     initial_equity: float,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
+    ensure_runtime_dependencies()
     if initial_equity <= 0:
         raise ValueError("initial-equity must be > 0")
     if not frames:

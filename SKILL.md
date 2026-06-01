@@ -88,7 +88,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `fetch_baostock_a_share.py`：可选 baostock A 股日线取数脚本，输出本地行情 CSV 和 metadata JSON，包含 `tradestatus/preclose/pctChg/isST` 门禁字段。
 - `fetch_akshare_a_share.py`：可选 akshare A 股日线取数脚本，先尝试中文列接口，失败时记录 fallback 并转用 `stock_zh_a_daily`。
 - `fetch_yfinance_ohlcv.py`：可选 yfinance 日线取数脚本，输出本地通用 OHLCV CSV 和 metadata JSON；用 `--timeout-seconds` 显式限制每票拉取超时。非严格模式可能写出部分 symbol，门禁必须检查 `symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`，或使用 `--fail-on-fetch-error`。fetch metadata 的 `end_date` 是请求截止日；实际最后交易日必须看每个 symbol 的 `date_max`。`--market` 只是写入输出标签，不证明 yfinance 数据源、交易所或交易日历变成对应市场。
-- `stock_selection_*.py`、`lightgbm_prediction_summary.py`：评分脚本使用的配置、数据读取、指标、输出、profile、股票池、可交易性元数据和诊断辅助函数。
+- `stock_selection_*.py`、`lightgbm_prediction_summary.py`：评分脚本使用的配置、数据读取、指标、输出、profile、股票池、可交易性元数据和诊断辅助函数；它们不是用户 CLI 入口，`python3 -S <helper>.py --help` 的顶层 pandas/numpy import 失败不属于 `--help` 入口缺口。`python3 -S --help` 依赖轻量化门禁只适用于带 `argparse`/`main()`/`__main__` 的脚本入口。
 
 使用方式：
 
@@ -104,7 +104,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py --input /tm
 
 完全离线运行时，必须使用已经安装好依赖的解释器、虚拟环境、wheelhouse 或已有包缓存。若 `uv run --with ...` 因无法解析依赖失败，应显式报告环境问题；不得用 mock 数据、跳过依赖或把未运行的脚本说成验证通过。
 
-脚本以 CLI 为稳定入口；若在 Python 代码中复用，需要将 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`。不要把 `from scripts.<name> import ...` 这类 package-style import 当成稳定 API；它可能在 import 阶段看似成功，但调用时因脚本内部顶层依赖未在路径中而失败。当前脚本支持读取 CSV/Parquet，但中间产物默认写 CSV。若用户要求严格全链路无 CSV，必须说明当前 CLI 链路不支持，不能先写 CSV 再转换成 Parquet 后声称满足无 CSV；只有用户明确允许临时 CSV 时，才可显式转换后继续。
+脚本以 CLI 为稳定入口；若在 Python 代码中复用，需要将 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`。不要把 `from scripts.<name> import ...` 这类 package-style import 当成稳定 API；它可能在 import 阶段看似成功，但调用时因脚本内部顶层依赖未在路径中而失败。`python3 -S scripts/<name>.py --help` 只要求真实 CLI 入口在缺少 pandas/numpy 时可展示帮助；helper/import 模块没有帮助界面承诺，必须通过调用它们的 CLI 入口验证。当前脚本支持读取 CSV/Parquet，但中间产物默认写 CSV。若用户要求严格全链路无 CSV，必须说明当前 CLI 链路不支持，不能先写 CSV 再转换成 Parquet 后声称满足无 CSV；只有用户明确允许临时 CSV 时，才可显式转换后继续。
 
 ## 输入数据契约
 

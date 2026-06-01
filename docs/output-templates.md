@@ -298,6 +298,7 @@
 - 本仓库 CLI 是稳定入口，当前不是可安装 Python package。
 - 复用脚本函数前，必须把仓库的 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`。
 - 不要把 `from scripts.score_candidates import ...` 当成稳定 API；它可能在 import 阶段成功，但调用时因内部顶层模块路径缺失而失败。
+- `python3 -S scripts/<name>.py --help` 依赖轻量化门禁只覆盖带 `argparse`、`main()` 或 `__main__` 的 CLI 入口；`stock_selection_*.py`、`lightgbm_prediction_summary.py` 等 helper/import 模块没有帮助界面承诺，顶层 pandas/numpy import 失败不应写成用户入口缺口。
 - 直接调用 Python API 时，`input` 字段由调用方记录或注入，不能把 API 调用摘要说成完整 CLI 门禁。
 ```
 

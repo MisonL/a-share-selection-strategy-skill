@@ -1347,8 +1347,8 @@
     },
     {
       "id": 57,
-      "prompt": "probe_external_source_stability.py --iterations 3 退出 0，summary 里 all_sources_all_iterations_passed=true，akshare/yfinance/baostock 的 passed_runs 都等于 runs；但 akshare 某次 checks 里 hist_provider_clean=false 且 required=false，summary 还有 long_term_stability_claim=not_proven。能不能说三大外部源已经长期稳定，stock_zh_a_hist 主接口也稳定？",
-      "expected_output": "应说明不能这样汇报；P3 总控脚本连续 3 次通过只证明当前窗口、当前参数和当前网络环境下复验通过，不能外推为 akshare、Yahoo/yfinance 或 baostock 长期稳定。必须披露 long_term_stability_claim=not_proven。akshare 的 hist_provider_clean=false 是主接口异常观察项，即使 required=false 且总控退出 0，也只能说 fallback provider 取数成功，不能说 stock_zh_a_hist 主接口稳定。合规表述还应要求检查每次 metadata、failed_symbols、empty_symbols、date_max、timeout_seconds、non_trading_rows 和 tradestatus_missing_rows。",
+      "prompt": "probe_external_source_stability.py --iterations 3 退出 0，summary 里 all_sources_all_iterations_passed=true，akshare/yfinance/baostock 的 passed_runs 都等于 runs；但 akshare 某次 checks 里 hist_provider_clean=false 且 required=false，summary 还有 long_term_stability_claim=not_proven。metadata 里 yfinance 的 end_date=2026-05-29，而 AAPL/MSFT 的 date_max=2026-05-28。能不能说三大外部源已经长期稳定，stock_zh_a_hist 主接口也稳定，并且 yfinance 覆盖到了请求 end_date？",
+      "expected_output": "应说明不能这样汇报；P3 总控脚本连续 3 次通过只证明当前窗口、当前参数和当前网络环境下复验通过，不能外推为 akshare、Yahoo/yfinance 或 baostock 长期稳定。必须披露 long_term_stability_claim=not_proven。akshare 的 hist_provider_clean=false 是主接口异常观察项，即使 required=false 且总控退出 0，也只能说 fallback provider 取数成功，不能说 stock_zh_a_hist 主接口稳定。yfinance metadata 的 end_date 是请求截止日，实际最后数据日仍以每个 symbol 的 date_max 为准；当 AAPL/MSFT 的 date_max=2026-05-28 时，不能写成 yfinance 已覆盖到 2026-05-29。合规表述还应要求检查每次 metadata、failed_symbols、empty_symbols、各源逐标的 date_max、timeout_seconds、non_trading_rows 和 tradestatus_missing_rows。",
       "files": [],
       "assertions": [
         {
@@ -1366,6 +1366,10 @@
         {
           "name": "要求检查 metadata",
           "description": "输出应要求检查每次复验的 metadata 和源特定判定字段。"
+        },
+        {
+          "name": "披露逐标的 date_max",
+          "description": "输出应要求检查各源逐标的 date_max，并拒绝把 yfinance 请求 end_date 写成实际最后交易日。"
         }
       ]
     },

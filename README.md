@@ -296,7 +296,10 @@ uv run --with pandas --with numpy --with akshare --with yfinance --with baostock
   python scripts/probe_external_source_stability.py \
     --output-dir "$RUN_DIR/runs" \
     --summary-output "$RUN_DIR/external_source_stability.json" \
-    --iterations 3
+    --iterations 3 \
+    --akshare-symbols 000001,600000 \
+    --yfinance-symbols AAPL,MSFT \
+    --baostock-symbols 000001,600000
 ```
 
 读取 `external_source_stability.json` 时必须检查 `summary.sources.*.all_passed`、逐次 `metadata`、`checks` 和 `long_term_stability_claim=not_proven`。akshare 的 `hist_provider_clean` 是观察项：若该项为 false 而其他必需检查通过，只能说明主接口失败后 fallback provider 成功，不能写成 `stock_zh_a_hist` 稳定。yfinance 的实际最后交易日仍看每个 symbol 的 `date_max`；baostock 仍需检查 `non_trading_rows=0`、`tradestatus_missing_rows=0` 和 `adjustflag=3`。

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import redirect_stdout
+import io
 import json
 import subprocess
 import tempfile
@@ -35,6 +37,25 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
         self.assertEqual("not_proven", summary["long_term_stability_claim"])
         self.assertEqual({}, summary["sources"]["akshare"]["observation_failed_checks"])
         self.assertEqual([], probe.strict_errors(manifest))
+
+    def test_print_summary_keeps_long_term_claim_unproven(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = args_for(output)
+            manifest = probe.initial_manifest(args)
+            probe.run_probe(
+                args,
+                output_dir=output / "runs",
+                manifest=manifest,
+                executor=FakeExecutor(),
+            )
+
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            probe.print_summary(manifest)
+
+        self.assertIn("all_sources_all_iterations_passed=True", stdout.getvalue())
+        self.assertIn("long_term_stability_claim=not_proven", stdout.getvalue())
 
     def test_akshare_fallback_is_observation_not_hard_failure(self) -> None:
         metadata = akshare_metadata(fallback=True)

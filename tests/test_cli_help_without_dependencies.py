@@ -90,6 +90,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--cost-bps",
                 "--slippage-bps",
                 "--require-tradable-bars",
+                "--require-tradable-holding-period",
                 "--fail-on-incomplete",
             ],
             "portfolio_equity_curve.py": [

@@ -122,7 +122,7 @@
 - 本轮新增 `scripts/backtest_buy_hold.py`。
 - 脚本只做信号日收盘价到未来第 N 个可用交易行收盘价的 close-to-close buy-hold 基线。
 - 候选日期必须精确匹配 OHLCV 日期，不自动滚动到下一交易日。
-- 输出显式标记 `cost_model=round_trip_bps`、`slippage_model=round_trip_bps`；未启用回测级可交易门禁时 `tradability_model=not_modeled`，启用 `--require-tradable-bars` 时为 `tradestatus_entry_exit_only`；`limit_rules_model` 始终为 `not_modeled`。
+- 输出显式标记 `cost_model=round_trip_bps`、`slippage_model=round_trip_bps`；未启用回测级可交易门禁时 `tradability_model=not_modeled`，启用 `--require-tradable-bars` 时为 `tradestatus_entry_exit_only`，启用 `--require-tradable-holding-period` 时为 `tradestatus_holding_period_bars`；`limit_rules_model` 始终为 `not_modeled`。
 - `--cost-bps` 和 `--slippage-bps` 只按 round-trip bps 从 `gross_return` 中扣减，并额外输出 `cost_bps`、`slippage_bps` 和扣减后的 `return`。
 - 本轮新增 `tests/test_buy_hold_backtest_cli.py`，覆盖正常收益、缺入场日不回退、严格模式遇到缺数据非 0 且不写输出。
 - 本轮测试补充覆盖 `cost_bps=12.5`、`slippage_bps=7.5` 时 `return = gross_return - 0.002`，以及负成本或负滑点显式失败。
@@ -136,8 +136,10 @@
 - 真实资金曲线的等权平均净收益为 `2026-05-12=-0.043135064458`、`2026-05-15=-0.027106257927`、`2026-05-20=-0.012646729332`；最大回撤区间为 `START -> 2026-05-20`。
 - `portfolio_equity_curve.py` 新增 `--min-final-equity` 和 `--max-drawdown-floor`。真实成本/滑点回测产物复验在 `/tmp/stock-selection-equity-threshold-gate-20260530T104740/`；设置 `min-final-equity=0.95` 和 `max-drawdown-floor=-0.05` 返回 3 且不写失败输出，设置 `0.90/-0.10` 返回 0 并写出资金曲线。
 - `backtest_buy_hold.py` 新增 `--require-tradable-bars`，打开后要求入场和退出 bar 都有 `tradestatus=1`；缺列、入场不可交易或退出不可交易会转为 incomplete，并可被 `--fail-on-incomplete` 拦截。
+- `backtest_buy_hold.py` 新增 `--require-tradable-holding-period`，打开后会同时要求价格表内入场到退出的已观测 bar 都有 `tradestatus=1`；中间持有期已存在价格行不可交易时返回 `missing_reason=non_tradable_holding_period`，模型口径为 `tradestatus_holding_period_bars`。
 - 回测级 `tradestatus` 门禁复验产物在 `/tmp/stock-selection-backtest-tradability-gate-20260530T111018/`；含 `tradestatus` 的 000001/600000 真实价格返回 0 且 `completed_trades=2`，旧 12-symbol 真实价格因缺 `tradestatus` 返回 3 且不写输出，`missing_reason_counts=missing_tradestatus:7`。
 - 当前代码复跑产物在 `/tmp/stock-selection-backtest-tradability-current-20260530T124812/`；baostock 000001/600000 短窗口取数 36 行，`non_trading_rows=0`、`tradestatus_missing_rows=0`，启用 `--require-tradable-bars --fail-on-incomplete` 返回 0，回测 CSV 记录 `tradability_model=tradestatus_entry_exit_only` 且 `limit_rules_model=not_modeled`。
+- 2026-06-01 本地契约测试补充覆盖新旧口径差异：旧 `--require-tradable-bars` 遇到中间持有期 `tradestatus=0` 仍保持 complete；新 `--require-tradable-holding-period` 遇到同一场景转为 incomplete，stdout 披露 `tradability_model=tradestatus_holding_period_bars` 和 `missing_reason_counts=non_tradable_holding_period:1`。focused 命令 `PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy python -m unittest tests.test_buy_hold_backtest_cli tests.test_baostock_walk_forward_runner tests.test_cli_help_without_dependencies -v` 返回 0，`Ran 23 tests ... OK`。
 - 历史只读字段审查确认 `/tmp/stock-selection-ashare-scan-20260530-032723/prices.csv` 有 OHLCV 和 `turn`，但没有 `tradestatus`、`suspended`、`is_trading`、`limit_status`、`up_limit`、`down_limit`、`pre_close` 等字段；候选和回测产物也没有可交易/停牌/涨跌停字段。
 - 只读并发持仓审查确认 `/tmp/stock-selection-backtest-costs-20260530T101000/` 的 15 笔真实 complete 交易最大同时打开 12 笔，发生在 `2026-05-15`、`2026-05-18`、`2026-05-19`；同一 symbol 跨信号日重复持仓冲突共有 21 个 `date-symbol` 组合，涉及 `002594`、`300059`、`300750`、`601318`、`000333`。
 - 新增 `portfolio_overlap_report.py`，读取多个回测 CSV，按 business-day 闭区间统计 `daily_open_positions`、`max_open_positions`、同标的重叠和资金字段可验证性。该 business-day 闭区间不是 A 股交易所日历、节假日、停复牌或全持有期真实可交易性门禁。
@@ -153,7 +155,7 @@
 边界:
 
 - 成本和滑点只是简单 round-trip bps 扣减；资金曲线只是按信号日等权复利已完成交易。sizing 脚本让仓位字段来源可追溯，但它仍只是本地 equal-cash/lot-floor 模型，不代表真实订单成交、券商容量、涨跌停可买入或全市场策略质量。
-- 新 baostock 取数入口和 `--require-tradable-bars` 可拒绝 `tradestatus != 1` 的不可交易行，但回测仍不判断涨跌停状态；因此 `limit_rules_model=not_modeled` 仍必须保留。
+- 新 baostock 取数入口和 `--require-tradable-bars` 可拒绝 entry/exit 的 `tradestatus != 1`，`--require-tradable-holding-period` 可拒绝价格表内已观测持有期 bar 的 `tradestatus != 1`，但回测仍不补全真实交易所日历或判断涨跌停状态；因此 `limit_rules_model=not_modeled` 仍必须保留。
 - 已有 12-symbol/3 信号日真实候选 CSV 与真实 OHLCV 运行记录；仍需要更大股票池、更多时间段和真实交易约束复验后，才能评价策略质量。
 
 ## 场景 U: baostock A 股全链路
@@ -256,7 +258,7 @@
 边界:
 
 - 2-symbol 最新日 smoke 不证明全市场策略质量，也不证明样本外收益。
-- 12-symbol 三信号日回测证明了真实候选和真实 OHLCV 能进入 close-to-close 基线回测；当前代码支持 round-trip bps 扣减、等权资金曲线、取数阶段 `tradestatus` 门禁、回测级 `--require-tradable-bars` 门禁、组合并发持仓报告和测试资金字段权重容量门禁，但仍不覆盖真实现金容量、涨跌停或全市场泛化能力。
+- 12-symbol 三信号日回测证明了真实候选和真实 OHLCV 能进入 close-to-close 基线回测；当前代码支持 round-trip bps 扣减、等权资金曲线、取数阶段 `tradestatus` 门禁、回测级 entry/exit `--require-tradable-bars` 门禁、回测级 observed holding-period `--require-tradable-holding-period` 门禁、组合并发持仓报告和测试资金字段权重容量门禁，但仍不覆盖真实现金容量、涨跌停或全市场泛化能力。
 - current-code 复验只证明固定 12-symbol、三信号日、5 日持有、10 bps 成本、5 bps 滑点和 `tradestatus` 入场/退出门禁下的可复跑边界；不能外推为全市场样本外收益有效。
 - P1 四信号日扩展复验只证明同一固定池新增 `2026-04-24` 后仍能按固定门禁复跑；不能外推为策略正期望、全市场泛化、真实成交容量或涨跌停规则已覆盖。
 - P1 40-symbol/6 信号日扩容复验只证明两个既有 40 支股票池、一组新增沪市 40-symbol 月末窗口、深市主板/创业板/科创板零交集月末窗口、一组沪市 603 号段 late-window 窗口、多个 6 信号日窗口、显式丢弃源数据异常、`cash_budget=3000000`、5 日持有、10 bps 成本、5 bps 滑点和 `tradestatus` 入场/退出门禁下的可复跑边界；不能外推为全市场样本外收益有效，也不能证明固定 300 万现金预算适合更大候选集。
@@ -333,5 +335,6 @@
 - yfinance/Yahoo 在当前环境长期稳定取数。
 - baostock、akshare 或 yfinance 任一外部源的长期服务稳定性。
 - 真实交易所日历、节假日、特殊交易日、临时休市和全持有期停复牌可交易性。
+- 价格表缺失日期、非交易所工作日差异、真实停复牌区间完整性和临时休市；`tradestatus_holding_period_bars` 只覆盖已观测 bar。
 - 真实 LightGBM 质量指标，包括概率校准、holdout AUC/IC、分层收益、跨窗口稳定性、跨年份或分市场样本外统计、逐信号日独立预测质量。
 - 全市场级 QSSS 策略质量、样本外收益、真实涨跌停规则、真实成交容量和券商订单证明。

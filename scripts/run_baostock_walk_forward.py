@@ -18,6 +18,7 @@ from walk_forward_portfolio_commands import ALLOCATION_MODEL_EQUAL, ALLOCATION_M
 SCRIPTS = Path(__file__).resolve().parent
 CONFIG_PATH = SCRIPTS / "qsss_profile_config.json"
 TRADABILITY_MODEL = "tradestatus_entry_exit_only"
+TRADABILITY_MODEL_HOLDING_PERIOD = "tradestatus_holding_period_bars"
 LIMIT_RULES_MODEL = "not_modeled"
 Executor = Callable[[list[str]], subprocess.CompletedProcess[str]]
 
@@ -91,6 +92,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-gross-notional", type=float, required=True)
     parser.add_argument("--max-cash-reserved", type=float, required=True)
     parser.add_argument("--fail-on-symbol-overlap", action="store_true")
+    parser.add_argument("--require-tradable-holding-period", action="store_true")
     parser.add_argument("--expect-portfolio-violations", action="store_true")
     parser.add_argument("--drop-invalid-rows", action="store_true")
     return parser
@@ -214,7 +216,10 @@ def allocate_command(args: argparse.Namespace, prices: Path, paths: dict[str, Pa
     return script_command("allocate_candidate_capital.py", "--prices", prices, "--candidates", paths["candidates"], "--output", paths["sized"], "--cash-budget", args.cash_budget, "--lot-size", args.lot_size, "--fail-on-unallocated")
 
 def backtest_command(args: argparse.Namespace, prices: Path, paths: dict[str, Path]) -> list[str]:
-    return script_command("backtest_buy_hold.py", "--prices", prices, "--candidates", paths["sized"], "--output", paths["backtest"], "--hold-days", args.hold_days, "--cost-bps", args.cost_bps, "--slippage-bps", args.slippage_bps, "--require-tradable-bars", "--fail-on-incomplete")
+    command = script_command("backtest_buy_hold.py", "--prices", prices, "--candidates", paths["sized"], "--output", paths["backtest"], "--hold-days", args.hold_days, "--cost-bps", args.cost_bps, "--slippage-bps", args.slippage_bps, "--require-tradable-bars", "--fail-on-incomplete")
+    if args.require_tradable_holding_period:
+        command.append("--require-tradable-holding-period")
+    return command
 
 def equity_command(output: Path, backtests: list[Path]) -> list[str]:
     return script_command("portfolio_equity_curve.py", "--backtests", *backtests, "--output", output / "qsss_equity_curve.csv", "--fail-on-incomplete")
@@ -226,7 +231,7 @@ def overlap_command(args: argparse.Namespace, output: Path, backtests: list[Path
     return command
 
 def summary_command(args: argparse.Namespace, output: Path) -> list[str]:
-    command = script_command("summarize_walk_forward_run.py", "--run-dir", output, "--output", output / "qsss_run_summary.json", "--signal-dates", *args.signal_dates, "--expected-symbol-count", len(parse_symbols(args.symbols)), "--required-tradability-model", TRADABILITY_MODEL, "--required-limit-rules-model", LIMIT_RULES_MODEL, "--max-open-positions", args.max_open_positions, "--max-gross-weight", args.max_gross_weight, "--max-gross-notional", args.max_gross_notional, "--max-cash-reserved", args.max_cash_reserved)
+    command = script_command("summarize_walk_forward_run.py", "--run-dir", output, "--output", output / "qsss_run_summary.json", "--signal-dates", *args.signal_dates, "--expected-symbol-count", len(parse_symbols(args.symbols)), "--required-tradability-model", tradability_model(args), "--required-limit-rules-model", LIMIT_RULES_MODEL, "--max-open-positions", args.max_open_positions, "--max-gross-weight", args.max_gross_weight, "--max-gross-notional", args.max_gross_notional, "--max-cash-reserved", args.max_cash_reserved)
     if args.fail_on_symbol_overlap:
         command.append("--fail-on-symbol-overlap")
     if args.expect_portfolio_violations:
@@ -234,6 +239,11 @@ def summary_command(args: argparse.Namespace, output: Path) -> list[str]:
     if args.drop_invalid_rows:
         command.append("--allow-dropped-invalid-rows")
     return command
+
+def tradability_model(args: argparse.Namespace) -> str:
+    if args.require_tradable_holding_period:
+        return TRADABILITY_MODEL_HOLDING_PERIOD
+    return TRADABILITY_MODEL
 
 def script_command(script: str, *parts: object) -> list[str]:
     return [sys.executable, str(SCRIPTS / script), *[str(part) for part in parts]]
@@ -251,7 +261,7 @@ def initial_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "max_candidates": args.max_candidates,
         "allocation_model": args.allocation_model,
         "limit_rules_model": LIMIT_RULES_MODEL,
-        "tradability_model": TRADABILITY_MODEL,
+        "tradability_model": tradability_model(args),
         "steps": [],
     }
 

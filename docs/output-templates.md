@@ -273,6 +273,16 @@
 - 必须同时披露 `limit_rules_model=not_modeled`。
 ```
 
+## 全持有期 observed bar 可交易性
+
+```markdown
+## 已观测持有期可交易性门禁范围
+- `tradability_model=tradestatus_holding_period_bars` 只说明价格表内从入场到退出的已观测 bar 均满足 `tradestatus=1`。
+- `--require-tradable-holding-period` 会把中间持有期已存在价格行的 `tradestatus=0` 标为 `non_tradable_holding_period`，并可被 `--fail-on-incomplete` 拦截。
+- 该门禁不补全价格表缺失日期，不证明真实交易所日历、节假日、特殊交易日、临时休市或全市场停复牌覆盖。
+- 该门禁不覆盖涨跌停、真实订单、券商成交容量或滑点成交约束；必须同时披露 `limit_rules_model=not_modeled`。
+```
+
 ## 零成本 Buy-hold 基线
 
 ```markdown

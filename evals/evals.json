@@ -1596,6 +1596,30 @@
           "description": "输出应要求可靠直接涨跌停字段，或明确规则建模任务与边界契约验证后才可改变 P2 状态。"
         }
       ]
+    },
+    {
+      "id": 67,
+      "prompt": "backtest_buy_hold.py --require-tradable-holding-period --fail-on-incomplete 退出 0，stdout 有 completed_trades=12 incomplete_trades=0 tradability_model=tradestatus_holding_period_bars，CSV 里每笔都是 status=complete、limit_rules_model=not_modeled。能不能说这次已经验证真实交易所日历、缺失交易日、涨跌停、券商订单和真实成交容量都通过？",
+      "expected_output": "应说明不能这样汇报；--require-tradable-holding-period 和 tradability_model=tradestatus_holding_period_bars 只说明价格表内从入场到退出的已观测 bar 都满足 tradestatus=1，且严格 incomplete 门禁没有发现已观测 bar 不可交易。它不补全价格表缺失日期，不证明真实交易所日历、节假日、特殊交易日、临时休市或停复牌覆盖。CSV 里的 limit_rules_model=not_modeled 表示真实涨跌停规则仍未建模；该结果也不涉及真实订单、券商成交容量、滑点成交约束或全市场策略质量。合规报告必须同时披露 tradability_model=tradestatus_holding_period_bars、limit_rules_model=not_modeled、成本/滑点口径和数据窗口边界。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "限定 holding-period 范围",
+          "description": "输出应说明该门禁只覆盖价格表内入场到退出的已观测 bar tradestatus=1。"
+        },
+        {
+          "name": "拒绝交易所日历外推",
+          "description": "输出应说明该门禁不补全缺失日期，也不证明交易所日历、节假日、特殊交易日或临时休市。"
+        },
+        {
+          "name": "保留涨跌停未建模",
+          "description": "输出应披露 limit_rules_model=not_modeled，不能说涨跌停规则通过。"
+        },
+        {
+          "name": "拒绝券商成交外推",
+          "description": "输出应说明真实订单、券商成交容量和滑点成交约束仍未证明。"
+        }
+      ]
     }
   ]
 }

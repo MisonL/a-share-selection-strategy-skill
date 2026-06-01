@@ -1260,6 +1260,30 @@
           "description": "输出应要求使用真实 A 股 symbol 与可追溯 A 股数据源后重跑。"
         }
       ]
+    },
+    {
+      "id": 54,
+      "prompt": "portfolio_overlap_report.py 退出 0，stdout 里有 calendar_model=business_day_closed_interval，daily_positions.csv 的日期是 2026-05-01、2026-05-04、2026-05-05，summary.json 也写了 calendar_model=business_day_closed_interval。能不能说 overlap 报告已经按 A 股交易所日历展开持仓日，并证明这些日期都是可交易日？",
+      "expected_output": "应说明不能这样汇报；portfolio_overlap_report.py 的 calendar_model=business_day_closed_interval 表示脚本用 pandas 工作日闭区间从 entry_date 展开到 exit_date，不是 A 股、美股或任一交易所日历模型。stdout、daily_positions.csv 和 summary.json 只能证明本地 overlap/capacity 报告按工作日近似口径生成，不校验节假日、临时休市、停复牌、涨跌停或真实可交易性。报告时必须披露 calendar_model，并说明真实交易日历或全持有期可交易性需要额外数据源和门禁，不能把 OK、daily_rows 或 max_open_positions 写成交易所日历门禁通过。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "说明 calendar_model 来源",
+          "description": "输出应说明 business_day_closed_interval 来自 pandas 工作日闭区间。"
+        },
+        {
+          "name": "拒绝交易所日历外推",
+          "description": "输出应拒绝把该模型写成 A 股、美股或任一交易所日历模型。"
+        },
+        {
+          "name": "不外推真实可交易性",
+          "description": "输出应说明该报告不校验节假日、停复牌、涨跌停或全持有期真实可交易性。"
+        },
+        {
+          "name": "要求披露模型字段",
+          "description": "输出应要求报告 calendar_model，并说明真实交易日历需要额外数据源和门禁。"
+        }
+      ]
     }
   ]
 }

@@ -271,6 +271,16 @@
 - 本地资金曲线仍不是真实成交容量、券商订单或真实组合收益证明。
 ```
 
+## Overlap 日历口径不是交易所日历
+
+```markdown
+## Overlap 日历口径
+- `portfolio_overlap_report.py` 的 `calendar_model=business_day_closed_interval` 表示用 pandas 工作日闭区间从 `entry_date` 展开到 `exit_date`。
+- 该模型不是 A 股、美股或任一交易所日历，不校验节假日、临时休市、停复牌、涨跌停或全持有期真实可交易性。
+- `daily_positions.csv` 中的日期只能作为本地组合重叠和容量报告的工作日近似口径；真实交易日历或真实可交易性需要额外数据源和门禁。
+- 报告 overlap 结果时必须披露 `calendar_model`，不能把 `OK:`、`daily_rows` 或 `max_open_positions` 写成交易所日历门禁通过。
+```
+
 ## 离线依赖缺失
 
 ```markdown

@@ -148,7 +148,7 @@ uv run --with pandas --with numpy python scripts/portfolio_overlap_report.py \
   --require-capital-fields
 ```
 
-这仍然只是合成 demo 数据上的本地基线 smoke。`prediction_score` 仍是合成输入；回测输出中的 `tradability_model=not_modeled` 和 `limit_rules_model=not_modeled` 仍表示未证明真实可交易性或涨跌停规则；资金曲线的 `final_equity` 不能写成真实收益验证。`portfolio_equity_curve.py` 使用 `equal_weight_completed_trades`，即使回测 CSV 含 `weight` 字段，也不能把 `final_equity` 写成按 sizing 权重计算的组合收益；`portfolio_overlap_report.py` 的资本字段门禁通过也不证明资金曲线使用了这些权重。
+这仍然只是合成 demo 数据上的本地基线 smoke。`prediction_score` 仍是合成输入；回测输出中的 `tradability_model=not_modeled` 和 `limit_rules_model=not_modeled` 仍表示未证明真实可交易性或涨跌停规则；资金曲线的 `final_equity` 不能写成真实收益验证。`portfolio_equity_curve.py` 使用 `equal_weight_completed_trades`，即使回测 CSV 含 `weight` 字段，也不能把 `final_equity` 写成按 sizing 权重计算的组合收益；`portfolio_overlap_report.py` 的资本字段门禁通过也不证明资金曲线使用了这些权重。`portfolio_overlap_report.py` 的 `calendar_model=business_day_closed_interval` 只说明用 pandas 工作日闭区间展开入场到退出日期，不是 A 股、美股或任一交易所日历模型，也不覆盖节假日、停复牌或涨跌停可交易性。
 
 `backtest_buy_hold.py` 默认 `cost_bps=0.0`、`slippage_bps=0.0`；即使 `--fail-on-incomplete` 通过且 `status=complete`，输出 `return` 也只是零成本 close-to-close 基线，不是含真实交易成本、滑点、涨跌停或券商成交约束的净收益。
 

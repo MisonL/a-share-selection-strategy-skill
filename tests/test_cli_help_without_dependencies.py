@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class CliHelpWithoutDependenciesTests(unittest.TestCase):
     def test_core_navigation_help_does_not_import_pandas(self) -> None:
         cases = {
+            "create_demo_data.py": ["--output", "--days"],
             "run_baostock_walk_forward.py": [],
             "probe_baostock_limit_fields.py": [],
             "validate_ohlcv.py": ["--input", "--config", "--min-history-rows"],
@@ -124,6 +125,30 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--max-cash-reserved",
                 "--fail-on-symbol-overlap",
                 "--expect-portfolio-violations",
+                "--allow-dropped-invalid-rows",
+            ],
+            "validate_walk_forward_manifest.py": [
+                "--manifest",
+                "--output",
+                "--signal-dates",
+                "--expected-symbol-count",
+                "--required-tradability-model",
+                "--required-limit-rules-model",
+                "--expected-max-candidates",
+                "--expect-portfolio-violations",
+            ],
+            "validate_walk_forward_artifacts.py": [
+                "--run-dir",
+                "--output",
+                "--signal-dates",
+                "--expected-symbols",
+                "--expected-candidates",
+                "--expected-final-equity",
+                "--expected-portfolio-violations",
+                "--required-allocation-model",
+                "--required-tradability-model",
+                "--required-limit-rules-model",
+                "--manifest-validation",
                 "--allow-dropped-invalid-rows",
             ],
             "score_candidates.py": [

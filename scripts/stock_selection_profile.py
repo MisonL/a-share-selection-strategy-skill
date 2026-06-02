@@ -10,15 +10,31 @@ from stock_selection_metrics import is_qsss_mode
 
 
 def profile_column_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list[str]:
+    errors = threshold_column_errors(frame, config)
     if not is_qsss_mode(config):
-        return []
-    errors = []
+        return errors
     if config.get("universe", {}).get("market") and "market" not in frame.columns:
         errors.append("qsss-derived profile requires market column")
     if not any(column in frame.columns for column in ["prediction", "prediction_score"]):
         errors.append("qsss-derived profile requires prediction or prediction_score column")
     if not any(column in frame.columns for column in ["turn", "turnover"]):
         errors.append("qsss-derived profile requires turn or turnover column")
+    return errors
+
+
+def threshold_column_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list[str]:
+    thresholds = config.get("thresholds", {})
+    errors = []
+    if "min_amount" in thresholds and "amount" not in frame.columns:
+        errors.append("configured min_amount threshold requires amount column")
+    if "min_turn" in thresholds and not any(
+        column in frame.columns for column in ["turn", "turnover"]
+    ):
+        errors.append("configured min_turn threshold requires turn or turnover column")
+    if thresholds.get("exclude_st") and "isST" not in frame.columns:
+        errors.append("configured exclude_st threshold requires isST column")
+    if thresholds.get("require_tradestatus") and "tradestatus" not in frame.columns:
+        errors.append("configured require_tradestatus threshold requires tradestatus column")
     return errors
 
 

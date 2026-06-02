@@ -73,9 +73,12 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 
 - `example_config.json`：通用权重、窗口和阈值示例。
 - `qsss_profile_config.json`：QSSS-derived A 股默认剖面示例。
+- `ultra_short_low_price_config.json`：通用技术评分低价超短剖面，表达 `3 <= close <= 10`、成交量/成交额/换手硬阈值、排除 ST/停牌/一字板，以及更高短线爆发权重；不使用也不伪造 QSSS/LightGBM prediction。
 - `create_demo_data.py`：生成可复制运行的本地 demo CSV。
 - `validate_ohlcv.py`：校验本地 CSV/Parquet 行情文件。
-- `score_candidates.py`：读取本地行情文件并输出候选股 CSV。
+- `score_candidates.py`：读取本地行情文件并输出候选股 CSV；可用 `--spot-input` 合并实时价、涨跌幅、行业和成交额展示字段，但这些字段不参与核心评分。
+- `run_today_a_share_selection.py`：总控 CLI，串联 `validate_ohlcv.py`、可选实时快照、`score_candidates.py` 和诊断输出，写出 `run_manifest.json`、`summary.json`、`candidates.csv`、`diagnostics.csv`；当前不证明实时全市场扫描完成。
+- `fetch_eastmoney_a_share_spot.py`：东方财富 A 股实时快照入口，输出 `spot.csv` 和 `metadata.json`，记录 `requested_pages`、`successful_pages`、`failed_pages`、`raw_items`、`filtered_items`、`snapshot_time`、`partial_result`。
 - `generate_lightgbm_predictions.py`：可选 LightGBM 预测生成器，输出 `prediction_score`。
 - `allocate_candidate_capital.py`：可选候选资金分配脚本，按信号日 close、现金预算和 lot size 生成可追溯 sizing 字段；候选表已有资金字段时默认拒绝，只有显式 `--overwrite-capital-fields` 才重算覆盖。
 - `backtest_buy_hold.py`：可选 close-to-close buy-hold 基线回测，可透传候选表资金字段。`--require-tradable-bars` 只检查入场和退出 bar；`--require-tradable-holding-period` 检查价格表内从入场到退出的已观测 bar 都满足 `tradestatus=1`，并输出 `tradability_model=tradestatus_holding_period_bars`。
@@ -99,6 +102,7 @@ uv run --with pandas --with numpy python scripts/validate_ohlcv.py --input /tmp/
 uv run --with pandas --with numpy python scripts/validate_ohlcv.py --input /tmp/stock-selection-demo/prices_with_prediction.csv --config scripts/qsss_profile_config.json
 uv run --with pandas --with numpy python scripts/score_candidates.py --input /tmp/stock-selection-demo/prices.csv --config scripts/example_config.json --output /tmp/stock-selection-demo/candidates.csv
 uv run --with pandas --with numpy python scripts/score_candidates.py --input /tmp/stock-selection-demo/prices_with_prediction.csv --config scripts/qsss_profile_config.json --output /tmp/stock-selection-demo/qsss_candidates.csv
+uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py --prices-input /tmp/stock-selection-demo/prices.csv --output-dir /tmp/stock-selection-demo/today-low-price --mode generic
 ```
 
 `create_demo_data.py` 只依赖标准库。`validate_ohlcv.py`、`score_candidates.py`、`backtest_buy_hold.py` 和测试需要 `pandas`、`numpy`。Parquet 输入需要 `pyarrow` 或 `fastparquet`。真实 LightGBM 预测生成器需要 `requirements-ml.txt`。
@@ -129,6 +133,38 @@ uv run --with pandas --with numpy python scripts/score_candidates.py --input /tm
 - QSSS-derived 必须包含 `turn` 或 `turnover`。
 - 无 config 的基础 OHLCV 校验或切片成功不会检查或补齐 QSSS-derived 必需字段；切片后要用 QSSS config 重新校验和评分，缺字段的 `bad_input output_written=false` 不是成功 0 候选。
 - 如果使用未来收益做训练标签，必须避免在预测时泄漏未来数据。
+
+## 今日选股入口
+
+当用户要求“今日选股”“10 元以内超短爆发”且已经有本地行情文件时，优先使用 `run_today_a_share_selection.py --mode generic` 和 `scripts/ultra_short_low_price_config.json`。该入口可合并本地或东方财富实时快照作为展示字段，但不证明实时全市场扫描完成。
+
+```bash
+uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py \
+  --prices-input /path/to/prices.csv \
+  --output-dir /tmp/stock-selection-today \
+  --mode generic \
+  --fail-on-skipped
+```
+
+如需补充东方财富实时快照展示字段，可加：
+
+```bash
+uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py \
+  --prices-input /path/to/prices.csv \
+  --output-dir /tmp/stock-selection-today \
+  --mode generic \
+  --fetch-spot eastmoney \
+  --spot-pages 5 \
+  --fail-on-partial-spot
+```
+
+输出检查重点：
+
+- `run_manifest.json`：每一步命令、退出码、stdout/stderr 和允许退出码。
+- `summary.json`：`mode`、`qsss_mode`、`lightgbm_not_used`、`source_scope`、候选数、`spot_rows` 和失败步骤。
+- `diagnostics.csv`：保留机器字段 `failed_thresholds`，并附带展示层字段 `failed_thresholds_zh`、`selection_status`、`short_reason`。
+
+如果用户坚持 QSSS-derived 口径，使用 `--mode qsss`。缺少 `prediction` 或 `prediction_score` 时，入口应在 validate 阶段失败并写出 manifest；不得自动改走通用评分，除非用户明确接受非 QSSS 结果。
 
 ## QSSS-derived 默认剖面
 

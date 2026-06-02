@@ -22,6 +22,7 @@ def build_frame(
     prediction_value: float = 0.72,
     prediction_column: str = "prediction_score",
     include_turn: bool = True,
+    include_tradability: bool = False,
 ) -> pd.DataFrame:
     rows = []
     dates = pd.bdate_range("2025-01-02", periods=days)
@@ -39,7 +40,11 @@ def build_frame(
                 "low": close * 0.988,
                 "close": close,
                 "volume": 120000 + index * 30,
+                "amount": 150000000 + index * 100000,
             }
+            if include_tradability:
+                row["tradestatus"] = "1"
+                row["isST"] = "0"
             if include_turn:
                 row["turn"] = 1.1 + np.cos(index / 11) * 0.03
             if include_prediction:

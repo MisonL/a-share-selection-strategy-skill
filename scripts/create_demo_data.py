@@ -20,7 +20,10 @@ FIELDNAMES = [
     "low",
     "close",
     "volume",
+    "amount",
     "turn",
+    "tradestatus",
+    "isST",
     "prediction_score",
 ]
 
@@ -64,7 +67,7 @@ def write_csv(path: Path, *, include_prediction: bool, days: int) -> None:
 
 def demo_rows(*, include_prediction: bool, days: int) -> list[dict[str, str]]:
     rows = []
-    symbols = [("000002", "Demo Shenzhen", 8.0, 0.72), ("600001", "Demo Shanghai", 10.0, 0.68)]
+    symbols = [("000002", "Demo Shenzhen", 6.0, 0.72), ("600001", "Demo Shanghai", 8.0, 0.68)]
     for symbol, name, base, prediction in symbols:
         for index, day in enumerate(business_dates(date(2025, 1, 2), days)):
             close = base + index * 0.018 + math.sin(index / 9) * 0.08
@@ -78,7 +81,10 @@ def demo_rows(*, include_prediction: bool, days: int) -> list[dict[str, str]]:
                 "low": f"{close * 0.988:.4f}",
                 "close": f"{close:.4f}",
                 "volume": str(120000 + index * 30),
+                "amount": f"{150000000 + index * 100000:.2f}",
                 "turn": f"{1.1 + math.cos(index / 11) * 0.03:.4f}",
+                "tradestatus": "1",
+                "isST": "0",
             }
             if include_prediction:
                 row["prediction_score"] = f"{prediction:.4f}"

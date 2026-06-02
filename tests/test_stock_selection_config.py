@@ -35,6 +35,20 @@ class StockSelectionConfigTests(unittest.TestCase):
         self.assertEqual(2, summary["candidates"])
         self.assertEqual(2, len(candidates))
 
+    def test_ultra_short_low_price_config_validates(self) -> None:
+        config = stock_selection_config.load_config(
+            SCRIPTS / "ultra_short_low_price_config.json"
+        )
+
+        self.assertEqual("generic-technical", config["score_mode"])
+        self.assertEqual(10.0, config["thresholds"]["max_close"])
+        self.assertEqual(100000000.0, config["thresholds"]["min_amount"])
+        self.assertEqual(1.0, config["thresholds"]["min_turn"])
+        self.assertTrue(config["thresholds"]["exclude_st"])
+        self.assertEqual("1", config["thresholds"]["require_tradestatus"])
+        self.assertTrue(config["thresholds"]["exclude_one_word_bar"])
+        self.assertTrue(config["disclosure"]["lightgbm_not_used"])
+
     def test_openai_agent_manifest_has_required_interface_fields(self) -> None:
         text = (ROOT / "agents/openai.yaml").read_text(encoding="utf-8")
         self.assertIn('display_name: "Stock Selection Strategy"', text)

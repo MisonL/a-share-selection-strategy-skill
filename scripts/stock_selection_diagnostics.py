@@ -1,13 +1,17 @@
-"""Diagnostics and summary helpers for stock selection scoring."""
+"""Diagnostics helpers for stock selection scoring."""
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
+from stock_selection_diagnostic_labels import (
+    failed_thresholds_zh,
+    selection_status,
+    short_reason,
+)
 from stock_selection_metrics import is_qsss_mode
 
 
@@ -18,6 +22,15 @@ DIAGNOSTIC_COLUMNS = [
     "date",
     "close",
     "volume",
+    "amount",
+    "turn",
+    "tradestatus",
+    "isST",
+    "one_word_bar",
+    "spot_price",
+    "spot_pct_chg",
+    "spot_amount",
+    "spot_industry",
     "rsi",
     "volatility",
     "momentum_score",
@@ -29,8 +42,10 @@ DIAGNOSTIC_COLUMNS = [
     "passed_thresholds",
     "selected_candidate",
     "failed_thresholds",
+    "failed_thresholds_zh",
+    "selection_status",
+    "short_reason",
 ]
-
 
 def threshold_masks(
     frame: pd.DataFrame, thresholds: dict[str, Any]
@@ -45,6 +60,21 @@ def threshold_masks(
         "min_volume": frame["volume"] >= float(thresholds["min_volume"]),
         "min_close": frame["close"] >= float(thresholds["min_close"]),
     }
+    if "max_close" in thresholds:
+        masks["max_close"] = frame["close"] <= float(thresholds["max_close"])
+    if "min_amount" in thresholds:
+        masks["min_amount"] = frame["amount"] >= float(thresholds["min_amount"])
+    if "min_turn" in thresholds:
+        masks["min_turn"] = frame["turn"] >= float(thresholds["min_turn"])
+    if thresholds.get("exclude_st"):
+        masks["exclude_st"] = ~is_st_series(frame["isST"])
+    if thresholds.get("require_tradestatus"):
+        required = str(thresholds["require_tradestatus"]).strip()
+        masks["require_tradestatus"] = (
+            frame["tradestatus"].astype(str).str.strip().eq(required)
+        )
+    if thresholds.get("exclude_one_word_bar"):
+        masks["exclude_one_word_bar"] = ~frame["one_word_bar"].astype(bool)
     if "min_prediction_score" in thresholds:
         masks["min_prediction_score"] = frame["prediction_score"] >= float(
             thresholds["min_prediction_score"]
@@ -145,16 +175,18 @@ def threshold_diagnostics(
         failed = [
             name for name, mask in masks.items() if not bool(mask.loc[index])
         ]
-        rows.append(diagnostic_row(row, failed, selected_symbols))
+        selected = symbol_selected(row, selected_symbols)
+        rows.append(diagnostic_row(row, failed, selected))
     return rows
 
 
 def diagnostic_row(
     row: pd.Series,
     failed_thresholds: list[str],
-    selected_symbols: set[str],
+    selected: bool,
 ) -> dict[str, Any]:
     symbol = str(row["symbol"])
+    passed = not failed_thresholds
     return {
         "symbol": symbol,
         "name": row.get("name", symbol),
@@ -162,6 +194,15 @@ def diagnostic_row(
         "date": row.get("date", ""),
         "close": row.get("close"),
         "volume": row.get("volume"),
+        "amount": row.get("amount"),
+        "turn": row.get("turn"),
+        "tradestatus": row.get("tradestatus"),
+        "isST": row.get("isST"),
+        "one_word_bar": row.get("one_word_bar"),
+        "spot_price": row.get("spot_price"),
+        "spot_pct_chg": row.get("spot_pct_chg"),
+        "spot_amount": row.get("spot_amount"),
+        "spot_industry": row.get("spot_industry"),
         "rsi": row.get("rsi"),
         "volatility": row.get("volatility"),
         "momentum_score": row.get("momentum_score"),
@@ -170,10 +211,22 @@ def diagnostic_row(
         "explosion_score": row.get("explosion_score"),
         "risk_score": row.get("risk_score"),
         "total_score": row.get("total_score"),
-        "passed_thresholds": not failed_thresholds,
-        "selected_candidate": symbol in selected_symbols,
+        "passed_thresholds": passed,
+        "selected_candidate": selected,
         "failed_thresholds": ";".join(failed_thresholds),
+        "failed_thresholds_zh": failed_thresholds_zh(failed_thresholds),
+        "selection_status": selection_status(selected, passed),
+        "short_reason": short_reason(selected, failed_thresholds),
     }
+
+
+def symbol_selected(row: pd.Series, selected_symbols: set[str]) -> bool:
+    return str(row["symbol"]) in selected_symbols
+
+
+def is_st_series(series: pd.Series) -> pd.Series:
+    values = series.astype(str).str.strip().str.lower()
+    return values.isin({"1", "true", "yes", "st"})
 
 
 def write_threshold_diagnostics(rows: list[dict[str, Any]], path: Path) -> None:
@@ -219,81 +272,3 @@ def empty_result_reason(summary: dict[str, Any], candidates: int) -> str:
     if summary.get("threshold_failed_symbols", 0) == summary.get("scored_symbols", 0):
         return "threshold_filtered_all"
     return "none"
-
-
-def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> None:
-    parts = [
-        f"raw_symbols={summary['raw_symbols']}",
-        f"input_symbols={summary['input_symbols']}",
-        f"invalid_or_dropped_symbols={summary['invalid_or_dropped_symbols']}",
-        f"universe_filtered_symbols={summary['universe_filtered_symbols']}",
-        f"market_filtered_symbols={summary['market_filtered_symbols']}",
-        f"prefix_allow_filtered_symbols={summary['prefix_allow_filtered_symbols']}",
-        f"prefix_excluded_symbols={summary['prefix_excluded_symbols']}",
-        f"insufficient_history_symbols={summary['insufficient_history_symbols']}",
-        f"scored_symbols={summary['scored_symbols']}",
-        f"failed_symbols={summary.get('failed_symbols', 0)}",
-        f"threshold_failed_symbols={summary['threshold_failed_symbols']}",
-        f"candidates={summary['candidates']}",
-    ]
-    if summary.get("effective_empty_result") is not None:
-        parts.append(f"effective_empty_result={str(summary['effective_empty_result']).lower()}")
-    if summary.get("empty_result_reason"):
-        parts.append(f"empty_result_reason={summary['empty_result_reason']}")
-    if summary.get("input"):
-        parts.append(f"input={summary['input']}")
-    if summary.get("turnover_assumption"):
-        parts.append(f"turnover_assumption={summary['turnover_assumption']}")
-    parts.append(f"output={output}")
-    print(f"{prefix}: " + " ".join(parts))
-    if summary.get("threshold_failures"):
-        print(f"INFO: threshold_failures={format_counts(summary['threshold_failures'])}")
-    if summary.get("failed_symbol_examples"):
-        print(
-            "INFO: failed_symbol_examples="
-            f"{','.join(summary['failed_symbol_examples'])}"
-        )
-    if summary.get("insufficient_history_symbol_examples"):
-        print(
-            "INFO: insufficient_history_symbol_examples="
-            f"{','.join(summary['insufficient_history_symbol_examples'])}"
-        )
-    if summary.get("turnover_assumption"):
-        print(
-            "WARNING: generic mode: turn/turnover missing; turnover_ratio "
-            "component uses a neutral series and no QSSS turnover gate is applied",
-            file=sys.stderr,
-        )
-    if summary.get("prediction_source"):
-        print(
-            "INFO: prediction_source=external_unverified "
-            "lightgbm_not_executed_by_this_script=true"
-        )
-
-
-def print_skipped_history_warning(
-    short_symbols: list[str], config: dict[str, Any]
-) -> None:
-    min_history = int(config["thresholds"].get("min_history_rows", 120))
-    examples = ", ".join(short_symbols[:10])
-    print(
-        "WARNING: skipped symbols with insufficient history "
-        f"rows (< {min_history}): {examples}",
-        file=sys.stderr,
-    )
-
-
-def no_scored_symbols_message(summary: dict[str, Any]) -> str:
-    short_examples = ",".join(summary.get("insufficient_history_symbol_examples", []))
-    failed_examples = ",".join(summary.get("failed_symbol_examples", []))
-    return (
-        "no symbols could be scored; "
-        f"insufficient_history_symbols={summary['insufficient_history_symbols']} "
-        f"failed_symbols={summary['failed_symbols']} "
-        f"insufficient_history_symbol_examples={short_examples} "
-        f"failed_symbol_examples={failed_examples}"
-    )
-
-
-def format_counts(counts: dict[str, int]) -> str:
-    return ",".join(f"{name}:{count}" for name, count in sorted(counts.items()))

@@ -193,7 +193,7 @@ class StockSelectionScriptTests(unittest.TestCase):
 
     def test_qsss_requires_prediction_column(self) -> None:
         config = load_config("qsss_profile_config.json")
-        frame = build_frame(include_turn=True)
+        frame = build_frame(include_turn=True, include_tradability=True)
         with self.assertRaisesRegex(ValueError, "prediction or prediction_score"):
             scorer.score_candidates(frame, config)
 
@@ -293,7 +293,120 @@ class StockSelectionScriptTests(unittest.TestCase):
         self.assertTrue(
             diagnostics["failed_thresholds"].str.contains("min_total_score").all()
         )
+        self.assertTrue(
+            diagnostics["failed_thresholds_zh"].str.contains("综合评分不足").all()
+        )
+        self.assertEqual({"未通过阈值"}, set(diagnostics["selection_status"]))
+        self.assertTrue(diagnostics["short_reason"].str.contains("综合评分不足").all())
         self.assertIn("effective_empty_result=true", stdout.getvalue())
+
+    def test_cli_merges_spot_input_into_candidates_and_diagnostics(self) -> None:
+        config = load_config("example_config.json")
+        config["thresholds"] = permissive_thresholds(120)
+        frame = build_frame(include_turn=True)
+        spot = pd.DataFrame(
+            [
+                {
+                    "symbol": "000002",
+                    "price": 8.88,
+                    "pct_chg": 3.2,
+                    "amount": 250000000,
+                    "industry": "软件服务",
+                }
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            spot_path = Path(tmpdir) / "spot.csv"
+            config_path = Path(tmpdir) / "config.json"
+            output_path = Path(tmpdir) / "candidates.csv"
+            diagnostics_path = Path(tmpdir) / "diagnostics.csv"
+            frame.to_csv(input_path, index=False)
+            spot.to_csv(spot_path, index=False)
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = scorer.main(
+                    [
+                        "--input",
+                        str(input_path),
+                        "--config",
+                        str(config_path),
+                        "--output",
+                        str(output_path),
+                        "--diagnostics-output",
+                        str(diagnostics_path),
+                        "--spot-input",
+                        str(spot_path),
+                    ]
+                )
+            candidates = pd.read_csv(output_path)
+            diagnostics = pd.read_csv(diagnostics_path)
+
+        self.assertEqual(0, code, stderr.getvalue())
+        self.assertIn("spot_rows=1", stdout.getvalue())
+        selected = candidates[candidates["symbol"].astype(str).eq("2")].iloc[0]
+        self.assertEqual(8.88, selected["spot_price"])
+        diagnostic = diagnostics[diagnostics["symbol"].astype(str).eq("2")].iloc[0]
+        self.assertEqual("软件服务", diagnostic["spot_industry"])
+
+    def test_ultra_short_profile_filters_prices_above_max_close(self) -> None:
+        config = load_config("ultra_short_low_price_config.json")
+        config["thresholds"] = permissive_thresholds(120) | {"max_close": 11.0}
+        frame = build_frame(include_turn=True)
+
+        candidates, summary = scorer.score_candidates(frame, config)
+
+        self.assertEqual(2, summary["scored_symbols"])
+        self.assertEqual(1, summary["threshold_failed_symbols"])
+        self.assertEqual({"000002"}, set(candidates["symbol"]))
+        self.assertEqual({"max_close": 1}, summary["threshold_failures"])
+
+    def test_ultra_short_profile_requires_amount_turn_and_tradability_columns(self) -> None:
+        config = load_config("ultra_short_low_price_config.json")
+        frame = build_frame(include_turn=True, include_tradability=True).drop(
+            columns=["amount", "turn", "tradestatus", "isST"]
+        )
+
+        with self.assertRaisesRegex(ValueError, "min_amount threshold requires amount"):
+            scorer.score_candidates(frame, config)
+
+    def test_ultra_short_profile_filters_liquidity_st_suspended_and_one_word_bar(self) -> None:
+        config = load_config("ultra_short_low_price_config.json")
+        config["thresholds"] = permissive_thresholds(120) | {
+            "min_amount": 100000000.0,
+            "min_turn": 1.0,
+            "max_close": 20.0,
+            "exclude_st": True,
+            "require_tradestatus": "1",
+            "exclude_one_word_bar": True,
+        }
+        frame = build_frame(include_turn=True, include_tradability=True)
+        latest_000002 = frame[frame["symbol"].eq("000002")].index[-1]
+        latest_600001 = frame[frame["symbol"].eq("600001")].index[-1]
+        frame.loc[latest_000002, "amount"] = 1.0
+        frame.loc[latest_000002, "turn"] = 0.1
+        frame.loc[latest_600001, "tradestatus"] = "0"
+        frame.loc[latest_600001, "isST"] = "1"
+        for column in ["open", "high", "low"]:
+            frame.loc[latest_600001, column] = frame.loc[latest_600001, "close"]
+
+        candidates, summary = scorer.score_candidates(frame, config)
+
+        self.assertEqual(0, len(candidates))
+        self.assertEqual(2, summary["threshold_failed_symbols"])
+        self.assertEqual(
+            {
+                "exclude_one_word_bar": 1,
+                "exclude_st": 1,
+                "min_amount": 1,
+                "min_turn": 1,
+                "require_tradestatus": 1,
+            },
+            summary["threshold_failures"],
+        )
 
     def test_cli_missing_qsss_prediction_returns_error(self) -> None:
         frame = build_frame(include_turn=True)

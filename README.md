@@ -298,6 +298,30 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
 
 如果 `candidates=0` 且 `effective_empty_result=true`，这表示脚本成功运行但没有标的通过当前阈值；不要写成“产生候选股”。用 `score_diagnostics.csv` 查看每个已评分 symbol 的 `failed_thresholds`。如果 metadata 中 `fallback_errors` 非空，必须说明主接口失败且已使用 fallback provider；fallback 成功不等于主接口稳定可用。akshare 输出可满足通用 OHLCV 和 `turn` 口径，但仍不生成真实 `prediction/prediction_score`，不能直接解释成 QSSS-derived 或 LightGBM 链路通过。
 
+本地已落地行情可以使用今日选股总控 CLI 串联校验、评分和诊断。默认 generic 模式使用低价超短剖面，要求价格、成交量、成交额、换手率和可交易性字段满足配置阈值，写出 `run_manifest.json`、`summary.json`、`candidates.csv` 和 `diagnostics.csv`；它不联网抓取实时全市场快照，也不生成 LightGBM prediction：
+
+```bash
+uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py \
+  --prices-input /tmp/stock-selection-akshare/prices.csv \
+  --output-dir /tmp/stock-selection-today-low-price \
+  --mode generic \
+  --fail-on-skipped
+```
+
+如果改用 `--mode qsss`，输入必须已经包含 `market=A-share`、`prediction` 或 `prediction_score`，以及 `turn` 或 `turnover`；缺少 prediction 时会在 validate 阶段失败并保留 manifest，不会自动降级为通用评分。
+
+如需合并东方财富实时快照展示字段，可让总控 CLI 先调用快照入口。`spot_price`、`spot_pct_chg`、`spot_amount`、`spot_industry` 只进入候选和诊断展示，不参与核心评分；如果分页失败，metadata 会写出 `partial_result=true`，不能写成全市场实时扫描完成：
+
+```bash
+uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py \
+  --prices-input /tmp/stock-selection-akshare/prices.csv \
+  --output-dir /tmp/stock-selection-today-low-price \
+  --mode generic \
+  --fetch-spot eastmoney \
+  --spot-pages 5 \
+  --fail-on-partial-spot
+```
+
 美股等通用 OHLCV 可先通过 yfinance 落地，再走通用校验和评分。真实环境失败时命令会非 0，不得改用 mock 或缓存样例冒充成功；门禁还必须检查 metadata 中 `rows > 0`、`symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`。该脚本写入原始 `Close`，不会用 `Adj Close` 静默替代 `close`；`--timeout-seconds` 用于限制每票拉取超时。`--market` 只是写入 CSV 和 metadata 的标签，不校验 yfinance symbol 所属市场、交易所或交易日历。
 
 ```bash

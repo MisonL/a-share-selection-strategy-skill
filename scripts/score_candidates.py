@@ -9,9 +9,10 @@ from pathlib import Path
 from typing import Any
 
 
-BASE_COLUMNS = ["symbol", "date", "open", "high", "low", "close", "volume"]
 OUTPUT_COLUMNS = [
-    "rank", "symbol", "name", "market", "date", "close", "volume", "turn",
+    "rank", "symbol", "name", "market", "date", "close", "volume", "turn", "amount",
+    "tradestatus", "isST", "one_word_bar",
+    "spot_price", "spot_pct_chg", "spot_amount", "spot_industry",
     "rsi", "volatility", "macd", "macd_status", "momentum_score", "trend_score",
     "prediction_score", "explosion_score", "risk_score", "total_score", "ma15",
     "low_ma15_flag", "explosion_focus_flag", "low_price_explosion_flag",
@@ -39,6 +40,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--diagnostics-output",
         help="Optional CSV path for scored-symbol threshold diagnostics.",
     )
+    parser.add_argument(
+        "--spot-input",
+        help="Optional CSV or Parquet realtime spot file merged into outputs.",
+    )
     return parser
 
 
@@ -48,8 +53,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         ensure_runtime_dependencies()
         config = load_config(Path(args.config))
-        candidates, summary = score_candidates(read_table(Path(args.input)), config)
+        spot = read_table(Path(args.spot_input)) if args.spot_input else None
+        candidates, summary = score_candidates(read_table(Path(args.input)), config, spot)
         summary["input"] = Path(args.input).name
+        if args.spot_input:
+            summary["spot_input"] = Path(args.spot_input).name
         strict_errors = strict_gate_errors(
             summary,
             fail_on_skipped=args.fail_on_skipped,
@@ -85,27 +93,32 @@ def ensure_runtime_dependencies() -> None:
         return
 
     import pandas as pandas_module
+    import stock_selection_candidate_fields as gate_fields_module
     import stock_selection_config as config_module
     import stock_selection_data as data_module
     import stock_selection_diagnostics as diagnostics_module
     import stock_selection_metrics as metrics_module
+    import stock_selection_prepare as prepare_module
     import stock_selection_profile as profile_module
+    import stock_selection_score_summary as summary_module
+    import stock_selection_spot as spot_module
     import stock_selection_universe as universe_module
     import validate_ohlcv as validator_module
 
-    skipped_warning = diagnostics_module.print_skipped_history_warning
     globals().update(
         {
             "pd": pandas_module,
+            "merge_latest_gate_fields": gate_fields_module.merge_latest_gate_fields,
             "load_config": config_module.load_config,
             "parse_dates": data_module.parse_dates,
             "read_table": data_module.read_table,
             "add_threshold_summary": diagnostics_module.add_threshold_summary,
             "build_summary": diagnostics_module.build_summary,
             "complete_summary": diagnostics_module.complete_summary,
-            "no_scored_symbols_message": diagnostics_module.no_scored_symbols_message,
-            "print_skipped_history_warning": skipped_warning,
-            "print_summary": diagnostics_module.print_summary,
+            "no_scored_symbols_message": summary_module.no_scored_symbols_message,
+            "prepare_input_frame": prepare_module.prepare_frame,
+            "print_skipped_history_warning": summary_module.print_skipped_history_warning,
+            "print_summary": summary_module.print_summary,
             "strict_gate_errors": diagnostics_module.strict_gate_errors,
             "threshold_masks": diagnostics_module.threshold_masks,
             "threshold_diagnostics": diagnostics_module.threshold_diagnostics,
@@ -116,6 +129,8 @@ def ensure_runtime_dependencies() -> None:
             "score_symbol": metrics_module.score_symbol,
             "profile_column_errors": profile_module.profile_column_errors,
             "qsss_value_errors": profile_module.qsss_value_errors,
+            "merge_latest_spot_fields": spot_module.merge_latest_spot_fields,
+            "merge_spot_view": spot_module.merge_spot_view,
             "apply_universe_filter": universe_module.apply_universe_filter,
             "validate_frame": validator_module.validate_frame,
         }
@@ -123,17 +138,18 @@ def ensure_runtime_dependencies() -> None:
 
 
 def score_candidates(
-    frame: pd.DataFrame, config: dict[str, Any]
+    frame: pd.DataFrame, config: dict[str, Any], spot: pd.DataFrame | None = None
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     ensure_runtime_dependencies()
     validate_input_frame(frame, config)
     validate_profile_requirements(frame, config)
-    prepared = prepare_frame(frame)
+    prepared = prepare_input_frame(frame, parse_dates)
     raw_symbols = int(frame["symbol"].astype(str).nunique())
     if prepared.empty and raw_symbols:
         raise ValueError("no valid rows after basic data cleaning")
     validate_qsss_symbols(prepared, config)
     input_frame, universe_summary = apply_universe_filter(prepared, config)
+    spot_view, spot_summary = merge_spot_view(input_frame, spot)
     validate_prediction_values(input_frame)
     scored_rows, failed_symbols, short_symbols = score_groups(input_frame, config)
     scored = pd.DataFrame(scored_rows)
@@ -147,10 +163,14 @@ def score_candidates(
         config=config,
         universe_summary=universe_summary,
     )
+    summary.update(spot_summary)
     if short_symbols:
-        print_skipped_history_warning(short_symbols, config)
+        min_history = int(config["thresholds"].get("min_history_rows", 120))
+        print_skipped_history_warning(short_symbols, min_history)
     if scored.empty:
         return empty_result(summary)
+    scored = merge_latest_gate_fields(scored, input_frame)
+    scored = merge_latest_spot_fields(scored, spot_view)
     thresholded = apply_thresholds(scored, config["thresholds"])
     summary = add_threshold_summary(
         summary=summary,
@@ -235,30 +255,6 @@ def validate_qsss_symbols(frame: pd.DataFrame, config: dict[str, Any]) -> None:
     errors = qsss_value_errors(frame, config)
     if errors:
         raise ValueError("; ".join(errors))
-
-
-def prepare_frame(frame: pd.DataFrame) -> pd.DataFrame:
-    result = frame.copy()
-    result["symbol"] = result["symbol"].astype(str)
-    result["date"] = parse_dates(result["date"])
-    numeric_columns = [
-        "open",
-        "high",
-        "low",
-        "close",
-        "volume",
-        "turnover",
-        "turn",
-        "prediction",
-        "prediction_score",
-    ]
-    for column in numeric_columns:
-        if column in result.columns:
-            result[column] = pd.to_numeric(result[column], errors="coerce")
-    result = result.dropna(subset=BASE_COLUMNS)
-    price_mask = (result[["open", "high", "low", "close"]] > 0).all(axis=1)
-    result = result[price_mask & (result["volume"] >= 0)]
-    return result.sort_values(["symbol", "date"]).reset_index(drop=True)
 
 
 def rank_and_limit(frame: pd.DataFrame, config: dict[str, Any]) -> pd.DataFrame:

@@ -72,6 +72,13 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             "validate_ohlcv.py": {"--input", "--config", "--min-history-rows"},
             "fetch_baostock_a_share.py": FETCH_CORE_OPTIONS | {"--drop-invalid-rows"},
             "fetch_akshare_a_share.py": FETCH_CORE_OPTIONS | {"--drop-invalid-rows"},
+            "fetch_eastmoney_a_share_spot.py": {
+                "--output",
+                "--metadata-output",
+                "--pages",
+                "--page-size",
+                "--fail-on-partial",
+            },
             "fetch_yfinance_ohlcv.py": FETCH_CORE_OPTIONS | {"--market", "--timeout-seconds"},
             "probe_external_source_stability.py": {
                 "--output-dir",
@@ -80,6 +87,14 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--akshare-symbols",
                 "--yfinance-symbols",
                 "--baostock-symbols",
+            },
+            "run_today_a_share_selection.py": {
+                "--prices-input",
+                "--output-dir",
+                "--mode",
+                "--config",
+                "--fail-on-empty-result",
+                "--fail-on-skipped",
             },
             "generate_lightgbm_predictions.py": {
                 "--input",
@@ -178,6 +193,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--input",
                 "--config",
                 "--output",
+                "--spot-input",
                 "--fail-on-skipped",
                 "--fail-on-empty-result",
             },

@@ -37,6 +37,8 @@ class FetchEastmoneyAShareSpotTests(unittest.TestCase):
         self.assertEqual("000001", rows[0]["symbol"])
         self.assertEqual("eastmoney", metadata["source"])
         self.assertEqual(1, metadata["successful_pages"])
+        self.assertEqual(1, metadata["pages_successful"])
+        self.assertEqual(0, metadata["pages_failed"])
         self.assertEqual(1, metadata["retry_attempts_per_page"])
         self.assertFalse(metadata["partial_result"])
 

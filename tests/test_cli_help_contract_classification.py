@@ -34,7 +34,10 @@ CLI_HELP_ENTRIES = [
 HELP_CONTRACT_EXCLUDED_HELPERS = [
     "lightgbm_prediction_summary.py",
     "portfolio_candidate_allocation.py",
+    "run_today_a_share_selection_commands.py",
     "run_today_a_share_selection_helpers.py",
+    "run_today_a_share_selection_history.py",
+    "run_today_a_share_selection_modes.py",
     "stock_selection_backtest_rows.py",
     "stock_selection_calendar_contract.py",
     "stock_selection_candidate_fields.py",

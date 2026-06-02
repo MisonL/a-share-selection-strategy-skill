@@ -1,0 +1,143 @@
+"""Command builders for the local A-share selection runner."""
+
+from __future__ import annotations
+
+from pathlib import Path
+import sys
+from typing import Any
+
+
+SCRIPTS = Path(__file__).resolve().parent
+
+
+def validate_command(args: Any, prices: Path) -> list[str]:
+    return [
+        sys.executable,
+        str(SCRIPTS / "validate_ohlcv.py"),
+        "--input",
+        str(prices),
+        "--min-history-rows",
+        str(args.min_history_rows),
+        "--config",
+        str(run_config_path(args)),
+    ]
+
+
+def score_command(
+    args: Any,
+    prices: Path,
+    candidates: Path,
+    diagnostics: Path,
+    spot: Path | None,
+) -> list[str]:
+    command = [
+        sys.executable,
+        str(SCRIPTS / "score_candidates.py"),
+        "--input",
+        str(prices),
+        "--config",
+        str(run_config_path(args)),
+        "--output",
+        str(candidates),
+        "--diagnostics-output",
+        str(diagnostics),
+    ]
+    if spot is not None:
+        command.extend(["--spot-input", str(spot)])
+    if args.fail_on_empty_result:
+        command.append("--fail-on-empty-result")
+    if args.fail_on_skipped:
+        command.append("--fail-on-skipped")
+    return command
+
+
+def fetch_spot_command(args: Any, spot: Path | None) -> list[str]:
+    if args.fetch_spot != "eastmoney" or spot is None:
+        raise ValueError("unsupported spot fetch configuration")
+    command = [
+        sys.executable,
+        str(SCRIPTS / "fetch_eastmoney_a_share_spot.py"),
+        "--output",
+        str(spot),
+        "--metadata-output",
+        str(Path(args.output_dir) / "spot_metadata.json"),
+        "--pages",
+        str(args.spot_pages),
+    ]
+    if args.fail_on_partial_spot:
+        command.append("--fail-on-partial")
+    return command
+
+
+def fetch_history_command(
+    args: Any,
+    prices: Path,
+    symbols: list[str],
+) -> list[str]:
+    if args.history_source not in {"akshare", "baostock"}:
+        raise ValueError("history-source must be akshare or baostock when prices-input is omitted")
+    command = [
+        sys.executable,
+        str(SCRIPTS / f"fetch_{args.history_source}_a_share.py"),
+        "--symbols",
+        ",".join(symbols),
+        "--start-date",
+        str(args.start_date),
+        "--end-date",
+        str(args.end_date),
+        "--output",
+        str(prices),
+        "--metadata-output",
+        str(Path(args.output_dir) / "history_metadata.json"),
+    ]
+    if args.history_adjust is not None:
+        command.extend(["--adjust", str(args.history_adjust)])
+    if not args.allow_partial_history:
+        command.append("--fail-on-fetch-error")
+    if args.drop_invalid_history_rows:
+        command.append("--drop-invalid-rows")
+    return command
+
+
+def run_config_path(args: Any) -> Path:
+    return Path(args.output_dir) / selected_config(args).name
+
+
+def initial_manifest(args: Any) -> dict[str, Any]:
+    return {
+        "runner": "run_today_a_share_selection",
+        "requested_mode": args.mode,
+        "mode": "unresolved" if args.mode == "auto" else args.mode,
+        "mode_decision": "unresolved",
+        "mode_decision_reason": "",
+        "prices_input": str(Path(args.prices_input)) if args.prices_input else "",
+        "output_dir": str(Path(args.output_dir)),
+        "config_path": "",
+        "spot_input": str(Path(args.spot_input)) if args.spot_input else "",
+        "fetch_spot": args.fetch_spot or "",
+        "spot_pages": int(args.spot_pages),
+        "history_source": args.history_source or "",
+        "symbols": args.symbols or "",
+        "derive_symbols_from_spot": bool(args.derive_symbols_from_spot),
+        "max_history_symbols": int(args.max_history_symbols),
+        "history_adjust": args.history_adjust or "",
+        "start_date": args.start_date or "",
+        "end_date": args.end_date or "",
+        "allow_partial_history": bool(args.allow_partial_history),
+        "drop_invalid_history_rows": bool(args.drop_invalid_history_rows),
+        "min_history_rows": args.min_history_rows,
+        "fail_on_empty_result": bool(args.fail_on_empty_result),
+        "fail_on_skipped": bool(args.fail_on_skipped),
+        "qsss_mode": args.mode == "qsss",
+        "lightgbm_not_used": args.mode != "qsss",
+        "source_scope": "unresolved",
+        "history_symbols": [],
+        "steps": [],
+    }
+
+
+def selected_config(args: Any) -> Path:
+    if args.config:
+        return Path(args.config)
+    mode = getattr(args, "resolved_mode", args.mode)
+    return args.default_qsss_config if mode == "qsss" else args.default_generic_config

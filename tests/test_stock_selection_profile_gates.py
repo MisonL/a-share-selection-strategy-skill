@@ -141,6 +141,26 @@ class StockSelectionProfileGateTests(unittest.TestCase):
         self.assertEqual(1, code)
         self.assertIn("six digits", stderr.getvalue())
 
+    def test_low_price_profile_rejects_missing_tradability_columns(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=False)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            frame.to_csv(input_path, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = validate_ohlcv.main(
+                    [
+                        "--input",
+                        str(input_path),
+                        "--config",
+                        str(SCRIPTS / "ultra_short_low_price_config.json"),
+                    ]
+                )
+        self.assertEqual(1, code)
+        self.assertIn("requires isST column", stderr.getvalue())
+        self.assertIn("requires tradestatus column", stderr.getvalue())
+
     def test_cli_reports_in_universe_short_history_examples(self) -> None:
         frame = build_frame(include_prediction=True, include_turn=True)
         short = build_frame(days=10, include_prediction=True, include_turn=True)

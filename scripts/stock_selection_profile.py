@@ -35,6 +35,14 @@ def threshold_column_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list
         errors.append("configured exclude_st threshold requires isST column")
     if thresholds.get("require_tradestatus") and "tradestatus" not in frame.columns:
         errors.append("configured require_tradestatus threshold requires tradestatus column")
+    if thresholds.get("exclude_one_word_bar"):
+        required = ["open", "high", "low", "close"]
+        missing = [column for column in required if column not in frame.columns]
+        if missing:
+            errors.append(
+                "configured exclude_one_word_bar threshold requires OHLC columns: "
+                + ",".join(missing)
+            )
     return errors
 
 

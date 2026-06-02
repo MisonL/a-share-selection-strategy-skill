@@ -12,13 +12,17 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
     return {
         "runner": manifest["runner"],
         "status": status,
+        "requested_mode": manifest.get("requested_mode", manifest["mode"]),
         "mode": manifest["mode"],
+        "mode_decision": manifest.get("mode_decision", ""),
+        "mode_decision_reason": manifest.get("mode_decision_reason", ""),
         "qsss_mode": manifest["qsss_mode"],
         "lightgbm_not_used": manifest["lightgbm_not_used"],
         "source_scope": manifest["source_scope"],
         "steps": len(manifest["steps"]),
         "failed_steps": [step["step"] for step in failed],
         "spot_metadata": spot_metadata_view(manifest),
+        "spot_rows": spot_rows(manifest),
         "score": score_summary(manifest),
         "candidates_output": str(Path(manifest["output_dir"]) / "candidates.csv"),
         "diagnostics_output": str(Path(manifest["output_dir"]) / "diagnostics.csv"),
@@ -38,7 +42,9 @@ def spot_metadata_view(manifest: dict[str, Any]) -> dict[str, Any]:
         "requested_pages",
         "retry_attempts_per_page",
         "successful_pages",
+        "pages_successful",
         "failed_pages",
+        "pages_failed",
         "raw_items",
         "filtered_items",
         "partial_result",
@@ -47,10 +53,46 @@ def spot_metadata_view(manifest: dict[str, Any]) -> dict[str, Any]:
     return {key: data.get(key) for key in keys if key in data}
 
 
+def spot_rows(manifest: dict[str, Any]) -> int:
+    metadata = spot_metadata_view(manifest)
+    if metadata:
+        return int(metadata.get("filtered_items") or metadata.get("raw_items") or 0)
+    output_dir = Path(manifest["output_dir"])
+    if not manifest.get("spot_input"):
+        return 0
+    spot_path = output_dir / ("spot.parquet" if str(manifest["spot_input"]).endswith(".parquet") else "spot.csv")
+    if not spot_path.exists():
+        return 0
+    if spot_path.suffix == ".parquet":
+        return parquet_row_count(spot_path)
+    if spot_path.suffix != ".csv":
+        return 0
+    with spot_path.open(encoding="utf-8") as handle:
+        return max(sum(1 for _line in handle) - 1, 0)
+
+
+def parquet_row_count(path: Path) -> int:
+    try:
+        import pyarrow.parquet as pq
+    except ImportError:
+        import pandas as pd
+
+        return int(len(pd.read_parquet(path)))
+    return int(pq.ParquetFile(path).metadata.num_rows)
+
+
 def boundary_for(manifest: dict[str, Any]) -> str:
+    decision = manifest.get("mode_decision", "")
+    reason = manifest.get("mode_decision_reason", "")
     if manifest["qsss_mode"]:
-        return "QSSS mode requires real prediction or prediction_score in the input."
-    return "Generic technical mode; not QSSS-derived and not LightGBM-backed."
+        return (
+            "QSSS mode requires real prediction or prediction_score in the input. "
+            f"mode_decision={decision} reason={reason}"
+        )
+    return (
+        "Generic technical mode; not QSSS-derived and not LightGBM-backed. "
+        f"mode_decision={decision} reason={reason}"
+    )
 
 
 def score_summary(manifest: dict[str, Any]) -> dict[str, Any]:

@@ -161,7 +161,9 @@ def build_metadata(
         "requested_pages": int(args.pages),
         "retry_attempts_per_page": int(args.retries),
         "successful_pages": successful,
+        "pages_successful": successful,
         "failed_pages": failed_pages,
+        "pages_failed": len(failed_pages),
         "raw_items": len(rows),
         "filtered_items": len(rows),
         "snapshot_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -215,6 +217,7 @@ def print_summary(metadata: dict[str, Any], prefix: str = "OK") -> None:
         f"{prefix}: source=eastmoney raw_items={metadata['raw_items']} "
         f"retries={metadata['retry_attempts_per_page']} "
         f"successful_pages={metadata['successful_pages']} "
+        f"pages_successful={metadata['pages_successful']} "
         f"failed_pages={len(metadata['failed_pages'])} "
         f"partial_result={str(metadata['partial_result']).lower()} "
         f"output={metadata['output']} metadata={metadata['metadata_output']}"

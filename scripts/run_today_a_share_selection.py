@@ -13,6 +13,21 @@ from pathlib import Path
 from typing import Any
 
 from run_today_a_share_selection_helpers import print_summary, summary_view, write_json
+from run_today_a_share_selection_commands import (
+    fetch_history_command,
+    fetch_spot_command,
+    initial_manifest,
+    run_config_path,
+    score_command,
+    selected_config,
+    validate_command,
+)
+from run_today_a_share_selection_history import (
+    DEFAULT_HISTORY_SYMBOL_LIMIT,
+    history_symbols,
+    validate_history_inputs,
+)
+from run_today_a_share_selection_modes import ModeResolution, resolve_mode
 
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -37,6 +52,8 @@ class RunContext:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    args.default_generic_config = DEFAULT_GENERIC_CONFIG
+    args.default_qsss_config = DEFAULT_QSSS_CONFIG
     output = Path(args.output_dir)
     manifest_path = output / "run_manifest.json"
     manifest = initial_manifest(args)
@@ -70,9 +87,9 @@ def main(argv: list[str] | None = None) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run local A-share selection gates.")
-    parser.add_argument("--prices-input", required=True, help="Local CSV or Parquet prices.")
+    parser.add_argument("--prices-input", help="Local CSV or Parquet prices.")
     parser.add_argument("--output-dir", required=True, help="Output run directory.")
-    parser.add_argument("--mode", choices=["generic", "qsss"], default="generic")
+    parser.add_argument("--mode", choices=["auto", "generic", "qsss"], default="auto")
     parser.add_argument("--config", help="Override scoring config path.")
     parser.add_argument("--spot-input", help="Optional local spot CSV or Parquet file.")
     parser.add_argument(
@@ -80,9 +97,26 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["eastmoney"],
         help="Fetch spot snapshot before scoring.",
     )
-    parser.add_argument("--spot-pages", type=int, default=1)
+    parser.add_argument("--spot-pages", type=positive_int, default=1)
     parser.add_argument("--fail-on-partial-spot", action="store_true")
-    parser.add_argument("--min-history-rows", type=int, default=120)
+    parser.add_argument("--history-source", choices=["akshare", "baostock"])
+    parser.add_argument("--symbols", help="Comma-separated six-digit symbols for history fetch.")
+    parser.add_argument("--start-date", help="History start date.")
+    parser.add_argument("--end-date", help="History end date.")
+    parser.add_argument(
+        "--derive-symbols-from-spot",
+        action="store_true",
+        help="Derive history symbols from the local or fetched spot snapshot.",
+    )
+    parser.add_argument(
+        "--max-history-symbols",
+        type=positive_int,
+        default=DEFAULT_HISTORY_SYMBOL_LIMIT,
+    )
+    parser.add_argument("--history-adjust", help="Forwarded adjust value for history fetch.")
+    parser.add_argument("--allow-partial-history", action="store_true")
+    parser.add_argument("--drop-invalid-history-rows", action="store_true")
+    parser.add_argument("--min-history-rows", type=positive_int, default=120)
     parser.add_argument("--fail-on-empty-result", action="store_true")
     parser.add_argument("--fail-on-skipped", action="store_true")
     return parser
@@ -99,27 +133,45 @@ def run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, cwd=str(Path.cwd()), capture_output=True, text=True)
 
 
+def positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("value must be positive")
+    return parsed
+
+
 def run_pipeline(context: RunContext) -> None:
+    apply_mode_resolution(context, resolve_mode(context.args))
     output = Path(context.args.output_dir)
     prices = run_prices_path(context.args)
     candidates = output / "candidates.csv"
     diagnostics = output / "diagnostics.csv"
     spot = run_spot_path(context.args)
     prepare_inputs(context.args, output, prices, spot)
-    run_step(context, Step("validate", validate_command(context.args, prices)))
     if context.args.fetch_spot:
         run_step(context, Step("fetch_spot", fetch_spot_command(context.args, spot)))
+    if not context.args.prices_input:
+        symbols = history_symbols(context.args, spot, output, run_config_path(context.args))
+        context.manifest["history_symbols"] = symbols
+        run_step(
+            context,
+            Step("fetch_history", fetch_history_command(context.args, prices, symbols)),
+        )
+    run_step(context, Step("validate", validate_command(context.args, prices)))
     run_step(context, Step("score", score_command(context.args, prices, candidates, diagnostics, spot)))
 
 
 def prepare_inputs(
     args: argparse.Namespace, output: Path, prices: Path, spot: Path | None
 ) -> None:
-    source = Path(args.prices_input)
-    if not source.exists():
-        raise FileNotFoundError(f"prices input not found: {source}")
-    if source.resolve() != prices.resolve():
-        shutil.copyfile(source, prices)
+    output.mkdir(parents=True, exist_ok=True)
+    validate_history_inputs(args, spot)
+    if args.prices_input:
+        source = Path(args.prices_input)
+        if not source.exists():
+            raise FileNotFoundError(f"prices input not found: {source}")
+        if source.resolve() != prices.resolve():
+            shutil.copyfile(source, prices)
     config = selected_config(args)
     target_config = output / config.name
     if config.resolve() != target_config.resolve():
@@ -133,6 +185,8 @@ def prepare_inputs(
 
 
 def run_prices_path(args: argparse.Namespace) -> Path:
+    if not args.prices_input:
+        return Path(args.output_dir) / "prices.csv"
     source = Path(args.prices_input)
     suffix = source.suffix if source.suffix in {".csv", ".parquet"} else ".csv"
     return Path(args.output_dir) / f"prices{suffix}"
@@ -146,75 +200,31 @@ def run_spot_path(args: argparse.Namespace) -> Path | None:
     return Path(args.output_dir) / f"spot{suffix}"
 
 
-def selected_config(args: argparse.Namespace) -> Path:
-    if args.config:
-        return Path(args.config)
-    return DEFAULT_QSSS_CONFIG if args.mode == "qsss" else DEFAULT_GENERIC_CONFIG
+def apply_mode_resolution(context: RunContext, resolution: ModeResolution) -> None:
+    context.args.resolved_mode = resolution.mode
+    config = selected_config(context.args)
+    context.manifest.update(
+        {
+            "mode": resolution.mode,
+            "mode_decision": resolution.decision,
+            "mode_decision_reason": resolution.reason,
+            "config_path": str(Path(context.args.output_dir) / config.name),
+            "qsss_mode": resolution.mode == "qsss",
+            "lightgbm_not_used": resolution.mode != "qsss",
+            "source_scope": source_scope(context.args),
+        }
+    )
 
 
-def validate_command(args: argparse.Namespace, prices: Path) -> list[str]:
-    command = [
-        sys.executable,
-        str(SCRIPTS / "validate_ohlcv.py"),
-        "--input",
-        str(prices),
-        "--min-history-rows",
-        str(args.min_history_rows),
-        "--config",
-        str(run_config_path(args)),
-    ]
-    return command
-
-
-def score_command(
-    args: argparse.Namespace,
-    prices: Path,
-    candidates: Path,
-    diagnostics: Path,
-    spot: Path | None,
-) -> list[str]:
-    command = [
-        sys.executable,
-        str(SCRIPTS / "score_candidates.py"),
-        "--input",
-        str(prices),
-        "--config",
-        str(run_config_path(args)),
-        "--output",
-        str(candidates),
-        "--diagnostics-output",
-        str(diagnostics),
-    ]
-    if spot is not None:
-        command.extend(["--spot-input", str(spot)])
-    if args.fail_on_empty_result:
-        command.append("--fail-on-empty-result")
-    if args.fail_on_skipped:
-        command.append("--fail-on-skipped")
-    return command
-
-
-def fetch_spot_command(args: argparse.Namespace, spot: Path | None) -> list[str]:
-    if args.fetch_spot != "eastmoney" or spot is None:
-        raise ValueError("unsupported spot fetch configuration")
-    metadata = Path(args.output_dir) / "spot_metadata.json"
-    command = [
-        sys.executable,
-        str(SCRIPTS / "fetch_eastmoney_a_share_spot.py"),
-        "--output",
-        str(spot),
-        "--metadata-output",
-        str(metadata),
-        "--pages",
-        str(args.spot_pages),
-    ]
-    if args.fail_on_partial_spot:
-        command.append("--fail-on-partial")
-    return command
-
-
-def run_config_path(args: argparse.Namespace) -> Path:
-    return Path(args.output_dir) / selected_config(args).name
+def source_scope(args: argparse.Namespace) -> str:
+    scopes = []
+    history = f"{args.history_source}_history_fetch" if args.history_source else "history_fetch"
+    scopes.append("local_prices_input" if args.prices_input else history)
+    if args.spot_input:
+        scopes.append("local_spot_input")
+    if args.fetch_spot:
+        scopes.append("eastmoney_spot_snapshot")
+    return "+".join(scopes)
 
 
 def run_step(context: RunContext, step: Step) -> None:
@@ -233,27 +243,6 @@ def step_record(step: Step, result: subprocess.CompletedProcess[str]) -> dict[st
         "allowed_returncodes": [0],
         "stdout": result.stdout,
         "stderr": result.stderr,
-    }
-
-
-def initial_manifest(args: argparse.Namespace) -> dict[str, Any]:
-    config = selected_config(args)
-    return {
-        "runner": "run_today_a_share_selection",
-        "mode": args.mode,
-        "prices_input": str(Path(args.prices_input)),
-        "output_dir": str(Path(args.output_dir)),
-        "config_path": str(Path(args.output_dir) / config.name),
-        "spot_input": str(Path(args.spot_input)) if args.spot_input else "",
-        "fetch_spot": args.fetch_spot or "",
-        "spot_pages": int(args.spot_pages),
-        "min_history_rows": args.min_history_rows,
-        "fail_on_empty_result": bool(args.fail_on_empty_result),
-        "fail_on_skipped": bool(args.fail_on_skipped),
-        "qsss_mode": args.mode == "qsss",
-        "lightgbm_not_used": args.mode != "qsss",
-        "source_scope": "local_prices_input",
-        "steps": [],
     }
 
 

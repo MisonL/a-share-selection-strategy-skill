@@ -48,6 +48,15 @@ QSSS 原策略的主趋势分是 LightGBM 输出的上涨概率 `prediction`。
 - `generate_lightgbm_predictions.py` 会把最新预测概率重复写入该标的所有行，供评分脚本消费当前概率；不要解释成逐日历史预测序列。
 - 真实门禁必须启用 `--fail-on-skipped`，或显式检查 `raw_symbols == predicted_symbols` 且 `skipped_symbols == 0`。
 
+## LightGBM 质量边界
+
+`prediction_summary.json` 字段完整只证明本次生成链路可审计，不证明模型质量已经通过。
+
+- 审计字段包括 `feature_columns`、`split_method`、`scaler_fit_scope`、`label_definition`、`prediction_scope`、`model_quality_scope`、`model_quality_metrics`，以及每个 symbol 的训练、holdout、标签分布和跳过原因字段。
+- `holdout_auc` 只来自训练前缀之后、latest 之前的同一 symbol 时间后缀；`holdout_metric_status=not_computable` 时必须披露原因。
+- `model_quality_scope=generation_audit_only` 和 `model_quality_metrics` 中的 `not_computed/not_evaluated/not_proven` 是机器可读边界声明，不是质量指标通过证明。
+- 即使 `holdout_auc` 可计算，也不能写成概率校准、holdout IC、分层收益、跨窗口稳定性、跨年份或分市场样本外统计、逐信号日独立预测质量、样本外泛化或全市场策略质量已证明。
+
 ## 短线爆发分
 
 ```text

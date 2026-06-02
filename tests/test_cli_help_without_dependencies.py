@@ -13,6 +13,30 @@ from test_cli_help_contract_classification import CLI_HELP_ENTRIES
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SCRIPTS = ROOT / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+from portfolio_overlap_report import CALENDAR_MODEL  # noqa: E402
+
+
+FETCH_CORE_OPTIONS = [
+    "--symbols",
+    "--start-date",
+    "--end-date",
+    "--output",
+    "--metadata-output",
+    "--fail-on-fetch-error",
+]
+WALK_FORWARD_MODEL_OPTIONS = [
+    "--required-tradability-model",
+    "--required-limit-rules-model",
+]
+WALK_FORWARD_CAPACITY_OPTIONS = [
+    "--max-open-positions",
+    "--max-gross-weight",
+    "--max-gross-notional",
+    "--max-cash-reserved",
+]
 
 
 class CliHelpWithoutDependenciesTests(unittest.TestCase):
@@ -22,33 +46,12 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             "run_baostock_walk_forward.py": [],
             "probe_baostock_limit_fields.py": [],
             "validate_ohlcv.py": ["--input", "--config", "--min-history-rows"],
-            "fetch_baostock_a_share.py": [
-                "--symbols",
-                "--start-date",
-                "--end-date",
-                "--output",
-                "--metadata-output",
-                "--fail-on-fetch-error",
-                "--drop-invalid-rows",
-            ],
-            "fetch_akshare_a_share.py": [
-                "--symbols",
-                "--start-date",
-                "--end-date",
-                "--output",
-                "--metadata-output",
-                "--fail-on-fetch-error",
-                "--drop-invalid-rows",
-            ],
+            "fetch_baostock_a_share.py": [*FETCH_CORE_OPTIONS, "--drop-invalid-rows"],
+            "fetch_akshare_a_share.py": [*FETCH_CORE_OPTIONS, "--drop-invalid-rows"],
             "fetch_yfinance_ohlcv.py": [
-                "--symbols",
-                "--start-date",
-                "--end-date",
-                "--output",
-                "--metadata-output",
+                *FETCH_CORE_OPTIONS,
                 "--market",
                 "--timeout-seconds",
-                "--fail-on-fetch-error",
             ],
             "probe_external_source_stability.py": [
                 "--output-dir",
@@ -111,13 +114,10 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--daily-output",
                 "--overlap-output",
                 "--summary-output",
-                "--max-open-positions",
-                "--max-gross-weight",
-                "--max-gross-notional",
-                "--max-cash-reserved",
+                *WALK_FORWARD_CAPACITY_OPTIONS,
                 "--fail-on-symbol-overlap",
                 "--require-capital-fields",
-                "business_day_closed_interval",
+                CALENDAR_MODEL,
                 "pandas.bdate_range",
                 "not an exchange trading calendar",
             ],
@@ -126,12 +126,8 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--output",
                 "--signal-dates",
                 "--expected-symbol-count",
-                "--required-tradability-model",
-                "--required-limit-rules-model",
-                "--max-open-positions",
-                "--max-gross-weight",
-                "--max-gross-notional",
-                "--max-cash-reserved",
+                *WALK_FORWARD_MODEL_OPTIONS,
+                *WALK_FORWARD_CAPACITY_OPTIONS,
                 "--fail-on-symbol-overlap",
                 "--expect-portfolio-violations",
                 "--allow-dropped-invalid-rows",
@@ -141,8 +137,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--output",
                 "--signal-dates",
                 "--expected-symbol-count",
-                "--required-tradability-model",
-                "--required-limit-rules-model",
+                *WALK_FORWARD_MODEL_OPTIONS,
                 "--expected-max-candidates",
                 "--expect-portfolio-violations",
             ],
@@ -155,8 +150,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--expected-final-equity",
                 "--expected-portfolio-violations",
                 "--required-allocation-model",
-                "--required-tradability-model",
-                "--required-limit-rules-model",
+                *WALK_FORWARD_MODEL_OPTIONS,
                 "--manifest-validation",
                 "--allow-dropped-invalid-rows",
             ],

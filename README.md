@@ -148,7 +148,14 @@ uv run --with pandas --with numpy python scripts/portfolio_overlap_report.py \
   --require-capital-fields
 ```
 
-这仍然只是合成 demo 数据上的本地基线 smoke。`prediction_score` 仍是合成输入；回测输出中的 `tradability_model=not_modeled` 和 `limit_rules_model=not_modeled` 仍表示未证明真实可交易性或涨跌停规则；资金曲线的 `final_equity` 不能写成真实收益验证。`portfolio_equity_curve.py` 使用 `equal_weight_completed_trades`，即使回测 CSV 含 `weight` 字段，也不能把 `final_equity` 写成按 sizing 权重计算的组合收益；`portfolio_overlap_report.py` 的资本字段门禁通过也不证明资金曲线使用了这些权重。`portfolio_overlap_report.py` 的 `calendar_model=business_day_closed_interval` 只说明用 pandas 工作日闭区间展开入场到退出日期，不是 A 股、美股或任一交易所日历模型，也不覆盖节假日、停复牌或涨跌停可交易性。
+这仍然只是合成 demo 数据上的本地基线 smoke:
+
+- `prediction_score` 仍是合成输入。
+- 回测输出中的 `tradability_model=not_modeled` 和 `limit_rules_model=not_modeled` 表示真实可交易性和涨跌停规则仍未证明。
+- 资金曲线的 `final_equity` 不能写成真实收益验证。
+- `portfolio_equity_curve.py` 使用 `equal_weight_completed_trades`。即使回测 CSV 含 `weight` 字段，也不能把 `final_equity` 写成按 sizing 权重计算的组合收益。
+- `portfolio_overlap_report.py` 的资本字段门禁通过不证明资金曲线使用了这些权重。
+- `portfolio_overlap_report.py` 的 `calendar_model=business_day_closed_interval` 只说明用 pandas 工作日闭区间展开入场到退出日期；它不是 A 股、美股或任一交易所日历模型，也不覆盖节假日、停复牌或涨跌停可交易性。
 
 `backtest_buy_hold.py` 默认 `cost_bps=0.0`、`slippage_bps=0.0`；即使 `--fail-on-incomplete` 通过且 `status=complete`，输出 `return` 也只是零成本 close-to-close 基线，不是含真实交易成本、滑点、涨跌停或券商成交约束的净收益。
 
@@ -211,7 +218,11 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
   --fail-on-empty-result
 ```
 
-该闭环只证明合成 demo 数据上的本地脚本可执行。`prediction_summary.json` 必须检查 `feature_columns`、`split_method`、`scaler_fit_scope`、`label_definition`、`prediction_scope`、`model_quality_scope`、`model_quality_metrics`，以及每个 symbol 的 `trainable_rows/train_rows/train_date_min/train_date_max/holdout_rows/holdout_date_min/holdout_date_max/latest_feature_date/target_positive_labels/target_negative_labels/holdout_positive_labels/holdout_negative_labels/holdout_auc/holdout_metric_status/holdout_metric_reason/skipped_reason`。`prediction_scope=latest_probability_repeated_for_scoring` 表示最新预测概率被重复写入该标的所有行，供评分脚本消费当前概率，不是逐日历史预测序列。`holdout_auc` 只来自训练前缀之后、latest 之前的同一 symbol 时间后缀；`holdout_metric_status=not_computable` 时必须披露原因。`model_quality_scope=generation_audit_only` 与 `model_quality_metrics` 中的 `holdout_ic=not_computed`、`probability_calibration=not_evaluated`、`full_market_generalization=not_proven` 是机器可读边界声明，不是质量指标。评分摘要中的 `prediction_source=external_unverified lightgbm_not_executed_by_this_script=true` 表示评分脚本本身不验证上游训练过程；即使上一条命令刚生成了 `prediction_score`，仍需单独核验训练窗口、标签、特征、时间序列切分、跳过标的和未来泄漏风险，不能把候选数或退出码写成真实策略收益、真实可交易性或真实 A 股全市场有效性证明。即使上述 summary 字段完整且 `holdout_auc` 可计算，也只证明本次训练和预测链路可审计，不证明概率校准、holdout IC、分层收益、跨窗口稳定性、跨年份或分市场样本外统计、逐信号日独立预测质量、样本外泛化或全市场策略质量。
+该闭环只证明合成 demo 数据上的本地脚本可执行。
+
+`prediction_scope=latest_probability_repeated_for_scoring` 表示最新预测概率被重复写入该标的所有行，供评分脚本消费当前概率，不是逐日历史预测序列。评分摘要中的 `prediction_source=external_unverified lightgbm_not_executed_by_this_script=true` 表示评分脚本本身不验证上游训练过程。
+
+即使上一条命令刚生成了 `prediction_score`，仍需单独核验训练窗口、标签、特征、时间序列切分、跳过标的和未来泄漏风险。LightGBM 质量边界以 `docs/qsss-derived-profile.md` 的“LightGBM 质量边界”为准；不能把候选数或退出码写成真实策略收益、真实可交易性、真实 A 股全市场有效性或模型质量已证明。
 
 真实 A 股行情可先落地为本地文件，再进入同一链路。下面示例使用 baostock，输出行情 CSV 和元数据 JSON；真实环境失败时命令会非 0，不应改用 mock 数据。门禁不能只看命令退出码，还必须检查 metadata 中 `rows > 0`、`symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`、`invalid_rows == 0`、`non_trading_rows == 0`。脚本会输出 `preclose/pctChg/tradestatus/isST`；若 baostock 返回停牌或异常行导致不可交易或 `volume/amount/turn` 为空，脚本默认失败；只有显式加 `--drop-invalid-rows` 时才会丢弃异常行，并在 metadata 记录 `dropped_invalid_rows` 和示例。
 

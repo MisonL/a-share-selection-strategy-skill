@@ -189,6 +189,8 @@ overlap summary:
 
 `final_equity` 和 `total_return` 是本地 close-to-close、完成交易等权资金曲线，不是按 `portfolio_cash_lot_floor` sizing 权重、真实成交或券商容量计算的收益。
 
+价格来自本次 baostock `adjustflag=3` 落地文件；本报告不额外证明公司行为处理、复权口径适配真实交易或券商成交口径。
+
 `calendar_model=business_day_closed_interval` 只表示 `portfolio_overlap_report.py` 用 pandas 工作日闭区间展开持仓日期；它不是 A 股交易所日历、节假日、停复牌或全持有期真实可交易性门禁。
 
 `limit_rules_model=not_modeled` 表示真实涨跌停规则仍未建模；本次复验也不证明真实成交容量、券商订单、全市场策略质量或样本外泛化。

@@ -54,7 +54,7 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
 
         daily, _overlaps, summary = overlap_report.build_overlap_report([frame])
 
-        self.assertEqual("business_day_closed_interval", summary["calendar_model"])
+        self.assertEqual(overlap_report.CALENDAR_MODEL, summary["calendar_model"])
         self.assertEqual(["2026-05-01", "2026-05-04", "2026-05-05"], daily["date"].tolist())
 
     def test_cli_reports_real_overlap_and_writes_outputs(self) -> None:

@@ -6,6 +6,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+TESTS = Path(__file__).resolve().parent
+sys.path.insert(0, str(TESTS))
+
+from test_cli_help_contract_classification import CLI_HELP_ENTRIES
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -90,6 +95,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--cost-bps",
                 "--slippage-bps",
                 "--require-tradable-bars",
+                "--require-tradable-holding-period",
                 "--fail-on-incomplete",
             ],
             "portfolio_equity_curve.py": [
@@ -111,6 +117,9 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--max-cash-reserved",
                 "--fail-on-symbol-overlap",
                 "--require-capital-fields",
+                "business_day_closed_interval",
+                "pandas.bdate_range",
+                "not an exchange trading calendar",
             ],
             "summarize_walk_forward_run.py": [
                 "--run-dir",
@@ -159,6 +168,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--fail-on-empty-result",
             ],
         }
+        self.assertEqual(set(CLI_HELP_ENTRIES), set(cases))
         for script_name, expected_options in cases.items():
             script = ROOT / f"scripts/{script_name}"
             with self.subTest(script=script.name):

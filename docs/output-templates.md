@@ -101,7 +101,8 @@
 - `probe_external_source_stability.py` 的 `all_sources_all_iterations_passed=true` 只说明当前窗口、当前参数和当前网络环境下连续复验通过。
 - 必须披露 `long_term_stability_claim=not_proven`，不能写成 akshare、Yahoo/yfinance 或 baostock 长期稳定。
 - akshare 的 `hist_provider_clean=false` 是主接口异常观察项；即使总控脚本退出 0，也只能写“fallback provider 成功”，不能写 `stock_zh_a_hist` 稳定。
-- yfinance 的实际最后交易日仍以每个 symbol 的 `date_max` 为准；`timeout_seconds` 只记录本次等待上限，不证明公网稳定。
+- 报告时必须列出各源 metadata 的逐标的 `date_max`；yfinance 的实际最后交易日仍以每个 symbol 的 `date_max` 为准，可能早于请求 `end_date`。
+- `timeout_seconds` 只记录本次等待上限，不证明公网稳定。
 - baostock fetch 通过仍只覆盖本次 symbols、日期范围、`adjustflag` 和 metadata 门禁；不证明涨跌停规则、券商成交或长期服务稳定。
 ```
 
@@ -229,6 +230,7 @@
 - 默认退出码为 0 时仍必须披露 `unsupported_candidate_fields`、`provider_error_fields`、`available_control_fields`、`control_rows` 和 `limit_rules_model`。
 - `provider_error_fields` 不是字段不支持；应保留 provider 错误码和错误信息，必要时用 `--fail-on-provider-error --require-control-rows` 作为严格门禁。
 - 控制字段有样本行不等于真实可交易性、涨跌停或券商成交约束已验证。
+- `preclose/pctChg/tradestatus/isST` 只是控制或诊断字段，不得用 `preclose + pctChg`、股票前缀或 `isST` 粗推真实涨跌停规则。
 - `supported_direct_limit_fields` 只统计 `up_limit/down_limit/limit_status`；`is_trading` 或 `suspended` 即使可用，也只能作为交易状态或停牌字段线索，不能让 `limit_rules_model=not_modeled` 变成已建模。
 ```
 
@@ -273,6 +275,16 @@
 - 必须同时披露 `limit_rules_model=not_modeled`。
 ```
 
+## 全持有期 observed bar 可交易性
+
+```markdown
+## 已观测持有期可交易性门禁范围
+- `tradability_model=tradestatus_holding_period_bars` 只说明价格表内从入场到退出的已观测 bar 均满足 `tradestatus=1`。
+- `--require-tradable-holding-period` 会把中间持有期已存在价格行的 `tradestatus=0` 标为 `non_tradable_holding_period`，并可被 `--fail-on-incomplete` 拦截。
+- 该门禁不补全价格表缺失日期，不证明真实交易所日历、节假日、特殊交易日、临时休市或全市场停复牌覆盖。
+- 该门禁不覆盖涨跌停、真实订单、券商成交容量或滑点成交约束；必须同时披露 `limit_rules_model=not_modeled`。
+```
+
 ## 零成本 Buy-hold 基线
 
 ```markdown
@@ -309,8 +321,9 @@
 
 ```markdown
 ## Overlap 日历口径
-- `portfolio_overlap_report.py` 的 `calendar_model=business_day_closed_interval` 表示用 pandas 工作日闭区间从 `entry_date` 展开到 `exit_date`。
+- `portfolio_overlap_report.py` 的 `calendar_model=business_day_closed_interval` 表示脚本用 `pandas.bdate_range` 的普通工作日闭区间从 `entry_date` 展开到 `exit_date`。
 - 该模型不是 A 股、美股或任一交易所日历，不校验节假日、临时休市、停复牌、涨跌停或全持有期真实可交易性。
+- 普通工作日近似可能包含交易所休市日，例如法定节假日或特殊休市日；这些日期出现在 `daily_positions.csv` 时只能说明 overlap/capacity 近似口径覆盖了该工作日，不能证明当天是交易所可交易日。
 - `daily_positions.csv` 中的日期只能作为本地组合重叠和容量报告的工作日近似口径；真实交易日历或真实可交易性需要额外数据源和门禁。
 - 报告 overlap 结果时必须披露 `calendar_model`，不能把 `OK:`、`daily_rows` 或 `max_open_positions` 写成交易所日历门禁通过。
 ```
@@ -333,6 +346,7 @@
 - 复用脚本函数前，必须把仓库的 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`。
 - 不要把 `from scripts.score_candidates import ...` 当成稳定 API；它可能在 import 阶段成功，但调用时因内部顶层模块路径缺失而失败。
 - `python3 -S scripts/<name>.py --help` 依赖轻量化门禁只覆盖带 `argparse`、`main()` 或 `__main__` 的 CLI 入口；`stock_selection_*.py`、`lightgbm_prediction_summary.py` 等 helper/import 模块没有帮助界面承诺，顶层 pandas/numpy import 失败不应写成用户入口缺口。
+- 使用 `scripts/*.py` 全量扫描时，必须先把真实 CLI 入口和 helper/import 模块分开；不能用 glob 扫描里的 helper 失败覆盖真实 CLI 入口的逐项验证结果。
 - 直接调用 Python API 时，`input` 字段由调用方记录或注入，不能把 API 调用摘要说成完整 CLI 门禁。
 ```
 
@@ -388,11 +402,13 @@
 - 必须披露 `raw_symbols`、`predicted_symbols`、`skipped_symbols` 和 `skipped_symbol_examples`。
 - 下游 `validate_ohlcv.py` 或 `score_candidates.py` 通过，只覆盖已写出的预测文件，不能反推上游全部标的通过。
 - 完整门禁应使用 `--fail-on-skipped`，或显式确认 `raw_symbols == predicted_symbols` 且 `skipped_symbols == 0`。
-- `prediction_summary.json` 中的 `feature_columns`、`split_method`、`scaler_fit_scope`、`label_definition`、训练日期窗口和标签分布只是本次生成链路审计字段。
+- `prediction_summary.json` 中的 `feature_columns`、`split_method`、`scaler_fit_scope`、`label_definition`、训练/holdout 日期窗口和标签分布只是本次生成链路审计字段。
 - `label_definition=target_return = close.shift(-horizon) / close - 1; class = target_return > train_mean` 只是相对训练集均值的二分类标签口径。
-- `target_positive_labels` 和 `target_negative_labels` 非空只证明训练切分内两类标签都存在，不证明标签业务合理性、概率校准、holdout AUC/IC、跨窗口稳定性或样本外泛化。
+- `target_positive_labels` 和 `target_negative_labels` 非空只证明训练切分内两类标签都存在，不证明标签业务合理性、概率校准、holdout IC、跨窗口稳定性或样本外泛化。
+- `holdout_auc` 只来自训练前缀之后、latest 之前的同一 symbol 时间后缀；`holdout_metric_status=not_computable` 时必须披露原因。它不是跨窗口、跨年份、分市场或全市场样本外泛化证明。
 - `prediction_scope=latest_probability_repeated_for_scoring` 不是逐日历史预测序列；它表示最新预测概率被重复写入该标的评分窗口。
-- 即使 summary 字段完整，也不能写成 LightGBM 模型质量、样本外泛化、AUC/IC、分层收益或全市场策略质量已证明。
+- `model_quality_scope=generation_audit_only` 和 `model_quality_metrics` 里的 `not_computed/not_evaluated/not_proven` 是机器可读边界声明，不是质量指标通过证明。
+- 即使 summary 字段完整且 `holdout_auc` 可计算，也不能写成 LightGBM 模型质量、样本外泛化、IC、分层收益或全市场策略质量已证明。
 ```
 
 ## 0 候选解释

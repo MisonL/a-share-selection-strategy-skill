@@ -16,6 +16,10 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import summarize_walk_forward_run as run_summary  # noqa: E402
+from stock_selection_model_contracts import (  # noqa: E402
+    LIMIT_RULES_MODEL_NOT_MODELED,
+    TRADABILITY_MODEL_ENTRY_EXIT,
+)
 
 
 class WalkForwardRunSummaryCliTests(unittest.TestCase):
@@ -31,9 +35,9 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
                     "--expected-symbol-count",
                     "2",
                     "--required-tradability-model",
-                    "tradestatus_entry_exit_only",
+                    TRADABILITY_MODEL_ENTRY_EXIT,
                     "--required-limit-rules-model",
-                    "not_modeled",
+                    LIMIT_RULES_MODEL_NOT_MODELED,
                     "--max-open-positions",
                     "2",
                     "--max-gross-weight",
@@ -212,8 +216,8 @@ def backtest_row(symbol: str, value: float) -> dict[str, object]:
         "return": value,
         "missing_data": False,
         "status": "complete",
-        "tradability_model": "tradestatus_entry_exit_only",
-        "limit_rules_model": "not_modeled",
+        "tradability_model": TRADABILITY_MODEL_ENTRY_EXIT,
+        "limit_rules_model": LIMIT_RULES_MODEL_NOT_MODELED,
     }
 
 

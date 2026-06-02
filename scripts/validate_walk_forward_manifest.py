@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from stock_selection_model_contracts import TRADABILITY_MODEL_HOLDING_PERIOD
 
 SIGNAL_SUFFIXES = ("slice", "predict", "validate", "score", "allocate", "backtest")
 PORTFOLIO_SIGNAL_SUFFIXES = ("slice", "predict", "validate", "score")
@@ -161,7 +162,14 @@ def command_errors(
     }
     errors.extend(requirements(by_name.get("fetch", []), "fetch", fetch_requirements()))
     for signal_date in signal_dates:
-        errors.extend(signal_command_errors(by_name, signal_date, allocation_model))
+        errors.extend(
+            signal_command_errors(
+                by_name,
+                signal_date,
+                allocation_model,
+                args.required_tradability_model,
+            )
+        )
     if allocation_model == "portfolio_cash_lot_floor":
         errors.extend(portfolio_allocate_errors(by_name.get("portfolio_allocate", [])))
     errors.extend(requirements(by_name.get("equity", []), "equity", ["portfolio_equity_curve.py", "--fail-on-incomplete"]))
@@ -170,13 +178,18 @@ def command_errors(
     return errors
 
 
-def signal_command_errors(by_name: dict[str, list[str]], signal_date: str, allocation_model: str) -> list[str]:
+def signal_command_errors(
+    by_name: dict[str, list[str]],
+    signal_date: str,
+    allocation_model: str,
+    required_tradability_model: str,
+) -> list[str]:
     checks = {
         "slice": ["slice_prices_as_of.py", "--as-of-date", signal_date],
         "predict": ["generate_lightgbm_predictions.py", "--summary-output", "--fail-on-skipped"],
         "validate": ["validate_ohlcv.py", "--config", "qsss_profile_config.json"],
         "score": ["score_candidates.py", "--fail-on-skipped", "--fail-on-empty-result"],
-        "backtest": ["backtest_buy_hold.py", "--require-tradable-bars", "--fail-on-incomplete"],
+        "backtest": backtest_requirements(signal_date, required_tradability_model),
     }
     if allocation_model != "portfolio_cash_lot_floor":
         checks["allocate"] = ["allocate_candidate_capital.py", "--cash-budget", "--lot-size", "--fail-on-unallocated"]
@@ -184,6 +197,19 @@ def signal_command_errors(by_name: dict[str, list[str]], signal_date: str, alloc
     for suffix, required in checks.items():
         errors.extend(requirements(by_name.get(f"{signal_date}:{suffix}", []), f"{signal_date}:{suffix}", required))
     return errors
+
+
+def backtest_requirements(signal_date: str, required_tradability_model: str) -> list[str]:
+    required = [
+        "backtest_buy_hold.py",
+        "--require-tradable-bars",
+        "--expected-signal-date",
+        signal_date,
+        "--fail-on-incomplete",
+    ]
+    if required_tradability_model == TRADABILITY_MODEL_HOLDING_PERIOD:
+        required.append("--require-tradable-holding-period")
+    return required
 
 
 def fetch_requirements() -> list[str]:
@@ -215,6 +241,7 @@ def portfolio_allocate_errors(command: list[str]) -> list[str]:
     required = [
         "allocate_portfolio_candidate_capital.py",
         "--raw-candidates",
+        "--expected-signal-dates",
         "--candidate-outputs",
         "--sized-outputs",
         "--skipped-output",

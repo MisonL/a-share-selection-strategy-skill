@@ -211,7 +211,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
   --fail-on-empty-result
 ```
 
-该闭环只证明合成 demo 数据上的本地脚本可执行。`prediction_summary.json` 必须检查 `feature_columns`、`split_method`、`scaler_fit_scope`、`label_definition`、`prediction_scope`，以及每个 symbol 的 `trainable_rows/train_rows/train_date_min/train_date_max/latest_feature_date/target_positive_labels/target_negative_labels/skipped_reason`。`prediction_scope=latest_probability_repeated_for_scoring` 表示最新预测概率被重复写入该标的所有行，供评分脚本消费当前概率，不是逐日历史预测序列。评分摘要中的 `prediction_source=external_unverified lightgbm_not_executed_by_this_script=true` 表示评分脚本本身不验证上游训练过程；即使上一条命令刚生成了 `prediction_score`，仍需单独核验训练窗口、标签、特征、时间序列切分、跳过标的和未来泄漏风险，不能把候选数或退出码写成真实策略收益、真实可交易性或真实 A 股全市场有效性证明。即使上述 summary 字段完整，也只证明本次训练和预测链路可审计，不证明概率校准、holdout AUC/IC、分层收益、跨窗口稳定性、跨年份或分市场样本外统计、逐信号日独立预测质量、样本外泛化或全市场策略质量。
+该闭环只证明合成 demo 数据上的本地脚本可执行。`prediction_summary.json` 必须检查 `feature_columns`、`split_method`、`scaler_fit_scope`、`label_definition`、`prediction_scope`、`model_quality_scope`、`model_quality_metrics`，以及每个 symbol 的 `trainable_rows/train_rows/train_date_min/train_date_max/holdout_rows/holdout_date_min/holdout_date_max/latest_feature_date/target_positive_labels/target_negative_labels/holdout_positive_labels/holdout_negative_labels/holdout_auc/holdout_metric_status/holdout_metric_reason/skipped_reason`。`prediction_scope=latest_probability_repeated_for_scoring` 表示最新预测概率被重复写入该标的所有行，供评分脚本消费当前概率，不是逐日历史预测序列。`holdout_auc` 只来自训练前缀之后、latest 之前的同一 symbol 时间后缀；`holdout_metric_status=not_computable` 时必须披露原因。`model_quality_scope=generation_audit_only` 与 `model_quality_metrics` 中的 `holdout_ic=not_computed`、`probability_calibration=not_evaluated`、`full_market_generalization=not_proven` 是机器可读边界声明，不是质量指标。评分摘要中的 `prediction_source=external_unverified lightgbm_not_executed_by_this_script=true` 表示评分脚本本身不验证上游训练过程；即使上一条命令刚生成了 `prediction_score`，仍需单独核验训练窗口、标签、特征、时间序列切分、跳过标的和未来泄漏风险，不能把候选数或退出码写成真实策略收益、真实可交易性或真实 A 股全市场有效性证明。即使上述 summary 字段完整且 `holdout_auc` 可计算，也只证明本次训练和预测链路可审计，不证明概率校准、holdout IC、分层收益、跨窗口稳定性、跨年份或分市场样本外统计、逐信号日独立预测质量、样本外泛化或全市场策略质量。
 
 真实 A 股行情可先落地为本地文件，再进入同一链路。下面示例使用 baostock，输出行情 CSV 和元数据 JSON；真实环境失败时命令会非 0，不应改用 mock 数据。门禁不能只看命令退出码，还必须检查 metadata 中 `rows > 0`、`symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`、`invalid_rows == 0`、`non_trading_rows == 0`。脚本会输出 `preclose/pctChg/tradestatus/isST`；若 baostock 返回停牌或异常行导致不可交易或 `volume/amount/turn` 为空，脚本默认失败；只有显式加 `--drop-invalid-rows` 时才会丢弃异常行，并在 metadata 记录 `dropped_invalid_rows` 和示例。
 
@@ -230,6 +230,36 @@ P2 真实涨跌停规则门禁当前仍是 `not_modeled`:
 - `preclose/pctChg/tradestatus/isST` 只是行情控制和诊断字段，不是 `up_limit/down_limit/limit_status` 这类直接涨跌停字段；不得用 `preclose + pctChg`、股票前缀或 `isST` 粗推真实涨跌停规则。
 - `probe_baostock_limit_fields.py` 只做字段可用性探针，不做规则推断；读取结果时必须看 `summary.supported_direct_limit_fields`、`summary.direct_limit_field_available` 和 `rule_inference_performed=false`，不能只看控制字段可用或候选字段列表。
 - walk-forward 命令中的 `--required-limit-rules-model not_modeled` 只是在 runner、manifest validator 和 artifact validator 中锁定并校验“未建模”口径保持一致，不是 P2 通过。
+
+可复制的 P2A 完整控制字段严格探针如下。若返回 `provider_error_fields`，例如 `turn/volume/amount`，即使 JSON 已写出，也只能记录为严格探针失败，不能写成 P2A 严格通过:
+
+```bash
+uv run --with pandas --with numpy --with baostock python scripts/probe_baostock_limit_fields.py \
+  --symbols 000001,600000,300750,688981 \
+  --start-date 2025-08-25 \
+  --end-date 2025-09-10 \
+  --adjust 3 \
+  --candidate-fields up_limit,down_limit,limit_status,is_trading,suspended \
+  --control-fields preclose,pctChg,tradestatus,isST,turn,volume,amount \
+  --output /tmp/stock-selection-p2a-limit-field-refresh/baostock_limit_field_probe.json \
+  --fail-on-provider-error \
+  --require-control-rows
+```
+
+若要只复验核心控制字段可取，可收窄到 `preclose,pctChg,tradestatus,isST`。该命令返回 0 也只证明核心控制字段和直接候选字段可用性口径，不证明真实涨跌停规则已建模:
+
+```bash
+uv run --with pandas --with numpy --with baostock python scripts/probe_baostock_limit_fields.py \
+  --symbols 000001,600000,300750,688981 \
+  --start-date 2025-08-25 \
+  --end-date 2025-09-10 \
+  --adjust 3 \
+  --candidate-fields up_limit,down_limit,limit_status,is_trading,suspended \
+  --control-fields preclose,pctChg,tradestatus,isST \
+  --output /tmp/stock-selection-p2a-limit-field-core/baostock_limit_field_probe.json \
+  --fail-on-provider-error \
+  --require-control-rows
+```
 
 akshare A 股入口会先尝试 `stock_zh_a_hist` 中文列；该接口失败或空结果时，会在 metadata 中记录 `fallback_errors` 并转用 `stock_zh_a_daily` 英文字段。真实环境失败时命令应非 0，不得改用 mock 或缓存样例冒充成功。取数窗口必须覆盖评分配置的最小历史行数；默认通用配置需要每个标的至少 `120` 行，`2024-01-01` 到 `2024-06-30` 这类半年窗口可能不足。
 
@@ -286,6 +316,8 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
 
 yfinance 裸 OHLCV 不含 `turn` 或 `turnover`，通用评分会输出 `turnover_assumption=neutral_series_missing_turnover` 并在 stderr 说明使用 neutral turnover series；报告候选时必须保留这个假设。`score_diagnostics.csv` 会记录每个已评分 symbol 的阈值失败项和是否入选，用于解释未入选标的，但它仍不是回测或收益证明。`end-date` 可能落在非交易日，实际数据范围以 metadata 中每个 symbol 的 `date_min/date_max` 为准；fetch 退出 0 且 `validate_ohlcv.py` 通过，也不能把非交易日 `end-date` 写成实际最后交易日、信号日或可回测入场日。该链路不生成或验证 LightGBM prediction，不适用于 QSSS-derived；若强行使用 QSSS-derived 配置，仍会因为缺少 `prediction/prediction_score` 和 `turn/turnover` 显式失败。
 
+`backtest_buy_hold.py --require-tradable-bars` 是 entry/exit-only 门禁，只检查入场和退出 bar 的 `tradestatus=1`，模型名为 `tradestatus_entry_exit_only`。如果需要更严格的本地可交易性检查，可额外传入 `--require-tradable-holding-period`；该模式会检查价格表内从入场到退出的已观测 bar 都是 `tradestatus=1`，模型名为 `tradestatus_holding_period_bars`。这仍只是已落地价格表内的 observed bars 门禁，不补全真实交易所日历、缺失交易日、节假日、临时休市、涨跌停、真实订单或券商成交容量。
+
 P3 外部源稳定性观察使用固定总控脚本重复调用 akshare、yfinance 和 baostock 取数入口。该脚本只证明当前窗口、当前参数和当前网络环境下的连续复验结果；即使 `all_sources_all_iterations_passed=true`，也不能写成公网数据源长期稳定。
 
 ```bash
@@ -294,7 +326,10 @@ uv run --with pandas --with numpy --with akshare --with yfinance --with baostock
   python scripts/probe_external_source_stability.py \
     --output-dir "$RUN_DIR/runs" \
     --summary-output "$RUN_DIR/external_source_stability.json" \
-    --iterations 3
+    --iterations 3 \
+    --akshare-symbols 000001,600000 \
+    --yfinance-symbols AAPL,MSFT \
+    --baostock-symbols 000001,600000
 ```
 
 读取 `external_source_stability.json` 时必须检查 `summary.sources.*.all_passed`、逐次 `metadata`、`checks` 和 `long_term_stability_claim=not_proven`。akshare 的 `hist_provider_clean` 是观察项：若该项为 false 而其他必需检查通过，只能说明主接口失败后 fallback provider 成功，不能写成 `stock_zh_a_hist` 稳定。yfinance 的实际最后交易日仍看每个 symbol 的 `date_max`；baostock 仍需检查 `non_trading_rows=0`、`tradestatus_missing_rows=0` 和 `adjustflag=3`。
@@ -372,7 +407,9 @@ python3 scripts/validate_walk_forward_artifacts.py \
   --allow-dropped-invalid-rows
 ```
 
-若目标是复现已知组合风险暴露，而不是证明当前门禁通过，才在 runner、summary 和 manifest validator 中同时使用 `--expect-portfolio-violations`。summary 在该模式下退出 0 且 `quality_errors=[]`，只表示已知违规被显式允许；报告中的 `portfolio_violations>0` 仍不是组合容量门禁通过。手工运行 summary 时，只有传入 `--required-tradability-model` 和 `--required-limit-rules-model`，`quality_errors=[]` 才能覆盖这些模型口径；省略 required 参数时必须披露 JSON 中实际 `tradability_models` 和 `limit_rules_models`。若 artifact validator 使用非 0 的 `--expected-portfolio-violations` 后退出 0 且 `errors=[]`，这只说明 artifact 与已知违规数量一致；报告中的 `portfolio_violations>0` 仍不是组合容量门禁通过。artifact validator 只有传入 `--manifest-validation "$RUN_DIR/run_manifest_validation.json"` 时才会校验 manifest 报告；若输出 `manifest_checked=false`，不能说 manifest 门禁已纳入本次 artifact 复验。若 runner 显式设置 `--max-candidates M`，manifest validator 才同步传 `--expected-max-candidates M`。`portfolio_cash_lot_floor` 生成 `qsss_raw_candidates.csv`、`qsss_candidates.csv`、`qsss_sized_candidates.csv`、`qsss_skipped_candidates.csv` 和 `qsss_allocation_summary.json`；artifact validator 会交叉校验 allocation 与 overlap 的容量摘要。overlap summary 中的 `calendar_model=business_day_closed_interval` 仍只是 pandas 工作日闭区间，不是交易所日历、节假日、特殊交易日或全持有期停复牌可交易性门禁。当前脚本仍不证明真实成交容量、券商订单或涨跌停规则。当前真实门禁优先级以 `docs/reviews/REAL-SCENARIO-GATES-2026-05-30.md` 为准。
+如要让一键 runner 的回测步骤使用全持有期已观测 bar 可交易性门禁，可在 runner 命令中加入 `--require-tradable-holding-period`，并把后续 manifest validator、artifact validator 或手工 summary 的 `--required-tradability-model` 改为 `tradestatus_holding_period_bars`。默认 P1 示例仍使用 `tradestatus_entry_exit_only`，因此不能把旧产物解释成全持有期 observed bar 门禁通过。
+
+若目标是复现已知组合风险暴露，而不是证明当前门禁通过，才在 runner、summary 和 manifest validator 中同时使用 `--expect-portfolio-violations`。summary 在该模式下退出 0 且 `quality_errors=[]`，只表示已知违规被显式允许；报告中的 `portfolio_violations>0` 仍不是组合容量门禁通过。手工运行 summary 时，只有传入 `--required-tradability-model` 和 `--required-limit-rules-model`，`quality_errors=[]` 才能覆盖这些模型口径；省略 required 参数时必须披露 JSON 中实际 `tradability_models` 和 `limit_rules_models`。若 artifact validator 使用非 0 的 `--expected-portfolio-violations` 后退出 0 且 `errors=[]`，这只说明 artifact 与已知违规数量一致；报告中的 `portfolio_violations>0` 仍不是组合容量门禁通过。artifact validator 只有传入 `--manifest-validation "$RUN_DIR/run_manifest_validation.json"` 时才会校验 manifest 报告；若输出 `manifest_checked=false`，不能说 manifest 门禁已纳入本次 artifact 复验。若 runner 显式设置 `--max-candidates M`，manifest validator 才同步传 `--expected-max-candidates M`。`portfolio_cash_lot_floor` 生成 `qsss_raw_candidates.csv`、`qsss_candidates.csv`、`qsss_sized_candidates.csv`、`qsss_skipped_candidates.csv` 和 `qsss_allocation_summary.json`；artifact validator 会交叉校验 allocation 与 overlap 的容量摘要。overlap summary 中的 `calendar_model=business_day_closed_interval` 仍只是 pandas 工作日闭区间，不是交易所日历、节假日、特殊交易日或全持有期停复牌可交易性门禁。`tradestatus_holding_period_bars` 只覆盖价格表内已观测 bar 的 `tradestatus=1`，不能补足真实交易所日历、缺失交易日或涨跌停规则。当前脚本仍不证明真实成交容量、券商订单或涨跌停规则。当前真实门禁优先级以 `docs/reviews/REAL-SCENARIO-GATES-2026-05-30.md` 为准。
 输入约定：`symbol` 必须按文本保存以保留前导零；校验脚本会拒绝 1 到 3 位纯数字代码，避免把 `000001` 这类 A 股代码被表格软件损坏后的值当作有效输入。`date` 支持 `YYYY-MM-DD` 或 `YYYYMMDD`；`volume` 单位必须在同一文件内保持一致，脚本只能校验数值和非负，无法从纯数值可靠判断“股/手/张/成交额”是否混用。QSSS-derived 的 `market` 只接受精确值 `A-share`，不会自动归一化 `A股`、`China` 等别名。
 
 常见字段映射：akshare 中文列需映射为 `股票代码 -> symbol`、`日期 -> date`、`成交量 -> volume`、`成交额 -> amount`、`换手率 -> turn`，`stock_zh_a_daily` 英文字段需映射 `volume -> volume`、`amount -> amount`、`turnover -> turn`，其中 `成交额` 或 `amount` 不得映射为 `volume`；tushare 需将 `ts_code` 去掉 `.SZ`/`.SH` 后写入 `symbol`，`trade_date -> date`，`vol -> volume`，`amount -> amount`，`turnover_rate -> turn`；yfinance 需将 `Date/Symbol/Open/High/Low/Close/Volume` 映射为小写标准字段。yfinance 映射后只满足通用 OHLCV；若用于 QSSS-derived，还必须外部补齐 `market=A-share`、真实上游 `prediction_score`、以及 `turn` 或 `turnover`，不能从 yfinance OHLCV 自动推断。不要把 `Adj Close` 静默替换为 `close`；使用复权价时要记录复权口径。多源合并时统一保留一个预测列，推荐先生成 `prediction_score = coalesce(prediction_score, prediction)`。

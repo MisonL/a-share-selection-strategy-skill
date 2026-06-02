@@ -78,7 +78,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `score_candidates.py`：读取本地行情文件并输出候选股 CSV。
 - `generate_lightgbm_predictions.py`：可选 LightGBM 预测生成器，输出 `prediction_score`。
 - `allocate_candidate_capital.py`：可选候选资金分配脚本，按信号日 close、现金预算和 lot size 生成可追溯 sizing 字段；候选表已有资金字段时默认拒绝，只有显式 `--overwrite-capital-fields` 才重算覆盖。
-- `backtest_buy_hold.py`：可选 close-to-close buy-hold 基线回测，可透传候选表资金字段。
+- `backtest_buy_hold.py`：可选 close-to-close buy-hold 基线回测，可透传候选表资金字段。`--require-tradable-bars` 只检查入场和退出 bar；`--require-tradable-holding-period` 检查价格表内从入场到退出的已观测 bar 都满足 `tradestatus=1`，并输出 `tradability_model=tradestatus_holding_period_bars`。
 - `portfolio_equity_curve.py`：可选等权组合资金曲线生成器，读取一个或多个回测 CSV，并支持 final equity / max drawdown 失败门槛。默认只按 complete trades 等权计算权益曲线，不使用输入 `weight` 加权；`incomplete_trades>0` 时 `OK` 和 `final_equity` 不代表全量回测通过，严格门禁需显式使用 `--fail-on-incomplete`。
 - `portfolio_overlap_report.py`：可选组合并发持仓、同标的重叠、资金字段完整性，以及权重、名义金额和预留现金容量门禁报告。未传 `--require-capital-fields` 时，单项金额门禁可只验证自身字段；若 `capital_fields_missing` 非空或 `weight_capacity_verifiable=false`，不能说完整组合容量字段已验证。`calendar_model=business_day_closed_interval` 来自 pandas 工作日闭区间，不是交易所日历、节假日、停复牌或真实可交易日历门禁。
 - `summarize_walk_forward_run.py`：汇总 walk-forward run 目录，输出 `qsss_run_summary.json` 并执行 metadata、prediction、回测、资金曲线和组合容量门禁。`--required-tradability-model` 和 `--required-limit-rules-model` 只有传入时才检查模型口径；省略后 `quality_errors=[]` 不能说明这些模型门禁通过。`--expect-portfolio-violations` 只用于复现已知组合风险；退出 0 且 `quality_errors=[]` 时如果 `portfolio_violations>0`，仍不能说组合容量门禁通过。
@@ -143,7 +143,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py --input /tm
 - `generate_lightgbm_predictions.py` 是可选上游生成器；真实门禁必须启用 `--fail-on-skipped`，或检查 `raw_symbols == predicted_symbols` 且 `skipped_symbols == 0`。下游评分成功只覆盖已写出的预测行，不能反推被上游跳过的标的也通过。
 - `prediction_summary.json` 应审计 `feature_columns`、`split_method`、`scaler_fit_scope`、`label_definition`、`prediction_scope`，以及每个 symbol 的训练日期窗口、训练标签分布和 `skipped_reason`；字段完整只证明本次生成链路可审计，不证明概率校准、holdout AUC/IC、分层收益、跨窗口稳定性、跨年份或分市场样本外统计、逐信号日独立预测质量、样本外泛化或全市场策略质量。
 - `prediction_scope=latest_probability_repeated_for_scoring` 表示生成器把最新预测概率重复写入该标的所有行，供评分脚本消费当前概率；这不是逐日历史预测序列。
-- `backtest_buy_hold.py` 只做信号日收盘价到未来第 N 个可用交易行收盘价的基线；候选信号日必须精确存在于价格表，不会自动顺延到下一交易日，缺入场价会记为 `missing_entry_price`。`--cost-bps` 和 `--slippage-bps` 只做 round-trip bps 扣减；默认未传时两者都是 0，`return` 仍是零成本 close-to-close 基线，不是真实净收益。`--require-tradable-bars` 只检查入场和退出日 `tradestatus=1`，不扫描中间持有期行，也不覆盖涨跌停；回测不生成 sizing，需先由 `allocate_candidate_capital.py` 生成可追溯资金字段。最新信号日缺少未来价格导致 `missing_future_price` 时，不得绕过 `--fail-on-incomplete` 或把 incomplete trade 写成成功回测。
+- `backtest_buy_hold.py` 只做信号日收盘价到未来第 N 个可用交易行收盘价的基线；候选信号日必须精确存在于价格表，不会自动顺延到下一交易日，缺入场价会记为 `missing_entry_price`。`--cost-bps` 和 `--slippage-bps` 只做 round-trip bps 扣减；默认未传时两者都是 0，`return` 仍是零成本 close-to-close 基线，不是真实净收益。`--require-tradable-bars` 只检查入场和退出日 `tradestatus=1`，不扫描中间持有期行；`--require-tradable-holding-period` 检查价格表内从入场到退出的已观测 bar 均为 `tradestatus=1`，但仍不证明交易所日历、缺失交易日、节假日、临时休市、涨跌停或券商成交约束。回测不生成 sizing，需先由 `allocate_candidate_capital.py` 生成可追溯资金字段。最新信号日缺少未来价格导致 `missing_future_price` 时，不得绕过 `--fail-on-incomplete` 或把 incomplete trade 写成成功回测。
 
 QSSS-derived 总分：
 

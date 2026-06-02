@@ -10,12 +10,25 @@ import pandas as pd
 
 from stock_selection_data import parse_dates
 
+MODEL_QUALITY_SCOPE = "generation_audit_only"
+MODEL_QUALITY_METRICS = {
+    "holdout_auc": "not_computed",
+    "holdout_ic": "not_computed",
+    "probability_calibration": "not_evaluated",
+    "return_bucket_analysis": "not_computed",
+    "cross_window_stability": "not_evaluated",
+    "cross_year_generalization": "not_evaluated",
+    "cross_market_generalization": "not_evaluated",
+    "full_market_generalization": "not_proven",
+}
+
 
 def symbol_summary(
     group: pd.DataFrame,
     trainable: pd.DataFrame,
     train: pd.DataFrame,
     latest: pd.DataFrame,
+    holdout: dict[str, Any],
     probability: float,
     horizon: int,
     target_threshold: float,
@@ -35,6 +48,7 @@ def symbol_summary(
         "target_threshold": float(target_threshold),
         "target_positive_labels": int(positive_labels),
         "target_negative_labels": int(negative_labels),
+        **holdout,
         "prediction_score": float(probability),
         "prediction_horizon_days": int(horizon),
         "label_definition": "target_return = close.shift(-horizon) / close - 1; class = target_return > train_mean",
@@ -48,6 +62,14 @@ def skipped_summary(group: pd.DataFrame, reason: str) -> dict[str, Any]:
         "status": "skipped",
         "trainable_rows": 0,
         "train_rows": 0,
+        "holdout_rows": 0,
+        "holdout_date_min": "",
+        "holdout_date_max": "",
+        "holdout_positive_labels": 0,
+        "holdout_negative_labels": 0,
+        "holdout_auc": None,
+        "holdout_metric_status": "not_computable",
+        "holdout_metric_reason": "symbol_skipped",
         "prediction_score": None,
         "prediction_horizon_days": None,
         "skipped_reason": reason,
@@ -84,6 +106,8 @@ def build_summary(
         "split_method": "time_series_train_prefix",
         "scaler_fit_scope": "train_split_only",
         "prediction_scope": "latest_probability_repeated_for_scoring",
+        "model_quality_scope": MODEL_QUALITY_SCOPE,
+        "model_quality_metrics": dict(MODEL_QUALITY_METRICS),
         "label_definition": "target_return = close.shift(-horizon) / close - 1; class = target_return > train_mean",
         "symbols": symbol_summaries,
     }

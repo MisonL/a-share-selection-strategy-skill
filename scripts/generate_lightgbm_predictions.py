@@ -218,6 +218,7 @@ def predict_symbol(
     x_train = scaled_frame(scaler.fit_transform(train[FEATURE_COLUMNS]), train.index)
     model = model_deps["classifier"](**QSSS_MODEL_PARAMS)
     model.fit(x_train, target_label.astype(int))
+    holdout = holdout_summary(trainable, train_size, target_threshold, scaler, model, group)
     latest = features.dropna(subset=FEATURE_COLUMNS).iloc[[-1]]
     x_latest = scaled_frame(scaler.transform(latest[FEATURE_COLUMNS]), latest.index)
     probability = float(model.predict_proba(x_latest)[0][1])
@@ -226,11 +227,84 @@ def predict_symbol(
         trainable,
         train,
         latest,
+        holdout,
         probability,
         horizon,
         target_threshold,
         int(target_label.sum()),
         int(len(target_label) - target_label.sum()),
+    )
+
+
+def holdout_summary(
+    trainable: pd.DataFrame,
+    train_size: int,
+    target_threshold: float,
+    scaler: Any,
+    model: Any,
+    group: pd.DataFrame,
+) -> dict[str, Any]:
+    holdout = trainable.iloc[train_size:]
+    labels = holdout["target_return"] > target_threshold
+    summary = base_holdout_summary(holdout, labels, group)
+    if len(holdout) == 0:
+        return {**summary, **holdout_metric(None, "empty_holdout")}
+    if labels.nunique() < 2:
+        return {**summary, **holdout_metric(None, "single_class_holdout")}
+    x_holdout = scaled_frame(scaler.transform(holdout[FEATURE_COLUMNS]), holdout.index)
+    scores = model.predict_proba(x_holdout)[:, 1]
+    return {**summary, **holdout_metric(binary_auc(labels.astype(int), scores), "")}
+
+
+def base_holdout_summary(
+    holdout: pd.DataFrame,
+    labels: pd.Series,
+    group: pd.DataFrame,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "holdout_rows": int(len(holdout)),
+        "holdout_date_min": "",
+        "holdout_date_max": "",
+        "holdout_positive_labels": int(labels.sum()) if len(labels) else 0,
+        "holdout_negative_labels": int(len(labels) - labels.sum()) if len(labels) else 0,
+    }
+    if len(holdout):
+        dates = parse_dates(group.loc[holdout.index, "date"])
+        result["holdout_date_min"] = dates.min().date().isoformat()
+        result["holdout_date_max"] = dates.max().date().isoformat()
+    return result
+
+
+def holdout_metric(value: float | None, reason: str) -> dict[str, Any]:
+    return {
+        "holdout_auc": value,
+        "holdout_metric_status": "computed" if reason == "" else "not_computable",
+        "holdout_metric_reason": reason,
+    }
+
+
+def binary_auc(labels: Any, scores: Any) -> float:
+    labels_array = np.asarray(labels, dtype=int)
+    scores_array = np.asarray(scores, dtype=float)
+    order = np.argsort(scores_array, kind="mergesort")
+    ranks = np.empty(len(scores_array), dtype=float)
+    sorted_scores = scores_array[order]
+    start = 0
+    while start < len(sorted_scores):
+        end = start + 1
+        while end < len(sorted_scores) and sorted_scores[end] == sorted_scores[start]:
+            end += 1
+        ranks[order[start:end]] = (start + 1 + end) / 2.0
+        start = end
+    positives = labels_array == 1
+    positive_count = int(positives.sum())
+    negative_count = int(len(labels_array) - positive_count)
+    if positive_count == 0 or negative_count == 0:
+        raise ValueError("AUC requires both positive and negative labels")
+    positive_rank_sum = float(ranks[positives].sum())
+    return float(
+        (positive_rank_sum - positive_count * (positive_count + 1) / 2.0)
+        / (positive_count * negative_count)
     )
 
 

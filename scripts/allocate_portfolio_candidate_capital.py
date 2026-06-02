@@ -17,6 +17,7 @@ def main(argv: list[str] | None = None) -> int:
         selected, sized, skipped, summary = allocate_portfolio(
             read_table(Path(args.prices)),
             [read_table(Path(path)) for path in args.raw_candidates],
+            expected_signal_dates=args.expected_signal_dates,
             cash_budget=args.cash_budget,
             lot_size=args.lot_size,
             hold_days=args.hold_days,
@@ -42,6 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Allocate candidates with portfolio capacity.")
     parser.add_argument("--prices", required=True)
     parser.add_argument("--raw-candidates", nargs="+", required=True)
+    parser.add_argument("--expected-signal-dates", nargs="+")
     parser.add_argument("--candidate-outputs", nargs="+", required=True)
     parser.add_argument("--sized-outputs", nargs="+", required=True)
     parser.add_argument("--skipped-output", required=True)

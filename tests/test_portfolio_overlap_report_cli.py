@@ -45,6 +45,18 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
         self.assertEqual(2, len(overlaps))
         self.assertEqual(["000001"], sorted(overlaps["symbol"].unique().tolist()))
 
+    def test_calendar_model_is_pandas_business_day_not_exchange_calendar(self) -> None:
+        frame = pd.DataFrame(
+            [
+                trade("000001", "2026-04-30", "2026-05-01", "2026-05-05"),
+            ]
+        )
+
+        daily, _overlaps, summary = overlap_report.build_overlap_report([frame])
+
+        self.assertEqual("business_day_closed_interval", summary["calendar_model"])
+        self.assertEqual(["2026-05-01", "2026-05-04", "2026-05-05"], daily["date"].tolist())
+
     def test_cli_reports_real_overlap_and_writes_outputs(self) -> None:
         first = pd.DataFrame(
             [

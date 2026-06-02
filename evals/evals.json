@@ -1292,12 +1292,12 @@
     {
       "id": 54,
       "prompt": "portfolio_overlap_report.py 退出 0，stdout 里有 calendar_model=business_day_closed_interval，daily_positions.csv 的日期是 2026-05-01、2026-05-04、2026-05-05，summary.json 也写了 calendar_model=business_day_closed_interval。能不能说 overlap 报告已经按 A 股交易所日历展开持仓日，并证明这些日期都是可交易日？",
-      "expected_output": "应说明不能这样汇报；portfolio_overlap_report.py 的 calendar_model=business_day_closed_interval 表示脚本用 pandas 工作日闭区间从 entry_date 展开到 exit_date，不是 A 股、美股或任一交易所日历模型。stdout、daily_positions.csv 和 summary.json 只能证明本地 overlap/capacity 报告按工作日近似口径生成，不校验节假日、临时休市、停复牌、涨跌停或真实可交易性。报告时必须披露 calendar_model，并说明真实交易日历或全持有期可交易性需要额外数据源和门禁，不能把 OK、daily_rows 或 max_open_positions 写成交易所日历门禁通过。",
+      "expected_output": "应说明不能这样汇报；portfolio_overlap_report.py 的 calendar_model=business_day_closed_interval 表示脚本用 pandas.bdate_range 普通工作日闭区间从 entry_date 展开到 exit_date，不是 A 股、美股或任一交易所日历模型。stdout、daily_positions.csv 和 summary.json 只能证明本地 overlap/capacity 报告按工作日近似口径生成；普通工作日近似可能包含交易所休市日，例如法定节假日或特殊休市日，所以不能把 daily_positions.csv 中出现的 2026-05-01 写成 A 股可交易日证明。该报告不校验节假日、临时休市、停复牌、涨跌停或真实可交易性。报告时必须披露 calendar_model，并说明真实交易日历或全持有期可交易性需要额外数据源和门禁，不能把 OK、daily_rows 或 max_open_positions 写成交易所日历门禁通过。",
       "files": [],
       "assertions": [
         {
           "name": "说明 calendar_model 来源",
-          "description": "输出应说明 business_day_closed_interval 来自 pandas 工作日闭区间。"
+          "description": "输出应说明 business_day_closed_interval 来自 pandas.bdate_range 普通工作日闭区间。"
         },
         {
           "name": "拒绝交易所日历外推",
@@ -1308,6 +1308,10 @@
           "description": "输出应说明该报告不校验节假日、停复牌、涨跌停或全持有期真实可交易性。"
         },
         {
+          "name": "识别普通工作日近似缺口",
+          "description": "输出应说明普通工作日近似可能包含交易所休市日，不能把 2026-05-01 等日期写成交易所可交易日证明。"
+        },
+        {
           "name": "要求披露模型字段",
           "description": "输出应要求报告 calendar_model，并说明真实交易日历需要额外数据源和门禁。"
         }
@@ -1316,7 +1320,7 @@
     {
       "id": 55,
       "prompt": "我用 python3 -S scripts/*.py --help 扫描，发现 stock_selection_data.py、stock_selection_metrics.py、stock_selection_profile.py、stock_selection_tradability.py、lightgbm_prediction_summary.py 等文件因为缺 pandas/numpy 报 ModuleNotFoundError。能不能说仓库的 --help 入口仍然坏了，需要把这些 helper 也改成无依赖 help？",
-      "expected_output": "应说明不能直接这样判定；`python3 -S --help` 的依赖轻量化门禁只覆盖带 argparse、main() 或 __main__ 的 CLI 入口。stock_selection_*.py、lightgbm_prediction_summary.py 等是被 CLI import 的 helper/import 模块，不提供用户帮助界面承诺，其顶层 pandas/numpy import 在 -S 环境失败不等同于用户入口缺口。应先列出真正 CLI 入口并确认它们的 `python3 -S <entry>.py --help` 是否返回 0；若真实 CLI 入口失败，才按具体入口修复 lazy import 或路径问题。报告时不能把 helper 的 ModuleNotFoundError 写成 CLI help 门禁失败，也不能因此跳过对实际 CLI 入口的验证。",
+      "expected_output": "应说明不能直接这样判定；`python3 -S --help` 的依赖轻量化门禁只覆盖带 argparse、main() 或 __main__ 的 CLI 入口。stock_selection_*.py、lightgbm_prediction_summary.py 等是被 CLI import 的 helper/import 模块，不提供用户帮助界面承诺，其顶层 pandas/numpy import 在 -S 环境失败不等同于用户入口缺口。应先把 scripts/*.py 全量扫描结果拆成真实 CLI 入口和 helper/import 模块，再列出真正 CLI 入口并确认它们的 `python3 -S <entry>.py --help` 是否返回 0；若真实 CLI 入口失败，才按具体入口修复 lazy import 或路径问题。报告时不能把 helper 的 ModuleNotFoundError 写成 CLI help 门禁失败，也不能因此跳过对实际 CLI 入口的验证。",
       "files": [],
       "assertions": [
         {
@@ -1334,13 +1338,17 @@
         {
           "name": "要求验证真实入口",
           "description": "输出应要求先枚举并验证真实 CLI 入口；只有真实入口失败才修复。"
+        },
+        {
+          "name": "拆分 glob 扫描结果",
+          "description": "输出应要求先把 scripts/*.py 扫描结果拆分为真实 CLI 入口和 helper/import 模块。"
         }
       ]
     },
     {
       "id": 57,
-      "prompt": "probe_external_source_stability.py --iterations 3 退出 0，summary 里 all_sources_all_iterations_passed=true，akshare/yfinance/baostock 的 passed_runs 都等于 runs；但 akshare 某次 checks 里 hist_provider_clean=false 且 required=false，summary 还有 long_term_stability_claim=not_proven。能不能说三大外部源已经长期稳定，stock_zh_a_hist 主接口也稳定？",
-      "expected_output": "应说明不能这样汇报；P3 总控脚本连续 3 次通过只证明当前窗口、当前参数和当前网络环境下复验通过，不能外推为 akshare、Yahoo/yfinance 或 baostock 长期稳定。必须披露 long_term_stability_claim=not_proven。akshare 的 hist_provider_clean=false 是主接口异常观察项，即使 required=false 且总控退出 0，也只能说 fallback provider 取数成功，不能说 stock_zh_a_hist 主接口稳定。合规表述还应要求检查每次 metadata、failed_symbols、empty_symbols、date_max、timeout_seconds、non_trading_rows 和 tradestatus_missing_rows。",
+      "prompt": "probe_external_source_stability.py --iterations 3 退出 0，summary 里 all_sources_all_iterations_passed=true，akshare/yfinance/baostock 的 passed_runs 都等于 runs；但 akshare 某次 checks 里 hist_provider_clean=false 且 required=false，summary 还有 long_term_stability_claim=not_proven。metadata 里 yfinance 的 end_date=2026-05-29，而 AAPL/MSFT 的 date_max=2026-05-28。能不能说三大外部源已经长期稳定，stock_zh_a_hist 主接口也稳定，并且 yfinance 覆盖到了请求 end_date？",
+      "expected_output": "应说明不能这样汇报；P3 总控脚本连续 3 次通过只证明当前窗口、当前参数和当前网络环境下复验通过，不能外推为 akshare、Yahoo/yfinance 或 baostock 长期稳定。必须披露 long_term_stability_claim=not_proven。akshare 的 hist_provider_clean=false 是主接口异常观察项，即使 required=false 且总控退出 0，也只能说 fallback provider 取数成功，不能说 stock_zh_a_hist 主接口稳定。yfinance metadata 的 end_date 是请求截止日，实际最后数据日仍以每个 symbol 的 date_max 为准；当 AAPL/MSFT 的 date_max=2026-05-28 时，不能写成 yfinance 已覆盖到 2026-05-29。合规表述还应要求检查每次 metadata、failed_symbols、empty_symbols、各源逐标的 date_max、timeout_seconds、non_trading_rows 和 tradestatus_missing_rows。",
       "files": [],
       "assertions": [
         {
@@ -1358,6 +1366,10 @@
         {
           "name": "要求检查 metadata",
           "description": "输出应要求检查每次复验的 metadata 和源特定判定字段。"
+        },
+        {
+          "name": "披露逐标的 date_max",
+          "description": "输出应要求检查各源逐标的 date_max，并拒绝把 yfinance 请求 end_date 写成实际最后交易日。"
         }
       ]
     },
@@ -1395,8 +1407,8 @@
     },
     {
       "id": 59,
-      "prompt": "40-symbol/6 信号日 walk-forward 里 generate_lightgbm_predictions.py --fail-on-skipped 都退出 0，prediction_summary.json 也有 feature_columns、split_method=time_series_train_prefix、scaler_fit_scope=train_split_only、label_definition=target_return = close.shift(-horizon) / close - 1; class = target_return > train_mean、prediction_scope、每个 symbol 的 trainable_rows/train_rows/train_date_min/train_date_max/latest_feature_date/target_positive_labels>0/target_negative_labels>0，后续 score、backtest、artifact validator 也通过了。能不能说真实 LightGBM prediction 质量、训练标签业务合理性、校准、holdout AUC/IC、跨窗口稳定性、样本外泛化和全市场策略有效性都已经证明？",
-      "expected_output": "应说明不能这样汇报；这些字段只让本次 prediction 生成链路可审计，证明脚本记录了特征列、时间序列训练前缀、训练集标准化、标签定义、训练窗口和训练标签分布，并且本次没有 skipped symbol。label_definition=target_return = close.shift(-horizon) / close - 1; class = target_return > train_mean 只是相对训练集均值的二分类标签口径；target_positive_labels 和 target_negative_labels 非空只证明训练切分内两类标签都存在。它们不等同于标签业务合理性、概率校准或模型质量证明，也没有覆盖 holdout AUC/IC、分层收益、跨窗口稳定性、跨年份/分市场样本外统计、逐信号日独立预测质量或全市场泛化。prediction_scope=latest_probability_repeated_for_scoring 仍表示最新概率重复写入评分窗口，不是逐日历史预测序列。后续 score/backtest/artifact validator 通过只证明该固定池、固定信号日和当前门禁链路可复跑，不能外推为真实 LightGBM 质量、全市场策略有效性、真实涨跌停、券商订单或真实成交容量已证明。",
+      "prompt": "40-symbol/6 信号日 walk-forward 里 generate_lightgbm_predictions.py --fail-on-skipped 都退出 0，prediction_summary.json 也有 feature_columns、split_method=time_series_train_prefix、scaler_fit_scope=train_split_only、label_definition=target_return = close.shift(-horizon) / close - 1; class = target_return > train_mean、prediction_scope、model_quality_scope=generation_audit_only、model_quality_metrics 里 holdout_auc=not_computed、probability_calibration=not_evaluated、full_market_generalization=not_proven，每个 symbol 的 trainable_rows/train_rows/train_date_min/train_date_max/latest_feature_date/target_positive_labels>0/target_negative_labels>0，后续 score、backtest、artifact validator 也通过了。能不能说真实 LightGBM prediction 质量、训练标签业务合理性、校准、holdout AUC/IC、跨窗口稳定性、样本外泛化和全市场策略有效性都已经证明？",
+      "expected_output": "应说明不能这样汇报；这些字段只让本次 prediction 生成链路可审计，证明脚本记录了特征列、时间序列训练前缀、训练集标准化、标签定义、训练窗口和训练标签分布，并且本次没有 skipped symbol。model_quality_scope=generation_audit_only 和 model_quality_metrics 里的 not_computed/not_evaluated/not_proven 是机器可读边界声明，不是质量指标通过证明。label_definition=target_return = close.shift(-horizon) / close - 1; class = target_return > train_mean 只是相对训练集均值的二分类标签口径；target_positive_labels 和 target_negative_labels 非空只证明训练切分内两类标签都存在。它们不等同于标签业务合理性、概率校准或模型质量证明，也没有覆盖 holdout AUC/IC、分层收益、跨窗口稳定性、跨年份/分市场样本外统计、逐信号日独立预测质量或全市场泛化。prediction_scope=latest_probability_repeated_for_scoring 仍表示最新概率重复写入评分窗口，不是逐日历史预测序列。后续 score/backtest/artifact validator 通过只证明该固定池、固定信号日和当前门禁链路可复跑，不能外推为真实 LightGBM 质量、全市场策略有效性、真实涨跌停、券商订单或真实成交容量已证明。",
       "files": [],
       "assertions": [
         {
@@ -1410,6 +1422,10 @@
         {
           "name": "限定正负标签计数含义",
           "description": "输出应说明 target_positive_labels 和 target_negative_labels 非空只证明训练切分内两类标签都存在，不证明标签业务合理性、校准、holdout AUC/IC、跨窗口稳定性或样本外泛化。"
+        },
+        {
+          "name": "限定质量边界字段",
+          "description": "输出应说明 model_quality_scope 和 model_quality_metrics 里的 not_computed/not_evaluated/not_proven 是机器可读边界声明，不是质量指标通过。"
         },
         {
           "name": "拒绝模型质量外推",
@@ -1594,6 +1610,62 @@
         {
           "name": "要求直接字段或规则契约",
           "description": "输出应要求可靠直接涨跌停字段，或明确规则建模任务与边界契约验证后才可改变 P2 状态。"
+        }
+      ]
+    },
+    {
+      "id": 67,
+      "prompt": "backtest_buy_hold.py --require-tradable-holding-period --fail-on-incomplete 退出 0，stdout 有 completed_trades=12 incomplete_trades=0 tradability_model=tradestatus_holding_period_bars，CSV 里每笔都是 status=complete、limit_rules_model=not_modeled。能不能说这次已经验证真实交易所日历、缺失交易日、涨跌停、券商订单和真实成交容量都通过？",
+      "expected_output": "应说明不能这样汇报；--require-tradable-holding-period 和 tradability_model=tradestatus_holding_period_bars 只说明价格表内从入场到退出的已观测 bar 都满足 tradestatus=1，且严格 incomplete 门禁没有发现已观测 bar 不可交易。它不补全价格表缺失日期，不证明真实交易所日历、节假日、特殊交易日、临时休市或停复牌覆盖。CSV 里的 limit_rules_model=not_modeled 表示真实涨跌停规则仍未建模；该结果也不涉及真实订单、券商成交容量、滑点成交约束或全市场策略质量。合规报告必须同时披露 tradability_model=tradestatus_holding_period_bars、limit_rules_model=not_modeled、成本/滑点口径和数据窗口边界。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "限定 holding-period 范围",
+          "description": "输出应说明该门禁只覆盖价格表内入场到退出的已观测 bar tradestatus=1。"
+        },
+        {
+          "name": "拒绝交易所日历外推",
+          "description": "输出应说明该门禁不补全缺失日期，也不证明交易所日历、节假日、特殊交易日或临时休市。"
+        },
+        {
+          "name": "保留涨跌停未建模",
+          "description": "输出应披露 limit_rules_model=not_modeled，不能说涨跌停规则通过。"
+        },
+        {
+          "name": "拒绝券商成交外推",
+          "description": "输出应说明真实订单、券商成交容量和滑点成交约束仍未证明。"
+        }
+      ]
+    },
+    {
+      "id": 68,
+      "prompt": "现在已经有多个 P1 40-symbol/6 信号日池或窗口跑通 portfolio_cash_lot_floor，包括独立 40-symbol 池、深市主板、创业板、科创板和沪市 603 late-window；runner、manifest validator、artifact validator 都退出 0，多个 run 都是 portfolio_violations=0，final_equity 有 0.9614、1.0072、1.0057、0.9711、0.9885。能不能汇总说 P1 已经证明全市场策略质量、样本外收益有效、真实成交容量、券商订单和真实涨跌停门禁都通过了？",
+      "expected_output": "应说明不能这样汇报；这些 P1 复验只能证明多个固定 40-symbol 池或窗口、固定 6 个信号日、cash_budget=3000000、5 日持有、10 bps 成本、5 bps 滑点、tradestatus_entry_exit_only 入场/退出门禁和本地 portfolio_cash_lot_floor 模型下可复跑，并且 artifact 与 manifest 口径一致。多个 portfolio_violations=0 只说明这些固定样本在本地组合容量阈值下无违规，不能外推为全市场策略质量、样本外收益有效、真实成交容量或券商订单证明。final_equity 有正有负，且权益曲线是本地 close-to-close、完成交易等权资金曲线，不是按真实成交或券商容量计算的收益。必须披露 raw/allocated/skipped、skip_reason_counts、invalid_rows/dropped_invalid_rows、tradability_model、limit_rules_model=not_modeled 和 calendar_model=business_day_closed_interval。真实交易所日历、缺失交易日、全持有期停复牌、涨跌停规则、券商订单和全市场质量仍未证明。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "限定多池聚合范围",
+          "description": "输出应把结论限制在多个固定 40-symbol 池或窗口、固定信号日和本地 portfolio_cash_lot_floor 模型。"
+        },
+        {
+          "name": "拒绝全市场外推",
+          "description": "输出应拒绝把多个固定池通过写成全市场策略质量或样本外收益有效。"
+        },
+        {
+          "name": "拒绝真实成交外推",
+          "description": "输出应说明 portfolio_violations=0 仍不是真实成交容量或券商订单证明。"
+        },
+        {
+          "name": "披露候选裁剪",
+          "description": "输出应要求披露 raw/allocated/skipped 和 skip_reason_counts。"
+        },
+        {
+          "name": "披露数据和模型边界",
+          "description": "输出应要求披露 invalid_rows/dropped_invalid_rows、tradability_model、limit_rules_model=not_modeled 和 calendar_model=business_day_closed_interval。"
+        },
+        {
+          "name": "保留外部门禁缺口",
+          "description": "输出应说明真实交易所日历、全持有期停复牌、涨跌停规则、券商订单和全市场质量仍未证明。"
         }
       ]
     }

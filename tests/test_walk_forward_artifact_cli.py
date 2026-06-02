@@ -16,6 +16,10 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import validate_walk_forward_artifacts as artifact_cli  # noqa: E402
+from stock_selection_model_contracts import (  # noqa: E402
+    LIMIT_RULES_MODEL_NOT_MODELED,
+    TRADABILITY_MODEL_ENTRY_EXIT,
+)
 
 
 class WalkForwardArtifactCliTests(unittest.TestCase):
@@ -53,6 +57,16 @@ class WalkForwardArtifactCliTests(unittest.TestCase):
 
         self.assertEqual(3, code)
         self.assertIn("2026-05-12_sized_missing_cash_reserved", stderr)
+
+    def test_cli_rejects_backtest_signal_date_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(Path(tmpdir))
+            rewrite_backtest_signal_date(root / "signals/2026-05-12/qsss_backtest.csv", "2026-05-09")
+
+            code, _stdout, stderr = call_cli(root, root / "artifact_validation.json")
+
+        self.assertEqual(3, code)
+        self.assertIn("2026-05-12_backtest_signal_date_mismatch=2026-05-09", stderr)
 
     def test_cli_rejects_summary_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -97,9 +111,9 @@ def call_cli(root: Path, output: Path, extra_args: list[str] | None = None) -> t
         "--expected-portfolio-violations",
         "1",
         "--required-tradability-model",
-        "tradestatus_entry_exit_only",
+        TRADABILITY_MODEL_ENTRY_EXIT,
         "--required-limit-rules-model",
-        "not_modeled",
+        LIMIT_RULES_MODEL_NOT_MODELED,
         "--manifest-validation",
         str(root / "run_manifest_validation.json"),
     ]
@@ -209,8 +223,8 @@ def backtest_rows() -> list[dict[str, object]]:
                 "signal_date": "2026-05-12",
                 "status": "complete",
                 "missing_data": False,
-                "tradability_model": "tradestatus_entry_exit_only",
-                "limit_rules_model": "not_modeled",
+                "tradability_model": TRADABILITY_MODEL_ENTRY_EXIT,
+                "limit_rules_model": LIMIT_RULES_MODEL_NOT_MODELED,
                 "hold_days_requested": 5,
                 "cost_bps": 10.0,
                 "slippage_bps": 5.0,
@@ -265,6 +279,12 @@ def append_price_row(path: Path, date: str) -> None:
 def drop_column(path: Path, column: str) -> None:
     rows = pd.read_csv(path, dtype={"symbol": str})
     rows = rows.drop(columns=[column])
+    rows.to_csv(path, index=False)
+
+
+def rewrite_backtest_signal_date(path: Path, signal_date: str) -> None:
+    rows = pd.read_csv(path, dtype={"symbol": str})
+    rows.loc[0, "signal_date"] = signal_date
     rows.to_csv(path, index=False)
 
 

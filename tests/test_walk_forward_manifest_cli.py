@@ -14,6 +14,11 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import validate_walk_forward_manifest as manifest_cli  # noqa: E402
+from stock_selection_model_contracts import (  # noqa: E402
+    LIMIT_RULES_MODEL_NOT_MODELED,
+    TRADABILITY_MODEL_ENTRY_EXIT,
+    TRADABILITY_MODEL_HOLDING_PERIOD,
+)
 
 
 class WalkForwardManifestCliTests(unittest.TestCase):
@@ -57,6 +62,19 @@ class WalkForwardManifestCliTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertIn("2026-05-12:score_missing_--fail-on-empty-result", stderr)
 
+    def test_cli_requires_expected_signal_date_on_backtest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest = Path(tmpdir) / "run_manifest.json"
+            data = build_manifest(["2026-05-12"])
+            backtest = next(item for item in data["steps"] if item["step"] == "2026-05-12:backtest")
+            backtest["command"].remove("--expected-signal-date")
+            write_json(manifest, data)
+
+            code, _stdout, stderr = call_cli(manifest, None, [])
+
+        self.assertEqual(3, code)
+        self.assertIn("2026-05-12:backtest_missing_--expected-signal-date", stderr)
+
     def test_cli_rejects_missing_steps_schema(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             manifest = Path(tmpdir) / "run_manifest.json"
@@ -98,8 +116,69 @@ class WalkForwardManifestCliTests(unittest.TestCase):
         self.assertEqual("", stderr)
         self.assertEqual([], report["errors"])
 
+    def test_cli_requires_expected_signal_dates_on_portfolio_allocate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest = Path(tmpdir) / "run_manifest.json"
+            data = build_manifest(["2026-05-12"], allocation_model="portfolio_cash_lot_floor")
+            allocate = next(item for item in data["steps"] if item["step"] == "portfolio_allocate")
+            allocate["command"].remove("--expected-signal-dates")
+            write_json(manifest, data)
 
-def call_cli(manifest: Path, output: Path | None, extra: list[str]) -> tuple[int, str, str]:
+            code, _stdout, stderr = call_cli(manifest, None, [])
+
+        self.assertEqual(3, code)
+        self.assertIn("portfolio_allocate_missing_--expected-signal-dates", stderr)
+
+    def test_holding_period_model_requires_backtest_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest = Path(tmpdir) / "run_manifest.json"
+            data = build_manifest(["2026-05-12"], tradability_model=TRADABILITY_MODEL_HOLDING_PERIOD)
+            backtest = next(item for item in data["steps"] if item["step"] == "2026-05-12:backtest")
+            backtest["command"].remove("--require-tradable-holding-period")
+            write_json(manifest, data)
+
+            code, _stdout, stderr = call_cli(
+                manifest,
+                None,
+                [],
+                tradability_model=TRADABILITY_MODEL_HOLDING_PERIOD,
+            )
+
+        self.assertEqual(3, code)
+        self.assertIn("2026-05-12:backtest_missing_--require-tradable-holding-period", stderr)
+
+    def test_holding_period_model_accepts_required_backtest_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest = Path(tmpdir) / "run_manifest.json"
+            output = Path(tmpdir) / "manifest_report.json"
+            write_json(
+                manifest,
+                build_manifest(
+                    ["2026-05-12"],
+                    tradability_model=TRADABILITY_MODEL_HOLDING_PERIOD,
+                ),
+            )
+
+            code, stdout, stderr = call_cli(
+                manifest,
+                output,
+                [],
+                tradability_model=TRADABILITY_MODEL_HOLDING_PERIOD,
+            )
+            report = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(0, code)
+        self.assertIn("OK:", stdout)
+        self.assertEqual("", stderr)
+        self.assertEqual([], report["errors"])
+
+
+def call_cli(
+    manifest: Path,
+    output: Path | None,
+    extra: list[str],
+    tradability_model: str = TRADABILITY_MODEL_ENTRY_EXIT,
+) -> tuple[int, str, str]:
     args = [
         "--manifest",
         str(manifest),
@@ -108,9 +187,9 @@ def call_cli(manifest: Path, output: Path | None, extra: list[str]) -> tuple[int
         "--expected-symbol-count",
         "2",
         "--required-tradability-model",
-        "tradestatus_entry_exit_only",
+        tradability_model,
         "--required-limit-rules-model",
-        "not_modeled",
+        LIMIT_RULES_MODEL_NOT_MODELED,
         *extra,
     ]
     if output:
@@ -129,18 +208,22 @@ def build_manifest(
     failed_step: str = "",
     max_candidates: int | None = None,
     allocation_model: str = "equal_cash_budget_lot_floor",
+    tradability_model: str = TRADABILITY_MODEL_ENTRY_EXIT,
 ) -> dict[str, object]:
     steps = [step("fetch", fetch_command())]
     for signal_date in signal_dates:
-        steps.extend(signal_steps(signal_date, allocation_model))
+        steps.extend(signal_steps(signal_date, allocation_model, tradability_model))
     if allocation_model == "portfolio_cash_lot_floor":
         steps.append(step("portfolio_allocate", portfolio_allocate_command()))
-        steps.extend(step(f"{signal_date}:backtest", backtest_command()) for signal_date in signal_dates)
+        steps.extend(
+            step(f"{signal_date}:backtest", backtest_command(signal_date, tradability_model))
+            for signal_date in signal_dates
+        )
     steps.extend(
         [
             step("equity", command("portfolio_equity_curve.py", "--fail-on-incomplete")),
             step("portfolio_overlap", overlap_command(), options=overlap_options(overlap_code)),
-            step("summary", summary_command(signal_dates)),
+            step("summary", summary_command(signal_dates, tradability_model)),
         ]
     )
     for item in steps:
@@ -152,8 +235,8 @@ def build_manifest(
         "source": "baostock",
         "symbols": ["000001", "600000"],
         "signal_dates": signal_dates,
-        "tradability_model": "tradestatus_entry_exit_only",
-        "limit_rules_model": "not_modeled",
+        "tradability_model": tradability_model,
+        "limit_rules_model": LIMIT_RULES_MODEL_NOT_MODELED,
         "max_candidates": max_candidates,
         "allocation_model": allocation_model,
         "steps": steps,
@@ -165,7 +248,11 @@ def overlap_options(overlap_code: int) -> dict[str, object]:
     return {"code": overlap_code, "allowed": allowed}
 
 
-def signal_steps(signal_date: str, allocation_model: str) -> list[dict[str, object]]:
+def signal_steps(
+    signal_date: str,
+    allocation_model: str,
+    tradability_model: str,
+) -> list[dict[str, object]]:
     steps = [
         step(f"{signal_date}:slice", command("slice_prices_as_of.py", "--as-of-date", signal_date)),
         step(f"{signal_date}:predict", command("generate_lightgbm_predictions.py", "--summary-output", "--fail-on-skipped")),
@@ -174,7 +261,7 @@ def signal_steps(signal_date: str, allocation_model: str) -> list[dict[str, obje
     ]
     if allocation_model != "portfolio_cash_lot_floor":
         steps.append(step(f"{signal_date}:allocate", command("allocate_candidate_capital.py", "--cash-budget", "1000000", "--lot-size", "100", "--fail-on-unallocated")))
-        steps.append(step(f"{signal_date}:backtest", backtest_command()))
+        steps.append(step(f"{signal_date}:backtest", backtest_command(signal_date, tradability_model)))
     return steps
 
 
@@ -187,15 +274,21 @@ def overlap_command() -> list[str]:
 
 
 def portfolio_allocate_command() -> list[str]:
-    return command("allocate_portfolio_candidate_capital.py", "--raw-candidates", "raw.csv", "--candidate-outputs", "candidates.csv", "--sized-outputs", "sized.csv", "--skipped-output", "skipped.csv", "--summary-output", "allocation.json", "--max-open-positions", "10", "--max-gross-weight", "1.0", "--max-gross-notional", "1000000", "--max-cash-reserved", "1000000", "--fail-on-symbol-overlap")
+    return command("allocate_portfolio_candidate_capital.py", "--raw-candidates", "raw.csv", "--expected-signal-dates", "2026-05-12", "--candidate-outputs", "candidates.csv", "--sized-outputs", "sized.csv", "--skipped-output", "skipped.csv", "--summary-output", "allocation.json", "--max-open-positions", "10", "--max-gross-weight", "1.0", "--max-gross-notional", "1000000", "--max-cash-reserved", "1000000", "--fail-on-symbol-overlap")
 
 
-def backtest_command() -> list[str]:
-    return command("backtest_buy_hold.py", "--require-tradable-bars", "--fail-on-incomplete")
+def backtest_command(
+    signal_date: str,
+    tradability_model: str = TRADABILITY_MODEL_ENTRY_EXIT,
+) -> list[str]:
+    parts = ["--require-tradable-bars", "--expected-signal-date", signal_date, "--fail-on-incomplete"]
+    if tradability_model == TRADABILITY_MODEL_HOLDING_PERIOD:
+        parts.append("--require-tradable-holding-period")
+    return command("backtest_buy_hold.py", *parts)
 
 
-def summary_command(signal_dates: list[str]) -> list[str]:
-    return command("summarize_walk_forward_run.py", "--signal-dates", *signal_dates, "--expected-symbol-count", "2", "--required-tradability-model", "tradestatus_entry_exit_only", "--required-limit-rules-model", "not_modeled", "--fail-on-symbol-overlap", "--expect-portfolio-violations")
+def summary_command(signal_dates: list[str], tradability_model: str = TRADABILITY_MODEL_ENTRY_EXIT) -> list[str]:
+    return command("summarize_walk_forward_run.py", "--signal-dates", *signal_dates, "--expected-symbol-count", "2", "--required-tradability-model", tradability_model, "--required-limit-rules-model", LIMIT_RULES_MODEL_NOT_MODELED, "--fail-on-symbol-overlap", "--expect-portfolio-violations")
 
 
 def command(script: str, *parts: str) -> list[str]:

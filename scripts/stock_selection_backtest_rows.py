@@ -6,10 +6,16 @@ from typing import Any
 
 import pandas as pd
 
+from stock_selection_model_contracts import (
+    LIMIT_RULES_MODEL_NOT_MODELED,
+    TRADABILITY_MODEL_ENTRY_EXIT,
+    TRADABILITY_MODEL_HOLDING_PERIOD,
+    TRADABILITY_MODEL_NONE,
+    tradability_model,
+)
 
-TRADABILITY_MODEL_NONE = "not_modeled"
-TRADABILITY_MODEL_STATUS = "tradestatus_entry_exit_only"
-LIMIT_RULES_MODEL = "not_modeled"
+TRADABILITY_MODEL_STATUS = TRADABILITY_MODEL_ENTRY_EXIT
+LIMIT_RULES_MODEL = LIMIT_RULES_MODEL_NOT_MODELED
 
 
 def completed_row(
@@ -23,6 +29,7 @@ def completed_row(
     cost_bps: float,
     slippage_bps: float,
     require_tradable_bars: bool,
+    require_holding_period_tradable: bool = False,
 ) -> dict[str, Any]:
     entry = history.iloc[entry_pos]
     exit_row = history.iloc[exit_pos]
@@ -31,7 +38,12 @@ def completed_row(
     gross_return = exit_close / entry_close - 1
     total_deduction = bps_to_ratio(cost_bps + slippage_bps)
     return {
-        **base_row(symbol, signal_date, require_tradable_bars=require_tradable_bars),
+        **base_row(
+            symbol,
+            signal_date,
+            require_tradable_bars=require_tradable_bars,
+            require_holding_period_tradable=require_holding_period_tradable,
+        ),
         "entry_date": entry["date"].date().isoformat(),
         "exit_date": exit_row["date"].date().isoformat(),
         "entry_close": entry_close,
@@ -57,9 +69,15 @@ def incomplete_row(
     cost_bps: float,
     slippage_bps: float,
     require_tradable_bars: bool = False,
+    require_holding_period_tradable: bool = False,
 ) -> dict[str, Any]:
     return {
-        **base_row(symbol, signal_date, require_tradable_bars=require_tradable_bars),
+        **base_row(
+            symbol,
+            signal_date,
+            require_tradable_bars=require_tradable_bars,
+            require_holding_period_tradable=require_holding_period_tradable,
+        ),
         "entry_date": "",
         "exit_date": "",
         "entry_close": pd.NA,
@@ -76,13 +94,21 @@ def incomplete_row(
     }
 
 
-def base_row(symbol: str, signal_date: Any, require_tradable_bars: bool = False) -> dict[str, Any]:
+def base_row(
+    symbol: str,
+    signal_date: Any,
+    require_tradable_bars: bool = False,
+    require_holding_period_tradable: bool = False,
+) -> dict[str, Any]:
     return {
         "symbol": symbol,
         "signal_date": str(signal_date),
         "cost_model": "round_trip_bps",
         "slippage_model": "round_trip_bps",
-        "tradability_model": tradability_model(require_tradable_bars),
+        "tradability_model": tradability_model(
+            require_tradable_bars,
+            require_holding_period_tradable=require_holding_period_tradable,
+        ),
         "limit_rules_model": LIMIT_RULES_MODEL,
     }
 
@@ -93,6 +119,7 @@ def build_summary(
     cost_bps: float,
     slippage_bps: float,
     require_tradable_bars: bool,
+    require_holding_period_tradable: bool = False,
 ) -> dict[str, Any]:
     completed = int((result["missing_data"] == False).sum())
     total = int(len(result))
@@ -103,20 +130,19 @@ def build_summary(
         "hold_days": int(holding_days),
         "cost_bps": float(cost_bps),
         "slippage_bps": float(slippage_bps),
-        "tradability_required": bool(require_tradable_bars),
-        "tradability_model": tradability_model(require_tradable_bars),
+        "tradability_required": bool(
+            require_tradable_bars or require_holding_period_tradable
+        ),
+        "tradability_model": tradability_model(
+            require_tradable_bars,
+            require_holding_period_tradable=require_holding_period_tradable,
+        ),
         "missing_reason_counts": missing_reason_counts(result),
     }
 
 
 def bps_to_ratio(value: float) -> float:
     return float(value) / 10000.0
-
-
-def tradability_model(require_tradable_bars: bool) -> str:
-    if require_tradable_bars:
-        return TRADABILITY_MODEL_STATUS
-    return TRADABILITY_MODEL_NONE
 
 
 def missing_reason_counts(result: pd.DataFrame) -> str:

@@ -15,7 +15,13 @@ CALENDAR_MODEL = "business_day_closed_interval"
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Report portfolio position overlap gates.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Report portfolio position overlap gates. "
+            "calendar_model=business_day_closed_interval uses pandas.bdate_range "
+            "ordinary business days, not an exchange trading calendar."
+        )
+    )
     parser.add_argument("--backtests", nargs="+", required=True, help="Backtest CSV/Parquet paths.")
     parser.add_argument("--daily-output", required=True, help="Daily open positions CSV path.")
     parser.add_argument("--overlap-output", required=True, help="Same-symbol overlap CSV path.")

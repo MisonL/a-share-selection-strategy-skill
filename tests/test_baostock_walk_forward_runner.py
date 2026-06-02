@@ -13,6 +13,10 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import run_baostock_walk_forward as runner  # noqa: E402
+from stock_selection_model_contracts import (  # noqa: E402
+    LIMIT_RULES_MODEL_NOT_MODELED,
+    TRADABILITY_MODEL_HOLDING_PERIOD,
+)
 
 
 class BaostockWalkForwardRunnerTests(unittest.TestCase):
@@ -59,7 +63,7 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
         summary_command = data["steps"][-1]["command"]
         self.assertIn("--expect-portfolio-violations", summary_command)
         self.assertIn("--required-limit-rules-model", summary_command)
-        self.assertIn("not_modeled", summary_command)
+        self.assertIn(LIMIT_RULES_MODEL_NOT_MODELED, summary_command)
 
     def test_offline_plan_fails_fast_and_records_failed_step(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -101,9 +105,35 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
         self.assertIn("--fail-on-empty-result", commands["2026-05-12:score"])
         self.assertIn("--fail-on-unallocated", commands["2026-05-12:allocate"])
         self.assertIn("--require-tradable-bars", commands["2026-05-12:backtest"])
+        self.assertIn("--expected-signal-date", commands["2026-05-12:backtest"])
+        self.assertIn("2026-05-12", commands["2026-05-12:backtest"])
+        self.assertNotIn("--require-tradable-holding-period", commands["2026-05-12:backtest"])
         self.assertIn("--fail-on-incomplete", commands["2026-05-12:backtest"])
         self.assertIn("--require-capital-fields", commands["portfolio_overlap"])
         self.assertIn("--fail-on-symbol-overlap", commands["portfolio_overlap"])
+
+    def test_can_request_holding_period_tradability_model(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            args = args_for(
+                Path(tmpdir),
+                signal_dates=["2026-05-12"],
+                require_tradable_holding_period=True,
+            )
+            executor = FakeExecutor({})
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args=args,
+                manifest=manifest,
+                manifest_path=Path(tmpdir) / "run_manifest.json",
+                executor=executor,
+            )
+
+            runner.run_pipeline(context)
+            commands = {item["step"]: item["command"] for item in manifest["steps"]}
+
+        self.assertEqual(TRADABILITY_MODEL_HOLDING_PERIOD, manifest["tradability_model"])
+        self.assertIn("--require-tradable-holding-period", commands["2026-05-12:backtest"])
+        self.assertIn(TRADABILITY_MODEL_HOLDING_PERIOD, commands["summary"])
 
     def test_drop_invalid_rows_marks_summary_allowance_explicitly(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -171,6 +201,9 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
         self.assertLess(steps.index("portfolio_allocate"), steps.index("2026-05-12:backtest"))
         self.assertLess(steps.index("portfolio_allocate"), steps.index("2026-05-20:backtest"))
         self.assertIn("allocate_portfolio_candidate_capital.py", commands["portfolio_allocate"][1])
+        self.assertIn("--expected-signal-dates", commands["portfolio_allocate"])
+        self.assertIn("2026-05-12", commands["portfolio_allocate"])
+        self.assertIn("2026-05-20", commands["portfolio_allocate"])
         self.assertIn("qsss_raw_candidates.csv", " ".join(commands["2026-05-12:score"]))
         self.assertEqual("portfolio_cash_lot_floor", manifest["allocation_model"])
 
@@ -228,6 +261,7 @@ def args_for(
     drop_invalid_rows: bool = False,
     max_candidates: int | None = None,
     allocation_model: str | None = None,
+    require_tradable_holding_period: bool = False,
 ) -> object:
     parser = runner.build_parser()
     args = [
@@ -258,6 +292,8 @@ def args_for(
         args.extend(["--max-candidates", str(max_candidates)])
     if allocation_model is not None:
         args.extend(["--allocation-model", allocation_model])
+    if require_tradable_holding_period:
+        args.append("--require-tradable-holding-period")
     if drop_invalid_rows:
         args.append("--drop-invalid-rows")
     return parser.parse_args(args)

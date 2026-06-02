@@ -73,6 +73,8 @@ def tradability_failure_reason(
     history: pd.DataFrame,
     entry_pos: int,
     exit_pos: int,
+    *,
+    require_holding_period: bool = False,
 ) -> str:
     if "tradestatus" not in history:
         return "missing_tradestatus"
@@ -80,6 +82,10 @@ def tradability_failure_reason(
         return "non_tradable_entry"
     if not is_tradable_status(history.iloc[exit_pos].get("tradestatus")):
         return "non_tradable_exit"
+    if require_holding_period:
+        holding_window = history.iloc[entry_pos : exit_pos + 1]
+        if not holding_window["tradestatus"].map(is_tradable_status).all():
+            return "non_tradable_holding_period"
     return ""
 
 

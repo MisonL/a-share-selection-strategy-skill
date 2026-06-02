@@ -14,6 +14,7 @@ ALLOCATION_MODEL_PORTFOLIO = "portfolio_cash_lot_floor"
 def portfolio_allocate_command(args: Any, output: Path, signals: list[Any]) -> list[str]:
     command = script_command("allocate_portfolio_candidate_capital.py", "--prices", output / "prices.csv")
     command.extend(["--raw-candidates", *[str(signal.paths["raw_candidates"]) for signal in signals]])
+    command.extend(["--expected-signal-dates", *[str(signal.signal_date) for signal in signals]])
     command.extend(["--candidate-outputs", *[str(signal.paths["candidates"]) for signal in signals]])
     command.extend(["--sized-outputs", *[str(signal.paths["sized"]) for signal in signals]])
     command.extend(["--skipped-output", str(output / "qsss_skipped_candidates.csv")])

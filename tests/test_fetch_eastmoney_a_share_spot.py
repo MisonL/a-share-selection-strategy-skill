@@ -37,6 +37,7 @@ class FetchEastmoneyAShareSpotTests(unittest.TestCase):
         self.assertEqual("000001", rows[0]["symbol"])
         self.assertEqual("eastmoney", metadata["source"])
         self.assertEqual(1, metadata["successful_pages"])
+        self.assertEqual(1, metadata["retry_attempts_per_page"])
         self.assertFalse(metadata["partial_result"])
 
     def test_cli_writes_partial_metadata_and_strict_failure(self) -> None:
@@ -57,6 +58,8 @@ class FetchEastmoneyAShareSpotTests(unittest.TestCase):
                             str(metadata),
                             "--pages",
                             "2",
+                            "--retries",
+                            "0",
                             "--fail-on-partial",
                         ]
                     )
@@ -69,7 +72,31 @@ class FetchEastmoneyAShareSpotTests(unittest.TestCase):
         self.assertIn("partial_result=true", stderr.getvalue())
         self.assertTrue(data["partial_result"])
         self.assertEqual(1, len(data["failed_pages"]))
+        self.assertIn(
+            "use_partial_snapshot_only_with_partial_result_disclosure",
+            data["allowed_failure_actions"],
+        )
         self.assertEqual(2, len(rows))
+
+    def test_fetch_retries_page_before_marking_failure(self) -> None:
+        args = eastmoney.build_parser().parse_args(
+            [
+                "--output",
+                "/tmp/spot.csv",
+                "--metadata-output",
+                "/tmp/meta.json",
+                "--pages",
+                "1",
+                "--retries",
+                "2",
+            ]
+        )
+
+        rows, metadata = eastmoney.fetch_snapshot(args, FailOnceOpener())
+
+        self.assertEqual(2, len(rows))
+        self.assertEqual(2, metadata["retry_attempts_per_page"])
+        self.assertFalse(metadata["partial_result"])
 
 
 class FakeOpener:
@@ -85,6 +112,17 @@ class FailingSecondPageOpener:
         self.calls += 1
         if self.calls == 2:
             raise RuntimeError("remote disconnected")
+        return json.dumps(payload()).encode("utf-8")
+
+
+class FailOnceOpener:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __call__(self, _url: str, _timeout: float) -> bytes:
+        self.calls += 1
+        if self.calls == 1:
+            raise RuntimeError("temporary disconnect")
         return json.dumps(payload()).encode("utf-8")
 
 

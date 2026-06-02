@@ -77,6 +77,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--metadata-output",
                 "--pages",
                 "--page-size",
+                "--retries",
                 "--fail-on-partial",
             },
             "fetch_yfinance_ohlcv.py": FETCH_CORE_OPTIONS | {"--market", "--timeout-seconds"},

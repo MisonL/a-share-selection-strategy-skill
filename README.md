@@ -322,6 +322,8 @@ uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py 
   --fail-on-partial-spot
 ```
 
+实时快照失败时只允许走显式下一步：增加重试或稍后重跑、使用 `--fail-on-partial-spot` 让部分分页直接失败、换源并披露 `source_scope`，或在用户接受陈旧口径时复用已落地快照。`summary.json.spot_metadata.allowed_failure_actions` 会记录这些允许动作；不得把 partial result、空快照或换源结果写成完整实时全市场扫描。
+
 美股等通用 OHLCV 可先通过 yfinance 落地，再走通用校验和评分。真实环境失败时命令会非 0，不得改用 mock 或缓存样例冒充成功；门禁还必须检查 metadata 中 `rows > 0`、`symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`。该脚本写入原始 `Close`，不会用 `Adj Close` 静默替代 `close`；`--timeout-seconds` 用于限制每票拉取超时。`--market` 只是写入 CSV 和 metadata 的标签，不校验 yfinance symbol 所属市场、交易所或交易日历。
 
 ```bash

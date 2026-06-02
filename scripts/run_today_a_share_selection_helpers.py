@@ -18,11 +18,33 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "source_scope": manifest["source_scope"],
         "steps": len(manifest["steps"]),
         "failed_steps": [step["step"] for step in failed],
+        "spot_metadata": spot_metadata_view(manifest),
         "score": score_summary(manifest),
         "candidates_output": str(Path(manifest["output_dir"]) / "candidates.csv"),
         "diagnostics_output": str(Path(manifest["output_dir"]) / "diagnostics.csv"),
         "boundary": boundary_for(manifest),
     }
+
+
+def spot_metadata_view(manifest: dict[str, Any]) -> dict[str, Any]:
+    output_dir = Path(manifest["output_dir"])
+    metadata_path = output_dir / "spot_metadata.json"
+    if not metadata_path.exists():
+        return {}
+    data = json.loads(metadata_path.read_text(encoding="utf-8"))
+    keys = [
+        "source",
+        "source_scope",
+        "requested_pages",
+        "retry_attempts_per_page",
+        "successful_pages",
+        "failed_pages",
+        "raw_items",
+        "filtered_items",
+        "partial_result",
+        "allowed_failure_actions",
+    ]
+    return {key: data.get(key) for key in keys if key in data}
 
 
 def boundary_for(manifest: dict[str, Any]) -> str:

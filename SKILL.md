@@ -163,6 +163,7 @@ uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py 
 - `run_manifest.json`：每一步命令、退出码、stdout/stderr 和允许退出码。
 - `summary.json`：`mode`、`qsss_mode`、`lightgbm_not_used`、`source_scope`、候选数、`spot_rows` 和失败步骤。
 - `diagnostics.csv`：保留机器字段 `failed_thresholds`，并附带展示层字段 `failed_thresholds_zh`、`selection_status`、`short_reason`。
+- `spot_metadata`：如果抓取实时快照，必须检查 `partial_result`、`failed_pages`、`retry_attempts_per_page` 和 `allowed_failure_actions`；允许动作包括重试、显式使用部分快照、换源并披露 scope，或在用户接受时复用已落地快照，不得静默改口径。
 
 如果用户坚持 QSSS-derived 口径，使用 `--mode qsss`。缺少 `prediction` 或 `prediction_score` 时，入口应在 validate 阶段失败并写出 manifest；不得自动改走通用评分，除非用户明确接受非 QSSS 结果。
 

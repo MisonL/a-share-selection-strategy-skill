@@ -55,6 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--pages", type=positive_int, default=1, help="Pages to request.")
     parser.add_argument("--page-size", type=positive_int, default=100)
     parser.add_argument("--timeout-seconds", type=float, default=10.0)
+    parser.add_argument("--retries", type=non_negative_int, default=1)
     parser.add_argument("--fail-on-partial", action="store_true")
     return parser
 
@@ -63,6 +64,13 @@ def positive_int(value: str) -> int:
     parsed = int(value)
     if parsed < 1:
         raise argparse.ArgumentTypeError("value must be positive")
+    return parsed
+
+
+def non_negative_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("value must be non-negative")
     return parsed
 
 
@@ -76,12 +84,27 @@ def fetch_snapshot(args: argparse.Namespace, opener: Opener) -> tuple[list[dict[
     failed_pages: list[dict[str, Any]] = []
     for page in range(1, args.pages + 1):
         try:
-            items = page_items(fetch_page(args, page, opener))
+            items = page_items(fetch_page_with_retries(args, page, opener))
             rows.extend(normalize_item(item) for item in items)
         except Exception as exc:  # noqa: BLE001
             failed_pages.append({"page": page, "error": str(exc)})
     metadata = build_metadata(args, rows, failed_pages)
     return rows, metadata
+
+
+def fetch_page_with_retries(
+    args: argparse.Namespace,
+    page: int,
+    opener: Opener,
+) -> dict[str, Any]:
+    attempts = int(args.retries) + 1
+    last_error: Exception | None = None
+    for _attempt in range(attempts):
+        try:
+            return fetch_page(args, page, opener)
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+    raise RuntimeError(f"page={page} attempts={attempts} error={last_error}")
 
 
 def fetch_page(args: argparse.Namespace, page: int, opener: Opener) -> dict[str, Any]:
@@ -136,12 +159,14 @@ def build_metadata(
         "source": "eastmoney",
         "source_scope": "a_share_spot_snapshot",
         "requested_pages": int(args.pages),
+        "retry_attempts_per_page": int(args.retries),
         "successful_pages": successful,
         "failed_pages": failed_pages,
         "raw_items": len(rows),
         "filtered_items": len(rows),
         "snapshot_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "partial_result": bool(failed_pages),
+        "allowed_failure_actions": allowed_failure_actions(bool(failed_pages), len(rows)),
         "output": str(Path(args.output)),
         "metadata_output": str(Path(args.metadata_output)),
     }
@@ -154,6 +179,22 @@ def strict_errors(metadata: dict[str, Any], args: argparse.Namespace) -> list[st
     if metadata["raw_items"] == 0:
         errors.append("raw_items=0")
     return errors
+
+
+def allowed_failure_actions(partial_result: bool, raw_items: int) -> list[str]:
+    if raw_items == 0:
+        return [
+            "retry_with_more_pages_or_later_window",
+            "switch_source_and_disclose_scope",
+            "reuse_landed_snapshot_only_if_user_accepts_stale_scope",
+        ]
+    if partial_result:
+        return [
+            "rerun_with_fail_on_partial",
+            "use_partial_snapshot_only_with_partial_result_disclosure",
+            "switch_source_and_compare_source_scope",
+        ]
+    return []
 
 
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -172,6 +213,7 @@ def write_json(data: dict[str, Any], path: Path) -> None:
 def print_summary(metadata: dict[str, Any], prefix: str = "OK") -> None:
     print(
         f"{prefix}: source=eastmoney raw_items={metadata['raw_items']} "
+        f"retries={metadata['retry_attempts_per_page']} "
         f"successful_pages={metadata['successful_pages']} "
         f"failed_pages={len(metadata['failed_pages'])} "
         f"partial_result={str(metadata['partial_result']).lower()} "

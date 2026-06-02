@@ -137,6 +137,43 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("--fail-on-partial", command)
         self.assertIn("2", command)
 
+    def test_summary_embeds_spot_metadata_failure_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            metadata = {
+                "source": "eastmoney",
+                "source_scope": "a_share_spot_snapshot",
+                "requested_pages": 2,
+                "retry_attempts_per_page": 1,
+                "successful_pages": 1,
+                "failed_pages": [{"page": 2, "error": "disconnect"}],
+                "raw_items": 100,
+                "filtered_items": 100,
+                "partial_result": True,
+                "allowed_failure_actions": ["rerun_with_fail_on_partial"],
+            }
+            (output / "spot_metadata.json").write_text(
+                json.dumps(metadata),
+                encoding="utf-8",
+            )
+            manifest = {
+                "runner": "run_today_a_share_selection",
+                "mode": "generic",
+                "qsss_mode": False,
+                "lightgbm_not_used": True,
+                "source_scope": "local_prices_input",
+                "output_dir": str(output),
+                "steps": [],
+            }
+
+            summary = runner.summary_view(manifest, "completed")
+
+        self.assertTrue(summary["spot_metadata"]["partial_result"])
+        self.assertEqual(
+            ["rerun_with_fail_on_partial"],
+            summary["spot_metadata"]["allowed_failure_actions"],
+        )
+
 
 def call_runner(args: list[str]) -> tuple[int, str, str]:
     stdout = StringIO()

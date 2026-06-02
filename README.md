@@ -298,17 +298,17 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
 
 如果 `candidates=0` 且 `effective_empty_result=true`，这表示脚本成功运行但没有标的通过当前阈值；不要写成“产生候选股”。用 `score_diagnostics.csv` 查看每个已评分 symbol 的 `failed_thresholds`。如果 metadata 中 `fallback_errors` 非空，必须说明主接口失败且已使用 fallback provider；fallback 成功不等于主接口稳定可用。akshare 输出可满足通用 OHLCV 和 `turn` 口径，但仍不生成真实 `prediction/prediction_score`，不能直接解释成 QSSS-derived 或 LightGBM 链路通过。
 
-本地已落地行情可以使用今日选股总控 CLI 串联校验、评分和诊断。默认 generic 模式使用低价超短剖面，要求价格、成交量、成交额、换手率和可交易性字段满足配置阈值，写出 `run_manifest.json`、`summary.json`、`candidates.csv` 和 `diagnostics.csv`；它不联网抓取实时全市场快照，也不生成 LightGBM prediction：
+本地已落地行情可以使用今日选股总控 CLI 串联校验、评分和诊断。默认 `--mode auto` 会先检查输入是否包含 QSSS-derived 必需列；缺少 `prediction` 或 `prediction_score` 时，会显式选择 generic 低价超短剖面，并在 `run_manifest.json` 记录 `requested_mode`、实际 `mode`、`mode_decision` 和 `mode_decision_reason`。它不是静默降级，也不生成 LightGBM prediction：
 
 ```bash
 uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py \
   --prices-input /tmp/stock-selection-akshare/prices.csv \
   --output-dir /tmp/stock-selection-today-low-price \
-  --mode generic \
+  --mode auto \
   --fail-on-skipped
 ```
 
-如果改用 `--mode qsss`，输入必须已经包含 `market=A-share`、`prediction` 或 `prediction_score`，以及 `turn` 或 `turnover`；缺少 prediction 时会在 validate 阶段失败并保留 manifest，不会自动降级为通用评分。
+如果显式使用 `--mode qsss`，输入必须已经包含 `market=A-share`、`prediction` 或 `prediction_score`，以及 `turn` 或 `turnover`；缺少 prediction 时会在 validate 阶段失败并保留 manifest，不会自动改走通用评分。低价超短剖面还要求 `amount`、`turn`、`tradestatus` 和 `isST` 等可交易字段；akshare 日线输出没有 `tradestatus/isST`，会按门禁失败，不能静默放宽成“可交易性已验证”。
 
 如需合并东方财富实时快照展示字段，可让总控 CLI 先调用快照入口。`spot_price`、`spot_pct_chg`、`spot_amount`、`spot_industry` 只进入候选和诊断展示，不参与核心评分；如果分页失败，metadata 会写出 `partial_result=true`，不能写成全市场实时扫描完成：
 
@@ -316,13 +316,45 @@ uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py 
 uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py \
   --prices-input /tmp/stock-selection-akshare/prices.csv \
   --output-dir /tmp/stock-selection-today-low-price \
-  --mode generic \
+  --mode auto \
   --fetch-spot eastmoney \
   --spot-pages 5 \
   --fail-on-partial-spot
 ```
 
 实时快照失败时只允许走显式下一步：增加重试或稍后重跑、使用 `--fail-on-partial-spot` 让部分分页直接失败、换源并披露 `source_scope`，或在用户接受陈旧口径时复用已落地快照。`summary.json.spot_metadata.allowed_failure_actions` 会记录这些允许动作；不得把 partial result、空快照或换源结果写成完整实时全市场扫描。
+
+如果没有本地历史行情文件，总控 CLI 也可以先调用仓库内显式取数脚本，再执行同一套校验和评分。下面示例使用 baostock，因为低价超短剖面需要 `tradestatus/isST` 门禁字段；`fetch_history` 非 0 时流水线会停止，不会继续评分：
+
+```bash
+uv run --with pandas --with numpy --with baostock python scripts/run_today_a_share_selection.py \
+  --output-dir /tmp/stock-selection-today-low-price \
+  --mode auto \
+  --history-source baostock \
+  --symbols 000001,600000 \
+  --start-date 2025-01-01 \
+  --end-date 2026-05-29 \
+  --fail-on-skipped
+```
+
+`--symbols` 接受六位 A 股代码，也接受 `sh.600000`、`sz.000001` 这类前缀形式；manifest 和 `selected_symbols.json` 会记录归一化后的六位代码。
+
+也可以用东方财富快照先筛一批低价高成交额标的，再抓历史日线。这个流程的 `selected_symbols.json` 只证明“按实时快照字段筛出了历史抓取列表”，不证明实时全市场扫描完整，也不证明这些标的最终通过历史评分。spot 输入至少需要可识别的 symbol 列和 price/amount 字段；symbol 列支持 `symbol/code/code_id/stock_code/ticker/Ticker`，`sh.600000` 和 `sz.000001` 会归一化为六位代码，价格字段支持 `spot_price/price/close`，成交额字段支持 `spot_amount/amount`：
+
+```bash
+uv run --with pandas --with numpy --with baostock python scripts/run_today_a_share_selection.py \
+  --output-dir /tmp/stock-selection-today-low-price \
+  --mode auto \
+  --fetch-spot eastmoney \
+  --spot-pages 5 \
+  --derive-symbols-from-spot \
+  --max-history-symbols 50 \
+  --history-source baostock \
+  --start-date 2025-01-01 \
+  --end-date 2026-05-29 \
+  --fail-on-partial-spot \
+  --fail-on-skipped
+```
 
 美股等通用 OHLCV 可先通过 yfinance 落地，再走通用校验和评分。真实环境失败时命令会非 0，不得改用 mock 或缓存样例冒充成功；门禁还必须检查 metadata 中 `rows > 0`、`symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`。该脚本写入原始 `Close`，不会用 `Adj Close` 静默替代 `close`；`--timeout-seconds` 用于限制每票拉取超时。`--market` 只是写入 CSV 和 metadata 的标签，不校验 yfinance symbol 所属市场、交易所或交易日历。
 

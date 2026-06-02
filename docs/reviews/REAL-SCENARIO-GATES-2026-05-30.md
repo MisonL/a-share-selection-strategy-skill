@@ -309,16 +309,16 @@
 
 ## 真实使用反馈验收锚点 / 2026-06-01
 
-本节记录 2026-06-01 真实使用反馈对应的后续验收边界。2026-06-02 已实现 `run_today_a_share_selection.py`、`ultra_short_low_price_config.json`、`fetch_eastmoney_a_share_spot.py`、`score_candidates.py --spot-input` 和诊断展示字段；这些覆盖已落地行情文件加可选实时快照展示字段，不表示已经实现实时全市场扫描或真实策略收益门禁。
+本节记录 2026-06-01 真实使用反馈对应的后续验收边界。2026-06-02 已实现 `run_today_a_share_selection.py`、`ultra_short_low_price_config.json`、`fetch_eastmoney_a_share_spot.py`、`score_candidates.py --spot-input` 和诊断展示字段；同日进一步补充了 `--mode auto` 显式决策、可选 baostock/akshare 历史 fetch 编排、从 spot 派生历史抓取列表，以及更明确的 metadata 字段。它们覆盖本地行情文件、可选实时快照展示字段和仓库内显式取数入口，不表示已经实现实时全市场扫描或真实策略收益门禁。
 
 - 今日真实选股如果按 QSSS-derived 口径执行，输入仍必须包含 `market=A-share`、`prediction` 或 `prediction_score`，以及 `turn` 或 `turnover`。缺少 `prediction_score` 时，标准决策树是先停止 QSSS-derived 评分并暴露缺口；若用户要保留 QSSS 口径，应先运行真实可审计的 `generate_lightgbm_predictions.py --fail-on-skipped` 或提供外部预测列；不得用动量分、爆发分、固定 0.5 或人工判断替代 LightGBM prediction。
-- 如果用户明确接受非 QSSS 的通用技术评分，才可以在本地 OHLCV 已落地并通过 `validate_ohlcv.py` 后走 `scripts/example_config.json` 或后续明确命名的通用 profile。该输出必须写明 `prediction_score` 未参与、不是 QSSS-derived 复刻、缺 `turn/turnover` 时只能披露 neutral turnover 假设，并且不能把候选排序写成真实收益、真实 LightGBM 或全市场策略质量证明。
+- 如果用户明确接受非 QSSS 的通用技术评分，才可以走 `scripts/example_config.json` 或明确命名的通用 profile。`run_today_a_share_selection.py --mode auto` 可在缺少 QSSS 必需列时显式选择 generic，并在 manifest 记录 `requested_mode`、实际 `mode`、`mode_decision` 和 `mode_decision_reason`；这不是静默降级。该输出必须写明 `prediction_score` 未参与、不是 QSSS-derived 复刻、缺 `turn/turnover` 时只能披露 neutral turnover 假设，并且不能把候选排序写成真实收益、真实 LightGBM 或全市场策略质量证明。
 - 实时样本池或联网抓取的少量股票只证明该固定 `requested_symbols`、数据源、参数、网络窗口和实际 `date_max` 下的局部样本可复跑。即使 runner、manifest validator 和 artifact validator 均通过，也不能写成“全市场扫描完成”。要宣称全市场扫描，必须先定义全市场 universe 生成规则，披露请求标的数、实际落地标的数、`failed_symbols`、`empty_symbols`、股票池过滤数、历史不足数、预测跳过数和最终候选数。
-- 东方财富实时快照源已由 `fetch_eastmoney_a_share_spot.py` 写入 metadata，包括 source、source_scope、requested_pages、successful_pages、failed_pages、raw_items、filtered_items、snapshot_time 和 partial_result。分页断连、部分页成功或只使用已落地快照时，只能称为局部实时样本池或历史快照复用，不能写成今日全市场实时扫描完成。
+- 东方财富实时快照源已由 `fetch_eastmoney_a_share_spot.py` 写入 metadata，包括 source、source_scope、requested_pages、successful_pages、pages_successful、failed_pages、pages_failed、raw_items、filtered_items、snapshot_time 和 partial_result。分页断连、部分页成功或只使用已落地快照时，只能称为局部实时样本池或历史快照复用，不能写成今日全市场实时扫描完成。
 - 实时快照失败策略已脚本化记录 `retry_attempts_per_page` 和 `allowed_failure_actions`。允许的后续动作只有重试或稍后重跑、显式 partial 失败、披露 partial 快照口径、换源并比较 source scope，或在用户接受时复用已落地快照；不得静默降级。
 - 低价超短意图已有通用技术评分 profile `scripts/ultra_short_low_price_config.json`，表达 `3 <= close <= 10`、成交量/成交额/换手硬阈值、排除 ST/停牌/一字板，以及更高短线爆发权重；它不是 QSSS-derived，不使用也不伪造 LightGBM prediction。
 - 中文诊断字段已有展示层派生字段 `failed_thresholds_zh`、`selection_status`、`short_reason`。这些字段必须继续从机器可读的 `failed_thresholds`、`threshold_failures`、summary 计数和取数 metadata 派生，不得替代原始字段，也不得把 fallback、partial result、strict gate failed 或 output_not_written 翻译成成功。
-- 总控 CLI `scripts/run_today_a_share_selection.py` 串联本地输入、`validate_ohlcv.py`、可选 `fetch_eastmoney_a_share_spot.py`、`score_candidates.py` 和诊断输出，并写出 `run_manifest.json`、`summary.json`、`candidates.csv`、`diagnostics.csv`。它不得吞掉任一步非 0 退出；当前不生成 prediction、不运行 sizing/backtest/portfolio validators，后续若扩展这些步骤仍需保留 manifest、summary 和失败原因。
+- 总控 CLI `scripts/run_today_a_share_selection.py` 串联本地输入或仓库内历史取数、可选 `fetch_eastmoney_a_share_spot.py`、`validate_ohlcv.py`、`score_candidates.py` 和诊断输出，并写出 `run_manifest.json`、`summary.json`、`candidates.csv`、`diagnostics.csv`。它不得吞掉任一步非 0 退出；当前不生成 prediction、不运行 sizing/backtest/portfolio validators，后续若扩展这些步骤仍需保留 manifest、summary 和失败原因。低价超短 profile 需要 `tradestatus/isST` 等可交易字段，akshare 日线缺这些字段时应按门禁失败，不能静默放宽。
 
 ## 当前结论
 

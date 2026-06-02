@@ -77,7 +77,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `create_demo_data.py`：生成可复制运行的本地 demo CSV。
 - `validate_ohlcv.py`：校验本地 CSV/Parquet 行情文件。
 - `score_candidates.py`：读取本地行情文件并输出候选股 CSV；可用 `--spot-input` 合并实时价、涨跌幅、行业和成交额展示字段，但这些字段不参与核心评分。
-- `run_today_a_share_selection.py`：总控 CLI，串联 `validate_ohlcv.py`、可选实时快照、`score_candidates.py` 和诊断输出，写出 `run_manifest.json`、`summary.json`、`candidates.csv`、`diagnostics.csv`；当前不证明实时全市场扫描完成。
+- `run_today_a_share_selection.py`：总控 CLI，串联可选实时快照、可选仓库内历史取数、`validate_ohlcv.py`、`score_candidates.py` 和诊断输出，写出 `run_manifest.json`、`summary.json`、`candidates.csv`、`diagnostics.csv`；当前不证明实时全市场扫描完成。
 - `fetch_eastmoney_a_share_spot.py`：东方财富 A 股实时快照入口，输出 `spot.csv` 和 `metadata.json`，记录 `requested_pages`、`successful_pages`、`failed_pages`、`raw_items`、`filtered_items`、`snapshot_time`、`partial_result`。
 - `generate_lightgbm_predictions.py`：可选 LightGBM 预测生成器，输出 `prediction_score`。
 - `allocate_candidate_capital.py`：可选候选资金分配脚本，按信号日 close、现金预算和 lot size 生成可追溯 sizing 字段；候选表已有资金字段时默认拒绝，只有显式 `--overwrite-capital-fields` 才重算覆盖。
@@ -102,7 +102,7 @@ uv run --with pandas --with numpy python scripts/validate_ohlcv.py --input /tmp/
 uv run --with pandas --with numpy python scripts/validate_ohlcv.py --input /tmp/stock-selection-demo/prices_with_prediction.csv --config scripts/qsss_profile_config.json
 uv run --with pandas --with numpy python scripts/score_candidates.py --input /tmp/stock-selection-demo/prices.csv --config scripts/example_config.json --output /tmp/stock-selection-demo/candidates.csv
 uv run --with pandas --with numpy python scripts/score_candidates.py --input /tmp/stock-selection-demo/prices_with_prediction.csv --config scripts/qsss_profile_config.json --output /tmp/stock-selection-demo/qsss_candidates.csv
-uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py --prices-input /tmp/stock-selection-demo/prices.csv --output-dir /tmp/stock-selection-demo/today-low-price --mode generic
+uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py --prices-input /tmp/stock-selection-demo/prices.csv --output-dir /tmp/stock-selection-demo/today-low-price --mode auto
 ```
 
 `create_demo_data.py` 只依赖标准库。`validate_ohlcv.py`、`score_candidates.py`、`backtest_buy_hold.py` 和测试需要 `pandas`、`numpy`。Parquet 输入需要 `pyarrow` 或 `fastparquet`。真实 LightGBM 预测生成器需要 `requirements-ml.txt`。
@@ -136,13 +136,13 @@ uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py 
 
 ## 今日选股入口
 
-当用户要求“今日选股”“10 元以内超短爆发”且已经有本地行情文件时，优先使用 `run_today_a_share_selection.py --mode generic` 和 `scripts/ultra_short_low_price_config.json`。该入口可合并本地或东方财富实时快照作为展示字段，但不证明实时全市场扫描完成。
+当用户要求“今日选股”“10 元以内超短爆发”时，优先使用 `run_today_a_share_selection.py --mode auto`。如果本地行情文件缺少 QSSS-derived 必需列，auto 会显式选择 generic 低价超短剖面，并在 manifest 记录 `requested_mode`、实际 `mode`、`mode_decision` 和 `mode_decision_reason`；这不是静默降级。该入口可合并本地或东方财富实时快照作为展示字段，也可显式调用仓库内 baostock/akshare 历史取数脚本，但不证明实时全市场扫描完成。
 
 ```bash
 uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py \
   --prices-input /path/to/prices.csv \
   --output-dir /tmp/stock-selection-today \
-  --mode generic \
+  --mode auto \
   --fail-on-skipped
 ```
 
@@ -152,20 +152,37 @@ uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py 
 uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py \
   --prices-input /path/to/prices.csv \
   --output-dir /tmp/stock-selection-today \
-  --mode generic \
+  --mode auto \
   --fetch-spot eastmoney \
   --spot-pages 5 \
   --fail-on-partial-spot
 ```
 
+没有本地历史行情文件时，可显式让总控 CLI 抓历史。低价超短剖面需要 `tradestatus/isST` 等可交易字段，优先用 baostock；akshare 路径缺这些字段时应失败并披露，不能把它写成可交易性已验证：
+
+```bash
+uv run --with pandas --with numpy --with baostock python scripts/run_today_a_share_selection.py \
+  --output-dir /tmp/stock-selection-today \
+  --mode auto \
+  --history-source baostock \
+  --symbols 000001,600000 \
+  --start-date 2025-01-01 \
+  --end-date 2026-05-29 \
+  --fail-on-skipped
+```
+
+`--symbols` 接受六位 A 股代码，也接受 `sh.600000`、`sz.000001` 这类前缀形式；manifest 和 `selected_symbols.json` 会记录归一化后的六位代码。
+
+也可以用 `--fetch-spot eastmoney --derive-symbols-from-spot --max-history-symbols N` 先生成 `selected_symbols.json`，再抓历史。该文件只证明按 spot 字段筛出了历史抓取列表；仍必须检查 `spot_metadata.partial_result`、`history_metadata`、`validate` 和 `score` 步骤。spot 输入至少需要可识别的 symbol 列和 price/amount 字段；symbol 列支持 `symbol/code/code_id/stock_code/ticker/Ticker`，`sh.600000` 和 `sz.000001` 会归一化为六位代码，价格字段支持 `spot_price/price/close`，成交额字段支持 `spot_amount/amount`。
+
 输出检查重点：
 
 - `run_manifest.json`：每一步命令、退出码、stdout/stderr 和允许退出码。
-- `summary.json`：`mode`、`qsss_mode`、`lightgbm_not_used`、`source_scope`、候选数、`spot_rows` 和失败步骤。
+- `summary.json`：`requested_mode`、实际 `mode`、`mode_decision`、`qsss_mode`、`lightgbm_not_used`、`source_scope`、候选数、`spot_rows` 和失败步骤。
 - `diagnostics.csv`：保留机器字段 `failed_thresholds`，并附带展示层字段 `failed_thresholds_zh`、`selection_status`、`short_reason`。
 - `spot_metadata`：如果抓取实时快照，必须检查 `partial_result`、`failed_pages`、`retry_attempts_per_page` 和 `allowed_failure_actions`；允许动作包括重试、显式使用部分快照、换源并披露 scope，或在用户接受时复用已落地快照，不得静默改口径。
 
-如果用户坚持 QSSS-derived 口径，使用 `--mode qsss`。缺少 `prediction` 或 `prediction_score` 时，入口应在 validate 阶段失败并写出 manifest；不得自动改走通用评分，除非用户明确接受非 QSSS 结果。
+如果用户坚持 QSSS-derived 口径，使用 `--mode qsss`。缺少 `prediction` 或 `prediction_score` 时，入口应在 validate 阶段失败并写出 manifest；不得自动改走通用评分。只有 `--mode auto` 或用户明确接受非 QSSS 结果时，才可进入 generic 技术评分。
 
 ## QSSS-derived 默认剖面
 

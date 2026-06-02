@@ -9,9 +9,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from stock_selection_calendar_contract import CALENDAR_MODEL
+
 
 REQUIRED_COLUMNS = ["symbol", "signal_date", "entry_date", "exit_date", "missing_data", "status"]
-CALENDAR_MODEL = "business_day_closed_interval"
 
 
 def main(argv: list[str] | None = None) -> int:

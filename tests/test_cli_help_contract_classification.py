@@ -33,6 +33,7 @@ HELP_CONTRACT_EXCLUDED_HELPERS = [
     "lightgbm_prediction_summary.py",
     "portfolio_candidate_allocation.py",
     "stock_selection_backtest_rows.py",
+    "stock_selection_calendar_contract.py",
     "stock_selection_capital.py",
     "stock_selection_config.py",
     "stock_selection_data.py",

@@ -1,67 +1,87 @@
 from __future__ import annotations
 
+import ast
+import importlib.util
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-TESTS = Path(__file__).resolve().parent
-sys.path.insert(0, str(TESTS))
-
-from test_cli_help_contract_classification import CLI_HELP_ENTRIES
-
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from portfolio_overlap_report import CALENDAR_MODEL  # noqa: E402
+TESTS = ROOT / "tests"
 
 
-FETCH_CORE_OPTIONS = [
-    "--symbols",
-    "--start-date",
-    "--end-date",
-    "--output",
-    "--metadata-output",
-    "--fail-on-fetch-error",
-]
-WALK_FORWARD_MODEL_OPTIONS = [
-    "--required-tradability-model",
-    "--required-limit-rules-model",
-]
-WALK_FORWARD_CAPACITY_OPTIONS = [
-    "--max-open-positions",
-    "--max-gross-weight",
-    "--max-gross-notional",
-    "--max-cash-reserved",
-]
+def load_cli_help_entries() -> list[str]:
+    module_path = TESTS / "test_cli_help_contract_classification.py"
+    spec = importlib.util.spec_from_file_location("cli_help_contract_classification", module_path)
+    if spec is None or spec.loader is None:
+        raise AssertionError(f"cannot load {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.CLI_HELP_ENTRIES
+
+
+def read_constant(module_path: Path, name: str) -> str:
+    tree = ast.parse(module_path.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if any(isinstance(target, ast.Name) and target.id == name for target in node.targets):
+            value = ast.literal_eval(node.value)
+            if isinstance(value, str):
+                return value
+    raise AssertionError(f"{name} string constant not found in {module_path}")
+
+
+CALENDAR_MODEL = read_constant(ROOT / "scripts/stock_selection_calendar_contract.py", "CALENDAR_MODEL")
+CLI_HELP_ENTRIES = load_cli_help_entries()
+FETCH_CORE_OPTIONS = frozenset(
+    {
+        "--symbols",
+        "--start-date",
+        "--end-date",
+        "--output",
+        "--metadata-output",
+        "--fail-on-fetch-error",
+    }
+)
+WALK_FORWARD_MODEL_OPTIONS = frozenset(
+    {
+        "--required-tradability-model",
+        "--required-limit-rules-model",
+    }
+)
+WALK_FORWARD_CAPACITY_OPTIONS = frozenset(
+    {
+        "--max-open-positions",
+        "--max-gross-weight",
+        "--max-gross-notional",
+        "--max-cash-reserved",
+    }
+)
 
 
 class CliHelpWithoutDependenciesTests(unittest.TestCase):
     def test_core_navigation_help_does_not_import_pandas(self) -> None:
         cases = {
-            "create_demo_data.py": ["--output", "--days"],
-            "run_baostock_walk_forward.py": [],
-            "probe_baostock_limit_fields.py": [],
-            "validate_ohlcv.py": ["--input", "--config", "--min-history-rows"],
-            "fetch_baostock_a_share.py": [*FETCH_CORE_OPTIONS, "--drop-invalid-rows"],
-            "fetch_akshare_a_share.py": [*FETCH_CORE_OPTIONS, "--drop-invalid-rows"],
-            "fetch_yfinance_ohlcv.py": [
-                *FETCH_CORE_OPTIONS,
-                "--market",
-                "--timeout-seconds",
-            ],
-            "probe_external_source_stability.py": [
+            "create_demo_data.py": {"--output", "--days"},
+            "run_baostock_walk_forward.py": set(),
+            "probe_baostock_limit_fields.py": set(),
+            "validate_ohlcv.py": {"--input", "--config", "--min-history-rows"},
+            "fetch_baostock_a_share.py": FETCH_CORE_OPTIONS | {"--drop-invalid-rows"},
+            "fetch_akshare_a_share.py": FETCH_CORE_OPTIONS | {"--drop-invalid-rows"},
+            "fetch_yfinance_ohlcv.py": FETCH_CORE_OPTIONS | {"--market", "--timeout-seconds"},
+            "probe_external_source_stability.py": {
                 "--output-dir",
                 "--summary-output",
                 "--iterations",
                 "--akshare-symbols",
                 "--yfinance-symbols",
                 "--baostock-symbols",
-            ],
-            "generate_lightgbm_predictions.py": [
+            },
+            "generate_lightgbm_predictions.py": {
                 "--input",
                 "--output",
                 "--horizon",
@@ -69,17 +89,17 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--min-history-rows",
                 "--summary-output",
                 "--fail-on-skipped",
-            ],
-            "slice_prices_as_of.py": ["--input", "--output", "--as-of-date"],
-            "allocate_candidate_capital.py": [
+            },
+            "slice_prices_as_of.py": {"--input", "--output", "--as-of-date"},
+            "allocate_candidate_capital.py": {
                 "--prices",
                 "--candidates",
                 "--output",
                 "--cash-budget",
                 "--lot-size",
                 "--fail-on-unallocated",
-            ],
-            "allocate_portfolio_candidate_capital.py": [
+            },
+            "allocate_portfolio_candidate_capital.py": {
                 "--prices",
                 "--raw-candidates",
                 "--candidate-outputs",
@@ -89,8 +109,8 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--cash-budget",
                 "--hold-days",
                 "--max-open-positions",
-            ],
-            "backtest_buy_hold.py": [
+            },
+            "backtest_buy_hold.py": {
                 "--prices",
                 "--candidates",
                 "--output",
@@ -100,48 +120,49 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--require-tradable-bars",
                 "--require-tradable-holding-period",
                 "--fail-on-incomplete",
-            ],
-            "portfolio_equity_curve.py": [
+            },
+            "portfolio_equity_curve.py": {
                 "--backtests",
                 "--output",
                 "--initial-equity",
                 "--fail-on-incomplete",
                 "--min-final-equity",
                 "--max-drawdown-floor",
-            ],
-            "portfolio_overlap_report.py": [
+            },
+            "portfolio_overlap_report.py": WALK_FORWARD_CAPACITY_OPTIONS
+            | {
                 "--backtests",
                 "--daily-output",
                 "--overlap-output",
                 "--summary-output",
-                *WALK_FORWARD_CAPACITY_OPTIONS,
                 "--fail-on-symbol-overlap",
                 "--require-capital-fields",
                 CALENDAR_MODEL,
                 "pandas.bdate_range",
                 "not an exchange trading calendar",
-            ],
-            "summarize_walk_forward_run.py": [
+            },
+            "summarize_walk_forward_run.py": WALK_FORWARD_MODEL_OPTIONS
+            | WALK_FORWARD_CAPACITY_OPTIONS
+            | {
                 "--run-dir",
                 "--output",
                 "--signal-dates",
                 "--expected-symbol-count",
-                *WALK_FORWARD_MODEL_OPTIONS,
-                *WALK_FORWARD_CAPACITY_OPTIONS,
                 "--fail-on-symbol-overlap",
                 "--expect-portfolio-violations",
                 "--allow-dropped-invalid-rows",
-            ],
-            "validate_walk_forward_manifest.py": [
+            },
+            "validate_walk_forward_manifest.py": WALK_FORWARD_MODEL_OPTIONS
+            | {
                 "--manifest",
                 "--output",
                 "--signal-dates",
                 "--expected-symbol-count",
-                *WALK_FORWARD_MODEL_OPTIONS,
                 "--expected-max-candidates",
                 "--expect-portfolio-violations",
-            ],
-            "validate_walk_forward_artifacts.py": [
+            },
+            "validate_walk_forward_artifacts.py": WALK_FORWARD_MODEL_OPTIONS
+            | {
                 "--run-dir",
                 "--output",
                 "--signal-dates",
@@ -150,17 +171,16 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--expected-final-equity",
                 "--expected-portfolio-violations",
                 "--required-allocation-model",
-                *WALK_FORWARD_MODEL_OPTIONS,
                 "--manifest-validation",
                 "--allow-dropped-invalid-rows",
-            ],
-            "score_candidates.py": [
+            },
+            "score_candidates.py": {
                 "--input",
                 "--config",
                 "--output",
                 "--fail-on-skipped",
                 "--fail-on-empty-result",
-            ],
+            },
         }
         self.assertEqual(set(CLI_HELP_ENTRIES), set(cases))
         for script_name, expected_options in cases.items():

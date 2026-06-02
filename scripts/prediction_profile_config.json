@@ -1,6 +1,6 @@
 {
-  "profile_name": "qsss-derived-a-share-daily",
-  "score_mode": "qsss-derived",
+  "profile_name": "prediction-derived-a-share-daily",
+  "score_mode": "prediction-derived",
   "universe": {
     "market": "A-share",
     "symbol_prefix_allow_regex": "^(60|68|00|30)",

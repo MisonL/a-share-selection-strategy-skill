@@ -129,16 +129,16 @@ class StockSelectionScriptTests(unittest.TestCase):
             summary["turnover_assumption"],
         )
 
-    def test_qsss_turnover_alias_scores(self) -> None:
-        config = load_config("qsss_profile_config.json")
+    def test_prediction_turnover_alias_scores(self) -> None:
+        config = load_config("prediction_profile_config.json")
         frame = build_frame(include_prediction=True, include_turn=True)
         frame = frame.rename(columns={"turn": "turnover"})
         _, summary = scorer.score_candidates(frame, config)
         self.assertEqual(2, summary["scored_symbols"])
         self.assertEqual(0, summary["failed_symbols"])
 
-    def test_qsss_candidate_output_keeps_raw_signal_close(self) -> None:
-        config = load_config("qsss_profile_config.json")
+    def test_prediction_candidate_output_keeps_raw_signal_close(self) -> None:
+        config = load_config("prediction_profile_config.json")
         config["thresholds"] = permissive_thresholds(120)
         frame = build_frame(include_prediction=True, include_turn=True)
         mask = frame["symbol"].eq("000002")
@@ -152,7 +152,7 @@ class StockSelectionScriptTests(unittest.TestCase):
         self.assertEqual(77.19, output["close"])
 
     def test_universe_filtering_reports_all_filtered_symbols(self) -> None:
-        config = load_config("qsss_profile_config.json")
+        config = load_config("prediction_profile_config.json")
         frame = build_frame(include_prediction=True, include_turn=True)
         frame["symbol"] = frame["symbol"].map(
             {"000002": "900001", "600001": "810002"}
@@ -191,21 +191,21 @@ class StockSelectionScriptTests(unittest.TestCase):
         self.assertEqual(0, summary["threshold_failed_symbols"])
         self.assertEqual(1, summary["candidates"])
 
-    def test_qsss_requires_prediction_column(self) -> None:
-        config = load_config("qsss_profile_config.json")
+    def test_prediction_requires_prediction_column(self) -> None:
+        config = load_config("prediction_profile_config.json")
         frame = build_frame(include_turn=True, include_tradability=True)
         with self.assertRaisesRegex(ValueError, "prediction or prediction_score"):
             scorer.score_candidates(frame, config)
 
-    def test_qsss_requires_market_column(self) -> None:
-        config = load_config("qsss_profile_config.json")
+    def test_prediction_requires_market_column(self) -> None:
+        config = load_config("prediction_profile_config.json")
         frame = build_frame(include_prediction=True, include_turn=True)
         frame = frame.drop(columns=["market"])
         with self.assertRaisesRegex(ValueError, "requires market column"):
             scorer.score_candidates(frame, config)
 
-    def test_qsss_rejects_invalid_prediction_range(self) -> None:
-        config = load_config("qsss_profile_config.json")
+    def test_prediction_rejects_invalid_prediction_range(self) -> None:
+        config = load_config("prediction_profile_config.json")
         frame = build_frame(
             include_prediction=True,
             prediction_value=1.2,
@@ -214,8 +214,8 @@ class StockSelectionScriptTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid values"):
             scorer.score_candidates(frame, config)
 
-    def test_qsss_rejects_missing_prediction_values(self) -> None:
-        config = load_config("qsss_profile_config.json")
+    def test_prediction_rejects_missing_prediction_values(self) -> None:
+        config = load_config("prediction_profile_config.json")
         frame = build_frame(include_prediction=True, include_turn=True)
         frame["prediction_score"] = float("nan")
         with self.assertRaisesRegex(ValueError, "prediction_score has"):
@@ -227,15 +227,15 @@ class StockSelectionScriptTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "prediction_score has"):
             scorer.score_candidates(frame, config)
 
-    def test_qsss_valid_prediction_marks_external_source(self) -> None:
-        config = load_config("qsss_profile_config.json")
+    def test_prediction_valid_prediction_marks_external_source(self) -> None:
+        config = load_config("prediction_profile_config.json")
         frame = build_frame(include_prediction=True, include_turn=True)
         _, summary = scorer.score_candidates(frame, config)
         self.assertEqual("external_unverified", summary["prediction_source"])
         self.assertEqual(2, summary["scored_symbols"])
 
     def test_universe_market_filter_is_applied(self) -> None:
-        config = load_config("qsss_profile_config.json")
+        config = load_config("prediction_profile_config.json")
         frame = build_frame(include_prediction=True, include_turn=True)
         frame["market"] = "HK"
         with self.assertRaisesRegex(ValueError, "requires at least one A-share row"):
@@ -254,7 +254,7 @@ class StockSelectionScriptTests(unittest.TestCase):
             self.assertIn(f"input={input_path.name}", stdout)
             self.assertIn("turnover_assumption=neutral_series_missing_turnover", stdout)
             self.assertIn("generic mode: turn/turnover missing", stderr)
-            self.assertIn("no QSSS turnover gate is applied", stderr)
+            self.assertIn("no prediction-derived turnover gate is applied", stderr)
 
     def test_cli_writes_threshold_diagnostics_csv(self) -> None:
         config = load_config("example_config.json")
@@ -408,16 +408,16 @@ class StockSelectionScriptTests(unittest.TestCase):
             summary["threshold_failures"],
         )
 
-    def test_cli_missing_qsss_prediction_returns_error(self) -> None:
+    def test_cli_missing_prediction_column_returns_error(self) -> None:
         frame = build_frame(include_turn=True)
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "prices.csv"
-            output_path = Path(tmpdir) / "qsss.csv"
+            output_path = Path(tmpdir) / "prediction.csv"
             frame.to_csv(input_path, index=False)
             code, _, stderr = run_score_cli(
                 input_path,
                 output_path,
-                config_name="qsss_profile_config.json",
+                config_name="prediction_profile_config.json",
             )
             self.assertEqual(2, code)
             self.assertFalse(output_path.exists())
@@ -426,16 +426,16 @@ class StockSelectionScriptTests(unittest.TestCase):
             self.assertIn("code=bad_input", stderr)
 
     def test_cli_low_prediction_reports_effective_empty_result(self) -> None:
-        config = load_config("qsss_profile_config.json")
+        config = load_config("prediction_profile_config.json")
         frame = build_frame(include_prediction=True, prediction_value=0.1, include_turn=True)
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "prices.csv"
-            output_path = Path(tmpdir) / "qsss_low_pred.csv"
+            output_path = Path(tmpdir) / "prediction_low_pred.csv"
             frame.to_csv(input_path, index=False)
             code, stdout, stderr = run_score_cli(
                 input_path,
                 output_path,
-                config_name="qsss_profile_config.json",
+                config_name="prediction_profile_config.json",
             )
             self.assertEqual(0, code, stderr)
             self.assertTrue(output_path.exists())

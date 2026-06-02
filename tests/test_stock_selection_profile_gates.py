@@ -20,16 +20,16 @@ from helpers import build_frame, load_config  # noqa: E402
 
 
 class StockSelectionProfileGateTests(unittest.TestCase):
-    def test_qsss_rejects_non_six_digit_ashare_symbol(self) -> None:
-        config = load_config("qsss_profile_config.json")
+    def test_prediction_rejects_non_six_digit_ashare_symbol(self) -> None:
+        config = load_config("prediction_profile_config.json")
         frame = build_frame(include_prediction=True, include_turn=True)
         frame = frame[frame["symbol"] == "600001"].copy()
         frame["symbol"] = "60001"
         with self.assertRaisesRegex(ValueError, "six digits"):
             scorer.score_candidates(frame, config)
 
-    def test_qsss_ignores_off_universe_short_history(self) -> None:
-        config = load_config("qsss_profile_config.json")
+    def test_prediction_ignores_off_universe_short_history(self) -> None:
+        config = load_config("prediction_profile_config.json")
         frame = build_frame(include_prediction=True, include_turn=True)
         off_universe = build_frame(
             days=10,
@@ -47,8 +47,8 @@ class StockSelectionProfileGateTests(unittest.TestCase):
         self.assertEqual(1, summary["market_filtered_symbols"])
         self.assertEqual(0, summary["insufficient_history_symbols"])
 
-    def test_qsss_reports_in_universe_short_history_in_summary(self) -> None:
-        config = load_config("qsss_profile_config.json")
+    def test_prediction_reports_in_universe_short_history_in_summary(self) -> None:
+        config = load_config("prediction_profile_config.json")
         frame = build_frame(include_prediction=True, include_turn=True)
         short = build_frame(days=10, include_prediction=True, include_turn=True)
         short = short[short["symbol"] == "000002"].copy()
@@ -60,7 +60,7 @@ class StockSelectionProfileGateTests(unittest.TestCase):
         self.assertEqual(["300001"], summary["insufficient_history_symbol_examples"])
         self.assertGreater(len(candidates), 0)
 
-    def test_validate_cli_with_qsss_config_checks_profile_columns(self) -> None:
+    def test_validate_cli_with_prediction_config_checks_profile_columns(self) -> None:
         frame = build_frame(include_turn=True)
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "prices.csv"
@@ -73,13 +73,13 @@ class StockSelectionProfileGateTests(unittest.TestCase):
                         "--input",
                         str(input_path),
                         "--config",
-                        str(SCRIPTS / "qsss_profile_config.json"),
+                        str(SCRIPTS / "prediction_profile_config.json"),
                     ]
                 )
         self.assertEqual(1, code)
         self.assertIn("prediction or prediction_score", stderr.getvalue())
 
-    def test_validate_cli_with_qsss_config_rejects_market_alias(self) -> None:
+    def test_validate_cli_with_prediction_config_rejects_market_alias(self) -> None:
         frame = build_frame(include_prediction=True, include_turn=True)
         frame["market"] = "A股"
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -93,14 +93,14 @@ class StockSelectionProfileGateTests(unittest.TestCase):
                         "--input",
                         str(input_path),
                         "--config",
-                        str(SCRIPTS / "qsss_profile_config.json"),
+                        str(SCRIPTS / "prediction_profile_config.json"),
                     ]
                 )
         self.assertEqual(1, code)
         self.assertIn("requires at least one A-share row", stderr.getvalue())
         self.assertIn("invalid_market_values=A股", stderr.getvalue())
 
-    def test_validate_cli_with_qsss_config_rejects_mixed_market_alias(self) -> None:
+    def test_validate_cli_with_prediction_config_rejects_mixed_market_alias(self) -> None:
         frame = build_frame(include_prediction=True, include_turn=True)
         frame.loc[frame["symbol"] == "000002", "market"] = "A股"
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -114,14 +114,14 @@ class StockSelectionProfileGateTests(unittest.TestCase):
                         "--input",
                         str(input_path),
                         "--config",
-                        str(SCRIPTS / "qsss_profile_config.json"),
+                        str(SCRIPTS / "prediction_profile_config.json"),
                     ]
                 )
         self.assertEqual(1, code)
         self.assertIn("A-share rows must use market=A-share", stderr.getvalue())
         self.assertIn("invalid_market_values=A股", stderr.getvalue())
 
-    def test_validate_cli_with_qsss_config_rejects_suffixed_ashare_symbol(self) -> None:
+    def test_validate_cli_with_prediction_config_rejects_suffixed_ashare_symbol(self) -> None:
         frame = build_frame(include_prediction=True, include_turn=True)
         frame["symbol"] = frame["symbol"].map({"000002": "000002.SZ", "600001": "600001.SH"})
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -135,7 +135,7 @@ class StockSelectionProfileGateTests(unittest.TestCase):
                         "--input",
                         str(input_path),
                         "--config",
-                        str(SCRIPTS / "qsss_profile_config.json"),
+                        str(SCRIPTS / "prediction_profile_config.json"),
                     ]
                 )
         self.assertEqual(1, code)
@@ -169,7 +169,7 @@ class StockSelectionProfileGateTests(unittest.TestCase):
         frame = pd.concat([frame, short], ignore_index=True)
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "prices.csv"
-            output_path = Path(tmpdir) / "qsss.csv"
+            output_path = Path(tmpdir) / "prediction.csv"
             frame.to_csv(input_path, index=False)
             stdout = StringIO()
             stderr = StringIO()
@@ -179,7 +179,7 @@ class StockSelectionProfileGateTests(unittest.TestCase):
                         "--input",
                         str(input_path),
                         "--config",
-                        str(SCRIPTS / "qsss_profile_config.json"),
+                        str(SCRIPTS / "prediction_profile_config.json"),
                         "--output",
                         str(output_path),
                     ]

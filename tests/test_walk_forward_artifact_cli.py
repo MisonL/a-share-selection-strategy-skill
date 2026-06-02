@@ -51,7 +51,7 @@ class WalkForwardArtifactCliTests(unittest.TestCase):
     def test_cli_rejects_missing_sizing_field(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
-            drop_column(root / "signals/2026-05-12/qsss_sized_candidates.csv", "cash_reserved")
+            drop_column(root / "signals/2026-05-12/prediction_sized_candidates.csv", "cash_reserved")
 
             code, _stdout, stderr = call_cli(root, root / "artifact_validation.json")
 
@@ -61,7 +61,7 @@ class WalkForwardArtifactCliTests(unittest.TestCase):
     def test_cli_rejects_backtest_signal_date_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
-            rewrite_backtest_signal_date(root / "signals/2026-05-12/qsss_backtest.csv", "2026-05-09")
+            rewrite_backtest_signal_date(root / "signals/2026-05-12/prediction_backtest.csv", "2026-05-09")
 
             code, _stdout, stderr = call_cli(root, root / "artifact_validation.json")
 
@@ -71,9 +71,9 @@ class WalkForwardArtifactCliTests(unittest.TestCase):
     def test_cli_rejects_summary_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
-            summary = read_json(root / "qsss_run_summary.json")
+            summary = read_json(root / "prediction_run_summary.json")
             summary["signals"][0]["candidates"] = 3
-            write_json(root / "qsss_run_summary.json", summary)
+            write_json(root / "prediction_run_summary.json", summary)
 
             code, _stdout, stderr = call_cli(root, root / "artifact_validation.json")
 
@@ -83,9 +83,9 @@ class WalkForwardArtifactCliTests(unittest.TestCase):
     def test_cli_accepts_tiny_summary_equity_rounding_difference(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
-            summary = read_json(root / "qsss_run_summary.json")
+            summary = read_json(root / "prediction_run_summary.json")
             summary["equity"]["final_equity"] = 0.9950000000000001
-            write_json(root / "qsss_run_summary.json", summary)
+            write_json(root / "prediction_run_summary.json", summary)
 
             code, _stdout, stderr = call_cli(root, root / "artifact_validation.json")
 
@@ -132,12 +132,12 @@ def build_run(root: Path) -> Path:
     write_json(root / "metadata.json", metadata())
     write_json(signal_dir / "prediction_summary.json", prediction())
     write_csv(signal_dir / "prices_signal_window.csv", price_rows())
-    write_csv(signal_dir / "qsss_candidates.csv", candidate_rows())
-    write_csv(signal_dir / "qsss_sized_candidates.csv", sized_rows())
-    write_csv(signal_dir / "qsss_backtest.csv", backtest_rows())
-    write_csv(root / "qsss_equity_curve.csv", equity_rows())
-    write_json(root / "qsss_overlap_summary.json", overlap_summary())
-    write_json(root / "qsss_run_summary.json", run_summary())
+    write_csv(signal_dir / "prediction_candidates.csv", candidate_rows())
+    write_csv(signal_dir / "prediction_sized_candidates.csv", sized_rows())
+    write_csv(signal_dir / "prediction_backtest.csv", backtest_rows())
+    write_csv(root / "prediction_equity_curve.csv", equity_rows())
+    write_json(root / "prediction_overlap_summary.json", overlap_summary())
+    write_json(root / "prediction_run_summary.json", run_summary())
     write_json(root / "run_manifest_validation.json", manifest_validation())
     return root
 

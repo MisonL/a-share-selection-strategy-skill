@@ -28,8 +28,8 @@ def allocation_errors(
     if args.required_allocation_model != "portfolio_cash_lot_floor":
         return ["unexpected_allocation_summary"] if summary.get("allocation") not in (None, {}) else []
     errors = []
-    allocation = load_json(run_dir / "qsss_allocation_summary.json")
-    skipped = read_csv(run_dir / "qsss_skipped_candidates.csv")
+    allocation = load_json(run_dir / "prediction_allocation_summary.json")
+    skipped = read_csv(run_dir / "prediction_skipped_candidates.csv")
     if summary.get("allocation") != allocation:
         errors.append("allocation_summary_mismatch")
     if allocation.get("allocation_model") != args.required_allocation_model:

@@ -167,7 +167,7 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
             )
 
             runner.run_pipeline(context)
-            config_path = output / "qsss_profile_config.json"
+            config_path = output / "prediction_profile_config.json"
             config = json.loads(config_path.read_text(encoding="utf-8"))
             commands = {item["step"]: item["command"] for item in manifest["steps"]}
 
@@ -204,7 +204,7 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
         self.assertIn("--expected-signal-dates", commands["portfolio_allocate"])
         self.assertIn("2026-05-12", commands["portfolio_allocate"])
         self.assertIn("2026-05-20", commands["portfolio_allocate"])
-        self.assertIn("qsss_raw_candidates.csv", " ".join(commands["2026-05-12:score"]))
+        self.assertIn("prediction_raw_candidates.csv", " ".join(commands["2026-05-12:score"]))
         self.assertEqual("portfolio_cash_lot_floor", manifest["allocation_model"])
 
 

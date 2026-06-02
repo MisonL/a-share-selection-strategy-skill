@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the baostock QSSS walk-forward gate through existing CLIs."""
+"""Run the baostock prediction-derived walk-forward gate through existing CLIs."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from stock_selection_symbols import parse_six_digit_symbols
 from walk_forward_portfolio_commands import ALLOCATION_MODEL_EQUAL, ALLOCATION_MODEL_PORTFOLIO, portfolio_allocate_command
 
 SCRIPTS = Path(__file__).resolve().parent
-CONFIG_PATH = SCRIPTS / "qsss_profile_config.json"
+CONFIG_PATH = SCRIPTS / "prediction_profile_config.json"
 TRADABILITY_MODEL = TRADABILITY_MODEL_ENTRY_EXIT
 LIMIT_RULES_MODEL = LIMIT_RULES_MODEL_NOT_MODELED
 Executor = Callable[[list[str]], subprocess.CompletedProcess[str]]
@@ -77,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run baostock QSSS walk-forward gates.")
+    parser = argparse.ArgumentParser(description="Run baostock prediction-derived walk-forward gates.")
     parser.add_argument("--symbols", required=True, help="Comma-separated six-digit symbols.")
     parser.add_argument("--start-date", required=True, help="Fetch start date.")
     parser.add_argument("--end-date", required=True, help="Fetch end date.")
@@ -183,10 +183,10 @@ def signal_paths(signal_dir: Path) -> dict[str, Path]:
         "sliced": signal_dir / "prices_signal_window.csv",
         "predictions": signal_dir / "predictions_signal_window.csv",
         "prediction_summary": signal_dir / "prediction_summary.json",
-        "raw_candidates": signal_dir / "qsss_raw_candidates.csv",
-        "candidates": signal_dir / "qsss_candidates.csv",
-        "sized": signal_dir / "qsss_sized_candidates.csv",
-        "backtest": signal_dir / "qsss_backtest.csv",
+        "raw_candidates": signal_dir / "prediction_raw_candidates.csv",
+        "candidates": signal_dir / "prediction_candidates.csv",
+        "sized": signal_dir / "prediction_sized_candidates.csv",
+        "backtest": signal_dir / "prediction_backtest.csv",
     }
 
 def prepare_config(args: argparse.Namespace, output: Path) -> Path:
@@ -194,7 +194,7 @@ def prepare_config(args: argparse.Namespace, output: Path) -> Path:
         return CONFIG_PATH
     config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     config.setdefault("output", {})["max_candidates"] = args.max_candidates
-    config_path = output / "qsss_profile_config.json"
+    config_path = output / "prediction_profile_config.json"
     write_json(config, config_path)
     return config_path
 
@@ -227,16 +227,16 @@ def backtest_command(args: argparse.Namespace, prices: Path, paths: dict[str, Pa
     return command
 
 def equity_command(output: Path, backtests: list[Path]) -> list[str]:
-    return script_command("portfolio_equity_curve.py", "--backtests", *backtests, "--output", output / "qsss_equity_curve.csv", "--fail-on-incomplete")
+    return script_command("portfolio_equity_curve.py", "--backtests", *backtests, "--output", output / "prediction_equity_curve.csv", "--fail-on-incomplete")
 
 def overlap_command(args: argparse.Namespace, output: Path, backtests: list[Path]) -> list[str]:
-    command = script_command("portfolio_overlap_report.py", "--backtests", *backtests, "--daily-output", output / "qsss_daily_positions.csv", "--overlap-output", output / "qsss_overlap.csv", "--summary-output", output / "qsss_overlap_summary.json", "--max-open-positions", args.max_open_positions, "--max-gross-weight", args.max_gross_weight, "--max-gross-notional", args.max_gross_notional, "--max-cash-reserved", args.max_cash_reserved, "--require-capital-fields")
+    command = script_command("portfolio_overlap_report.py", "--backtests", *backtests, "--daily-output", output / "prediction_daily_positions.csv", "--overlap-output", output / "prediction_overlap.csv", "--summary-output", output / "prediction_overlap_summary.json", "--max-open-positions", args.max_open_positions, "--max-gross-weight", args.max_gross_weight, "--max-gross-notional", args.max_gross_notional, "--max-cash-reserved", args.max_cash_reserved, "--require-capital-fields")
     if args.fail_on_symbol_overlap:
         command.append("--fail-on-symbol-overlap")
     return command
 
 def summary_command(args: argparse.Namespace, output: Path) -> list[str]:
-    command = script_command("summarize_walk_forward_run.py", "--run-dir", output, "--output", output / "qsss_run_summary.json", "--signal-dates", *args.signal_dates, "--expected-symbol-count", len(parse_symbols(args.symbols)), "--required-tradability-model", tradability_model(args), "--required-limit-rules-model", LIMIT_RULES_MODEL, "--max-open-positions", args.max_open_positions, "--max-gross-weight", args.max_gross_weight, "--max-gross-notional", args.max_gross_notional, "--max-cash-reserved", args.max_cash_reserved)
+    command = script_command("summarize_walk_forward_run.py", "--run-dir", output, "--output", output / "prediction_run_summary.json", "--signal-dates", *args.signal_dates, "--expected-symbol-count", len(parse_symbols(args.symbols)), "--required-tradability-model", tradability_model(args), "--required-limit-rules-model", LIMIT_RULES_MODEL, "--max-open-positions", args.max_open_positions, "--max-gross-weight", args.max_gross_weight, "--max-gross-notional", args.max_gross_notional, "--max-cash-reserved", args.max_cash_reserved)
     if args.fail_on_symbol_overlap:
         command.append("--fail-on-symbol-overlap")
     if args.expect_portfolio_violations:

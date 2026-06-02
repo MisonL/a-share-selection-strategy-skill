@@ -256,7 +256,7 @@ def signal_steps(
     steps = [
         step(f"{signal_date}:slice", command("slice_prices_as_of.py", "--as-of-date", signal_date)),
         step(f"{signal_date}:predict", command("generate_lightgbm_predictions.py", "--summary-output", "--fail-on-skipped")),
-        step(f"{signal_date}:validate", command("validate_ohlcv.py", "--config", "qsss_profile_config.json")),
+        step(f"{signal_date}:validate", command("validate_ohlcv.py", "--config", "prediction_profile_config.json")),
         step(f"{signal_date}:score", command("score_candidates.py", "--fail-on-skipped", "--fail-on-empty-result")),
     ]
     if allocation_model != "portfolio_cash_lot_floor":

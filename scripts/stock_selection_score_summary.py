@@ -53,7 +53,7 @@ def print_detail_lines(summary: dict[str, Any]) -> None:
     if summary.get("turnover_assumption"):
         print(
             "WARNING: generic mode: turn/turnover missing; turnover_ratio "
-            "component uses a neutral series and no QSSS turnover gate is applied",
+            "component uses a neutral series and no prediction-derived turnover gate is applied",
             file=sys.stderr,
         )
     if summary.get("prediction_source"):

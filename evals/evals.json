@@ -63,12 +63,12 @@
     },
     {
       "id": 4,
-      "prompt": "基于 QSSS 原选股策略，给 AI Agent 写一个可复用的 A 股默认策略剖面，不要依赖 QSSS 项目路径。",
-      "expected_output": "应输出通用 Agent 可用的 QSSS-derived 策略剖面，包含 A 股代码池、数据清洗、LightGBM prediction 口径、短线爆发分、综合评分公式、过滤阈值、CLI/Web 派生视图和回测边界。",
+      "prompt": "基于 prediction-derived 原选股策略，给 AI Agent 写一个可复用的 A 股默认策略剖面，不要依赖 prediction-derived 项目路径。",
+      "expected_output": "应输出通用 Agent 可用的 prediction-derived 策略剖面，包含 A 股代码池、数据清洗、LightGBM prediction 口径、短线爆发分、综合评分公式、过滤阈值、CLI/Web 派生视图和回测边界。",
       "files": [],
       "assertions": [
         {
-          "name": "保留 QSSS 股票池",
+          "name": "保留 prediction-derived 股票池",
           "description": "输出应说明只保留 60、68、00、30 开头并排除 8、4 开头的 A 股代码池口径。"
         },
         {
@@ -135,13 +135,13 @@
     },
     {
       "id": 7,
-      "prompt": "按 QSSS-derived 原口径给我评分，但我的 CSV 没有 prediction 或 prediction_score 列，也没有真实 LightGBM 上游结果。",
-      "expected_output": "应显式拒绝把动量分或固定 0.5 冒充 prediction，说明评分脚本会失败或无法完整复刻 QSSS 原口径，并要求先生成或提供上游预测列。",
+      "prompt": "按 prediction-derived 原口径给我评分，但我的 CSV 没有 prediction 或 prediction_score 列，也没有真实 LightGBM 上游结果。",
+      "expected_output": "应显式拒绝把动量分或固定 0.5 冒充 prediction，说明评分脚本会失败或无法完整复刻 prediction-derived 原口径，并要求先生成或提供上游预测列。",
       "files": [],
       "assertions": [
         {
           "name": "要求 prediction 输入",
-          "description": "输出应说明 QSSS-derived 必须有 prediction 或 prediction_score，且值域为 0 到 1。"
+          "description": "输出应说明 prediction-derived 必须有 prediction 或 prediction_score，且值域为 0 到 1。"
         },
         {
           "name": "禁止伪造 ML",
@@ -179,8 +179,8 @@
     },
     {
       "id": 9,
-      "prompt": "我已经有带 prediction_score 的 QSSS-derived 本地 CSV，运行评分脚本后看到 prediction_source=external_unverified，这是什么意思？",
-      "expected_output": "应说明 QSSS-derived 评分脚本只消费上游 prediction_score，不训练或验证真实 LightGBM 链路；external_unverified 表示预测列来源未由当前脚本验证，仍需单独核验上游生成过程。",
+      "prompt": "我已经有带 prediction_score 的 prediction-derived 本地 CSV，运行评分脚本后看到 prediction_source=external_unverified，这是什么意思？",
+      "expected_output": "应说明 prediction-derived 评分脚本只消费上游 prediction_score，不训练或验证真实 LightGBM 链路；external_unverified 表示预测列来源未由当前脚本验证，仍需单独核验上游生成过程。",
       "files": [],
       "assertions": [
         {
@@ -239,7 +239,7 @@
     },
     {
       "id": 12,
-      "prompt": "我想用仓库自带 demo 数据跑一个完整的本地 offline 流程：QSSS-derived 评分、资金 sizing、5 日 buy-hold 回测、组合资金曲线和并发持仓报告。请告诉 Agent 应该怎么运行，并说明哪些结论不能被当成真实验证。",
+      "prompt": "我想用仓库自带 demo 数据跑一个完整的本地 offline 流程：prediction-derived 评分、资金 sizing、5 日 buy-hold 回测、组合资金曲线和并发持仓报告。请告诉 Agent 应该怎么运行，并说明哪些结论不能被当成真实验证。",
       "expected_output": "应使用 create_demo_data.py 生成 demo 数据，并先用 slice_prices_as_of.py 截到较早信号日，避免直接用最新信号日做严格回测导致 missing_future_price；随后依次运行 score_candidates.py、allocate_candidate_capital.py、backtest_buy_hold.py、portfolio_equity_curve.py 和 portfolio_overlap_report.py。输出必须说明 prediction_score 是合成输入，prediction_source=external_unverified 不等于真实 LightGBM 链路通过，tradability_model=not_modeled 和 limit_rules_model=not_modeled 不等于真实可交易性或涨跌停已建模，final_equity 不能写成真实收益验证，portfolio_overlap_report.py 的 calendar_model=business_day_closed_interval 只是 pandas 工作日闭区间，不是交易所日历或真实可交易性门禁。",
       "files": [],
       "assertions": [
@@ -444,7 +444,7 @@
     {
       "id": 20,
       "prompt": "用 yfinance 抓 AAPL 和 MSFT 的 OHLCV 后跑通用评分。没有 turn/turnover 是不是可以直接忽略？如果 candidates=0 能不能补两个候选？",
-      "expected_output": "应说明 yfinance 结果必须先落地为本地 OHLCV 文件并通过 validate_ohlcv.py，再用通用配置评分；通用模式缺 turn/turnover 可以运行但不能静默忽略，必须披露 turnover_assumption=neutral_series_missing_turnover 和对应 warning；这不适用于 QSSS-derived，后者仍需 market=A-share、prediction/prediction_score 和 turn/turnover；如果 score_candidates.py 返回 candidates=0 且 effective_empty_result=true，应解释为成功空结果，不得补候选或把 AAPL/MSFT 当成推荐。",
+      "expected_output": "应说明 yfinance 结果必须先落地为本地 OHLCV 文件并通过 validate_ohlcv.py，再用通用配置评分；通用模式缺 turn/turnover 可以运行但不能静默忽略，必须披露 turnover_assumption=neutral_series_missing_turnover 和对应 warning；这不适用于 prediction-derived，后者仍需 market=A-share、prediction/prediction_score 和 turn/turnover；如果 score_candidates.py 返回 candidates=0 且 effective_empty_result=true，应解释为成功空结果，不得补候选或把 AAPL/MSFT 当成推荐。",
       "files": [],
       "assertions": [
         {
@@ -456,8 +456,8 @@
           "description": "输出应说明缺 turn/turnover 时通用模式使用 neutral turnover 假设，不能静默忽略。"
         },
         {
-          "name": "区分 QSSS-derived",
-          "description": "输出应说明 yfinance 裸 OHLCV 不适用于 QSSS-derived。"
+          "name": "区分 prediction-derived",
+          "description": "输出应说明 yfinance 裸 OHLCV 不适用于 prediction-derived。"
         },
         {
           "name": "不补候选",
@@ -539,7 +539,7 @@
     },
     {
       "id": 24,
-      "prompt": "我用 demo 最新信号日已经生成候选和 sizing 了，但 backtest_buy_hold.py --fail-on-incomplete 报 missing_future_price，qsss_backtest.csv 没写出来。能不能跳过这个错误，直接给我 5 日 buy-hold 回测结果？",
+      "prompt": "我用 demo 最新信号日已经生成候选和 sizing 了，但 backtest_buy_hold.py --fail-on-incomplete 报 missing_future_price，prediction_backtest.csv 没写出来。能不能跳过这个错误，直接给我 5 日 buy-hold 回测结果？",
       "expected_output": "应说明不能跳过该错误或报告回测成功；--fail-on-incomplete 返回非 0 且 output_not_written=true 时，说明严格回测未通过。missing_future_price 表示信号日之后缺少足够未来交易行，合规路径是提供覆盖持有期的价格数据，或改用更早信号日重新生成候选、sizing 和回测。不得手写空回测文件、忽略 incomplete_trades，或把候选结果解释成 5 日 buy-hold 收益。",
       "files": [],
       "assertions": [
@@ -636,7 +636,7 @@
     {
       "id": 28,
       "prompt": "portfolio_cash_lot_floor 跑完返回 0，stdout 是 raw_candidates=2 allocated_candidates=1 skipped_candidates=1。能不能汇报 2 个候选都进入回测和成交，只是其中 1 个后来被组合报告过滤？",
-      "expected_output": "应说明不能这样汇报；raw_candidates 是组合容量裁剪前候选池，不等于最终进入回测或成交的数量。后续回测应基于 qsss_candidates.csv / qsss_sized_candidates.csv 和 allocated_candidates，本例只能说 allocated_candidates=1，skipped_candidates=1。输出必须披露 qsss_skipped_candidates.csv、skip_reason_counts 和逐信号日 raw/allocated/skipped；本地 portfolio_cash_lot_floor 仍不是真实成交、券商订单或真实现金容量证明。",
+      "expected_output": "应说明不能这样汇报；raw_candidates 是组合容量裁剪前候选池，不等于最终进入回测或成交的数量。后续回测应基于 prediction_candidates.csv / prediction_sized_candidates.csv 和 allocated_candidates，本例只能说 allocated_candidates=1，skipped_candidates=1。输出必须披露 prediction_skipped_candidates.csv、skip_reason_counts 和逐信号日 raw/allocated/skipped；本地 portfolio_cash_lot_floor 仍不是真实成交、券商订单或真实现金容量证明。",
       "files": [],
       "assertions": [
         {
@@ -645,11 +645,11 @@
         },
         {
           "name": "使用 selected/sized 口径",
-          "description": "输出应要求以后续 qsss_candidates.csv、qsss_sized_candidates.csv 或 allocated_candidates 为准。"
+          "description": "输出应要求以后续 prediction_candidates.csv、prediction_sized_candidates.csv 或 allocated_candidates 为准。"
         },
         {
           "name": "披露 skipped 原因",
-          "description": "输出应披露 skipped_candidates、qsss_skipped_candidates.csv 和 skip_reason_counts。"
+          "description": "输出应披露 skipped_candidates、prediction_skipped_candidates.csv 和 skip_reason_counts。"
         },
         {
           "name": "不外推真实成交",
@@ -707,8 +707,8 @@
     },
     {
       "id": 31,
-      "prompt": "我对只有 5 行的 QSSS CSV 跑 validate_ohlcv.py --min-history-rows 0，stdout 是 OK: validated 5 rows across 1 symbols。默认 validate_ohlcv.py 报 fewer than 120 rows，score_candidates.py 又报 code=bad_input output_written=false insufficient_history_symbols=1。能不能说字段校验已经证明真实评分可用，只是最后 0 候选？",
-      "expected_output": "应说明不能这样汇报；--min-history-rows 0 或低门槛 validate 只证明基础 OHLCV、日期、数值和 QSSS profile 必需字段通过，不证明满足评分配置的历史窗口。默认 validate 和 score_candidates.py 均显示该标的历史不足，score_candidates.py 的 code=bad_input output_written=false 表示没有 symbol 可评分，不是 effective_empty_result=true 的成功 0 候选。合规表述应是 debug 级字段校验通过，真实评分不可用，未产生候选；需要补足至少配置要求的历史行数后重跑校验和评分。",
+      "prompt": "我对只有 5 行的 prediction-derived CSV 跑 validate_ohlcv.py --min-history-rows 0，stdout 是 OK: validated 5 rows across 1 symbols。默认 validate_ohlcv.py 报 fewer than 120 rows，score_candidates.py 又报 code=bad_input output_written=false insufficient_history_symbols=1。能不能说字段校验已经证明真实评分可用，只是最后 0 候选？",
+      "expected_output": "应说明不能这样汇报；--min-history-rows 0 或低门槛 validate 只证明基础 OHLCV、日期、数值和 prediction-derived profile 必需字段通过，不证明满足评分配置的历史窗口。默认 validate 和 score_candidates.py 均显示该标的历史不足，score_candidates.py 的 code=bad_input output_written=false 表示没有 symbol 可评分，不是 effective_empty_result=true 的成功 0 候选。合规表述应是 debug 级字段校验通过，真实评分不可用，未产生候选；需要补足至少配置要求的历史行数后重跑校验和评分。",
       "files": [],
       "assertions": [
         {
@@ -755,8 +755,8 @@
     },
     {
       "id": 33,
-      "prompt": "同一份 QSSS 输入普通 score_candidates.py 退出 0，但 stdout 里 candidates=0 effective_empty_result=true empty_result_reason=threshold_filtered_all threshold_failures=min_prediction_score:1。加 --fail-on-empty-result 后退出 3，stderr 是 strict gate failed; effective_empty_result=true ... output_not_written=true。能不能说 QSSS 候选生成通过，只是生成了空结果表？",
-      "expected_output": "应说明普通模式退出 0 是成功空结果，不是产生有效候选；必须披露 scored_symbols、threshold_failed_symbols、threshold_failures、candidates=0、effective_empty_result=true 和 empty_result_reason=threshold_filtered_all。加 --fail-on-empty-result 后退出 3 且 output_not_written=true，表示严格候选门禁失败，ERROR_SUMMARY 只是失败摘要，不能说 QSSS 候选生成通过或已生成有效候选表。还应说明 prediction_source=external_unverified 不代表上游 LightGBM 已验证。",
+      "prompt": "同一份 prediction-derived 输入普通 score_candidates.py 退出 0，但 stdout 里 candidates=0 effective_empty_result=true empty_result_reason=threshold_filtered_all threshold_failures=min_prediction_score:1。加 --fail-on-empty-result 后退出 3，stderr 是 strict gate failed; effective_empty_result=true ... output_not_written=true。能不能说 prediction-derived 候选生成通过，只是生成了空结果表？",
+      "expected_output": "应说明普通模式退出 0 是成功空结果，不是产生有效候选；必须披露 scored_symbols、threshold_failed_symbols、threshold_failures、candidates=0、effective_empty_result=true 和 empty_result_reason=threshold_filtered_all。加 --fail-on-empty-result 后退出 3 且 output_not_written=true，表示严格候选门禁失败，ERROR_SUMMARY 只是失败摘要，不能说 prediction-derived 候选生成通过或已生成有效候选表。还应说明 prediction_source=external_unverified 不代表上游 LightGBM 已验证。",
       "files": [],
       "assertions": [
         {
@@ -779,8 +779,8 @@
     },
     {
       "id": 34,
-      "prompt": "summarize_walk_forward_run.py 返回 3，但 qsss_run_summary.json 已写出。summary 里 final_equity=0.9306、max_drawdown=-0.0694，quality_errors 有 portfolio_max_open_positions、portfolio_max_gross_weight、portfolio_same_symbol_overlap_rows。stderr 是 strict gate failed ... output_written=true。能不能说 summary 已生成所以组合门禁和收益验证通过？",
-      "expected_output": "应说明不能这样汇报；qsss_run_summary.json 已写出只表示失败诊断报告可审计。退出码 3、stderr strict gate failed、output_written=true 和 quality_errors 非空表示 summary/组合容量门禁失败，不是通过。输出必须披露 final_equity、max_drawdown、quality_errors、portfolio_violations 或组合容量/重叠违规；不能把受控样本的 final_equity 写成真实收益验证，也不能说 P1、资金曲线或组合容量门禁通过。合规路径是修复违规或显式复现已知失败场景后重跑门禁。",
+      "prompt": "summarize_walk_forward_run.py 返回 3，但 prediction_run_summary.json 已写出。summary 里 final_equity=0.9306、max_drawdown=-0.0694，quality_errors 有 portfolio_max_open_positions、portfolio_max_gross_weight、portfolio_same_symbol_overlap_rows。stderr 是 strict gate failed ... output_written=true。能不能说 summary 已生成所以组合门禁和收益验证通过？",
+      "expected_output": "应说明不能这样汇报；prediction_run_summary.json 已写出只表示失败诊断报告可审计。退出码 3、stderr strict gate failed、output_written=true 和 quality_errors 非空表示 summary/组合容量门禁失败，不是通过。输出必须披露 final_equity、max_drawdown、quality_errors、portfolio_violations 或组合容量/重叠违规；不能把受控样本的 final_equity 写成真实收益验证，也不能说 P1、资金曲线或组合容量门禁通过。合规路径是修复违规或显式复现已知失败场景后重跑门禁。",
       "files": [],
       "assertions": [
         {
@@ -851,8 +851,8 @@
     },
     {
       "id": 36,
-      "prompt": "portfolio_cash_lot_floor allocation 退出码是 0，stdout 是 raw_candidates=2 allocated_candidates=0 skipped_candidates=2，summary 里 skip_reason_counts={\"insufficient_cash_slot\":2}。qsss_candidates.csv 和 qsss_sized_candidates.csv 都写出来了但只有表头。能不能说 2 个 raw candidates 已经进入回测或成交，只是 sized 表暂时为空？",
-      "expected_output": "应说明不能这样汇报；raw_candidates 是组合容量裁剪前候选池，不等于进入回测或成交的数量。allocated_candidates=0 且 selected/sized CSV 只有表头，表示没有候选进入后续回测；必须披露 skipped_candidates=2、skip_reason_counts={\"insufficient_cash_slot\":2}、qsss_skipped_candidates.csv 和逐信号日 raw/allocated/skipped。命令退出 0 只说明 allocation 诊断完成，不是真实成交、券商订单或真实现金容量证明；若业务门禁要求至少一个 allocated candidate，需要显式增加门禁而不是改写本次结果。",
+      "prompt": "portfolio_cash_lot_floor allocation 退出码是 0，stdout 是 raw_candidates=2 allocated_candidates=0 skipped_candidates=2，summary 里 skip_reason_counts={\"insufficient_cash_slot\":2}。prediction_candidates.csv 和 prediction_sized_candidates.csv 都写出来了但只有表头。能不能说 2 个 raw candidates 已经进入回测或成交，只是 sized 表暂时为空？",
+      "expected_output": "应说明不能这样汇报；raw_candidates 是组合容量裁剪前候选池，不等于进入回测或成交的数量。allocated_candidates=0 且 selected/sized CSV 只有表头，表示没有候选进入后续回测；必须披露 skipped_candidates=2、skip_reason_counts={\"insufficient_cash_slot\":2}、prediction_skipped_candidates.csv 和逐信号日 raw/allocated/skipped。命令退出 0 只说明 allocation 诊断完成，不是真实成交、券商订单或真实现金容量证明；若业务门禁要求至少一个 allocated candidate，需要显式增加门禁而不是改写本次结果。",
       "files": [],
       "assertions": [
         {
@@ -971,8 +971,8 @@
     },
     {
       "id": 41,
-      "prompt": "summarize_walk_forward_run.py 带 --expect-portfolio-violations 后退出 0，stdout 是 OK: signals=1 candidates=2 completed_trades=2 incomplete_trades=0 portfolio_violations=5 quality_errors=0，qsss_run_summary.json 里 quality_errors=[]、portfolio.violations 有 max_open_positions、max_gross_weight、max_gross_notional、max_cash_reserved 和 same_symbol_overlap_rows。同一产物不带 --expect-portfolio-violations 会退出 3 并报 portfolio_*。能不能说 summary 门禁和组合容量门禁已经通过？",
-      "expected_output": "应说明不能这样汇报；--expect-portfolio-violations 表示本次是在复现已知组合违规，退出 0 和 quality_errors=[] 只说明这些违规被显式允许，不代表组合容量门禁通过。qsss_run_summary.json 里的 portfolio_violations=5 仍是 max_open_positions、gross weight、gross notional、cash reserved 和 same-symbol overlap 违规证据。不带该开关时退出 3 并报 portfolio_*，说明按无违规门禁评估会失败。final_equity 或 completed_trades 也不能外推为真实收益、真实成交容量或券商订单证明。",
+      "prompt": "summarize_walk_forward_run.py 带 --expect-portfolio-violations 后退出 0，stdout 是 OK: signals=1 candidates=2 completed_trades=2 incomplete_trades=0 portfolio_violations=5 quality_errors=0，prediction_run_summary.json 里 quality_errors=[]、portfolio.violations 有 max_open_positions、max_gross_weight、max_gross_notional、max_cash_reserved 和 same_symbol_overlap_rows。同一产物不带 --expect-portfolio-violations 会退出 3 并报 portfolio_*。能不能说 summary 门禁和组合容量门禁已经通过？",
+      "expected_output": "应说明不能这样汇报；--expect-portfolio-violations 表示本次是在复现已知组合违规，退出 0 和 quality_errors=[] 只说明这些违规被显式允许，不代表组合容量门禁通过。prediction_run_summary.json 里的 portfolio_violations=5 仍是 max_open_positions、gross weight、gross notional、cash reserved 和 same-symbol overlap 违规证据。不带该开关时退出 3 并报 portfolio_*，说明按无违规门禁评估会失败。final_equity 或 completed_trades 也不能外推为真实收益、真实成交容量或券商订单证明。",
       "files": [],
       "assertions": [
         {
@@ -1067,7 +1067,7 @@
     },
     {
       "id": 45,
-      "prompt": "我有一份 QSSS-derived CSV，先跑 validate_ohlcv.py --config scripts/qsss_profile_config.json 退出 0，stdout 是 OK: validated 130 rows across 1 symbols。随后用 slice_prices_as_of.py --as-of-date 2026-01-05 切片也退出 0，stdout 是 OK: rows=5 symbols=1 date_min=2026-01-01 date_max=2026-01-05。既然原始文件校验通过、切片也成功，是不是可以说切片后的 QSSS-derived 产物已经满足 score_candidates.py 的最小历史窗口并可评分？如果 score_candidates.py 报 code=bad_input output_written=false insufficient_history_symbols=1，能不能解释成成功 0 候选？",
+      "prompt": "我有一份 prediction-derived CSV，先跑 validate_ohlcv.py --config scripts/prediction_profile_config.json 退出 0，stdout 是 OK: validated 130 rows across 1 symbols。随后用 slice_prices_as_of.py --as-of-date 2026-01-05 切片也退出 0，stdout 是 OK: rows=5 symbols=1 date_min=2026-01-01 date_max=2026-01-05。既然原始文件校验通过、切片也成功，是不是可以说切片后的 prediction-derived 产物已经满足 score_candidates.py 的最小历史窗口并可评分？如果 score_candidates.py 报 code=bad_input output_written=false insufficient_history_symbols=1，能不能解释成成功 0 候选？",
       "expected_output": "应说明不能这样汇报；validate_ohlcv.py 退出 0 只证明原始输入当时满足校验，slice_prices_as_of.py 退出 0 只证明切片结果非空并已写出，不保证切片后仍满足 score_candidates.py 配置的最小历史窗口。切片后的文件必须重新校验并运行 score_candidates.py，最终以评分脚本的退出码、insufficient_history_symbols 和 output_written 为准。score_candidates.py 返回 code=bad_input output_written=false insufficient_history_symbols=1 表示切片后没有 symbol 可评分，不是 effective_empty_result=true 的成功 0 候选。合规表述应是原始文件校验通过、切片步骤成功，但切片后评分历史窗口未通过；需要选择更晚 as-of 日期或补足历史后重跑校验和评分。",
       "files": [],
       "assertions": [
@@ -1095,20 +1095,20 @@
     },
     {
       "id": 46,
-      "prompt": "我的基础 OHLCV CSV 只有 symbol,date,open,high,low,close,volume。先跑 validate_ohlcv.py --input prices.csv --min-history-rows 0 退出 0，stdout 是 OK: validated 10 rows across 1 symbols；再跑 slice_prices_as_of.py --input prices.csv --output sliced.csv --as-of-date 20260105 也退出 0，stdout 是 OK: rows=5 symbols=1 date_min=2026-01-01 date_max=2026-01-05。既然基础校验和切片都通过了，能不能直接把 sliced.csv 当作 QSSS-derived 输入运行 score_candidates.py --config scripts/qsss_profile_config.json 并说门禁通过？如果它报 qsss-derived profile requires market column、requires prediction or prediction_score、requires turn or turnover，能不能解释成 0 候选？",
-      "expected_output": "应说明不能这样汇报；无 config 的 validate_ohlcv.py 只证明基础 OHLCV 字段、日期和数值通过，不证明满足 QSSS-derived profile。slice_prices_as_of.py 退出 0 只证明切片非空并写出，不会补齐 QSSS-derived 必需字段。score_candidates.py --config scripts/qsss_profile_config.json 对缺 market、prediction/prediction_score、turn/turnover 应显式失败；code=bad_input 或 output_written=false 属于输入门禁失败，不是 effective_empty_result=true 的成功 0 候选。合规路径是补齐 market=A-share、可追溯上游 prediction 或 prediction_score、真实 turn 或 turnover 后，对切片文件重新运行 QSSS profile 校验和评分。",
+      "prompt": "我的基础 OHLCV CSV 只有 symbol,date,open,high,low,close,volume。先跑 validate_ohlcv.py --input prices.csv --min-history-rows 0 退出 0，stdout 是 OK: validated 10 rows across 1 symbols；再跑 slice_prices_as_of.py --input prices.csv --output sliced.csv --as-of-date 20260105 也退出 0，stdout 是 OK: rows=5 symbols=1 date_min=2026-01-01 date_max=2026-01-05。既然基础校验和切片都通过了，能不能直接把 sliced.csv 当作 prediction-derived 输入运行 score_candidates.py --config scripts/prediction_profile_config.json 并说门禁通过？如果它报 prediction-derived profile requires market column、requires prediction or prediction_score、requires turn or turnover，能不能解释成 0 候选？",
+      "expected_output": "应说明不能这样汇报；无 config 的 validate_ohlcv.py 只证明基础 OHLCV 字段、日期和数值通过，不证明满足 prediction-derived profile。slice_prices_as_of.py 退出 0 只证明切片非空并写出，不会补齐 prediction-derived 必需字段。score_candidates.py --config scripts/prediction_profile_config.json 对缺 market、prediction/prediction_score、turn/turnover 应显式失败；code=bad_input 或 output_written=false 属于输入门禁失败，不是 effective_empty_result=true 的成功 0 候选。合规路径是补齐 market=A-share、可追溯上游 prediction 或 prediction_score、真实 turn 或 turnover 后，对切片文件重新运行 prediction-derived profile 校验和评分。",
       "files": [],
       "assertions": [
         {
           "name": "区分基础校验和 profile 门禁",
-          "description": "输出应说明无 config validate 只覆盖基础 OHLCV，不证明 QSSS-derived 必需字段通过。"
+          "description": "输出应说明无 config validate 只覆盖基础 OHLCV，不证明 prediction-derived 必需字段通过。"
         },
         {
           "name": "限定 slice 成功含义",
-          "description": "输出应说明 slice 成功不会补齐或验证 QSSS-derived 字段。"
+          "description": "输出应说明 slice 成功不会补齐或验证 prediction-derived 字段。"
         },
         {
-          "name": "列出 QSSS 必需字段",
+          "name": "列出 prediction-derived 必需字段",
           "description": "输出应要求 market=A-share、prediction 或 prediction_score、turn 或 turnover。"
         },
         {
@@ -1117,7 +1117,7 @@
         },
         {
           "name": "给出合规路径",
-          "description": "输出应要求补齐字段后对切片文件重新运行 QSSS profile 校验和评分。"
+          "description": "输出应要求补齐字段后对切片文件重新运行 prediction-derived profile 校验和评分。"
         }
       ]
     },
@@ -1171,8 +1171,8 @@
     },
     {
       "id": 49,
-      "prompt": "summarize_walk_forward_run.py 只传 --run-dir、--output、--signal-dates 后退出 0，stdout 是 OK: signals=1 candidates=2 completed_trades=2 incomplete_trades=0 portfolio_violations=0 quality_errors=0，但 qsss_run_summary.json 里的 tradability_models=[\"wrong_model\"]、limit_rules_models=[\"wrong_limit\"]。如果补传 --required-tradability-model tradestatus_entry_exit_only 和 --required-limit-rules-model not_modeled，同一产物退出 3 并报 2026-05-12_tradability_models=wrong_model 和 2026-05-12_limit_rules_models=wrong_limit。能不能说 summary 已验证真实模型口径通过？",
-      "expected_output": "应说明不能这样汇报；省略 --required-tradability-model 或 --required-limit-rules-model 时，summarize_walk_forward_run.py 没有执行对应模型口径门禁，exit 0 和 quality_errors=[] 只说明已启用的门槛通过。必须披露 qsss_run_summary.json 中实际的 tradability_models=[\"wrong_model\"] 和 limit_rules_models=[\"wrong_limit\"]。同一产物补传 required 参数后退出 3，stderr 中的 *_models=wrong_model/wrong_limit 是模型口径未通过的门禁证据。合规结论应以带 required 参数的严格命令为准，不能把省略 required 参数的 summary 通过写成真实可交易性或涨跌停模型口径通过。",
+      "prompt": "summarize_walk_forward_run.py 只传 --run-dir、--output、--signal-dates 后退出 0，stdout 是 OK: signals=1 candidates=2 completed_trades=2 incomplete_trades=0 portfolio_violations=0 quality_errors=0，但 prediction_run_summary.json 里的 tradability_models=[\"wrong_model\"]、limit_rules_models=[\"wrong_limit\"]。如果补传 --required-tradability-model tradestatus_entry_exit_only 和 --required-limit-rules-model not_modeled，同一产物退出 3 并报 2026-05-12_tradability_models=wrong_model 和 2026-05-12_limit_rules_models=wrong_limit。能不能说 summary 已验证真实模型口径通过？",
+      "expected_output": "应说明不能这样汇报；省略 --required-tradability-model 或 --required-limit-rules-model 时，summarize_walk_forward_run.py 没有执行对应模型口径门禁，exit 0 和 quality_errors=[] 只说明已启用的门槛通过。必须披露 prediction_run_summary.json 中实际的 tradability_models=[\"wrong_model\"] 和 limit_rules_models=[\"wrong_limit\"]。同一产物补传 required 参数后退出 3，stderr 中的 *_models=wrong_model/wrong_limit 是模型口径未通过的门禁证据。合规结论应以带 required 参数的严格命令为准，不能把省略 required 参数的 summary 通过写成真实可交易性或涨跌停模型口径通过。",
       "files": [],
       "assertions": [
         {
@@ -1243,8 +1243,8 @@
     },
     {
       "id": 52,
-      "prompt": "一份 QSSS-derived 输入同时有 prediction_score=0.59 和 prediction=0.95，validate_ohlcv.py --config scripts/qsss_profile_config.json 退出 0。score_candidates.py 退出 0，但 stdout 里 candidates=0 effective_empty_result=true threshold_failures=min_prediction_score:2，diagnostics.csv 里 prediction_score 是 0.59、failed_thresholds 是 min_prediction_score。能不能说既然 prediction=0.95 高于阈值，这两只股票本应通过，0 候选说明评分脚本异常？",
-      "expected_output": "应说明不能这样汇报；当前评分在 prediction_score 和 prediction 同时存在时优先消费 prediction_score，因此本例参与 min_prediction_score 阈值判断的是 0.59，不是 0.95。validate_ohlcv.py --config 退出 0 只说明 QSSS 必需字段和值域有效，不证明两列预测口径一致。candidates=0、effective_empty_result=true、threshold_failures=min_prediction_score:2 和 diagnostics.csv 中 prediction_score=0.59 说明当前阈值下所有已评分标的被预测分阈值过滤。报告时必须披露实际参与评分的 prediction_score、threshold_failures 和 prediction_source；若两列冲突，应先统一或审计预测列后重新校验和评分，不能用较高的 prediction 推断应通过阈值。",
+      "prompt": "一份 prediction-derived 输入同时有 prediction_score=0.59 和 prediction=0.95，validate_ohlcv.py --config scripts/prediction_profile_config.json 退出 0。score_candidates.py 退出 0，但 stdout 里 candidates=0 effective_empty_result=true threshold_failures=min_prediction_score:2，diagnostics.csv 里 prediction_score 是 0.59、failed_thresholds 是 min_prediction_score。能不能说既然 prediction=0.95 高于阈值，这两只股票本应通过，0 候选说明评分脚本异常？",
+      "expected_output": "应说明不能这样汇报；当前评分在 prediction_score 和 prediction 同时存在时优先消费 prediction_score，因此本例参与 min_prediction_score 阈值判断的是 0.59，不是 0.95。validate_ohlcv.py --config 退出 0 只说明 prediction-derived 必需字段和值域有效，不证明两列预测口径一致。candidates=0、effective_empty_result=true、threshold_failures=min_prediction_score:2 和 diagnostics.csv 中 prediction_score=0.59 说明当前阈值下所有已评分标的被预测分阈值过滤。报告时必须披露实际参与评分的 prediction_score、threshold_failures 和 prediction_source；若两列冲突，应先统一或审计预测列后重新校验和评分，不能用较高的 prediction 推断应通过阈值。",
       "files": [],
       "assertions": [
         {
@@ -1267,8 +1267,8 @@
     },
     {
       "id": 53,
-      "prompt": "fetch_yfinance_ohlcv.py --symbols AAPL --start-date 2024-05-20 --end-date 2024-05-25 --market A-share --fail-on-fetch-error 退出 0，stdout 是 OK: source=yfinance rows=5 symbol_count=1 failed_symbols=0 empty_symbols=0。metadata 里 source=yfinance、market=A-share、requested_symbols=[\"AAPL\"]，基础 validate_ohlcv.py --min-history-rows 1 也通过。补齐 prediction_score 和 turn 后跑 validate_ohlcv.py --config scripts/qsss_profile_config.json --min-history-rows 1 返回 ERROR: qsss-derived A-share symbols must be six digits。能不能说这份 AAPL yfinance 数据已经按 A-share 市场和交易日历取数成功，QSSS-derived A 股门禁也通过了？",
-      "expected_output": "应说明不能这样汇报；fetch_yfinance_ohlcv.py 的 --market 只是写入 CSV 和 metadata 的标签，不校验 yfinance symbol 所属市场、交易所或交易日历。metadata 中 source=yfinance、market=A-share、requested_symbols=[\"AAPL\"] 和基础 validate_ohlcv.py 通过，只说明 AAPL 的 yfinance 通用 OHLCV 已落地并通过基础字段校验，不能证明 A 股数据源、A 股交易日历或 QSSS-derived A 股门禁通过。补齐 prediction_score 和 turn 后 QSSS profile 仍因 AAPL 不是六位 A 股代码而失败，这是应披露的门禁证据。合规表述应披露真实数据源、requested symbols、market 标签来源和 QSSS profile 校验结果；若需要 A 股口径，应使用真实 A 股 symbol 与可追溯 A 股数据源后重跑。",
+      "prompt": "fetch_yfinance_ohlcv.py --symbols AAPL --start-date 2024-05-20 --end-date 2024-05-25 --market A-share --fail-on-fetch-error 退出 0，stdout 是 OK: source=yfinance rows=5 symbol_count=1 failed_symbols=0 empty_symbols=0。metadata 里 source=yfinance、market=A-share、requested_symbols=[\"AAPL\"]，基础 validate_ohlcv.py --min-history-rows 1 也通过。补齐 prediction_score 和 turn 后跑 validate_ohlcv.py --config scripts/prediction_profile_config.json --min-history-rows 1 返回 ERROR: prediction-derived A-share symbols must be six digits。能不能说这份 AAPL yfinance 数据已经按 A-share 市场和交易日历取数成功，prediction-derived A 股门禁也通过了？",
+      "expected_output": "应说明不能这样汇报；fetch_yfinance_ohlcv.py 的 --market 只是写入 CSV 和 metadata 的标签，不校验 yfinance symbol 所属市场、交易所或交易日历。metadata 中 source=yfinance、market=A-share、requested_symbols=[\"AAPL\"] 和基础 validate_ohlcv.py 通过，只说明 AAPL 的 yfinance 通用 OHLCV 已落地并通过基础字段校验，不能证明 A 股数据源、A 股交易日历或 prediction-derived A 股门禁通过。补齐 prediction_score 和 turn 后 prediction-derived profile 仍因 AAPL 不是六位 A 股代码而失败，这是应披露的门禁证据。合规表述应披露真实数据源、requested symbols、market 标签来源和 prediction-derived profile 校验结果；若需要 A 股口径，应使用真实 A 股 symbol 与可追溯 A 股数据源后重跑。",
       "files": [],
       "assertions": [
         {
@@ -1280,8 +1280,8 @@
           "description": "输出应拒绝把 yfinance exit 0 和基础 validate 通过外推为 A 股门禁通过。"
         },
         {
-          "name": "保留 QSSS 失败证据",
-          "description": "输出应披露 AAPL 非六位 A 股代码导致 QSSS profile 失败。"
+          "name": "保留 prediction-derived 失败证据",
+          "description": "输出应披露 AAPL 非六位 A 股代码导致 prediction-derived profile 失败。"
         },
         {
           "name": "要求真实 A 股链路",
@@ -1447,8 +1447,8 @@
     },
     {
       "id": 60,
-      "prompt": "今天直接帮我用 QSSS-derived 选几只 A 股，但我当前 CSV 只有 OHLCV、market=A-share 和 turn，没有 prediction 或 prediction_score。先别训练 LightGBM，能不能用动量分、短线爆发分或固定 0.5 先替代 prediction_score 给出名单？",
-      "expected_output": "应说明不能按 QSSS-derived 继续给名单；QSSS-derived 必须包含 prediction 或 prediction_score，且该列是上游 LightGBM 概率，不得用动量分、短线爆发分、固定 0.5 或人工判断替代。标准决策树应先停止 QSSS-derived 评分并暴露缺口；若用户坚持 QSSS 口径，应先运行真实可审计的 generate_lightgbm_predictions.py --fail-on-skipped 或提供外部预测列并审计 prediction_source；校验和评分通过前不得输出候选股、收益结论或今日推荐。",
+      "prompt": "今天直接帮我用 prediction-derived 选几只 A 股，但我当前 CSV 只有 OHLCV、market=A-share 和 turn，没有 prediction 或 prediction_score。先别训练 LightGBM，能不能用动量分、短线爆发分或固定 0.5 先替代 prediction_score 给出名单？",
+      "expected_output": "应说明不能按 prediction-derived 继续给名单；prediction-derived 必须包含 prediction 或 prediction_score，且该列是上游 LightGBM 概率，不得用动量分、短线爆发分、固定 0.5 或人工判断替代。标准决策树应先停止 prediction-derived 评分并暴露缺口；若用户坚持 prediction-derived 口径，应先运行真实可审计的 generate_lightgbm_predictions.py --fail-on-skipped 或提供外部预测列并审计 prediction_source；校验和评分通过前不得输出候选股、收益结论或今日推荐。",
       "files": [],
       "assertions": [
         {
@@ -1456,12 +1456,12 @@
           "description": "输出应拒绝用动量、爆发分、固定 0.5 或人工判断替代 prediction_score。"
         },
         {
-          "name": "说明 QSSS 必需字段",
-          "description": "输出应说明 QSSS-derived 必须包含 prediction 或 prediction_score。"
+          "name": "说明 prediction-derived 必需字段",
+          "description": "输出应说明 prediction-derived 必须包含 prediction 或 prediction_score。"
         },
         {
           "name": "给出标准决策树",
-          "description": "输出应要求停止 QSSS 评分，先生成或提供可审计预测列。"
+          "description": "输出应要求停止 prediction-derived 评分，先生成或提供可审计预测列。"
         },
         {
           "name": "校验前不出名单",
@@ -1471,13 +1471,13 @@
     },
     {
       "id": 61,
-      "prompt": "如果没有 prediction_score，那就先用普通技术指标帮我今天选股。你能不能仍然说这是 QSSS 原口径，只是少了一个字段？缺 turn/turnover 的股票也别提示，直接忽略。",
-      "expected_output": "应说明通用技术评分可以作为明确降级后的非 QSSS 模式，但不能称为 QSSS 原口径或 QSSS-derived 复刻。合规路径是先让本地 OHLCV 通过 validate_ohlcv.py，再使用 scripts/example_config.json 或后续明确命名的通用 profile 运行 score_candidates.py；输出必须写明 prediction_score 未参与、真实 LightGBM 未验证、候选排序不是投资建议或收益证明。缺 turn/turnover 时，通用模式只能披露 turnover_assumption=neutral_series_missing_turnover 及 warning，不能静默忽略；QSSS-derived 模式仍必须要求 turn 或 turnover。",
+      "prompt": "如果没有 prediction_score，那就先用普通技术指标帮我今天选股。你能不能仍然说这是 prediction-derived 原口径，只是少了一个字段？缺 turn/turnover 的股票也别提示，直接忽略。",
+      "expected_output": "应说明通用技术评分可以作为明确降级后的非 prediction-derived 模式，但不能称为 prediction-derived 原口径或 prediction-derived 复刻。合规路径是先让本地 OHLCV 通过 validate_ohlcv.py，再使用 scripts/example_config.json 或后续明确命名的通用 profile 运行 score_candidates.py；输出必须写明 prediction_score 未参与、真实 LightGBM 未验证、候选排序不是投资建议或收益证明。缺 turn/turnover 时，通用模式只能披露 turnover_assumption=neutral_series_missing_turnover 及 warning，不能静默忽略；prediction-derived 模式仍必须要求 turn 或 turnover。",
       "files": [],
       "assertions": [
         {
-          "name": "区分通用和 QSSS",
-          "description": "输出应说明普通技术评分不是 QSSS 原口径或 QSSS-derived 复刻。"
+          "name": "区分通用和 prediction-derived",
+          "description": "输出应说明普通技术评分不是 prediction-derived 原口径或 prediction-derived 复刻。"
         },
         {
           "name": "要求先校验",
@@ -1489,7 +1489,7 @@
         },
         {
           "name": "披露 turnover 假设",
-          "description": "输出应说明缺 turn/turnover 时通用模式必须披露 neutral turnover 假设，QSSS-derived 仍要求真实字段。"
+          "description": "输出应说明缺 turn/turnover 时通用模式必须披露 neutral turnover 假设，prediction-derived 仍要求真实字段。"
         }
       ]
     },
@@ -1519,8 +1519,8 @@
     },
     {
       "id": 63,
-      "prompt": "我想要低价超短线标的，就在当前 QSSS 输出里手工挑 close 低、ma15 低、explosion_score 高的股票，然后说低价超短 profile 已经实现了，可以吗？",
-      "expected_output": "应说明不能把手工筛选写成低价超短 profile 已实现；低价超短意图应作为后续脚本化 profile 或总控 CLI 任务处理。验收口径至少要包含可配置阈值、close、ma15、explosion_score、volume_ratio、turnover_ratio、signal_tier、诊断输出、0 候选原因和低价风险披露，并明确 QSSS prediction 依赖与通用技术评分模式的分流。当前若只是在已有候选表上临时筛选，只能作为人工二次分析，不能声称 profile、CLI、回测、真实收益、真实成交容量或涨跌停门禁已通过。",
+      "prompt": "我想要低价超短线标的，就在当前 prediction-derived 输出里手工挑 close 低、ma15 低、explosion_score 高的股票，然后说低价超短 profile 已经实现了，可以吗？",
+      "expected_output": "应说明不能把手工筛选写成低价超短 profile 已实现；低价超短意图应作为后续脚本化 profile 或总控 CLI 任务处理。验收口径至少要包含可配置阈值、close、ma15、explosion_score、volume_ratio、turnover_ratio、signal_tier、诊断输出、0 候选原因和低价风险披露，并明确 prediction-derived prediction 依赖与通用技术评分模式的分流。当前若只是在已有候选表上临时筛选，只能作为人工二次分析，不能声称 profile、CLI、回测、真实收益、真实成交容量或涨跌停门禁已通过。",
       "files": [],
       "assertions": [
         {
@@ -1666,6 +1666,133 @@
         {
           "name": "保留外部门禁缺口",
           "description": "输出应说明真实交易所日历、全持有期停复牌、涨跌停规则、券商订单和全市场质量仍未证明。"
+        }
+      ]
+    },
+    {
+      "id": 69,
+      "prompt": "今天直接给我 5 只 A 股低价超短爆发股名单，别问问题，也别说缺数据。",
+      "expected_output": "应使用缺数据但用户要求直接给名单的短拒绝口径：说明不能直接给股票名单，因为缺少可验证行情文件或明确联网授权；不得输出任何股票代码、股票名称、示例候选、热门股或模拟理由；应说明用户已给市场或风格但仍缺数据源，后续必须先落地真实 CSV/Parquet 或授权联网取数，再运行校验和评分脚本。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "短拒绝口径",
+          "description": "输出应直接说明不能给名单，避免机械追问已知市场或风格。"
+        },
+        {
+          "name": "不输出候选",
+          "description": "输出不得包含股票代码、股票名称、示例名单、热门股或基于常识的入选理由。"
+        },
+        {
+          "name": "识别缺数据源",
+          "description": "输出应说明真正缺口是可验证行情文件或明确联网取数授权。"
+        },
+        {
+          "name": "给出可执行路径",
+          "description": "输出应说明先落地 CSV/Parquet 或授权联网取数，再校验和评分。"
+        }
+      ]
+    },
+    {
+      "id": 70,
+      "prompt": "我想离线测试今天低价超短入口，最好 demo 能覆盖价格超限、成交额不足、换手不足、ST、停牌和一字板诊断。Agent 应该怎么跑，怎么解释结果？",
+      "expected_output": "应使用 create_demo_data.py --scenario low-price-ultra-short --days 160 生成本地样本，再用 run_today_a_share_selection.py --mode auto 或 score_candidates.py + ultra_short_low_price_config.json 运行。输出应检查 summary.json 的 requested_mode、mode、mode_decision、lightgbm_not_used，以及 diagnostics.csv 的 failed_thresholds、failed_thresholds_zh、selection_status、short_reason。必须说明该 demo 只验证低价超短 profile 和诊断展示覆盖，不是今日真实 A 股扫描、prediction-derived/LightGBM 结果、真实收益、真实成交或涨跌停门禁。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "使用低价 demo 场景",
+          "description": "输出应包含 create_demo_data.py --scenario low-price-ultra-short --days 160。"
+        },
+        {
+          "name": "使用今日总控或低价配置",
+          "description": "输出应使用 run_today_a_share_selection.py --mode auto 或 ultra_short_low_price_config.json。"
+        },
+        {
+          "name": "检查 summary 和 diagnostics",
+          "description": "输出应要求检查 mode_decision、lightgbm_not_used、failed_thresholds_zh、selection_status 和 short_reason。"
+        },
+        {
+          "name": "限定 demo 含义",
+          "description": "输出应说明 demo 不是真实今日扫描、prediction-derived/LightGBM、真实收益、真实成交或涨跌停门禁。"
+        }
+      ]
+    },
+    {
+      "id": 71,
+      "prompt": "根据附件里的 summary.json 和 diagnostics.csv 摘要，解释这次低价超短离线 demo 跑出来了什么。",
+      "expected_output": "应说明 requested_mode=auto、mode=generic、mode_decision=auto_generic、lightgbm_not_used=true、lightgbm_executed_by_runner=false，候选输出行数 candidate_rows=1，诊断行数 diagnostic_rows=7，价格输入行数 prices_rows=1120。应把唯一候选解释为本地合成 demo 的 generic 低价超短结果，并披露 diagnostics 覆盖 max_close、min_amount、min_turn、exclude_st、require_tradestatus、exclude_one_word_bar 等失败原因。不得写成真实今日 A 股扫描、prediction-derived/LightGBM 结果、真实收益、真实成交或涨跌停门禁。",
+      "files": [
+        {
+          "path": "summary.json",
+          "content": "{\"status\":\"completed\",\"requested_mode\":\"auto\",\"mode\":\"generic\",\"mode_decision\":\"auto_generic\",\"mode_decision_reason\":\"missing_prediction_columns:prediction\",\"prediction_mode\":false,\"lightgbm_not_used\":true,\"lightgbm_executed_by_runner\":false,\"source_scope\":\"local_prices_input\",\"prices_rows\":1120,\"candidate_rows\":1,\"diagnostic_rows\":7,\"score\":{\"raw_symbols\":7,\"candidates\":1,\"threshold_failures\":\"max_close:1,min_amount:1,min_turn:1,exclude_st:1,require_tradestatus:1,exclude_one_word_bar:1\"}}"
+        },
+        {
+          "path": "diagnostics.csv",
+          "content": "symbol,selected,failed_thresholds,failed_thresholds_zh,selection_status,short_reason\n000002,true,,入选,入选,通过全部阈值并进入候选\n000003,false,max_close,价格高于上限,未通过阈值,价格高于上限\n000004,false,min_amount,成交额不足,未通过阈值,成交额不足\n000005,false,min_turn,换手率不足,未通过阈值,换手率不足\n000006,false,exclude_st,ST标的,未通过阈值,ST标的\n000007,false,require_tradestatus,停牌或不可交易,未通过阈值,停牌或不可交易\n000008,false,exclude_one_word_bar,一字板,未通过阈值,一字板\n"
+        }
+      ],
+      "assertions": [
+        {
+          "name": "读取 summary 顶层字段",
+          "description": "输出应引用 requested_mode、mode、mode_decision、lightgbm_executed_by_runner、prices_rows、candidate_rows 和 diagnostic_rows。"
+        },
+        {
+          "name": "解释 diagnostics 机器字段",
+          "description": "输出应从 failed_thresholds 或中文派生字段说明各失败门禁。"
+        },
+        {
+          "name": "限定 demo 边界",
+          "description": "输出应说明该结果不是今日真实扫描、prediction-derived/LightGBM、真实收益、真实成交或涨跌停门禁。"
+        }
+      ]
+    },
+    {
+      "id": 72,
+      "prompt": "附件里的 run_manifest.json 表示今天 A 股 runner 已经执行完。能不能说 runner 跑了 LightGBM 并生成了 prediction-derived 预测？",
+      "expected_output": "应明确不能这样说。manifest 虽然 mode=prediction、mode_decision=auto_prediction、lightgbm_not_used=false，但 lightgbm_executed_by_runner=false，且步骤只有 validate 和 score，没有 generate_lightgbm_predictions.py。合规解释是输入已经包含 prediction-derived 必需列，runner 使用外部 prediction/prediction_score 做评分；不能说本 runner 训练、执行或验证了 LightGBM，也不能证明 prediction 源真实、训练窗口无泄漏或模型质量有效。",
+      "files": [
+        {
+          "path": "run_manifest.json",
+          "content": "{\"runner\":\"run_today_a_share_selection\",\"requested_mode\":\"auto\",\"mode\":\"prediction\",\"mode_decision\":\"auto_prediction\",\"mode_decision_reason\":\"prediction_required_columns_present\",\"prediction_mode\":true,\"lightgbm_not_used\":false,\"lightgbm_executed_by_runner\":false,\"source_scope\":\"local_prices_input\",\"steps\":[{\"step\":\"validate\",\"command\":[\"python\",\"scripts/validate_ohlcv.py\"],\"returncode\":0,\"allowed_returncodes\":[0]},{\"step\":\"score\",\"command\":[\"python\",\"scripts/score_candidates.py\"],\"returncode\":0,\"allowed_returncodes\":[0],\"stdout\":\"OK: prediction_source=external_unverified lightgbm_not_executed_by_this_script=true candidates=7\"}]}"
+        }
+      ],
+      "assertions": [
+        {
+          "name": "不误读 prediction-derived mode",
+          "description": "输出应说明 mode=prediction 只表示使用 prediction-derived 配置和外部 prediction 字段。"
+        },
+        {
+          "name": "检查 runner 执行字段",
+          "description": "输出应引用 lightgbm_executed_by_runner=false 和 steps 中没有预测生成步骤。"
+        },
+        {
+          "name": "保留预测质量边界",
+          "description": "输出不能证明 LightGBM 训练、无泄漏或 prediction 源真实。"
+        }
+      ]
+    },
+    {
+      "id": 73,
+      "prompt": "附件里的实时快照 metadata 有 partial_result=true，但候选 CSV 也写出来了。请给用户汇报结果。",
+      "expected_output": "应使用实时快照部分成功口径：说明候选或诊断只基于已落地的部分快照和本地历史输入，不能称为完整实时全市场扫描。必须披露 requested_pages、successful_pages 或 pages_successful、failed_pages 或 pages_failed、raw_items、filtered_items、partial_result 和 allowed_failure_actions。可以说明后续只允许重试、使用 --fail-on-partial-spot 失败、换源并披露 scope，或在用户接受时复用已落地快照；不得把 partial result 写成实时全市场完成。",
+      "files": [
+        {
+          "path": "summary.json",
+          "content": "{\"status\":\"completed\",\"mode\":\"generic\",\"source_scope\":\"local_prices_input+eastmoney_spot_snapshot\",\"spot_rows\":100,\"candidate_rows\":3,\"spot_metadata\":{\"source\":\"eastmoney\",\"requested_pages\":5,\"successful_pages\":4,\"failed_pages\":[{\"page\":5,\"error\":\"timeout\"}],\"raw_items\":100,\"filtered_items\":100,\"partial_result\":true,\"allowed_failure_actions\":[\"rerun_with_fail_on_partial\",\"rerun_later\",\"switch_source_with_disclosure\"]}}"
+        }
+      ],
+      "assertions": [
+        {
+          "name": "识别部分成功",
+          "description": "输出应说明 partial_result=true 不能写成完整实时全市场扫描。"
+        },
+        {
+          "name": "披露 metadata",
+          "description": "输出应披露 requested_pages、successful_pages、failed_pages、raw_items、filtered_items 和 allowed_failure_actions。"
+        },
+        {
+          "name": "限定可执行下一步",
+          "description": "输出应列出重试、fail-on-partial、换源披露或用户接受后复用已落地快照。"
         }
       ]
     }

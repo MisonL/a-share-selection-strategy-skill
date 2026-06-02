@@ -21,9 +21,9 @@ def build_artifact_report(run_dir: Path, args: Any, validator: str) -> dict[str,
     dates = list(args.signal_dates)
     symbols = list(args.expected_symbols)
     errors = count_errors(dates, args.expected_candidates)
-    summary = load_json(run_dir / "qsss_run_summary.json")
+    summary = load_json(run_dir / "prediction_run_summary.json")
     errors += metadata_errors(load_json(run_dir / "metadata.json"), symbols, args)
-    overlap = load_json(run_dir / "qsss_overlap_summary.json")
+    overlap = load_json(run_dir / "prediction_overlap_summary.json")
     errors += allocation_errors(
         run_dir=run_dir,
         summary=summary,
@@ -34,7 +34,7 @@ def build_artifact_report(run_dir: Path, args: Any, validator: str) -> dict[str,
     )
     errors += summary_errors(summary, dates, args.expected_candidates)
     totals = validate_signal_artifacts(run_dir, dates, symbols, args, errors)
-    errors += equity_errors(run_dir / "qsss_equity_curve.csv", summary, dates, args, totals)
+    errors += equity_errors(run_dir / "prediction_equity_curve.csv", summary, dates, args, totals)
     errors += overlap_errors(overlap, summary, args)
     manifest_checked = bool(args.manifest_validation)
     if args.manifest_validation:
@@ -91,9 +91,9 @@ def validate_signal_artifacts(
     for index, date in enumerate(dates):
         signal_dir = run_dir / "signals" / date
         expected = args.expected_candidates[index] if index < len(args.expected_candidates) else 0
-        candidates = read_csv(signal_dir / "qsss_candidates.csv")
-        sized = read_csv(signal_dir / "qsss_sized_candidates.csv")
-        backtest = read_csv(signal_dir / "qsss_backtest.csv")
+        candidates = read_csv(signal_dir / "prediction_candidates.csv")
+        sized = read_csv(signal_dir / "prediction_sized_candidates.csv")
+        backtest = read_csv(signal_dir / "prediction_backtest.csv")
         prices = read_csv(signal_dir / "prices_signal_window.csv")
         errors += price_window_errors(prices, date, symbols)
         errors += prediction_errors(load_json(signal_dir / "prediction_summary.json"), date, len(symbols))
@@ -161,7 +161,7 @@ def sized_errors(rows: list[dict[str, str]], signal_date: str, args: Any) -> lis
 def raw_candidate_errors(run_dir: Path, date: str, selected_count: int, args: Any) -> list[str]:
     if args.required_allocation_model != "portfolio_cash_lot_floor":
         return []
-    rows = read_csv(run_dir / "signals" / date / "qsss_raw_candidates.csv")
+    rows = read_csv(run_dir / "signals" / date / "prediction_raw_candidates.csv")
     return [f"{date}_raw_candidates_lt_selected"] if len(rows) < selected_count else []
 
 

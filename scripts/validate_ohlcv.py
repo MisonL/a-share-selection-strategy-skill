@@ -54,20 +54,20 @@ def main(argv: list[str] | None = None) -> int:
 def ensure_runtime_dependencies() -> None:
     if "pd" in globals():
         return
-    global pd, load_config, parse_dates, read_table, profile_column_errors, qsss_value_errors
+    global pd, load_config, parse_dates, read_table, profile_column_errors, prediction_value_errors
     import pandas as pandas_module
     from stock_selection_config import load_config as load_config_fn
     from stock_selection_data import parse_dates as parse_dates_fn
     from stock_selection_data import read_table as read_table_fn
     from stock_selection_profile import profile_column_errors as profile_column_errors_fn
-    from stock_selection_profile import qsss_value_errors as qsss_value_errors_fn
+    from stock_selection_profile import prediction_value_errors as prediction_value_errors_fn
 
     pd = pandas_module
     load_config = load_config_fn
     parse_dates = parse_dates_fn
     read_table = read_table_fn
     profile_column_errors = profile_column_errors_fn
-    qsss_value_errors = qsss_value_errors_fn
+    prediction_value_errors = prediction_value_errors_fn
 
 
 def validate_frame(frame: pd.DataFrame, min_history_rows: int) -> list[str]:
@@ -158,7 +158,7 @@ def validate_profile_columns(
     errors = profile_column_errors(frame, config)
     if errors:
         return errors
-    return qsss_value_errors(frame, config)
+    return prediction_value_errors(frame, config)
 
 
 if __name__ == "__main__":

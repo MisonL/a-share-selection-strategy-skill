@@ -18,7 +18,7 @@ jobs:
         run: |
           python -m json.tool evals/evals.json >/tmp/stock-selection-evals.json
           python -m json.tool scripts/example_config.json >/tmp/stock-selection-example-config.json
-          python -m json.tool scripts/qsss_profile_config.json >/tmp/stock-selection-qsss-config.json
+          python -m json.tool scripts/prediction_profile_config.json >/tmp/stock-selection-prediction-config.json
       - name: Validate agent manifest
         run: |
           python - <<'PY'

@@ -12,4 +12,4 @@ build/
 *.log
 *.tmp
 candidates.csv
-qsss_candidates.csv
+prediction_candidates.csv

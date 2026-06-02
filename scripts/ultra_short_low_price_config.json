@@ -5,7 +5,7 @@
     "market": "A-share",
     "symbol_prefix_allow_regex": "^(60|68|00|30)",
     "symbol_prefix_exclude": ["8", "4"],
-    "notes": "通用技术评分低价超短剖面；不使用也不伪造 QSSS/LightGBM prediction。"
+    "notes": "通用技术评分低价超短剖面；不使用也不伪造 prediction-derived/LightGBM prediction。"
   },
   "windows": {
     "momentum_short": 20,
@@ -57,7 +57,7 @@
   },
   "disclosure": {
     "prediction_policy": "not_used",
-    "qsss_mode": false,
+    "prediction_mode": false,
     "lightgbm_not_used": true,
     "risk_note": "低价超短剖面只表达通用技术因子约束，不证明真实成交、涨跌停、收益或 LightGBM 质量。"
   },

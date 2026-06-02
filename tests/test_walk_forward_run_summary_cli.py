@@ -186,8 +186,8 @@ def build_run(
         metadata,
     )
     write_signal_dir(root / signal_parent / "2026-05-12", skipped_symbols)
-    write_equity(root / "qsss_equity_curve.csv")
-    write_json(root / "qsss_overlap_summary.json", overlap_summary(portfolio_violates))
+    write_equity(root / "prediction_equity_curve.csv")
+    write_json(root / "prediction_overlap_summary.json", overlap_summary(portfolio_violates))
     return root
 
 
@@ -198,7 +198,7 @@ def write_signal_dir(path: Path, skipped_symbols: int) -> None:
         {"raw_symbols": 2, "predicted_symbols": 2 - skipped_symbols, "skipped_symbols": skipped_symbols},
     )
     pd.DataFrame([{"symbol": "000001"}, {"symbol": "000002"}]).to_csv(
-        path / "qsss_candidates.csv",
+        path / "prediction_candidates.csv",
         index=False,
     )
     pd.DataFrame(
@@ -206,7 +206,7 @@ def write_signal_dir(path: Path, skipped_symbols: int) -> None:
             backtest_row("000001", -0.02),
             backtest_row("000002", 0.01),
         ]
-    ).to_csv(path / "qsss_backtest.csv", index=False)
+    ).to_csv(path / "prediction_backtest.csv", index=False)
 
 
 def backtest_row(symbol: str, value: float) -> dict[str, object]:

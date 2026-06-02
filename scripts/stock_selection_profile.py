@@ -6,19 +6,19 @@ from typing import Any
 
 import pandas as pd
 
-from stock_selection_metrics import is_qsss_mode
+from stock_selection_metrics import is_prediction_mode
 
 
 def profile_column_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list[str]:
     errors = threshold_column_errors(frame, config)
-    if not is_qsss_mode(config):
+    if not is_prediction_mode(config):
         return errors
     if config.get("universe", {}).get("market") and "market" not in frame.columns:
-        errors.append("qsss-derived profile requires market column")
+        errors.append("prediction-derived profile requires market column")
     if not any(column in frame.columns for column in ["prediction", "prediction_score"]):
-        errors.append("qsss-derived profile requires prediction or prediction_score column")
+        errors.append("prediction-derived profile requires prediction or prediction_score column")
     if not any(column in frame.columns for column in ["turn", "turnover"]):
-        errors.append("qsss-derived profile requires turn or turnover column")
+        errors.append("prediction-derived profile requires turn or turnover column")
     return errors
 
 
@@ -46,19 +46,19 @@ def threshold_column_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list
     return errors
 
 
-def qsss_value_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list[str]:
-    if not is_qsss_mode(config):
+def prediction_value_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list[str]:
+    if not is_prediction_mode(config):
         return []
     errors = []
     market = str(config.get("universe", {}).get("market", ""))
-    errors.extend(qsss_market_errors(frame, market))
-    market_frame = qsss_market_frame(frame, market)
+    errors.extend(prediction_market_errors(frame, market))
+    market_frame = prediction_market_frame(frame, market)
     if not market_frame.empty:
         invalid_symbols = ~market_frame["symbol"].astype(str).str.fullmatch(r"\d{6}")
         invalid_count = int(invalid_symbols.sum())
         if invalid_count:
             errors.append(
-                "qsss-derived A-share symbols must be six digits; "
+                "prediction-derived A-share symbols must be six digits; "
                 f"invalid_symbols={invalid_count}"
             )
     prediction_frame = market_frame if not market_frame.empty else frame
@@ -68,7 +68,7 @@ def qsss_value_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list[str]:
     return errors
 
 
-def qsss_market_errors(frame: pd.DataFrame, market: str) -> list[str]:
+def prediction_market_errors(frame: pd.DataFrame, market: str) -> list[str]:
     if not market or "market" not in frame.columns:
         return []
     values = frame["market"].astype(str)
@@ -78,15 +78,15 @@ def qsss_market_errors(frame: pd.DataFrame, market: str) -> list[str]:
     errors = []
     if invalid.any():
         errors.append(
-            f"qsss-derived A-share rows must use market={market}; "
+            f"prediction-derived A-share rows must use market={market}; "
             f"invalid_market_values={format_value_counts(values[invalid])}"
         )
     if (values == market).sum() == 0:
-        errors.append(f"qsss-derived profile requires at least one {market} row")
+        errors.append(f"prediction-derived profile requires at least one {market} row")
     return errors
 
 
-def qsss_market_frame(frame: pd.DataFrame, market: str) -> pd.DataFrame:
+def prediction_market_frame(frame: pd.DataFrame, market: str) -> pd.DataFrame:
     if not market or "market" not in frame.columns:
         return frame.iloc[0:0]
     return frame[frame["market"].astype(str) == market]

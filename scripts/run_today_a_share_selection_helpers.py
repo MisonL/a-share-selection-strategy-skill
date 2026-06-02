@@ -9,6 +9,9 @@ from typing import Any
 
 def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
     failed = [step for step in manifest["steps"] if step["returncode"] not in step["allowed_returncodes"]]
+    prices = prices_output_path(manifest)
+    candidates = Path(manifest["output_dir"]) / "candidates.csv"
+    diagnostics = Path(manifest["output_dir"]) / "diagnostics.csv"
     return {
         "runner": manifest["runner"],
         "status": status,
@@ -16,18 +19,29 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "mode": manifest["mode"],
         "mode_decision": manifest.get("mode_decision", ""),
         "mode_decision_reason": manifest.get("mode_decision_reason", ""),
-        "qsss_mode": manifest["qsss_mode"],
+        "prediction_mode": manifest["prediction_mode"],
         "lightgbm_not_used": manifest["lightgbm_not_used"],
+        "lightgbm_executed_by_runner": manifest.get("lightgbm_executed_by_runner", False),
         "source_scope": manifest["source_scope"],
         "steps": len(manifest["steps"]),
         "failed_steps": [step["step"] for step in failed],
         "spot_metadata": spot_metadata_view(manifest),
         "spot_rows": spot_rows(manifest),
+        "prices_rows": tabular_row_count(prices),
+        "candidate_rows": tabular_row_count(candidates),
+        "diagnostic_rows": tabular_row_count(diagnostics),
         "score": score_summary(manifest),
-        "candidates_output": str(Path(manifest["output_dir"]) / "candidates.csv"),
-        "diagnostics_output": str(Path(manifest["output_dir"]) / "diagnostics.csv"),
+        "prices_output": str(prices),
+        "candidates_output": str(candidates),
+        "diagnostics_output": str(diagnostics),
         "boundary": boundary_for(manifest),
     }
+
+
+def prices_output_path(manifest: dict[str, Any]) -> Path:
+    source = str(manifest.get("prices_input", ""))
+    suffix = tabular_suffix(source)
+    return Path(manifest["output_dir"]) / f"prices{suffix}"
 
 
 def spot_metadata_view(manifest: dict[str, Any]) -> dict[str, Any]:
@@ -60,14 +74,25 @@ def spot_rows(manifest: dict[str, Any]) -> int:
     output_dir = Path(manifest["output_dir"])
     if not manifest.get("spot_input"):
         return 0
-    spot_path = output_dir / ("spot.parquet" if str(manifest["spot_input"]).endswith(".parquet") else "spot.csv")
+    spot_path = output_dir / f"spot{tabular_suffix(str(manifest['spot_input']))}"
     if not spot_path.exists():
         return 0
-    if spot_path.suffix == ".parquet":
-        return parquet_row_count(spot_path)
-    if spot_path.suffix != ".csv":
+    return tabular_row_count(spot_path)
+
+
+def tabular_suffix(source: str | Path) -> str:
+    suffix = Path(source).suffix.lower()
+    return suffix if suffix in {".csv", ".parquet", ".pq"} else ".csv"
+
+
+def tabular_row_count(path: Path) -> int:
+    if not path.exists():
         return 0
-    with spot_path.open(encoding="utf-8") as handle:
+    if path.suffix.lower() in {".parquet", ".pq"}:
+        return parquet_row_count(path)
+    if path.suffix.lower() != ".csv":
+        return 0
+    with path.open(encoding="utf-8") as handle:
         return max(sum(1 for _line in handle) - 1, 0)
 
 
@@ -84,14 +109,15 @@ def parquet_row_count(path: Path) -> int:
 def boundary_for(manifest: dict[str, Any]) -> str:
     decision = manifest.get("mode_decision", "")
     reason = manifest.get("mode_decision_reason", "")
-    if manifest["qsss_mode"]:
+    if manifest["prediction_mode"]:
         return (
-            "QSSS mode requires real prediction or prediction_score in the input. "
-            f"mode_decision={decision} reason={reason}"
+            "prediction-derived mode requires external prediction or prediction_score in the input. "
+            "The runner does not execute LightGBM. "
+            f"lightgbm_executed_by_runner=false mode_decision={decision} reason={reason}"
         )
     return (
-        "Generic technical mode; not QSSS-derived and not LightGBM-backed. "
-        f"mode_decision={decision} reason={reason}"
+        "Generic technical mode; not prediction-derived and not LightGBM-backed. "
+        f"lightgbm_executed_by_runner=false mode_decision={decision} reason={reason}"
     )
 
 
@@ -142,7 +168,8 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
     print(
         "OK: runner=run_today_a_share_selection "
         f"mode={manifest['mode']} steps={len(manifest['steps'])} "
-        f"qsss_mode={str(manifest['qsss_mode']).lower()} "
+        f"prediction_mode={str(manifest['prediction_mode']).lower()} "
         f"lightgbm_not_used={str(manifest['lightgbm_not_used']).lower()} "
+        "lightgbm_executed_by_runner=false "
         f"manifest={output / 'run_manifest.json'} summary={output / 'summary.json'}"
     )

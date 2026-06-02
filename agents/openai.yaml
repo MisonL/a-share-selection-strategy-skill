@@ -1,4 +1,4 @@
 interface:
   display_name: "Stock Selection Strategy"
-  short_description: "Design, implement, run, score, explain, and review stock screens"
-  default_prompt: "Use $stock-selection-strategy to design, implement, run, score, explain, or audit a verifiable stock selection workflow from local market data."
+  short_description: "Design, run, score, explain, and audit verifiable stock screens"
+  default_prompt: "Use $stock-selection-strategy to design, run, score, explain, or audit a verifiable stock selection workflow. Do not output candidates without local market data or explicit fetch authorization; do not fabricate prediction-derived or LightGBM predictions. This is not investment advice."

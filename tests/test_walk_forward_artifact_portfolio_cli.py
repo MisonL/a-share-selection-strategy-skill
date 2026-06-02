@@ -22,16 +22,16 @@ class WalkForwardArtifactPortfolioCliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
             allocation = allocation_summary()
-            write_json(root / "qsss_allocation_summary.json", allocation)
-            write_csv(root / "qsss_skipped_candidates.csv", skipped_rows())
-            write_csv(root / "signals/2026-05-12/qsss_raw_candidates.csv", raw_candidate_rows())
+            write_json(root / "prediction_allocation_summary.json", allocation)
+            write_csv(root / "prediction_skipped_candidates.csv", skipped_rows())
+            write_csv(root / "signals/2026-05-12/prediction_raw_candidates.csv", raw_candidate_rows())
             overlap = portfolio_overlap_summary()
-            write_json(root / "qsss_overlap_summary.json", overlap)
-            summary = read_json(root / "qsss_run_summary.json")
+            write_json(root / "prediction_overlap_summary.json", overlap)
+            summary = read_json(root / "prediction_run_summary.json")
             summary["allocation"] = allocation
             summary["portfolio"] = {"summary": overlap, "violations": []}
-            write_json(root / "qsss_run_summary.json", summary)
-            set_capital_model(root / "signals/2026-05-12/qsss_sized_candidates.csv")
+            write_json(root / "prediction_run_summary.json", summary)
+            set_capital_model(root / "signals/2026-05-12/prediction_sized_candidates.csv")
 
             code, _stdout, stderr = call_cli(
                 root,
@@ -51,17 +51,17 @@ class WalkForwardArtifactPortfolioCliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
             allocation = allocation_summary()
-            write_json(root / "qsss_allocation_summary.json", allocation)
-            write_csv(root / "qsss_skipped_candidates.csv", skipped_rows())
-            write_csv(root / "signals/2026-05-12/qsss_raw_candidates.csv", raw_candidate_rows())
+            write_json(root / "prediction_allocation_summary.json", allocation)
+            write_csv(root / "prediction_skipped_candidates.csv", skipped_rows())
+            write_csv(root / "signals/2026-05-12/prediction_raw_candidates.csv", raw_candidate_rows())
             overlap = portfolio_overlap_summary()
             overlap["max_gross_notional"] = 2200.0
-            write_json(root / "qsss_overlap_summary.json", overlap)
-            summary = read_json(root / "qsss_run_summary.json")
+            write_json(root / "prediction_overlap_summary.json", overlap)
+            summary = read_json(root / "prediction_run_summary.json")
             summary["allocation"] = allocation
             summary["portfolio"] = {"summary": overlap, "violations": []}
-            write_json(root / "qsss_run_summary.json", summary)
-            set_capital_model(root / "signals/2026-05-12/qsss_sized_candidates.csv")
+            write_json(root / "prediction_run_summary.json", summary)
+            set_capital_model(root / "signals/2026-05-12/prediction_sized_candidates.csv")
 
             code, _stdout, stderr = call_cli(
                 root,
@@ -81,17 +81,17 @@ class WalkForwardArtifactPortfolioCliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
             allocation = allocation_summary()
-            write_json(root / "qsss_allocation_summary.json", allocation)
-            write_csv(root / "qsss_skipped_candidates.csv", skipped_rows())
-            write_csv(root / "signals/2026-05-12/qsss_raw_candidates.csv", raw_candidate_rows())
+            write_json(root / "prediction_allocation_summary.json", allocation)
+            write_csv(root / "prediction_skipped_candidates.csv", skipped_rows())
+            write_csv(root / "signals/2026-05-12/prediction_raw_candidates.csv", raw_candidate_rows())
             overlap = portfolio_overlap_summary()
             del overlap["max_cash_reserved"]
-            write_json(root / "qsss_overlap_summary.json", overlap)
-            summary = read_json(root / "qsss_run_summary.json")
+            write_json(root / "prediction_overlap_summary.json", overlap)
+            summary = read_json(root / "prediction_run_summary.json")
             summary["allocation"] = allocation
             summary["portfolio"] = {"summary": overlap, "violations": []}
-            write_json(root / "qsss_run_summary.json", summary)
-            set_capital_model(root / "signals/2026-05-12/qsss_sized_candidates.csv")
+            write_json(root / "prediction_run_summary.json", summary)
+            set_capital_model(root / "signals/2026-05-12/prediction_sized_candidates.csv")
 
             code, _stdout, stderr = call_cli(
                 root,
@@ -119,17 +119,17 @@ class WalkForwardArtifactPortfolioCliTests(unittest.TestCase):
                 root = build_run(Path(tmpdir))
                 allocation = allocation_summary()
                 allocation["max_gross_notional"] = value
-                write_json(root / "qsss_allocation_summary.json", allocation)
-                write_csv(root / "qsss_skipped_candidates.csv", skipped_rows())
-                write_csv(root / "signals/2026-05-12/qsss_raw_candidates.csv", raw_candidate_rows())
+                write_json(root / "prediction_allocation_summary.json", allocation)
+                write_csv(root / "prediction_skipped_candidates.csv", skipped_rows())
+                write_csv(root / "signals/2026-05-12/prediction_raw_candidates.csv", raw_candidate_rows())
                 overlap = portfolio_overlap_summary()
                 overlap["max_gross_notional"] = value
-                write_json(root / "qsss_overlap_summary.json", overlap)
-                summary = read_json(root / "qsss_run_summary.json")
+                write_json(root / "prediction_overlap_summary.json", overlap)
+                summary = read_json(root / "prediction_run_summary.json")
                 summary["allocation"] = allocation
                 summary["portfolio"] = {"summary": overlap, "violations": []}
-                write_json(root / "qsss_run_summary.json", summary)
-                set_capital_model(root / "signals/2026-05-12/qsss_sized_candidates.csv")
+                write_json(root / "prediction_run_summary.json", summary)
+                set_capital_model(root / "signals/2026-05-12/prediction_sized_candidates.csv")
 
                 code, _stdout, stderr = call_cli(
                     root,

@@ -30,7 +30,7 @@ def run_score_cli(
         "--input",
         str(input_path),
         "--config",
-        str(SCRIPTS / "qsss_profile_config.json"),
+        str(SCRIPTS / "prediction_profile_config.json"),
         "--output",
         str(output_path),
         *extra_args,
@@ -64,7 +64,7 @@ class StockSelectionStrictCliTests(unittest.TestCase):
         frame = pd.concat([frame, short], ignore_index=True)
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "prices.csv"
-            output_path = Path(tmpdir) / "qsss_strict.csv"
+            output_path = Path(tmpdir) / "prediction_strict.csv"
             frame.to_csv(input_path, index=False)
             code, stdout, stderr = run_score_cli(
                 input_path,
@@ -84,7 +84,7 @@ class StockSelectionStrictCliTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "prices.csv"
-            output_path = Path(tmpdir) / "qsss_empty_strict.csv"
+            output_path = Path(tmpdir) / "prediction_empty_strict.csv"
             frame.to_csv(input_path, index=False)
             code, stdout, stderr = run_score_cli(
                 input_path,

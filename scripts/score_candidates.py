@@ -125,10 +125,10 @@ def ensure_runtime_dependencies() -> None:
             "write_threshold_diagnostics": (
                 diagnostics_module.write_threshold_diagnostics
             ),
-            "is_qsss_mode": metrics_module.is_qsss_mode,
+            "is_prediction_mode": metrics_module.is_prediction_mode,
             "score_symbol": metrics_module.score_symbol,
             "profile_column_errors": profile_module.profile_column_errors,
-            "qsss_value_errors": profile_module.qsss_value_errors,
+            "prediction_value_errors": profile_module.prediction_value_errors,
             "merge_latest_spot_fields": spot_module.merge_latest_spot_fields,
             "merge_spot_view": spot_module.merge_spot_view,
             "apply_universe_filter": universe_module.apply_universe_filter,
@@ -147,7 +147,7 @@ def score_candidates(
     raw_symbols = int(frame["symbol"].astype(str).nunique())
     if prepared.empty and raw_symbols:
         raise ValueError("no valid rows after basic data cleaning")
-    validate_qsss_symbols(prepared, config)
+    validate_prediction_symbols(prepared, config)
     input_frame, universe_summary = apply_universe_filter(prepared, config)
     spot_view, spot_summary = merge_spot_view(input_frame, spot)
     validate_prediction_values(input_frame)
@@ -251,8 +251,8 @@ def validate_profile_requirements(frame: pd.DataFrame, config: dict[str, Any]) -
         raise ValueError("; ".join(errors))
 
 
-def validate_qsss_symbols(frame: pd.DataFrame, config: dict[str, Any]) -> None:
-    errors = qsss_value_errors(frame, config)
+def validate_prediction_symbols(frame: pd.DataFrame, config: dict[str, Any]) -> None:
+    errors = prediction_value_errors(frame, config)
     if errors:
         raise ValueError("; ".join(errors))
 
@@ -261,7 +261,7 @@ def rank_and_limit(frame: pd.DataFrame, config: dict[str, Any]) -> pd.DataFrame:
     ranked = frame.copy()
     sort_columns = ["total_score"]
     ascending = [False]
-    if not is_qsss_mode(config):
+    if not is_prediction_mode(config):
         sort_columns.extend(["explosion_score", "momentum_score"])
         ascending.extend([False, False])
     ranked = ranked.sort_values(sort_columns, ascending=ascending).reset_index(drop=True)

@@ -12,7 +12,7 @@ from stock_selection_diagnostic_labels import (
     selection_status,
     short_reason,
 )
-from stock_selection_metrics import is_qsss_mode
+from stock_selection_metrics import is_prediction_mode
 
 
 DIAGNOSTIC_COLUMNS = [
@@ -98,15 +98,15 @@ def threshold_failure_counts(
 
 
 def turnover_assumption_for(frame: pd.DataFrame, config: dict[str, Any]) -> str:
-    if is_qsss_mode(config):
+    if is_prediction_mode(config):
         return ""
     if any(column in frame.columns for column in ["turn", "turnover"]):
         return ""
     return "neutral_series_missing_turnover"
 
 
-def qsss_prediction_source(config: dict[str, Any]) -> str:
-    return "external_unverified" if is_qsss_mode(config) else ""
+def prediction_source_for(config: dict[str, Any]) -> str:
+    return "external_unverified" if is_prediction_mode(config) else ""
 
 
 def build_summary(
@@ -142,7 +142,7 @@ def build_summary(
         "threshold_failed_symbols": 0,
         "threshold_failures": {},
         "turnover_assumption": turnover_assumption_for(raw, config),
-        "prediction_source": qsss_prediction_source(config),
+        "prediction_source": prediction_source_for(config),
     }
 
 

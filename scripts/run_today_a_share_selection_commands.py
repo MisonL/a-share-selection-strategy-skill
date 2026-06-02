@@ -128,8 +128,9 @@ def initial_manifest(args: Any) -> dict[str, Any]:
         "min_history_rows": args.min_history_rows,
         "fail_on_empty_result": bool(args.fail_on_empty_result),
         "fail_on_skipped": bool(args.fail_on_skipped),
-        "qsss_mode": args.mode == "qsss",
-        "lightgbm_not_used": args.mode != "qsss",
+        "prediction_mode": args.mode == "prediction",
+        "lightgbm_not_used": args.mode != "prediction",
+        "lightgbm_executed_by_runner": False,
         "source_scope": "unresolved",
         "history_symbols": [],
         "steps": [],
@@ -140,4 +141,4 @@ def selected_config(args: Any) -> Path:
     if args.config:
         return Path(args.config)
     mode = getattr(args, "resolved_mode", args.mode)
-    return args.default_qsss_config if mode == "qsss" else args.default_generic_config
+    return args.default_prediction_config if mode == "prediction" else args.default_generic_config

@@ -187,7 +187,7 @@ def signal_command_errors(
     checks = {
         "slice": ["slice_prices_as_of.py", "--as-of-date", signal_date],
         "predict": ["generate_lightgbm_predictions.py", "--summary-output", "--fail-on-skipped"],
-        "validate": ["validate_ohlcv.py", "--config", "qsss_profile_config.json"],
+        "validate": ["validate_ohlcv.py", "--config", "prediction_profile_config.json"],
         "score": ["score_candidates.py", "--fail-on-skipped", "--fail-on-empty-result"],
         "backtest": backtest_requirements(signal_date, required_tradability_model),
     }

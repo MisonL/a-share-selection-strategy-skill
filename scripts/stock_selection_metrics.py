@@ -81,7 +81,7 @@ def compute_metrics(
     explosion = calculate_explosion_score(
         close=close,
         volume=volume,
-        turnover=resolve_turnover(data, strict=is_qsss_mode(config)),
+        turnover=resolve_turnover(data, strict=is_prediction_mode(config)),
         macd=macd,
         signal=signal,
         windows=windows,
@@ -101,12 +101,12 @@ def compute_metrics(
         "total_score": total,
     }
 
-def is_qsss_mode(config: dict[str, Any]) -> bool:
-    return str(config.get("score_mode", "")).lower() == "qsss-derived"
+def is_prediction_mode(config: dict[str, Any]) -> bool:
+    return str(config.get("score_mode", "")).lower() == "prediction-derived"
 
 def risk_score(volatility: float, config: dict[str, Any]) -> float:
     score = 1.0 - max(volatility, 0.0)
-    if is_qsss_mode(config):
+    if is_prediction_mode(config):
         return score
     return clamp01(score)
 
@@ -137,9 +137,9 @@ def resolve_prediction(data: pd.DataFrame, config: dict[str, Any]) -> float:
     columns = ["prediction_score", "prediction"]
     available = [column for column in columns if column in data.columns]
     if not available:
-        if is_qsss_mode(config):
+        if is_prediction_mode(config):
             raise ValueError(
-                "qsss-derived score mode requires prediction or prediction_score"
+                "prediction-derived score mode requires prediction or prediction_score"
             )
         return math.nan
     value = latest_numeric(data[available[0]])
@@ -267,7 +267,7 @@ def resolve_turnover(data: pd.DataFrame, strict: bool = False) -> pd.Series:
     if "turn" in data.columns:
         return data["turn"].astype(float)
     if strict:
-        raise ValueError("qsss-derived score mode requires turn or turnover column")
+        raise ValueError("prediction-derived score mode requires turn or turnover column")
     return pd.Series(np.ones(len(data)), index=data.index, dtype=float)
 
 

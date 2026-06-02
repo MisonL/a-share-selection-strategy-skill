@@ -85,12 +85,12 @@ def build_run_summary(run_dir: Path, options: argparse.Namespace) -> dict[str, A
     ensure_runtime_dependencies()
     metadata = load_json(run_dir / "metadata.json")
     signals = [signal_summary(path) for path in signal_dirs(run_dir, options.signal_dates)]
-    equity = equity_summary(run_dir / "qsss_equity_curve.csv")
-    portfolio = portfolio_summary(run_dir / "qsss_overlap_summary.json", options)
+    equity = equity_summary(run_dir / "prediction_equity_curve.csv")
+    portfolio = portfolio_summary(run_dir / "prediction_overlap_summary.json", options)
     summary = {
         "run_dir": str(run_dir),
         "metadata": metadata_view(metadata),
-        "allocation": load_json(run_dir / "qsss_allocation_summary.json") if (run_dir / "qsss_allocation_summary.json").exists() else None,
+        "allocation": load_json(run_dir / "prediction_allocation_summary.json") if (run_dir / "prediction_allocation_summary.json").exists() else None,
         "signals": signals,
         "equity": equity,
         "portfolio": portfolio,
@@ -121,8 +121,8 @@ def signal_base(run_dir: Path) -> Path:
 def signal_summary(signal_dir: Path) -> dict[str, Any]:
     ensure_runtime_dependencies()
     prediction = load_json(signal_dir / "prediction_summary.json")
-    candidates = read_table(signal_dir / "qsss_candidates.csv")
-    backtest = read_table(signal_dir / "qsss_backtest.csv")
+    candidates = read_table(signal_dir / "prediction_candidates.csv")
+    backtest = read_table(signal_dir / "prediction_backtest.csv")
     require_columns(backtest, ["return", "missing_data", "status"])
     complete = complete_trades(backtest)
     returns = pd.to_numeric(complete["return"], errors="coerce").dropna()

@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from run_today_a_share_selection_helpers import print_summary, summary_view, write_json
+from run_today_a_share_selection_helpers import print_summary, summary_view, tabular_suffix, write_json
 from run_today_a_share_selection_commands import (
     fetch_history_command,
     fetch_spot_command,
@@ -32,7 +32,7 @@ from run_today_a_share_selection_modes import ModeResolution, resolve_mode
 
 SCRIPTS = Path(__file__).resolve().parent
 DEFAULT_GENERIC_CONFIG = SCRIPTS / "ultra_short_low_price_config.json"
-DEFAULT_QSSS_CONFIG = SCRIPTS / "qsss_profile_config.json"
+DEFAULT_PREDICTION_CONFIG = SCRIPTS / "prediction_profile_config.json"
 Executor = Callable[[list[str]], subprocess.CompletedProcess[str]]
 
 
@@ -53,7 +53,7 @@ class RunContext:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     args.default_generic_config = DEFAULT_GENERIC_CONFIG
-    args.default_qsss_config = DEFAULT_QSSS_CONFIG
+    args.default_prediction_config = DEFAULT_PREDICTION_CONFIG
     output = Path(args.output_dir)
     manifest_path = output / "run_manifest.json"
     manifest = initial_manifest(args)
@@ -86,10 +86,17 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run local A-share selection gates.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run local A-share selection gates. In --mode auto, inputs with "
+            "market plus prediction/prediction_score plus turn/turnover use prediction-derived "
+            "external-prediction scoring; otherwise the runner uses the generic "
+            "low-price profile. This runner never executes LightGBM."
+        )
+    )
     parser.add_argument("--prices-input", help="Local CSV or Parquet prices.")
     parser.add_argument("--output-dir", required=True, help="Output run directory.")
-    parser.add_argument("--mode", choices=["auto", "generic", "qsss"], default="auto")
+    parser.add_argument("--mode", choices=["auto", "generic", "prediction"], default="auto")
     parser.add_argument("--config", help="Override scoring config path.")
     parser.add_argument("--spot-input", help="Optional local spot CSV or Parquet file.")
     parser.add_argument(
@@ -187,17 +194,13 @@ def prepare_inputs(
 def run_prices_path(args: argparse.Namespace) -> Path:
     if not args.prices_input:
         return Path(args.output_dir) / "prices.csv"
-    source = Path(args.prices_input)
-    suffix = source.suffix if source.suffix in {".csv", ".parquet"} else ".csv"
-    return Path(args.output_dir) / f"prices{suffix}"
+    return Path(args.output_dir) / f"prices{tabular_suffix(args.prices_input)}"
 
 
 def run_spot_path(args: argparse.Namespace) -> Path | None:
     if not args.spot_input and not args.fetch_spot:
         return None
-    suffix = Path(args.spot_input).suffix if args.spot_input else ".csv"
-    suffix = suffix if suffix in {".csv", ".parquet"} else ".csv"
-    return Path(args.output_dir) / f"spot{suffix}"
+    return Path(args.output_dir) / f"spot{tabular_suffix(args.spot_input or '')}"
 
 
 def apply_mode_resolution(context: RunContext, resolution: ModeResolution) -> None:
@@ -209,8 +212,9 @@ def apply_mode_resolution(context: RunContext, resolution: ModeResolution) -> No
             "mode_decision": resolution.decision,
             "mode_decision_reason": resolution.reason,
             "config_path": str(Path(context.args.output_dir) / config.name),
-            "qsss_mode": resolution.mode == "qsss",
-            "lightgbm_not_used": resolution.mode != "qsss",
+            "prediction_mode": resolution.mode == "prediction",
+            "lightgbm_not_used": resolution.mode != "prediction",
+            "lightgbm_executed_by_runner": False,
             "source_scope": source_scope(context.args),
         }
     )

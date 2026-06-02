@@ -21,7 +21,7 @@ FEATURE_COLUMNS = [
     "signal",
 ]
 BASE_COLUMNS = ["symbol", "date", "open", "high", "low", "close", "volume"]
-QSSS_MODEL_PARAMS = {
+MODEL_PARAMS = {
     "n_estimators": 100,
     "num_leaves": 31,
     "min_child_samples": 5,
@@ -216,7 +216,7 @@ def predict_symbol(
         raise ValueError("training target has fewer than two classes")
     scaler = model_deps["scaler"]()
     x_train = scaled_frame(scaler.fit_transform(train[FEATURE_COLUMNS]), train.index)
-    model = model_deps["classifier"](**QSSS_MODEL_PARAMS)
+    model = model_deps["classifier"](**MODEL_PARAMS)
     model.fit(x_train, target_label.astype(int))
     holdout = holdout_summary(trainable, train_size, target_threshold, scaler, model, group)
     latest = features.dropna(subset=FEATURE_COLUMNS).iloc[[-1]]

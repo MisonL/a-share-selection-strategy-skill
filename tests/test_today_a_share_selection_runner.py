@@ -48,20 +48,28 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual("auto", manifest["requested_mode"])
         self.assertEqual("generic", manifest["mode"])
         self.assertEqual("auto_generic", manifest["mode_decision"])
-        self.assertIn("missing_qsss_columns:prediction", manifest["mode_decision_reason"])
+        self.assertIn("missing_prediction_columns:prediction", manifest["mode_decision_reason"])
         self.assertTrue(manifest["lightgbm_not_used"])
+        self.assertFalse(manifest["lightgbm_executed_by_runner"])
         self.assertEqual("completed", summary["status"])
         self.assertEqual("auto", summary["requested_mode"])
         self.assertEqual("generic", summary["mode"])
         self.assertEqual("auto_generic", summary["mode_decision"])
-        self.assertIn("missing_qsss_columns:prediction", summary["mode_decision_reason"])
+        self.assertIn("missing_prediction_columns:prediction", summary["mode_decision_reason"])
+        self.assertFalse(summary["lightgbm_executed_by_runner"])
         self.assertEqual([], summary["failed_steps"])
         self.assertEqual(0, summary["spot_rows"])
         self.assertEqual(2, summary["score"]["raw_symbols"])
         self.assertEqual(2, summary["score"]["candidates"])
         self.assertFalse(summary["score"]["effective_empty_result"])
+        self.assertEqual(len(frame), summary["prices_rows"])
+        self.assertEqual(2, summary["candidate_rows"])
+        self.assertEqual(2, summary["diagnostic_rows"])
+        self.assertTrue(summary["prices_output"].endswith("prices.csv"))
+        self.assertTrue(summary["candidates_output"].endswith("candidates.csv"))
+        self.assertTrue(summary["diagnostics_output"].endswith("diagnostics.csv"))
 
-    def test_qsss_runner_fails_without_prediction_and_keeps_manifest(self) -> None:
+    def test_prediction_runner_fails_without_prediction_and_keeps_manifest(self) -> None:
         frame = build_frame(
             include_turn=True,
             include_prediction=False,
@@ -80,7 +88,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                     "--output-dir",
                     str(output),
                     "--mode",
-                    "qsss",
+                    "prediction",
                 ]
             )
 
@@ -92,9 +100,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(["validate"], [step["step"] for step in manifest["steps"]])
         self.assertEqual(["validate"], summary["failed_steps"])
         self.assertEqual("failed", summary["status"])
-        self.assertTrue(manifest["qsss_mode"])
+        self.assertTrue(manifest["prediction_mode"])
 
-    def test_auto_runner_uses_qsss_when_prediction_columns_exist(self) -> None:
+    def test_auto_runner_uses_prediction_when_prediction_columns_exist(self) -> None:
         frame = build_frame(include_prediction=True, include_turn=True)
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -114,9 +122,10 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
 
         self.assertEqual(0, code, stderr)
-        self.assertEqual("qsss", manifest["mode"])
-        self.assertEqual("auto_qsss", manifest["mode_decision"])
+        self.assertEqual("prediction", manifest["mode"])
+        self.assertEqual("auto_prediction", manifest["mode_decision"])
         self.assertFalse(manifest["lightgbm_not_used"])
+        self.assertFalse(manifest["lightgbm_executed_by_runner"])
 
     def test_explicit_mode_rejects_conflicting_config(self) -> None:
         frame = build_frame(include_turn=True, include_tradability=True)
@@ -133,7 +142,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                     "--output-dir",
                     str(output),
                     "--mode",
-                    "qsss",
+                    "prediction",
                     "--config",
                     str(SCRIPTS / "ultra_short_low_price_config.json"),
                 ]
@@ -272,7 +281,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             manifest = {
                 "runner": "run_today_a_share_selection",
                 "mode": "generic",
-                "qsss_mode": False,
+                "prediction_mode": False,
                 "lightgbm_not_used": True,
                 "source_scope": "local_prices_input",
                 "output_dir": str(output),
@@ -606,6 +615,105 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(0, code, stderr)
         self.assertEqual(2, summary["spot_rows"])
 
+    def test_runner_counts_uppercase_parquet_spot_rows_in_summary(self) -> None:
+        pd = __import__("pandas")
+        frame = build_frame(include_turn=True, include_tradability=True)
+        frame[["open", "high", "low", "close"]] = frame[
+            ["open", "high", "low", "close"]
+        ] * 0.75
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            spot = root / "spot.PARQUET"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+            pd.DataFrame(
+                [
+                    {"symbol": "000002", "spot_price": 8.8},
+                    {"symbol": "600001", "spot_price": 9.2},
+                ]
+            ).to_parquet(spot, index=False)
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--spot-input",
+                    str(spot),
+                    "--output-dir",
+                    str(output),
+                ]
+            )
+
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            spot_copy_exists = (output / "spot.parquet").exists()
+
+        self.assertEqual(0, code, stderr)
+        self.assertTrue(spot_copy_exists)
+        self.assertEqual(2, summary["spot_rows"])
+
+    def test_runner_preserves_pq_prices_input_extension(self) -> None:
+        pd = __import__("pandas")
+        frame = build_frame(include_turn=True, include_tradability=True)
+        frame[["open", "high", "low", "close"]] = frame[
+            ["open", "high", "low", "close"]
+        ] * 0.75
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.pq"
+            output = root / "run"
+            frame.to_parquet(prices, index=False)
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--output-dir",
+                    str(output),
+                ]
+            )
+
+            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            prices_copy_exists = (output / "prices.pq").exists()
+
+        self.assertEqual(0, code, stderr)
+        self.assertTrue(prices_copy_exists)
+        self.assertTrue(summary["prices_output"].endswith("prices.pq"))
+        self.assertEqual(len(frame), summary["prices_rows"])
+        self.assertIn(str(output / "prices.pq"), manifest["steps"][0]["command"])
+
+    def test_runner_normalizes_uppercase_parquet_prices_input_extension(self) -> None:
+        pd = __import__("pandas")
+        frame = build_frame(include_turn=True, include_tradability=True)
+        frame[["open", "high", "low", "close"]] = frame[
+            ["open", "high", "low", "close"]
+        ] * 0.75
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.PQ"
+            output = root / "run"
+            frame.to_parquet(prices, index=False)
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--output-dir",
+                    str(output),
+                ]
+            )
+
+            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            prices_copy_exists = (output / "prices.pq").exists()
+
+        self.assertEqual(0, code, stderr)
+        self.assertTrue(prices_copy_exists)
+        self.assertTrue(summary["prices_output"].endswith("prices.pq"))
+        self.assertEqual(len(frame), summary["prices_rows"])
+        self.assertIn(str(output / "prices.pq"), manifest["steps"][0]["command"])
+
     def test_runner_does_not_filter_non_st_name_containing_st_letters(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -662,7 +770,7 @@ def call_runner(args: list[str]) -> tuple[int, str, str]:
 def parsed_args(args: list[str]) -> object:
     namespace = runner.build_parser().parse_args(args)
     namespace.default_generic_config = runner.DEFAULT_GENERIC_CONFIG
-    namespace.default_qsss_config = runner.DEFAULT_QSSS_CONFIG
+    namespace.default_prediction_config = runner.DEFAULT_PREDICTION_CONFIG
     return namespace
 
 

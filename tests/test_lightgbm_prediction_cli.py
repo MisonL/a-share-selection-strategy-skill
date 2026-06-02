@@ -57,7 +57,7 @@ class RecordingClassifier:
 
 
 class LightgbmPredictionCliTests(unittest.TestCase):
-    def test_prediction_uses_train_split_only_and_scores_qsss_input(self) -> None:
+    def test_prediction_uses_train_split_only_and_scores_prediction_input(self) -> None:
         frame = build_frame(days=180, include_turn=True)
         deps = {"classifier": RecordingClassifier, "scaler": RecordingScaler}
         result, summary = generator.generate_predictions(
@@ -79,7 +79,7 @@ class LightgbmPredictionCliTests(unittest.TestCase):
         self.assertTrue(RecordingClassifier.saw_feature_columns)
         _, score_summary = scorer.score_candidates(
             result,
-            load_config("qsss_profile_config.json"),
+            load_config("prediction_profile_config.json"),
         )
         self.assertEqual(2, score_summary["scored_symbols"])
         with tempfile.TemporaryDirectory() as tmpdir:

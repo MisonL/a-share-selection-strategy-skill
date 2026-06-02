@@ -27,7 +27,7 @@ class WalkForwardArtifactPriceCliTests(unittest.TestCase):
     def test_cli_rejects_candidate_close_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
-            update_first_value(root / "signals/2026-05-12/qsss_candidates.csv", "close", 9.0)
+            update_first_value(root / "signals/2026-05-12/prediction_candidates.csv", "close", 9.0)
 
             code, _stdout, stderr = call_cli(root, root / "artifact_validation.json")
 
@@ -37,7 +37,7 @@ class WalkForwardArtifactPriceCliTests(unittest.TestCase):
     def test_cli_rejects_missing_candidate_close(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
-            drop_column(root / "signals/2026-05-12/qsss_candidates.csv", "close")
+            drop_column(root / "signals/2026-05-12/prediction_candidates.csv", "close")
 
             code, _stdout, stderr = call_cli(root, root / "artifact_validation.json")
 
@@ -47,7 +47,7 @@ class WalkForwardArtifactPriceCliTests(unittest.TestCase):
     def test_cli_rejects_sized_signal_close_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
-            update_first_value(root / "signals/2026-05-12/qsss_sized_candidates.csv", "signal_close", 9.0)
+            update_first_value(root / "signals/2026-05-12/prediction_sized_candidates.csv", "signal_close", 9.0)
 
             code, _stdout, stderr = call_cli(root, root / "artifact_validation.json")
 
@@ -57,7 +57,7 @@ class WalkForwardArtifactPriceCliTests(unittest.TestCase):
     def test_cli_rejects_optional_sized_close_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
-            update_first_value(root / "signals/2026-05-12/qsss_sized_candidates.csv", "close", 9.0)
+            update_first_value(root / "signals/2026-05-12/prediction_sized_candidates.csv", "close", 9.0)
 
             code, _stdout, stderr = call_cli(root, root / "artifact_validation.json")
 

@@ -106,12 +106,13 @@
 - 生成结果继续通过 `validate_ohlcv.py --config scripts/qsss_profile_config.json`，再进入 `score_candidates.py --config scripts/qsss_profile_config.json`，最终 `scored_symbols=2`、`candidates=1`。
 - 本次合成 demo 的 `prediction_score` 范围为 `0.0107376151670856` 到 `0.9479974705646024`，生成器 stderr 为空。
 - 2026-06-01 真实 SSE603 late-window 复验产物在 `/tmp/stock-selection-p1-portfolio-capacity-sse603-latewindow-20260601T105911Z/`；6 个信号日的 `prediction_summary.json` 均记录 `raw_symbols=40`、`predicted_symbols=40`、`skipped_symbols=0`，并包含 `feature_columns`、`split_method=time_series_train_prefix`、`scaler_fit_scope=train_split_only`、`label_definition=target_return = close.shift(-horizon) / close - 1; class = target_return > train_mean`、`prediction_scope=latest_probability_repeated_for_scoring`、训练日期窗口和正负训练标签计数。
-- 同一 SSE603 真实产物的 summary 字段只证明 40-symbol/6 信号日生成链路可审计；当前代码生成的 `prediction_summary.json` 不包含已计算的 holdout AUC/IC、概率校准、分层收益、跨窗口稳定性、跨年份或分市场样本外统计，新增 `model_quality_metrics` 只会把这些边界标记为 `not_computed`、`not_evaluated` 或 `not_proven`，也不证明逐信号日独立预测质量或全市场泛化。
+- 同一 SSE603 真实产物的 summary 字段只证明 40-symbol/6 信号日生成链路可审计；当时产物的 `prediction_summary.json` 不包含已计算的 holdout AUC/IC、概率校准、分层收益、跨窗口稳定性、跨年份或分市场样本外统计，`model_quality_metrics` 只会把这些边界标记为 `not_computed`、`not_evaluated` 或 `not_proven`，也不证明逐信号日独立预测质量或全市场泛化。
+- 2026-06-01 后续代码为 `generate_lightgbm_predictions.py` 增加 per-symbol `holdout_rows/holdout_date_min/holdout_date_max/holdout_positive_labels/holdout_negative_labels/holdout_auc/holdout_metric_status/holdout_metric_reason` 审计字段，holdout 只来自训练前缀之后、latest 之前的同一 symbol 时间后缀；`holdout_auc` 可计算只说明该 symbol 本次后缀 AUC 有记录，不证明概率校准、holdout IC、分层收益、跨窗口稳定性、跨年份或分市场样本外统计、样本外泛化或全市场策略质量。
 
 边界:
 
 - 单元测试使用受控假模型验证契约；合成 demo 使用真实 LightGBM 依赖验证运行链路，但仍不等同于真实 A 股行情上的训练结果。
-- 2-symbol、12-symbol 和 40-symbol baostock 证据只证明当前生成器能在有限真实行情样本上运行，并接入 `validate_ohlcv.py --config scripts/qsss_profile_config.json` 与 `score_candidates.py`；`model_quality_scope=generation_audit_only` 不证明概率校准、holdout AUC/IC、分层收益、跨窗口稳定性、逐信号日独立预测质量或全市场样本外泛化能力。
+- 2-symbol、12-symbol 和 40-symbol baostock 证据只证明当前生成器能在有限真实行情样本上运行，并接入 `validate_ohlcv.py --config scripts/qsss_profile_config.json` 与 `score_candidates.py`；`model_quality_scope=generation_audit_only` 和 per-symbol `holdout_auc` 不证明概率校准、holdout IC、分层收益、跨窗口稳定性、逐信号日独立预测质量或全市场样本外泛化能力。
 
 ## 场景 M: buy-hold 基线回测
 
@@ -357,5 +358,5 @@
 - baostock、akshare 或 yfinance 任一外部源的长期服务稳定性。
 - 真实交易所日历、节假日、特殊交易日、临时休市和全持有期停复牌可交易性。
 - 价格表缺失日期、非交易所工作日差异、真实停复牌区间完整性和临时休市；`tradestatus_holding_period_bars` 只覆盖已观测 bar。
-- 真实 LightGBM 质量指标，包括概率校准、holdout AUC/IC、分层收益、跨窗口稳定性、跨年份或分市场样本外统计、逐信号日独立预测质量。
+- 真实 LightGBM 质量指标，包括概率校准、holdout IC、分层收益、跨窗口稳定性、跨年份或分市场样本外统计、逐信号日独立预测质量；per-symbol `holdout_auc` 只作为生成链路审计字段，不构成这些质量指标通过。
 - 全市场级 QSSS 策略质量、样本外收益、真实涨跌停规则、真实成交容量和券商订单证明。

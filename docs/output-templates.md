@@ -402,12 +402,13 @@
 - 必须披露 `raw_symbols`、`predicted_symbols`、`skipped_symbols` 和 `skipped_symbol_examples`。
 - 下游 `validate_ohlcv.py` 或 `score_candidates.py` 通过，只覆盖已写出的预测文件，不能反推上游全部标的通过。
 - 完整门禁应使用 `--fail-on-skipped`，或显式确认 `raw_symbols == predicted_symbols` 且 `skipped_symbols == 0`。
-- `prediction_summary.json` 中的 `feature_columns`、`split_method`、`scaler_fit_scope`、`label_definition`、训练日期窗口和标签分布只是本次生成链路审计字段。
+- `prediction_summary.json` 中的 `feature_columns`、`split_method`、`scaler_fit_scope`、`label_definition`、训练/holdout 日期窗口和标签分布只是本次生成链路审计字段。
 - `label_definition=target_return = close.shift(-horizon) / close - 1; class = target_return > train_mean` 只是相对训练集均值的二分类标签口径。
-- `target_positive_labels` 和 `target_negative_labels` 非空只证明训练切分内两类标签都存在，不证明标签业务合理性、概率校准、holdout AUC/IC、跨窗口稳定性或样本外泛化。
+- `target_positive_labels` 和 `target_negative_labels` 非空只证明训练切分内两类标签都存在，不证明标签业务合理性、概率校准、holdout IC、跨窗口稳定性或样本外泛化。
+- `holdout_auc` 只来自训练前缀之后、latest 之前的同一 symbol 时间后缀；`holdout_metric_status=not_computable` 时必须披露原因。它不是跨窗口、跨年份、分市场或全市场样本外泛化证明。
 - `prediction_scope=latest_probability_repeated_for_scoring` 不是逐日历史预测序列；它表示最新预测概率被重复写入该标的评分窗口。
 - `model_quality_scope=generation_audit_only` 和 `model_quality_metrics` 里的 `not_computed/not_evaluated/not_proven` 是机器可读边界声明，不是质量指标通过证明。
-- 即使 summary 字段完整，也不能写成 LightGBM 模型质量、样本外泛化、AUC/IC、分层收益或全市场策略质量已证明。
+- 即使 summary 字段完整且 `holdout_auc` 可计算，也不能写成 LightGBM 模型质量、样本外泛化、IC、分层收益或全市场策略质量已证明。
 ```
 
 ## 0 候选解释

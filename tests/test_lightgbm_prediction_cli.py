@@ -105,6 +105,7 @@ class LightgbmPredictionCliTests(unittest.TestCase):
         self.assertIn("close.shift(-horizon)", saved["label_definition"])
         self.assertEqual("predicted", saved["symbols"][0]["status"])
         self.assertGreater(saved["symbols"][0]["train_rows"], 0)
+        self.assertGreater(saved["symbols"][0]["holdout_rows"], 0)
         self.assertGreaterEqual(
             saved["symbols"][0]["trainable_rows"],
             saved["symbols"][0]["train_rows"],
@@ -116,7 +117,37 @@ class LightgbmPredictionCliTests(unittest.TestCase):
         self.assertEqual(saved["symbols"][0]["date_max"], saved["symbols"][0]["latest_feature_date"])
         self.assertGreater(saved["symbols"][0]["target_positive_labels"], 0)
         self.assertGreater(saved["symbols"][0]["target_negative_labels"], 0)
+        self.assertLessEqual(
+            saved["symbols"][0]["train_date_max"],
+            saved["symbols"][0]["holdout_date_min"],
+        )
+        self.assertLessEqual(
+            saved["symbols"][0]["holdout_date_max"],
+            saved["symbols"][0]["latest_feature_date"],
+        )
+        self.assertEqual("not_computable", saved["symbols"][0]["holdout_metric_status"])
+        self.assertEqual("single_class_holdout", saved["symbols"][0]["holdout_metric_reason"])
+        self.assertIsNone(saved["symbols"][0]["holdout_auc"])
         self.assertIn("close.shift(-horizon)", saved["symbols"][0]["label_definition"])
+
+    def test_prediction_records_computed_holdout_auc_when_labels_vary(self) -> None:
+        frame = oscillating_frame(days=180)
+        deps = {"classifier": RecordingClassifier, "scaler": RecordingScaler}
+        _result, summary = generator.generate_predictions(
+            frame,
+            horizon=5,
+            train_ratio=0.8,
+            min_history_rows=150,
+            model_deps=deps,
+        )
+
+        first = summary["symbols"][0]
+        self.assertGreater(first["holdout_positive_labels"], 0)
+        self.assertGreater(first["holdout_negative_labels"], 0)
+        self.assertEqual("computed", first["holdout_metric_status"])
+        self.assertEqual("", first["holdout_metric_reason"])
+        self.assertGreaterEqual(first["holdout_auc"], 0.0)
+        self.assertLessEqual(first["holdout_auc"], 1.0)
 
     def test_cli_reports_missing_lightgbm_dependency_without_output(self) -> None:
         frame = build_frame(days=180, include_turn=True)
@@ -216,6 +247,23 @@ class LightgbmPredictionCliTests(unittest.TestCase):
             self.assertIn("output_not_written=true", stderr.getvalue())
         finally:
             generator.load_model_dependencies = original_loader
+
+
+def oscillating_frame(days: int) -> pd.DataFrame:
+    frame = build_frame(days=days, include_turn=True)
+    dates = sorted(frame["date"].unique())
+    wave = {
+        date: 10.0 + np.sin(index / 3.0) * 0.6 + np.cos(index / 5.0) * 0.3
+        for index, date in enumerate(dates)
+    }
+    for symbol_offset, symbol in enumerate(sorted(frame["symbol"].unique())):
+        mask = frame["symbol"] == symbol
+        adjusted = frame.loc[mask, "date"].map(wave).astype(float) + symbol_offset
+        frame.loc[mask, "close"] = adjusted
+        frame.loc[mask, "open"] = adjusted * 0.997
+        frame.loc[mask, "high"] = adjusted * 1.012
+        frame.loc[mask, "low"] = adjusted * 0.988
+    return frame
 
 
 if __name__ == "__main__":

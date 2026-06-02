@@ -9,8 +9,8 @@
 | 能力 | 说明 |
 |------|------|
 | 通用选股流程 | 覆盖输入数据契约、股票池过滤、技术因子、短线异动、风险控制和输出解释。 |
-| QSSS-derived 剖面 | 保留从 QSSS 原实现提炼出的 A 股默认口径，但不依赖 QSSS 仓库或运行环境。 |
-| 本地可复现脚本 | 提供 OHLCV 校验、候选股评分、通用配置和 QSSS-derived 配置。 |
+| prediction-derived 剖面 | 保留从 prediction-derived 原实现提炼出的 A 股默认口径，但不依赖 prediction-derived 仓库或运行环境。 |
+| 本地可复现脚本 | 提供 OHLCV 校验、候选股评分、通用配置和 prediction-derived 配置。 |
 | 显式失败边界 | 字段缺失、预测缺失、配置错误、脚本环境问题都会显式暴露，不伪造成功结果。 |
 | Agent 友好 | `SKILL.md` 可直接作为 Skill 入口，`evals/` 可用于验证 Agent 是否正确触发和使用。 |
 
@@ -47,12 +47,12 @@ uv run --with pandas --with numpy python scripts/validate_ohlcv.py \
   --input /tmp/stock-selection-demo/prices.csv
 ```
 
-如需按某个评分配置同步检查 profile 专属字段，可传入 `--config`。例如 QSSS-derived 会额外检查 `market`、`prediction` 或 `prediction_score`、`turn` 或 `turnover`：
+如需按某个评分配置同步检查 profile 专属字段，可传入 `--config`。例如 prediction-derived 会额外检查 `market`、`prediction` 或 `prediction_score`、`turn` 或 `turnover`：
 
 ```bash
 uv run --with pandas --with numpy python scripts/validate_ohlcv.py \
   --input /tmp/stock-selection-demo/prices_with_prediction.csv \
-  --config scripts/qsss_profile_config.json
+  --config scripts/prediction_profile_config.json
 ```
 
 `--min-history-rows 0` 或显式调低历史门槛只适合 debug 级字段校验。若评分配置仍要求默认 120 行历史，`score_candidates.py` 会按配置重新检查并跳过短历史标的；不能把低门槛 `OK: validated ...` 写成真实评分可用。
@@ -66,18 +66,39 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
   --output /tmp/stock-selection-demo/candidates.csv
 ```
 
-### 4. 使用 QSSS-derived 配置评分
+### 4. 使用 prediction-derived 配置评分
 
 ```bash
 uv run --with pandas --with numpy python scripts/score_candidates.py \
   --input /tmp/stock-selection-demo/prices_with_prediction.csv \
-  --config scripts/qsss_profile_config.json \
-  --output /tmp/stock-selection-demo/qsss_candidates.csv
+  --config scripts/prediction_profile_config.json \
+  --output /tmp/stock-selection-demo/prediction_candidates.csv
 ```
 
-该 demo 中的 `prediction_score` 是 `create_demo_data.py` 生成的合成输入。`score_candidates.py` 只消费该列，不训练、不生成、也不验证真实 LightGBM prediction；输出中的 `prediction_source=external_unverified lightgbm_not_executed_by_this_script=true` 是预期提示。不要把该 smoke test 的退出码 0 或候选数写成真实 LightGBM 链路、真实 QSSS 策略或真实回测已经通过。
+该 demo 中的 `prediction_score` 是 `create_demo_data.py` 生成的合成输入。`score_candidates.py` 只消费该列，不训练、不生成、也不验证真实 LightGBM prediction；输出中的 `prediction_source=external_unverified lightgbm_not_executed_by_this_script=true` 是预期提示。不要把该 smoke test 的退出码 0 或候选数写成真实 LightGBM 链路、真实 prediction-derived 策略或真实回测已经通过。
 
-### 5. 可选：读取 Parquet 输入
+### 5. 可选：低价超短离线诊断 demo
+
+该场景用于验证 `ultra_short_low_price_config.json` 和今日总控 CLI 的诊断是否清楚。它会生成更多本地样本，覆盖通过、价格超限、成交额不足、换手率不足、ST、停牌和一字板等典型情况。它仍是合成数据，不是今日真实 A 股扫描。
+
+```bash
+python3 scripts/create_demo_data.py \
+  --output /tmp/stock-selection-low-price-demo \
+  --days 160 \
+  --scenario low-price-ultra-short
+uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py \
+  --prices-input /tmp/stock-selection-low-price-demo/prices.csv \
+  --output-dir /tmp/stock-selection-low-price-demo/today \
+  --mode auto
+```
+
+检查重点：
+
+- `summary.json` 中 `requested_mode=auto`、`mode=generic`、`mode_decision=auto_generic`、`lightgbm_not_used=true`、`lightgbm_executed_by_runner=false`、`prices_rows=1120`、`candidate_rows=1`、`diagnostic_rows=7`。
+- `diagnostics.csv` 中的 `failed_thresholds`、`failed_thresholds_zh`、`selection_status`、`short_reason`。
+- 价格、成交额、换手率、ST、停牌和一字板失败项只能解释为本地 demo 诊断覆盖，不能写成真实可交易性或全市场结论。
+
+### 6. 可选：读取 Parquet 输入
 
 ```bash
 uv run --with pandas --with numpy --with pyarrow python - <<'PY'
@@ -99,47 +120,51 @@ uv run --with pandas --with numpy --with pyarrow python scripts/score_candidates
 
 这只验证 Parquet 输入读取；候选输出仍是 CSV。当前标准 CLI 链路不支持严格无 CSV 中间产物。如果用户要求全链路中间完全不出现 CSV，必须先停止并说明需要改造脚本输出、runner 固定路径、artifact validator 和测试；不得先写 CSV 再转换为 Parquet 后声称满足无 CSV。
 
-### 6. 可选：本地 demo 的 sizing、回测和组合报告
+### 7. 可选：本地 demo 的 sizing、回测和组合报告
 
 快速开始第 4 步会使用 demo 数据末尾作为候选信号日；如果直接对该最新信号日运行 `--fail-on-incomplete` 回测，会因为缺少未来 5 个交易行而显式失败。这是正确门禁，不是脚本故障。
 
-下面的本地 smoke 先把评分窗口截到较早的 `2025-06-20`，再用完整 demo 行情做 sizing、5 日 close-to-close 基线回测、等权资金曲线和组合容量报告：
+下面的本地 smoke 先把评分窗口截到较早的 `2025-06-25`，该日期同时满足 prediction-derived 默认 120 行历史和未来 5 日回测所需价格行；再用完整 demo 行情做 sizing、5 日 close-to-close 基线回测、等权资金曲线和组合容量报告：
 
 ```bash
 uv run --with pandas --with numpy python scripts/slice_prices_as_of.py \
   --input /tmp/stock-selection-demo/prices_with_prediction.csv \
-  --output /tmp/stock-selection-demo/prices_signal_window_2025-06-20.csv \
-  --as-of-date 2025-06-20
+  --output /tmp/stock-selection-demo/prices_signal_window_2025-06-25.csv \
+  --as-of-date 2025-06-25
+uv run --with pandas --with numpy python scripts/validate_ohlcv.py \
+  --input /tmp/stock-selection-demo/prices_signal_window_2025-06-25.csv \
+  --config scripts/prediction_profile_config.json
 uv run --with pandas --with numpy python scripts/score_candidates.py \
-  --input /tmp/stock-selection-demo/prices_signal_window_2025-06-20.csv \
-  --config scripts/qsss_profile_config.json \
-  --output /tmp/stock-selection-demo/qsss_candidates_2025-06-20.csv \
+  --input /tmp/stock-selection-demo/prices_signal_window_2025-06-25.csv \
+  --config scripts/prediction_profile_config.json \
+  --output /tmp/stock-selection-demo/prediction_candidates_2025-06-25.csv \
   --fail-on-skipped \
   --fail-on-empty-result
 uv run --with pandas --with numpy python scripts/allocate_candidate_capital.py \
   --prices /tmp/stock-selection-demo/prices.csv \
-  --candidates /tmp/stock-selection-demo/qsss_candidates_2025-06-20.csv \
-  --output /tmp/stock-selection-demo/qsss_sized_candidates_2025-06-20.csv \
+  --candidates /tmp/stock-selection-demo/prediction_candidates_2025-06-25.csv \
+  --output /tmp/stock-selection-demo/prediction_sized_candidates_2025-06-25.csv \
   --cash-budget 1000000 \
   --lot-size 100 \
   --fail-on-unallocated
 uv run --with pandas --with numpy python scripts/backtest_buy_hold.py \
   --prices /tmp/stock-selection-demo/prices.csv \
-  --candidates /tmp/stock-selection-demo/qsss_sized_candidates_2025-06-20.csv \
-  --output /tmp/stock-selection-demo/qsss_backtest_2025-06-20.csv \
+  --candidates /tmp/stock-selection-demo/prediction_sized_candidates_2025-06-25.csv \
+  --output /tmp/stock-selection-demo/prediction_backtest_2025-06-25.csv \
   --hold-days 5 \
   --cost-bps 10 \
   --slippage-bps 5 \
+  --expected-signal-date 2025-06-25 \
   --fail-on-incomplete
 uv run --with pandas --with numpy python scripts/portfolio_equity_curve.py \
-  --backtests /tmp/stock-selection-demo/qsss_backtest_2025-06-20.csv \
-  --output /tmp/stock-selection-demo/qsss_equity_curve_2025-06-20.csv \
+  --backtests /tmp/stock-selection-demo/prediction_backtest_2025-06-25.csv \
+  --output /tmp/stock-selection-demo/prediction_equity_curve_2025-06-25.csv \
   --fail-on-incomplete
 uv run --with pandas --with numpy python scripts/portfolio_overlap_report.py \
-  --backtests /tmp/stock-selection-demo/qsss_backtest_2025-06-20.csv \
-  --daily-output /tmp/stock-selection-demo/qsss_daily_positions_2025-06-20.csv \
-  --overlap-output /tmp/stock-selection-demo/qsss_overlap_2025-06-20.csv \
-  --summary-output /tmp/stock-selection-demo/qsss_overlap_summary_2025-06-20.json \
+  --backtests /tmp/stock-selection-demo/prediction_backtest_2025-06-25.csv \
+  --daily-output /tmp/stock-selection-demo/prediction_daily_positions_2025-06-25.csv \
+  --overlap-output /tmp/stock-selection-demo/prediction_overlap_2025-06-25.csv \
+  --summary-output /tmp/stock-selection-demo/prediction_overlap_summary_2025-06-25.json \
   --max-open-positions 10 \
   --max-gross-weight 1.0 \
   --max-gross-notional 1000000 \
@@ -159,7 +184,7 @@ uv run --with pandas --with numpy python scripts/portfolio_overlap_report.py \
 
 `backtest_buy_hold.py` 默认 `cost_bps=0.0`、`slippage_bps=0.0`；即使 `--fail-on-incomplete` 通过且 `status=complete`，输出 `return` 也只是零成本 close-to-close 基线，不是含真实交易成本、滑点、涨跌停或券商成交约束的净收益。
 
-### 7. 可选：校验 Skill 结构
+### 8. 可选：校验 Skill 结构
 
 `quick_validate.py` 来自本机安装的 skill-creator 工具，不随本仓库发布。维护者或 Skill 开发者可运行该检查；第三方环境没有校验器时可跳过。把下面的 `QUICK_VALIDATE` 替换为你机器上的校验器路径：
 
@@ -188,9 +213,9 @@ Skill is valid!
 | `close` | 收盘价 |
 | `volume` | 成交量 |
 
-QSSS-derived 配置要求输入包含 `market` 列，且 A 股记录使用 `A-share`；同时必须包含 `prediction` 或 `prediction_score` 列，取值范围为 0 到 1。该列表示上游模型已经生成的上涨概率；评分脚本不会训练 LightGBM，也不会用动量分伪造机器学习预测。若输入同时包含 `prediction_score` 和 `prediction`，当前评分优先使用 `prediction_score`；两列冲突时，不能因为 `prediction` 更高就认定应通过阈值，必须先统一或审计预测列。
+prediction-derived 配置要求输入包含 `market` 列，且 A 股记录使用 `A-share`；同时必须包含 `prediction` 或 `prediction_score` 列，取值范围为 0 到 1。该列表示上游模型已经生成的上涨概率；评分脚本不会训练 LightGBM，也不会用动量分伪造机器学习预测。若输入同时包含 `prediction_score` 和 `prediction`，当前评分优先使用 `prediction_score`；两列冲突时，不能因为 `prediction` 更高就认定应通过阈值，必须先统一或审计预测列。
 
-如果 QSSS-derived 输入缺少 `prediction` 或 `prediction_score`，不要运行评分产出候选股；使用 `docs/output-templates.md` 中的“QSSS-derived 缺少 prediction”模板说明失败原因。
+如果 prediction-derived 输入缺少 `prediction` 或 `prediction_score`，不要运行评分产出候选股；使用 `docs/output-templates.md` 中的“prediction-derived 缺少 prediction”模板说明失败原因。
 
 如果需要真实生成 `prediction_score`，可使用可选脚本 `generate_lightgbm_predictions.py`。该脚本使用时间序列切分，只在训练切分上拟合 `StandardScaler`，并在缺少 `lightgbm` 或 `scikit-learn` 时显式失败：
 
@@ -204,16 +229,16 @@ uv run --with pandas --with numpy --with scikit-learn --with lightgbm \
   --fail-on-skipped
 ```
 
-生成后可用 QSSS-derived 配置继续校验和评分，形成本地 demo 的 prediction 生成闭环：
+生成后可用 prediction-derived 配置继续校验和评分，形成本地 demo 的 prediction 生成闭环：
 
 ```bash
 uv run --with pandas --with numpy python scripts/validate_ohlcv.py \
   --input /tmp/stock-selection-ml-demo/prices_generated_prediction.csv \
-  --config scripts/qsss_profile_config.json
+  --config scripts/prediction_profile_config.json
 uv run --with pandas --with numpy python scripts/score_candidates.py \
   --input /tmp/stock-selection-ml-demo/prices_generated_prediction.csv \
-  --config scripts/qsss_profile_config.json \
-  --output /tmp/stock-selection-ml-demo/qsss_candidates.csv \
+  --config scripts/prediction_profile_config.json \
+  --output /tmp/stock-selection-ml-demo/prediction_candidates.csv \
   --fail-on-skipped \
   --fail-on-empty-result
 ```
@@ -222,7 +247,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
 
 `prediction_scope=latest_probability_repeated_for_scoring` 表示最新预测概率被重复写入该标的所有行，供评分脚本消费当前概率，不是逐日历史预测序列。评分摘要中的 `prediction_source=external_unverified lightgbm_not_executed_by_this_script=true` 表示评分脚本本身不验证上游训练过程。
 
-即使上一条命令刚生成了 `prediction_score`，仍需单独核验训练窗口、标签、特征、时间序列切分、跳过标的和未来泄漏风险。LightGBM 质量边界以 `docs/qsss-derived-profile.md` 的“LightGBM 质量边界”为准；不能把候选数或退出码写成真实策略收益、真实可交易性、真实 A 股全市场有效性或模型质量已证明。
+即使上一条命令刚生成了 `prediction_score`，仍需单独核验训练窗口、标签、特征、时间序列切分、跳过标的和未来泄漏风险。LightGBM 质量边界以 `docs/prediction-derived-profile.md` 的“LightGBM 质量边界”为准；不能把候选数或退出码写成真实策略收益、真实可交易性、真实 A 股全市场有效性或模型质量已证明。
 
 真实 A 股行情可先落地为本地文件，再进入同一链路。下面示例使用 baostock，输出行情 CSV 和元数据 JSON；真实环境失败时命令会非 0，不应改用 mock 数据。门禁不能只看命令退出码，还必须检查 metadata 中 `rows > 0`、`symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`、`invalid_rows == 0`、`non_trading_rows == 0`。脚本会输出 `preclose/pctChg/tradestatus/isST`；若 baostock 返回停牌或异常行导致不可交易或 `volume/amount/turn` 为空，脚本默认失败；只有显式加 `--drop-invalid-rows` 时才会丢弃异常行，并在 metadata 记录 `dropped_invalid_rows` 和示例。
 
@@ -296,9 +321,9 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
   --diagnostics-output /tmp/stock-selection-akshare/score_diagnostics.csv
 ```
 
-如果 `candidates=0` 且 `effective_empty_result=true`，这表示脚本成功运行但没有标的通过当前阈值；不要写成“产生候选股”。用 `score_diagnostics.csv` 查看每个已评分 symbol 的 `failed_thresholds`。如果 metadata 中 `fallback_errors` 非空，必须说明主接口失败且已使用 fallback provider；fallback 成功不等于主接口稳定可用。akshare 输出可满足通用 OHLCV 和 `turn` 口径，但仍不生成真实 `prediction/prediction_score`，不能直接解释成 QSSS-derived 或 LightGBM 链路通过。
+如果 `candidates=0` 且 `effective_empty_result=true`，这表示脚本成功运行但没有标的通过当前阈值；不要写成“产生候选股”。用 `score_diagnostics.csv` 查看每个已评分 symbol 的 `failed_thresholds`。如果 metadata 中 `fallback_errors` 非空，必须说明主接口失败且已使用 fallback provider；fallback 成功不等于主接口稳定可用。akshare 输出可满足通用 OHLCV 和 `turn` 口径，但仍不生成真实 `prediction/prediction_score`，不能直接解释成 prediction-derived 或 LightGBM 链路通过。
 
-本地已落地行情可以使用今日选股总控 CLI 串联校验、评分和诊断。默认 `--mode auto` 会先检查输入是否包含 QSSS-derived 必需列；缺少 `prediction` 或 `prediction_score` 时，会显式选择 generic 低价超短剖面，并在 `run_manifest.json` 记录 `requested_mode`、实际 `mode`、`mode_decision` 和 `mode_decision_reason`。它不是静默降级，也不生成 LightGBM prediction：
+本地已落地行情可以使用今日选股总控 CLI 串联校验、评分和诊断。默认 `--mode auto` 会先检查输入是否包含 prediction-derived 必需列；缺少 `prediction` 或 `prediction_score` 时，会显式选择 generic 低价超短剖面，并在 `run_manifest.json` 记录 `requested_mode`、实际 `mode`、`mode_decision` 和 `mode_decision_reason`。若输入包含 prediction-derived 必需列，auto 会使用外部 prediction 评分，但 `lightgbm_executed_by_runner=false` 仍表示总控 CLI 没有训练或执行 LightGBM。它不是静默降级，也不生成 LightGBM prediction：
 
 ```bash
 uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py \
@@ -308,7 +333,7 @@ uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py 
   --fail-on-skipped
 ```
 
-如果显式使用 `--mode qsss`，输入必须已经包含 `market=A-share`、`prediction` 或 `prediction_score`，以及 `turn` 或 `turnover`；缺少 prediction 时会在 validate 阶段失败并保留 manifest，不会自动改走通用评分。低价超短剖面还要求 `amount`、`turn`、`tradestatus` 和 `isST` 等可交易字段；akshare 日线输出没有 `tradestatus/isST`，会按门禁失败，不能静默放宽成“可交易性已验证”。
+如果显式使用 `--mode prediction`，输入必须已经包含 `market=A-share`、`prediction` 或 `prediction_score`，以及 `turn` 或 `turnover`；缺少 prediction 时会在 validate 阶段失败并保留 manifest，不会自动改走通用评分。低价超短剖面还要求 `amount`、`turn`、`tradestatus` 和 `isST` 等可交易字段；akshare 日线输出没有 `tradestatus/isST`，会按门禁失败，不能静默放宽成“可交易性已验证”。
 
 如需合并东方财富实时快照展示字段，可让总控 CLI 先调用快照入口。`spot_price`、`spot_pct_chg`、`spot_amount`、`spot_industry` 只进入候选和诊断展示，不参与核心评分；如果分页失败，metadata 会写出 `partial_result=true`，不能写成全市场实时扫描完成：
 
@@ -383,7 +408,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
   --fail-on-empty-result
 ```
 
-yfinance 裸 OHLCV 不含 `turn` 或 `turnover`，通用评分会输出 `turnover_assumption=neutral_series_missing_turnover` 并在 stderr 说明使用 neutral turnover series；报告候选时必须保留这个假设。`score_diagnostics.csv` 会记录每个已评分 symbol 的阈值失败项和是否入选，用于解释未入选标的，但它仍不是回测或收益证明。`end-date` 可能落在非交易日，实际数据范围以 metadata 中每个 symbol 的 `date_min/date_max` 为准；fetch 退出 0 且 `validate_ohlcv.py` 通过，也不能把非交易日 `end-date` 写成实际最后交易日、信号日或可回测入场日。该链路不生成或验证 LightGBM prediction，不适用于 QSSS-derived；若强行使用 QSSS-derived 配置，仍会因为缺少 `prediction/prediction_score` 和 `turn/turnover` 显式失败。
+yfinance 裸 OHLCV 不含 `turn` 或 `turnover`，通用评分会输出 `turnover_assumption=neutral_series_missing_turnover` 并在 stderr 说明使用 neutral turnover series；报告候选时必须保留这个假设。`score_diagnostics.csv` 会记录每个已评分 symbol 的阈值失败项和是否入选，用于解释未入选标的，但它仍不是回测或收益证明。`end-date` 可能落在非交易日，实际数据范围以 metadata 中每个 symbol 的 `date_min/date_max` 为准；fetch 退出 0 且 `validate_ohlcv.py` 通过，也不能把非交易日 `end-date` 写成实际最后交易日、信号日或可回测入场日。该链路不生成或验证 LightGBM prediction，不适用于 prediction-derived；若强行使用 prediction-derived 配置，仍会因为缺少 `prediction/prediction_score` 和 `turn/turnover` 显式失败。
 
 `backtest_buy_hold.py --require-tradable-bars` 是 entry/exit-only 门禁，只检查入场和退出 bar 的 `tradestatus=1`，模型名为 `tradestatus_entry_exit_only`。如果需要更严格的本地可交易性检查，可额外传入 `--require-tradable-holding-period`；该模式会检查价格表内从入场到退出的已观测 bar 都是 `tradestatus=1`，模型名为 `tradestatus_holding_period_bars`。这仍只是已落地价格表内的 observed bars 门禁，不补全真实交易所日历、缺失交易日、节假日、临时休市、涨跌停、真实订单或券商成交容量。
 
@@ -434,7 +459,7 @@ python3 scripts/validate_walk_forward_manifest.py \
   --required-limit-rules-model not_modeled
 ```
 
-artifact validator 的期望值从刚生成的 `run_manifest.json` 和 `qsss_run_summary.json` 提取，避免手填导致假绿或假失败：
+artifact validator 的期望值从刚生成的 `run_manifest.json` 和 `prediction_run_summary.json` 提取，避免手填导致假绿或假失败：
 
 ```bash
 eval "$(
@@ -452,7 +477,7 @@ def bash_array(name, values):
 
 run = Path(os.environ["RUN_DIR"])
 manifest = json.loads((run / "run_manifest.json").read_text())
-summary = json.loads((run / "qsss_run_summary.json").read_text())
+summary = json.loads((run / "prediction_run_summary.json").read_text())
 bash_array("VALIDATION_SIGNAL_DATES", manifest["signal_dates"])
 bash_array("VALIDATION_SYMBOLS", manifest["symbols"])
 bash_array("VALIDATION_CANDIDATES", [item["candidates"] for item in summary["signals"]])
@@ -478,16 +503,16 @@ python3 scripts/validate_walk_forward_artifacts.py \
 
 如要让一键 runner 的回测步骤使用全持有期已观测 bar 可交易性门禁，可在 runner 命令中加入 `--require-tradable-holding-period`，并把后续 manifest validator、artifact validator 或手工 summary 的 `--required-tradability-model` 改为 `tradestatus_holding_period_bars`。默认 P1 示例仍使用 `tradestatus_entry_exit_only`，因此不能把旧产物解释成全持有期 observed bar 门禁通过。
 
-若目标是复现已知组合风险暴露，而不是证明当前门禁通过，才在 runner、summary 和 manifest validator 中同时使用 `--expect-portfolio-violations`。summary 在该模式下退出 0 且 `quality_errors=[]`，只表示已知违规被显式允许；报告中的 `portfolio_violations>0` 仍不是组合容量门禁通过。手工运行 summary 时，只有传入 `--required-tradability-model` 和 `--required-limit-rules-model`，`quality_errors=[]` 才能覆盖这些模型口径；省略 required 参数时必须披露 JSON 中实际 `tradability_models` 和 `limit_rules_models`。若 artifact validator 使用非 0 的 `--expected-portfolio-violations` 后退出 0 且 `errors=[]`，这只说明 artifact 与已知违规数量一致；报告中的 `portfolio_violations>0` 仍不是组合容量门禁通过。artifact validator 只有传入 `--manifest-validation "$RUN_DIR/run_manifest_validation.json"` 时才会校验 manifest 报告；若输出 `manifest_checked=false`，不能说 manifest 门禁已纳入本次 artifact 复验。若 runner 显式设置 `--max-candidates M`，manifest validator 才同步传 `--expected-max-candidates M`。`portfolio_cash_lot_floor` 生成 `qsss_raw_candidates.csv`、`qsss_candidates.csv`、`qsss_sized_candidates.csv`、`qsss_skipped_candidates.csv` 和 `qsss_allocation_summary.json`；artifact validator 会交叉校验 allocation 与 overlap 的容量摘要。overlap summary 中的 `calendar_model=business_day_closed_interval` 仍只是 pandas 工作日闭区间，不是交易所日历、节假日、特殊交易日或全持有期停复牌可交易性门禁。`tradestatus_holding_period_bars` 只覆盖价格表内已观测 bar 的 `tradestatus=1`，不能补足真实交易所日历、缺失交易日或涨跌停规则。当前脚本仍不证明真实成交容量、券商订单或涨跌停规则。当前真实门禁优先级以 `docs/reviews/REAL-SCENARIO-GATES-2026-05-30.md` 为准。
-输入约定：`symbol` 必须按文本保存以保留前导零；校验脚本会拒绝 1 到 3 位纯数字代码，避免把 `000001` 这类 A 股代码被表格软件损坏后的值当作有效输入。`date` 支持 `YYYY-MM-DD` 或 `YYYYMMDD`；`volume` 单位必须在同一文件内保持一致，脚本只能校验数值和非负，无法从纯数值可靠判断“股/手/张/成交额”是否混用。QSSS-derived 的 `market` 只接受精确值 `A-share`，不会自动归一化 `A股`、`China` 等别名。
+若目标是复现已知组合风险暴露，而不是证明当前门禁通过，才在 runner、summary 和 manifest validator 中同时使用 `--expect-portfolio-violations`。summary 在该模式下退出 0 且 `quality_errors=[]`，只表示已知违规被显式允许；报告中的 `portfolio_violations>0` 仍不是组合容量门禁通过。手工运行 summary 时，只有传入 `--required-tradability-model` 和 `--required-limit-rules-model`，`quality_errors=[]` 才能覆盖这些模型口径；省略 required 参数时必须披露 JSON 中实际 `tradability_models` 和 `limit_rules_models`。若 artifact validator 使用非 0 的 `--expected-portfolio-violations` 后退出 0 且 `errors=[]`，这只说明 artifact 与已知违规数量一致；报告中的 `portfolio_violations>0` 仍不是组合容量门禁通过。artifact validator 只有传入 `--manifest-validation "$RUN_DIR/run_manifest_validation.json"` 时才会校验 manifest 报告；若输出 `manifest_checked=false`，不能说 manifest 门禁已纳入本次 artifact 复验。若 runner 显式设置 `--max-candidates M`，manifest validator 才同步传 `--expected-max-candidates M`。`portfolio_cash_lot_floor` 生成 `prediction_raw_candidates.csv`、`prediction_candidates.csv`、`prediction_sized_candidates.csv`、`prediction_skipped_candidates.csv` 和 `prediction_allocation_summary.json`；artifact validator 会交叉校验 allocation 与 overlap 的容量摘要。overlap summary 中的 `calendar_model=business_day_closed_interval` 仍只是 pandas 工作日闭区间，不是交易所日历、节假日、特殊交易日或全持有期停复牌可交易性门禁。`tradestatus_holding_period_bars` 只覆盖价格表内已观测 bar 的 `tradestatus=1`，不能补足真实交易所日历、缺失交易日或涨跌停规则。当前脚本仍不证明真实成交容量、券商订单或涨跌停规则。当前真实门禁优先级以 `docs/reviews/REAL-SCENARIO-GATES-2026-05-30.md` 为准。
+输入约定：`symbol` 必须按文本保存以保留前导零；校验脚本会拒绝 1 到 3 位纯数字代码，避免把 `000001` 这类 A 股代码被表格软件损坏后的值当作有效输入。`date` 支持 `YYYY-MM-DD` 或 `YYYYMMDD`；`volume` 单位必须在同一文件内保持一致，脚本只能校验数值和非负，无法从纯数值可靠判断“股/手/张/成交额”是否混用。prediction-derived 的 `market` 只接受精确值 `A-share`，不会自动归一化 `A股`、`China` 等别名。
 
-常见字段映射：akshare 中文列需映射为 `股票代码 -> symbol`、`日期 -> date`、`成交量 -> volume`、`成交额 -> amount`、`换手率 -> turn`，`stock_zh_a_daily` 英文字段需映射 `volume -> volume`、`amount -> amount`、`turnover -> turn`，其中 `成交额` 或 `amount` 不得映射为 `volume`；tushare 需将 `ts_code` 去掉 `.SZ`/`.SH` 后写入 `symbol`，`trade_date -> date`，`vol -> volume`，`amount -> amount`，`turnover_rate -> turn`；yfinance 需将 `Date/Symbol/Open/High/Low/Close/Volume` 映射为小写标准字段。yfinance 映射后只满足通用 OHLCV；若用于 QSSS-derived，还必须外部补齐 `market=A-share`、真实上游 `prediction_score`、以及 `turn` 或 `turnover`，不能从 yfinance OHLCV 自动推断。不要把 `Adj Close` 静默替换为 `close`；使用复权价时要记录复权口径。多源合并时统一保留一个预测列，推荐先生成 `prediction_score = coalesce(prediction_score, prediction)`。
+常见字段映射：akshare 中文列需映射为 `股票代码 -> symbol`、`日期 -> date`、`成交量 -> volume`、`成交额 -> amount`、`换手率 -> turn`，`stock_zh_a_daily` 英文字段需映射 `volume -> volume`、`amount -> amount`、`turnover -> turn`，其中 `成交额` 或 `amount` 不得映射为 `volume`；tushare 需将 `ts_code` 去掉 `.SZ`/`.SH` 后写入 `symbol`，`trade_date -> date`，`vol -> volume`，`amount -> amount`，`turnover_rate -> turn`；yfinance 需将 `Date/Symbol/Open/High/Low/Close/Volume` 映射为小写标准字段。yfinance 映射后只满足通用 OHLCV；若用于 prediction-derived，还必须外部补齐 `market=A-share`、真实上游 `prediction_score`、以及 `turn` 或 `turnover`，不能从 yfinance OHLCV 自动推断。不要把 `Adj Close` 静默替换为 `close`；使用复权价时要记录复权口径。多源合并时统一保留一个预测列，推荐先生成 `prediction_score = coalesce(prediction_score, prediction)`。
 
-`score_candidates.py` 的 CLI 摘要会报告输入文件名、`input_symbols`、股票池过滤、历史不足、输入异常、单股失败、阈值过滤、`turnover_assumption`、`effective_empty_result`、`empty_result_reason` 和最终候选数量。股票池过滤包含 `market_filtered_symbols`、`prefix_allow_filtered_symbols`、`prefix_excluded_symbols` 分项。`threshold_failures` 是各阈值独立失败计数，不是互斥分类，不能和 `threshold_failed_symbols` 相加对账。QSSS-derived 路径还会标记 `prediction_source=external_unverified`，表示脚本只消费上游预测，不验证该列是否由真实 LightGBM 链路生成。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。
+`score_candidates.py` 的 CLI 摘要会报告输入文件名、`input_symbols`、股票池过滤、历史不足、输入异常、单股失败、阈值过滤、`turnover_assumption`、`effective_empty_result`、`empty_result_reason` 和最终候选数量。股票池过滤包含 `market_filtered_symbols`、`prefix_allow_filtered_symbols`、`prefix_excluded_symbols` 分项。`threshold_failures` 是各阈值独立失败计数，不是互斥分类，不能和 `threshold_failed_symbols` 相加对账。prediction-derived 路径还会标记 `prediction_source=external_unverified`，表示脚本只消费上游预测，不验证该列是否由真实 LightGBM 链路生成。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。
 
 自动化流水线应把 `failed_symbols=0`、`insufficient_history_symbols=0`、`effective_empty_result=false` 作为成功门槛；也可在 CLI 中显式传入 `--fail-on-skipped` 和 `--fail-on-empty-result`，让跳过标的或 0 候选直接返回非 0。`failed_symbols>0` 表示存在单股运行期异常，即使脚本仍输出了其他候选，也应进入人工复核或失败处理。成功摘要会输出截断样例，例如 `failed_symbol_examples`、`insufficient_history_symbol_examples`，用于定位需要复核的标的。
 
-`validate_ohlcv.py --min-history-rows 0` 的成功只覆盖基础字段、日期、数值和 profile 必需字段，不覆盖评分配置的历史窗口。默认 QSSS-derived 评分仍要求 120 行历史；若 `score_candidates.py` 报 `code=bad_input output_written=false` 和 `insufficient_history_symbols>0`，这是输入不可评分，不是 0 候选成功。
+`validate_ohlcv.py --min-history-rows 0` 的成功只覆盖基础字段、日期、数值和 profile 必需字段，不覆盖评分配置的历史窗口。默认 prediction-derived 评分仍要求 120 行历史；若 `score_candidates.py` 报 `code=bad_input output_written=false` 和 `insufficient_history_symbols>0`，这是输入不可评分，不是 0 候选成功。
 
 配置中的 `output.max_candidates` 大于 0 时限制输出数量；设为 0 表示不截断候选结果。一键 runner 可用 `--max-candidates` 写出 run-scoped 配置，便于在 manifest 中追踪本次 top-N 门禁；也可用 `--allocation-model portfolio_cash_lot_floor` 启用组合级 sizing/cut，并生成 raw、selected、sized、skipped 和 allocation summary 证据。
 
@@ -512,7 +537,7 @@ total_score =
   + risk_score * 0.15
 ```
 
-QSSS-derived 评分模板：
+prediction-derived 评分模板：
 
 ```text
 total_score =
@@ -533,7 +558,7 @@ uv run --with pyyaml python "$QUICK_VALIDATE" "$(pwd)"
 /tmp/stock-selection-skill-venv/bin/python "$QUICK_VALIDATE" "$(pwd)"
 python3 -m json.tool evals/evals.json >/tmp/stock-selection-evals.json
 python3 -m json.tool scripts/example_config.json >/tmp/stock-selection-example-config.json
-python3 -m json.tool scripts/qsss_profile_config.json >/tmp/stock-selection-qsss-config.json
+python3 -m json.tool scripts/prediction_profile_config.json >/tmp/stock-selection-prediction-config.json
 uv run --with pyyaml python - <<'PY'
 import yaml
 from pathlib import Path
@@ -564,7 +589,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
 - 评分、校验、切片、预测和回测脚本以本地文件为入口；`fetch_baostock_a_share.py`、`fetch_akshare_a_share.py` 和 `fetch_yfinance_ohlcv.py` 是显式可选联网取数入口，只负责落地本地 gate 文件，不调用券商接口或交易接口。
 - 没有真实回测时，不得声称策略收益已经验证。
 - 使用机器学习预测时，必须明确训练窗口、预测窗口、标签定义和未来数据泄漏风险。
-- QSSS-derived 配置只复刻评分消费层；真实 LightGBM prediction 可由本仓库可选生成器或外部上游生成，但必须单独验证训练窗口、标签定义和未来泄漏风险。
+- prediction-derived 配置只复刻评分消费层；真实 LightGBM prediction 可由本仓库可选生成器或外部上游生成，但必须单独验证训练窗口、标签定义和未来泄漏风险。
 
 ## 授权
 

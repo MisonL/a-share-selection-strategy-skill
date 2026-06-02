@@ -1,6 +1,6 @@
-# QSSS-Derived Profile
+# Prediction-Derived Profile
 
-本文件保存 QSSS-derived A 股默认剖面的细节。`SKILL.md` 只保留入口约束；当用户要求“复刻 QSSS 原选股策略”或使用 `scripts/qsss_profile_config.json` 时再读取本文件。
+本文件保存 prediction-derived A 股默认剖面的细节。`SKILL.md` 只保留入口约束；当用户要求“复刻 prediction-derived 原选股策略”或使用 `scripts/prediction_profile_config.json` 时再读取本文件。
 
 ## 股票池和运行边界
 
@@ -35,7 +35,7 @@
 
 ## ML Prediction 口径
 
-QSSS 原策略的主趋势分是 LightGBM 输出的上涨概率 `prediction`。
+prediction-derived 原策略的主趋势分是 LightGBM 输出的上涨概率 `prediction`。
 
 - 特征：`momentum_1m`、`momentum_3m`、`momentum_6m`、`volatility`、`vol_ratio`、`rsi`、`macd`、`signal`。
 - 输入少于 100 行时不训练；特征和目标清洗后少于 50 行时不训练。

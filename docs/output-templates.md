@@ -1,5 +1,17 @@
 # Output Templates
 
+## 快速路由
+
+| 看到的字段或场景 | 使用模板 | 必须保留的边界 |
+|------------------|----------|----------------|
+| 缺本地行情或联网授权 | 无法直接选股 / 用户要求直接给名单但缺数据源 | 不输出候选代码、名称或模拟理由 |
+| `partial_result=true` 或分页失败 | 东方财富实时快照部分成功 / 联网取数尚未完成校验 | 不能写成全市场实时扫描完成 |
+| `output_written=false` 或 strict gate 非 0 | 对应失败模板，如历史窗口不足、prediction-derived 缺 prediction | 不能写成 0 候选成功 |
+| `effective_empty_result=true` | 0 候选结果 | 说明成功空结果原因，不证明策略有效 |
+| `prediction_source=external_unverified` | prediction-derived prediction 仅为外部输入 | 不能说预测源真实、训练质量或无泄漏已证明 |
+| `lightgbm_not_used=true` 或 `mode=generic` | 今日入口 generic 技术评分 | 不能写成 prediction-derived/LightGBM 结果 |
+| `lightgbm_executed_by_runner=false` | 今日入口或外部 prediction 评分 | 不能说 runner 训练或执行了 LightGBM |
+
 ## 无法直接选股
 
 ```markdown
@@ -9,6 +21,14 @@
 - 需要补充：市场、周期、时间范围、目标风格、CSV/Parquet 路径或联网取数授权。
 - 本地行情最小字段：`symbol`、`date`、`open`、`high`、`low`、`close`、`volume`。
 - 可验证后再执行：先校验数据，再评分和解释结果。
+```
+
+## 用户要求直接给名单但缺数据源
+
+```markdown
+我现在不能直接给出股票名单。
+
+你已经给了市场或风格，但缺少可验证行情文件或明确联网取数授权；我不能用热门股、记忆行情、常识或模拟数据补候选和理由。可执行路径是先落地真实 CSV/Parquet 或授权联网取数，再运行校验和评分脚本。没有这些输入前，候选名单、入选理由和收益判断都不能生成。
 ```
 
 ## 联网取数尚未完成校验
@@ -80,8 +100,8 @@
 ## Yfinance market 只是输出标签
 - `fetch_yfinance_ohlcv.py --market` 只把标签写入 CSV 和 metadata，不校验 symbol 所属市场、交易所或交易日历。
 - metadata 中 `source=yfinance`、`market=A-share` 和基础 `validate_ohlcv.py` 通过，不能写成 A 股数据源或 A 股交易日历门禁通过。
-- 如果 symbol 仍是 `AAPL` 这类非六位代码，QSSS-derived A 股 profile 应按 symbol 格式门禁显式失败。
-- 报告时必须披露真实数据源、requested symbols、market 标签来源，以及 QSSS profile 校验结果。
+- 如果 symbol 仍是 `AAPL` 这类非六位代码，prediction-derived A 股 profile 应按 symbol 格式门禁显式失败。
+- 报告时必须披露真实数据源、requested symbols、market 标签来源，以及 prediction-derived profile 校验结果。
 ```
 
 ## Yfinance 部分取数成功
@@ -164,8 +184,8 @@
 ```markdown
 ## 组合 allocation 已裁剪候选
 - `raw_candidates` 是组合容量裁剪前候选池，不等于最终进入回测或成交的数量。
-- 后续回测应基于 `qsss_candidates.csv` / `qsss_sized_candidates.csv` 和 `allocated_candidates`。
-- 如果 `skipped_candidates>0`，必须披露 `qsss_skipped_candidates.csv`、`skip_reason_counts` 和逐信号日 raw/allocated/skipped。
+- 后续回测应基于 `prediction_candidates.csv` / `prediction_sized_candidates.csv` 和 `allocated_candidates`。
+- 如果 `skipped_candidates>0`，必须披露 `prediction_skipped_candidates.csv`、`skip_reason_counts` 和逐信号日 raw/allocated/skipped。
 - 如果 `allocated_candidates=0`，即使命令退出 0 且 selected/sized CSV 已写出，也没有候选进入后续回测；只有表头的 CSV 不是有效候选表。
 - 本地 `portfolio_cash_lot_floor` 仍不是券商订单、真实成交或真实现金容量证明。
 ```
@@ -204,7 +224,7 @@
 
 ```markdown
 ## Summary/组合门禁未通过
-- `qsss_run_summary.json`、`qsss_overlap_summary.json` 或 overlap CSV 已写出，只说明诊断产物可供审计。
+- `prediction_run_summary.json`、`prediction_overlap_summary.json` 或 overlap CSV 已写出，只说明诊断产物可供审计。
 - 退出码非 0、stderr 含 `strict gate failed`、`quality_errors` 非空或 `portfolio_violations>0` 时，不能写成资金曲线、组合容量或 P1 门禁通过。
 - `output_written=true` 表示失败报告已落盘，不代表成功。
 - 必须披露 `final_equity`、`max_drawdown`、`quality_errors` 和组合容量/重叠违规；受控样本的 `final_equity` 不能写成真实收益验证。
@@ -360,19 +380,19 @@
 - `threshold_failures` 是逐阈值失败次数，同一标的可能同时计入多个阈值，不能和 `threshold_failed_symbols` 相加对账。
 ```
 
-## QSSS-derived 缺少 prediction
+## prediction-derived 缺少 prediction
 
 ```markdown
-## 无法按 QSSS-derived 原口径评分
-- 输入缺少 `prediction` 或 `prediction_score`，不能生成 QSSS-derived 候选股。
+## 无法按 prediction-derived 原口径评分
+- 输入缺少 `prediction` 或 `prediction_score`，不能生成 prediction-derived 候选股。
 - `prediction` 是上游 LightGBM 概率，不得用动量分、固定 `0.5`、mock 值或技术指标近似冒充。
 - 当前可做：
-  - 先提供或生成可追溯的上游 `prediction_score`，再运行 QSSS-derived 评分。
-  - 只做字段质量检查时，可先运行 QSSS profile 校验，让缺失字段显式失败。
+  - 先提供或生成可追溯的上游 `prediction_score`，再运行 prediction-derived 评分。
+  - 只做字段质量检查时，可先运行 prediction-derived profile 校验，让缺失字段显式失败。
 - 即使使用 `generate_lightgbm_predictions.py`，也必须单独核验训练窗口、标签、特征、时间序列切分、跳过标的和未来泄漏风险。
 ```
 
-## QSSS-derived 预测列冲突
+## prediction-derived 预测列冲突
 
 ```markdown
 ## 预测列口径需要先统一
@@ -380,18 +400,18 @@
 - 如果两列数值冲突，不能用较高的 `prediction` 解释 `min_prediction_score` 阈值应通过。
 - `validate_ohlcv.py --config` 通过只说明两列值域和必需字段有效，不证明两列口径一致。
 - 报告候选或 0 候选时必须披露实际参与评分的 `prediction_score`、`threshold_failures` 和 `prediction_source`。
-- 合规路径是先统一预测列或审计上游字段映射，再重新运行 QSSS profile 校验和评分。
+- 合规路径是先统一预测列或审计上游字段映射，再重新运行 prediction-derived profile 校验和评分。
 ```
 
-## 基础 OHLCV 不是 QSSS-derived 输入
+## 基础 OHLCV 不是 prediction-derived 输入
 
 ```markdown
-## QSSS-derived 门禁未通过
+## prediction-derived 门禁未通过
 - 无 config 的 `validate_ohlcv.py` 通过，只证明基础 OHLCV 字段、日期和数值有效。
-- `slice_prices_as_of.py` 退出 0 只说明切片非空并写出，不会补齐 QSSS-derived 必需字段。
-- QSSS-derived 仍必须包含 `market=A-share`、可追溯的 `prediction` 或 `prediction_score`，以及真实 `turn` 或 `turnover`。
-- `score_candidates.py --config scripts/qsss_profile_config.json` 报缺字段、`code=bad_input` 或 `output_written=false` 时，是输入门禁失败，不是成功 0 候选。
-- 合规路径是补齐 QSSS-derived 必需字段后，对切片文件重新运行 profile 校验和评分。
+- `slice_prices_as_of.py` 退出 0 只说明切片非空并写出，不会补齐 prediction-derived 必需字段。
+- prediction-derived 仍必须包含 `market=A-share`、可追溯的 `prediction` 或 `prediction_score`，以及真实 `turn` 或 `turnover`。
+- `score_candidates.py --config scripts/prediction_profile_config.json` 报缺字段、`code=bad_input` 或 `output_written=false` 时，是输入门禁失败，不是成功 0 候选。
+- 合规路径是补齐 prediction-derived 必需字段后，对切片文件重新运行 profile 校验和评分。
 ```
 
 ## LightGBM prediction 部分成功
@@ -441,7 +461,7 @@
 
 ```markdown
 ## 切片后仍不能评分
-- 原始 QSSS-derived 文件通过 `validate_ohlcv.py`，不代表 `slice_prices_as_of.py` 截断后的文件仍满足评分历史窗口。
+- 原始 prediction-derived 文件通过 `validate_ohlcv.py`，不代表 `slice_prices_as_of.py` 截断后的文件仍满足评分历史窗口。
 - `slice_prices_as_of.py` 退出 0 只说明切片结果非空并已写出；必须披露切片 stdout 中的 `rows`、`date_min` 和 `date_max`。
 - 对切片后的文件重新运行校验和评分；最终以 `score_candidates.py` 的退出码、`insufficient_history_symbols` 和 `output_written` 为准。
 - `code=bad_input output_written=false` 或 `insufficient_history_symbols>0` 表示切片后不可评分，不是成功 0 候选。
@@ -456,6 +476,9 @@
 - 数据窗口：
 - 股票池过滤：
 - 因子和权重：
+- `requested_mode/mode/mode_decision`：
+- `prediction_mode/lightgbm_not_used/lightgbm_executed_by_runner`：
+- `source_scope`：
 
 ## 候选结果
 | rank | symbol | name | total_score | key_reasons | risk_notes |
@@ -463,6 +486,7 @@
 
 ## 过滤摘要
 - 输入股票数：
+- `prices_rows/candidate_rows/diagnostic_rows`：
 - 剔除数量和原因：
 - 最终候选数：
 

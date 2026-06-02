@@ -68,7 +68,7 @@ python3 scripts/validate_walk_forward_manifest.py \
   --required-limit-rules-model not_modeled
 ```
 
-artifact validator 使用 README 的动态提取方式读取 `run_manifest.json` 和 `qsss_run_summary.json`，避免手填候选数和最终权益。命令额外固定:
+artifact validator 使用 README 的动态提取方式读取 `run_manifest.json` 和 `prediction_run_summary.json`，避免手填候选数和最终权益。命令额外固定:
 
 ```bash
 python3 scripts/validate_walk_forward_artifacts.py \

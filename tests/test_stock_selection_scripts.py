@@ -14,11 +14,14 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
 SCRIPTS = SKILL_ROOT / "scripts"
+TESTS = ROOT / "tests"
 sys.path.insert(0, str(SCRIPTS))
+sys.path.insert(0, str(TESTS))
 
 import score_candidates as scorer  # noqa: E402
 from stock_selection_data import read_table  # noqa: E402
 from stock_selection_prepare import prepare_frame  # noqa: E402
+from stock_selection_spot import normalized_spot_view  # noqa: E402
 from stock_selection_universe import apply_universe_filter  # noqa: E402
 import validate_ohlcv  # noqa: E402
 from helpers import build_frame, load_config, permissive_thresholds  # noqa: E402
@@ -76,6 +79,17 @@ class StockSelectionScriptTests(unittest.TestCase):
         frame["symbol"] = "12345"
         errors = validate_ohlcv.validate_frame(frame, min_history_rows=120)
         self.assertIn("preserve leading zeros as text", "; ".join(errors))
+
+    def test_validate_reports_available_errors_when_required_column_missing(self) -> None:
+        frame = build_frame()
+        frame["symbol"] = "1"
+        frame = frame.drop(columns=["volume"])
+
+        errors = validate_ohlcv.validate_frame(frame, min_history_rows=120)
+        joined = "; ".join(errors)
+
+        self.assertIn("missing required columns: volume", joined)
+        self.assertIn("preserve leading zeros as text", joined)
 
     def test_yyyymmdd_dates_are_parsed_as_calendar_dates(self) -> None:
         config = load_config("example_config.json")
@@ -254,18 +268,51 @@ class StockSelectionScriptTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "prediction_score has"):
             scorer.score_candidates(frame, config)
 
-    def test_generic_rejects_invalid_prediction_range(self) -> None:
+    def test_generic_ignores_prediction_columns(self) -> None:
         config = load_config("example_config.json")
-        frame = build_frame(include_prediction=True, prediction_value=-0.1)
-        with self.assertRaisesRegex(ValueError, "prediction_score has"):
-            scorer.score_candidates(frame, config)
+        with_prediction = build_frame(include_prediction=True, prediction_value=-0.1)
+        without_prediction = with_prediction.drop(columns=["prediction_score"])
+
+        candidates_with, summary = scorer.score_candidates(with_prediction, config)
+        candidates_without, _ = scorer.score_candidates(without_prediction, config)
+
+        self.assertEqual("not_used", summary["prediction_source"])
+        self.assertEqual("not_used", summary["prediction_input_source"])
+        self.assertFalse(summary["prediction_model_executed_by_score_script"])
+        self.assertTrue(summary["lightgbm_not_executed_by_this_script"])
+        self.assertTrue(candidates_with["prediction_score"].isna().all())
+        self.assertEqual({"not_used"}, set(candidates_with["prediction_source"]))
+        self.assertEqual({"not_used"}, set(candidates_with["prediction_input_source"]))
+        self.assertEqual(
+            candidates_without["trend_score"].tolist(),
+            candidates_with["trend_score"].tolist(),
+        )
 
     def test_prediction_valid_prediction_marks_external_source(self) -> None:
         config = load_config("prediction_profile_config.json")
         frame = build_frame(include_prediction=True, include_turn=True)
         _, summary = scorer.score_candidates(frame, config)
         self.assertEqual("external_unverified", summary["prediction_source"])
+        self.assertEqual("external_input", summary["prediction_input_source"])
+        self.assertFalse(summary["prediction_model_executed_by_score_script"])
+        self.assertTrue(summary["lightgbm_not_executed_by_this_script"])
         self.assertEqual(2, summary["scored_symbols"])
+
+    def test_prediction_candidates_carry_disclosure_fields(self) -> None:
+        config = load_config("prediction_profile_config.json")
+        frame = build_frame(include_prediction=True, include_turn=True)
+        candidates, _summary = scorer.score_candidates(frame, config)
+
+        self.assertEqual({"external_unverified"}, set(candidates["prediction_source"]))
+        self.assertEqual({"external_input"}, set(candidates["prediction_input_source"]))
+        self.assertEqual(
+            {False},
+            set(candidates["prediction_model_executed_by_score_script"]),
+        )
+        self.assertEqual(
+            {True},
+            set(candidates["lightgbm_not_executed_by_this_script"]),
+        )
 
     def test_universe_market_filter_is_applied(self) -> None:
         config = load_config("prediction_profile_config.json")
@@ -385,6 +432,47 @@ class StockSelectionScriptTests(unittest.TestCase):
         diagnostic = diagnostics[diagnostics["symbol"].astype(str).eq("2")].iloc[0]
         self.assertEqual("软件服务", diagnostic["spot_industry"])
 
+    def test_cli_normalizes_spot_symbol_aliases_before_merge(self) -> None:
+        config = load_config("example_config.json")
+        config["thresholds"] = permissive_thresholds(120)
+        frame = build_frame(include_turn=True)
+        spot = pd.DataFrame(
+            [
+                {"code": "sz.000002", "price": 8.88, "amount": 250000000},
+                {"code": "600001.SH", "price": 9.99, "amount": 260000000},
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            spot_path = Path(tmpdir) / "spot.csv"
+            config_path = Path(tmpdir) / "config.json"
+            output_path = Path(tmpdir) / "candidates.csv"
+            frame.to_csv(input_path, index=False)
+            spot.to_csv(spot_path, index=False)
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = scorer.main(
+                    [
+                        "--input",
+                        str(input_path),
+                        "--config",
+                        str(config_path),
+                        "--output",
+                        str(output_path),
+                        "--spot-input",
+                        str(spot_path),
+                    ]
+                )
+            candidates = pd.read_csv(output_path)
+
+        self.assertEqual(0, code, stderr.getvalue())
+        self.assertIn("spot_matched_symbols=2", stdout.getvalue())
+        selected = candidates[candidates["symbol"].astype(str).eq("2")].iloc[0]
+        self.assertEqual(8.88, selected["spot_price"])
+
     def test_spot_merge_matches_numeric_scored_symbol_to_text_spot(self) -> None:
         config = load_config("example_config.json")
         config["thresholds"] = permissive_thresholds(120)
@@ -398,6 +486,21 @@ class StockSelectionScriptTests(unittest.TestCase):
         self.assertEqual(1, summary["spot_matched_symbols"])
         selected = candidates[candidates["symbol"].astype(str).eq("600001")].iloc[0]
         self.assertEqual(8.88, selected["spot_price"])
+
+    def test_spot_normalization_preserves_values_from_sliced_frame(self) -> None:
+        spot = pd.DataFrame(
+            [
+                {"symbol": "skip", "spot_price": 1.0, "industry": "skip"},
+                {"symbol": "000002", "spot_price": 8.88, "industry": "软件服务"},
+                {"symbol": "600001", "spot_price": 9.99, "industry": "金融"},
+            ]
+        ).iloc[1:]
+
+        view = normalized_spot_view(spot)
+
+        selected = view[view["symbol"].eq("000002")].iloc[0]
+        self.assertEqual(8.88, selected["spot_price"])
+        self.assertEqual("软件服务", selected["spot_industry"])
 
     def test_ultra_short_profile_filters_prices_above_max_close(self) -> None:
         config = load_config("ultra_short_low_price_config.json")

@@ -15,7 +15,10 @@ OUTPUT_COLUMNS = [
     "tradestatus", "isST", "one_word_bar",
     "spot_price", "spot_pct_chg", "spot_amount", "spot_industry",
     "rsi", "volatility", "macd", "macd_status", "momentum_score", "trend_score",
-    "prediction_score", "explosion_score", "risk_score", "total_score", "ma15",
+    "prediction_score", "prediction_source", "prediction_input_source",
+    "prediction_model_executed_by_score_script",
+    "lightgbm_not_executed_by_this_script",
+    "explosion_score", "risk_score", "total_score", "ma15",
     "low_ma15_flag", "explosion_focus_flag", "low_price_explosion_flag",
     "signal_tier", "recommendation", "key_reasons", "risk_notes", "data_window",
 ]
@@ -118,6 +121,7 @@ def ensure_runtime_dependencies() -> None:
     import stock_selection_candidate_fields as gate_fields_module
     import stock_selection_config as config_module
     import stock_selection_data as data_module
+    import stock_selection_disclosure as disclosure_module
     import stock_selection_diagnostics as diagnostics_module
     import stock_selection_metrics as metrics_module
     import stock_selection_prepare as prepare_module
@@ -135,6 +139,9 @@ def ensure_runtime_dependencies() -> None:
             "parse_dates": data_module.parse_dates,
             "read_table": data_module.read_table,
             "add_threshold_summary": diagnostics_module.add_threshold_summary,
+            "add_prediction_disclosure_fields": (
+                disclosure_module.add_prediction_disclosure_fields
+            ),
             "build_summary": diagnostics_module.build_summary,
             "complete_summary": diagnostics_module.complete_summary,
             "no_scored_symbols_message": summary_module.no_scored_symbols_message,
@@ -172,7 +179,7 @@ def score_candidates(
     validate_prediction_symbols(prepared, config)
     input_frame, universe_summary = apply_universe_filter(prepared, config)
     spot_view, spot_summary = merge_spot_view(input_frame, spot)
-    validate_prediction_values(input_frame)
+    validate_prediction_values(input_frame, config)
     scored_rows, failed_symbols, short_symbols = score_groups(input_frame, config)
     scored = pd.DataFrame(scored_rows)
     summary = build_summary(
@@ -191,6 +198,7 @@ def score_candidates(
         print_skipped_history_warning(short_symbols, min_history)
     if scored.empty:
         return empty_result(summary)
+    scored = add_prediction_disclosure_fields(scored, config)
     scored = merge_latest_gate_fields(scored, input_frame)
     scored = merge_latest_spot_fields(scored, spot_view)
     thresholded = apply_thresholds(scored, config["thresholds"])
@@ -252,7 +260,9 @@ def validate_input_frame(frame: pd.DataFrame, config: dict[str, Any]) -> None:
         raise ValueError("; ".join(errors))
 
 
-def validate_prediction_values(frame: pd.DataFrame) -> None:
+def validate_prediction_values(frame: pd.DataFrame, config: dict[str, Any]) -> None:
+    if not is_prediction_mode(config):
+        return
     for column in ["prediction", "prediction_score"]:
         if column not in frame.columns:
             continue

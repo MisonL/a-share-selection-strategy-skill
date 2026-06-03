@@ -13,7 +13,9 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
 SCRIPTS = SKILL_ROOT / "scripts"
+TESTS = ROOT / "tests"
 sys.path.insert(0, str(SCRIPTS))
+sys.path.insert(0, str(TESTS))
 
 import score_candidates as scorer  # noqa: E402
 import validate_ohlcv  # noqa: E402

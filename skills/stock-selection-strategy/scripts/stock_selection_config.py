@@ -42,6 +42,7 @@ BASE_THRESHOLD_KEYS = [
     "min_close",
 ]
 BASE_WEIGHT_KEYS = ["momentum_score", "explosion_score", "risk_score"]
+PREDICTION_SCORE_MODE = "prediction-derived"
 
 
 def load_config(path: Path) -> dict[str, Any]:
@@ -66,6 +67,26 @@ def validate_config(config: dict[str, Any]) -> None:
         ["min_prediction_score", "min_trend_score"],
         "thresholds",
     )
+    validate_score_mode_keys(config)
+
+
+def validate_score_mode_keys(config: dict[str, Any]) -> None:
+    weights = config["weights"]
+    thresholds = config["thresholds"]
+    if is_prediction_mode(config):
+        reject_key(weights, "trend_score", "prediction-derived weights")
+        reject_key(thresholds, "min_trend_score", "prediction-derived thresholds")
+        require_keys(weights, ["prediction_score"], "weights")
+        require_keys(thresholds, ["min_prediction_score"], "thresholds")
+        return
+    reject_key(weights, "prediction_score", "generic weights")
+    reject_key(thresholds, "min_prediction_score", "generic thresholds")
+    require_keys(weights, ["trend_score"], "weights")
+    require_keys(thresholds, ["min_trend_score"], "thresholds")
+
+
+def is_prediction_mode(config: dict[str, Any]) -> bool:
+    return str(config.get("score_mode", "")).lower() == PREDICTION_SCORE_MODE
 
 
 def window_keys(config: dict[str, Any]) -> list[str]:
@@ -84,3 +105,8 @@ def require_keys(section: dict[str, Any], keys: list[str], name: str) -> None:
 def require_one_of(section: dict[str, Any], keys: list[str], name: str) -> None:
     if not any(key in section for key in keys):
         raise ValueError(f"config {name} require one of: {', '.join(keys)}")
+
+
+def reject_key(section: dict[str, Any], key: str, name: str) -> None:
+    if key in section:
+        raise ValueError(f"config {name} must not include {key}")

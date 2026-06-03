@@ -13,7 +13,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
 SCRIPTS = SKILL_ROOT / "scripts"
+TESTS = ROOT / "tests"
 sys.path.insert(0, str(SCRIPTS))
+sys.path.insert(0, str(TESTS))
 
 import run_today_a_share_selection as runner  # noqa: E402
 from run_today_a_share_selection_helpers import spot_rows, tabular_row_count  # noqa: E402
@@ -46,6 +48,8 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
         self.assertEqual(0, code, stderr)
         self.assertIn("runner=run_today_a_share_selection", stdout)
+        self.assertIn("candidate_rows=2", stdout)
+        self.assertIn("diagnostic_rows=2", stdout)
         self.assertEqual(["validate", "score"], [step["step"] for step in manifest["steps"]])
         self.assertEqual("auto", manifest["requested_mode"])
         self.assertEqual("generic", manifest["mode"])
@@ -278,6 +282,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("--spot-input", score_command)
         self.assertEqual("local_prices_input+local_spot_input", manifest["source_scope"])
         self.assertEqual(1, summary["spot_rows"])
+        self.assertEqual(1, summary["spot_matched_symbols"])
 
     def test_runner_records_eastmoney_fetch_step_before_score(self) -> None:
         args = runner.build_parser().parse_args(

@@ -13,6 +13,7 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
     prices = prices_output_path(manifest)
     candidates = Path(manifest["output_dir"]) / "candidates.csv"
     diagnostics = Path(manifest["output_dir"]) / "diagnostics.csv"
+    score = score_summary(manifest)
     return {
         "runner": manifest["runner"],
         "status": status,
@@ -37,10 +38,11 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "failed_steps": [step["step"] for step in failed],
         "spot_metadata": spot_metadata_view(manifest),
         "spot_rows": spot_rows(manifest),
+        "spot_matched_symbols": score.get("spot_matched_symbols", 0),
         "prices_rows": tabular_row_count(prices),
         "candidate_rows": tabular_row_count(candidates),
         "diagnostic_rows": tabular_row_count(diagnostics),
-        "score": score_summary(manifest),
+        "score": score,
         "prices_output": str(prices),
         "prices_output_written": prices.exists(),
         "candidates_output": str(candidates),
@@ -218,6 +220,7 @@ def write_json(data: dict[str, Any], path: Path) -> None:
 
 
 def print_summary(manifest: dict[str, Any], output: Path) -> None:
+    view = summary_view(manifest, "completed")
     print(
         "OK: runner=run_today_a_share_selection "
         f"mode={manifest['mode']} steps={len(manifest['steps'])} "
@@ -228,5 +231,9 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
         f"lightgbm_not_used={str(manifest['lightgbm_not_used']).lower()} "
         f"lightgbm_output_source={manifest.get('lightgbm_output_source', 'unknown')} "
         "lightgbm_executed_by_runner=false "
+        f"prices_rows={view['prices_rows']} "
+        f"candidate_rows={view['candidate_rows']} "
+        f"diagnostic_rows={view['diagnostic_rows']} "
+        f"spot_matched_symbols={view['spot_matched_symbols']} "
         f"manifest={output / 'run_manifest.json'} summary={output / 'summary.json'}"
     )

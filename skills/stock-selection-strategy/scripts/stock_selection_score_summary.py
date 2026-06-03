@@ -21,6 +21,9 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
         f"threshold_failed_symbols={summary['threshold_failed_symbols']}",
         f"candidates={summary['candidates']}",
     ]
+    for key in prediction_disclosure_keys():
+        if key in summary:
+            parts.append(f"{key}={format_value(summary[key])}")
     if summary.get("effective_empty_result") is not None:
         parts.append(f"effective_empty_result={str(summary['effective_empty_result']).lower()}")
     if summary.get("empty_result_reason"):
@@ -56,9 +59,10 @@ def print_detail_lines(summary: dict[str, Any]) -> None:
             "component uses a neutral series and no prediction-derived turnover gate is applied",
             file=sys.stderr,
         )
-    if summary.get("prediction_source"):
+    if summary.get("prediction_source") == "external_unverified":
         print(
-            "INFO: prediction_source=external_unverified "
+            f"INFO: prediction_source={summary['prediction_source']} "
+            f"prediction_input_source={summary.get('prediction_input_source', 'unknown')} "
             "prediction_model_executed_by_score_script=false "
             "lightgbm_not_executed_by_this_script=true"
         )
@@ -87,3 +91,18 @@ def no_scored_symbols_message(summary: dict[str, Any]) -> str:
 
 def format_counts(counts: dict[str, int]) -> str:
     return ",".join(f"{name}:{count}" for name, count in sorted(counts.items()))
+
+
+def prediction_disclosure_keys() -> list[str]:
+    return [
+        "prediction_source",
+        "prediction_input_source",
+        "prediction_model_executed_by_score_script",
+        "lightgbm_not_executed_by_this_script",
+    ]
+
+
+def format_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return str(value).lower()
+    return str(value)

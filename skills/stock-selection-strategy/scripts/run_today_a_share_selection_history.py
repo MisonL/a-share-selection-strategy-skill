@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-import re
 from typing import Any
+
+from stock_selection_symbols import (
+    normalize_prefixed_symbol,
+    normalize_symbol_values,
+    parse_six_digit_symbols,
+)
 
 
 DEFAULT_HISTORY_SYMBOL_LIMIT = 50
 SYMBOL_COLUMN_ALIASES = ["symbol", "code", "code_id", "stock_code", "ticker", "Ticker"]
-MISSING_TEXT_MARKERS = {"", "nan", "none", "null", "<na>"}
 
 
 def validate_history_inputs(args: Any, spot: Path | None) -> None:
@@ -68,20 +72,6 @@ def history_symbols(
     if spot is None:
         raise ValueError("--derive-symbols-from-spot requires a spot snapshot")
     return derive_symbols_from_spot(args, spot, output, config)
-
-
-def parse_six_digit_symbols(text: str) -> list[str]:
-    symbols = [
-        normalize_prefixed_symbol(item.strip())
-        for item in text.split(",")
-        if item.strip()
-    ]
-    invalid = [symbol for symbol in symbols if not re.fullmatch(r"\d{6}", symbol)]
-    if invalid:
-        raise ValueError(f"symbols must be six digits: {','.join(invalid)}")
-    if not symbols:
-        raise ValueError("symbols must not be empty")
-    return symbols
 
 
 def derive_symbols_from_spot(
@@ -159,25 +149,6 @@ def normalize_spot_filter_frame(frame):
         errors="coerce",
     )
     return result.dropna(subset=["spot_price", "spot_amount"])
-
-
-def normalize_symbol_values(values):
-    normalized = []
-    for value in values:
-        text = normalize_prefixed_symbol(value)
-        normalized.append(text)
-    return normalized
-
-
-def normalize_prefixed_symbol(value: Any) -> str:
-    text = str(value).strip()
-    if text.lower() in MISSING_TEXT_MARKERS:
-        return ""
-    if text.lower().startswith(("sh.", "sz.")):
-        text = text.split(".", 1)[1]
-    if text.lower().endswith((".sh", ".sz")):
-        text = text.rsplit(".", 1)[0]
-    return text
 
 
 def first_existing(frame, columns: list[str]):

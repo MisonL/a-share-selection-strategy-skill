@@ -75,7 +75,9 @@ def validate_frame(frame: pd.DataFrame, min_history_rows: int) -> list[str]:
     errors: list[str] = []
     missing = [column for column in REQUIRED_COLUMNS if column not in frame.columns]
     if missing:
-        return [f"missing required columns: {', '.join(missing)}"]
+        errors.append(f"missing required columns: {', '.join(missing)}")
+        errors.extend(validate_available_columns(frame, min_history_rows))
+        return errors
     if frame.empty:
         return ["input data is empty"]
 
@@ -86,6 +88,23 @@ def validate_frame(frame: pd.DataFrame, min_history_rows: int) -> list[str]:
     errors.extend(validate_duplicates(frame))
     errors.extend(validate_history(frame, min_history_rows=min_history_rows))
     return errors
+
+
+def validate_available_columns(
+    frame: pd.DataFrame,
+    min_history_rows: int,
+) -> Iterable[str]:
+    if "symbol" in frame:
+        yield from validate_symbols(frame)
+    if "date" in frame:
+        yield from validate_dates(frame)
+    for column in [*PRICE_COLUMNS, "volume"]:
+        if column in frame:
+            yield from validate_numeric_column(frame, column)
+    if {"symbol", "date"}.issubset(frame.columns):
+        yield from validate_duplicates(frame)
+    if "symbol" in frame:
+        yield from validate_history(frame, min_history_rows=min_history_rows)
 
 
 def validate_required_values(frame: pd.DataFrame) -> Iterable[str]:
@@ -111,18 +130,22 @@ def validate_symbols(frame: pd.DataFrame) -> Iterable[str]:
 
 def validate_numeric_values(frame: pd.DataFrame) -> Iterable[str]:
     for column in [*PRICE_COLUMNS, "volume"]:
-        values = pd.to_numeric(frame[column], errors="coerce")
-        invalid_count = int(values.isna().sum())
-        if invalid_count:
-            yield f"column {column} has {invalid_count} non-numeric values"
-        if column in PRICE_COLUMNS:
-            non_positive = int((values <= 0).sum())
-            if non_positive:
-                yield f"column {column} has {non_positive} non-positive values"
-        else:
-            negative = int((values < 0).sum())
-            if negative:
-                yield f"column {column} has {negative} negative values"
+        yield from validate_numeric_column(frame, column)
+
+
+def validate_numeric_column(frame: pd.DataFrame, column: str) -> Iterable[str]:
+    values = pd.to_numeric(frame[column], errors="coerce")
+    invalid_count = int(values.isna().sum())
+    if invalid_count:
+        yield f"column {column} has {invalid_count} non-numeric values"
+    if column in PRICE_COLUMNS:
+        non_positive = int((values <= 0).sum())
+        if non_positive:
+            yield f"column {column} has {non_positive} non-positive values"
+    else:
+        negative = int((values < 0).sum())
+        if negative:
+            yield f"column {column} has {negative} negative values"
 
 
 def validate_dates(frame: pd.DataFrame) -> Iterable[str]:

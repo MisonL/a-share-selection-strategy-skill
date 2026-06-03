@@ -6,6 +6,11 @@ from typing import Any
 
 import pandas as pd
 
+from stock_selection_symbols import normalize_symbol_values
+
+
+SYMBOL_COLUMN_ALIASES = ["symbol", "code", "code_id", "stock_code", "ticker", "Ticker"]
+
 
 def merge_spot_view(
     input_frame: pd.DataFrame, spot: pd.DataFrame | None
@@ -35,12 +40,12 @@ def spot_summary(rows: int, matched: int) -> dict[str, Any]:
 
 
 def normalized_spot_view(spot: pd.DataFrame) -> pd.DataFrame:
-    if "symbol" not in spot.columns:
-        raise ValueError("spot input requires symbol column")
-    result = pd.DataFrame({"symbol": spot["symbol"].astype(str)})
+    source_frame = spot.reset_index(drop=True)
+    symbol_values = first_existing_required(source_frame, SYMBOL_COLUMN_ALIASES, "symbol")
+    result = pd.DataFrame({"symbol": normalize_symbol_values(symbol_values)})
     for source, target in spot_column_map().items():
-        if source in spot.columns and target not in result.columns:
-            result[target] = spot[source]
+        if source in source_frame.columns and target not in result.columns:
+            result[target] = source_frame[source]
     for column in spot_columns():
         if column not in result.columns:
             result[column] = pd.NA
@@ -67,3 +72,12 @@ def spot_column_map() -> dict[str, str]:
         "spot_industry": "spot_industry",
         "industry": "spot_industry",
     }
+
+
+def first_existing_required(frame: pd.DataFrame, columns: list[str], label: str) -> Any:
+    for column in columns:
+        if column in frame:
+            return frame[column]
+    raise ValueError(
+        f"spot input requires {label} column; accepted aliases: {','.join(columns)}"
+    )

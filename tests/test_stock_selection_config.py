@@ -8,7 +8,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
 SCRIPTS = SKILL_ROOT / "scripts"
+TESTS = ROOT / "tests"
 sys.path.insert(0, str(SCRIPTS))
+sys.path.insert(0, str(TESTS))
 
 import score_candidates as scorer  # noqa: E402
 import create_demo_data  # noqa: E402
@@ -27,6 +29,38 @@ class StockSelectionConfigTests(unittest.TestCase):
         config = load_config("example_config.json")
         del config["thresholds"]["min_trend_score"]
         with self.assertRaisesRegex(ValueError, "thresholds require one of"):
+            stock_selection_config.validate_config(config)
+
+    def test_generic_config_rejects_prediction_weight_or_threshold(self) -> None:
+        config = load_config("example_config.json")
+        config["weights"]["prediction_score"] = config["weights"].pop("trend_score")
+        with self.assertRaisesRegex(ValueError, "generic weights must not include"):
+            stock_selection_config.validate_config(config)
+
+        config = load_config("example_config.json")
+        config["thresholds"]["min_prediction_score"] = config["thresholds"].pop(
+            "min_trend_score"
+        )
+        with self.assertRaisesRegex(ValueError, "generic thresholds must not include"):
+            stock_selection_config.validate_config(config)
+
+    def test_prediction_config_rejects_trend_weight_or_threshold(self) -> None:
+        config = load_config("prediction_profile_config.json")
+        config["weights"]["trend_score"] = config["weights"].pop("prediction_score")
+        with self.assertRaisesRegex(
+            ValueError,
+            "prediction-derived weights must not include",
+        ):
+            stock_selection_config.validate_config(config)
+
+        config = load_config("prediction_profile_config.json")
+        config["thresholds"]["min_trend_score"] = config["thresholds"].pop(
+            "min_prediction_score"
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "prediction-derived thresholds must not include",
+        ):
             stock_selection_config.validate_config(config)
 
     def test_config_validation_accepts_max_candidates_zero(self) -> None:

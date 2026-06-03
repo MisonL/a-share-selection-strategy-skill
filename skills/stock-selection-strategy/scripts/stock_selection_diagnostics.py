@@ -12,6 +12,7 @@ from stock_selection_diagnostic_labels import (
     selection_status,
     short_reason,
 )
+from stock_selection_disclosure import prediction_disclosure
 from stock_selection_metrics import is_prediction_mode
 
 
@@ -36,6 +37,10 @@ DIAGNOSTIC_COLUMNS = [
     "momentum_score",
     "trend_score",
     "prediction_score",
+    "prediction_source",
+    "prediction_input_source",
+    "prediction_model_executed_by_score_script",
+    "lightgbm_not_executed_by_this_script",
     "explosion_score",
     "risk_score",
     "total_score",
@@ -105,10 +110,6 @@ def turnover_assumption_for(frame: pd.DataFrame, config: dict[str, Any]) -> str:
     return "neutral_series_missing_turnover"
 
 
-def prediction_source_for(config: dict[str, Any]) -> str:
-    return "external_unverified" if is_prediction_mode(config) else ""
-
-
 def build_summary(
     *,
     raw: pd.DataFrame,
@@ -142,7 +143,7 @@ def build_summary(
         "threshold_failed_symbols": 0,
         "threshold_failures": {},
         "turnover_assumption": turnover_assumption_for(raw, config),
-        "prediction_source": prediction_source_for(config),
+        **prediction_disclosure(config),
     }
 
 
@@ -208,6 +209,14 @@ def diagnostic_row(
         "momentum_score": row.get("momentum_score"),
         "trend_score": row.get("trend_score"),
         "prediction_score": row.get("prediction_score"),
+        "prediction_source": row.get("prediction_source"),
+        "prediction_input_source": row.get("prediction_input_source"),
+        "prediction_model_executed_by_score_script": row.get(
+            "prediction_model_executed_by_score_script"
+        ),
+        "lightgbm_not_executed_by_this_script": row.get(
+            "lightgbm_not_executed_by_this_script"
+        ),
         "explosion_score": row.get("explosion_score"),
         "risk_score": row.get("risk_score"),
         "total_score": row.get("total_score"),

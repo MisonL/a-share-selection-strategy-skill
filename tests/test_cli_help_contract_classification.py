@@ -45,6 +45,7 @@ HELP_CONTRACT_EXCLUDED_HELPERS = [
     "stock_selection_candidate_fields.py",
     "stock_selection_capital.py",
     "stock_selection_config.py",
+    "stock_selection_disclosure.py",
     "stock_selection_diagnostic_labels.py",
     "stock_selection_data.py",
     "stock_selection_diagnostics.py",

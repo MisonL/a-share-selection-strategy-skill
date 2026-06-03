@@ -134,14 +134,14 @@ def apply_cleaning(data: pd.DataFrame, config: dict[str, Any]) -> pd.DataFrame:
     return data
 
 def resolve_prediction(data: pd.DataFrame, config: dict[str, Any]) -> float:
+    if not is_prediction_mode(config):
+        return math.nan
     columns = ["prediction_score", "prediction"]
     available = [column for column in columns if column in data.columns]
     if not available:
-        if is_prediction_mode(config):
-            raise ValueError(
-                "prediction-derived score mode requires prediction or prediction_score"
-            )
-        return math.nan
+        raise ValueError(
+            "prediction-derived score mode requires prediction or prediction_score"
+        )
     value = latest_numeric(data[available[0]])
     if math.isnan(value) or value < 0 or value > 1:
         raise ValueError("prediction score must be a number between 0 and 1")

@@ -20,7 +20,12 @@ class ModeResolution:
 def resolve_mode(args: Any) -> ModeResolution:
     if args.mode != "auto":
         validate_explicit_config_mode(args)
-        return ModeResolution(args.mode, "explicit", f"user_requested_{args.mode}")
+        return ModeResolution(
+            args.mode,
+            "explicit",
+            f"user_requested_{args.mode}",
+            explicit_missing_prediction_column_groups(args),
+        )
     if args.config:
         return resolve_config_mode(Path(args.config))
     if not args.prices_input:
@@ -59,6 +64,12 @@ def validate_explicit_config_mode(args: Any) -> None:
             "explicit mode conflicts with config score_mode: "
             f"mode={args.mode} config_mode={resolved}"
         )
+
+
+def explicit_missing_prediction_column_groups(args: Any) -> tuple[str, ...]:
+    if args.mode != "prediction" or not args.prices_input:
+        return ()
+    return tuple(missing_prediction_column_groups(input_columns(Path(args.prices_input))))
 
 
 def config_mode(config: dict) -> str:

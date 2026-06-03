@@ -75,7 +75,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
   --output /tmp/stock-selection-demo/prediction_candidates.csv
 ```
 
-该 demo 中的 `prediction_score` 是 `create_demo_data.py` 生成的合成输入。`score_candidates.py` 只消费该列，不训练、不生成、也不验证真实 LightGBM prediction；输出中的 `prediction_source=external_unverified lightgbm_not_executed_by_this_script=true` 是预期提示。不要把该 smoke test 的退出码 0 或候选数写成真实 LightGBM 链路、真实 prediction-derived 策略或真实回测已经通过。
+该 demo 中的 `prediction_score` 是 `create_demo_data.py` 生成的合成输入。`score_candidates.py` 只消费该列，不训练、不生成、也不验证真实 LightGBM prediction；输出中的 `prediction_source=external_unverified prediction_model_executed_by_score_script=false lightgbm_not_executed_by_this_script=true` 是预期提示。不要把该 smoke test 的退出码 0 或候选数写成真实 LightGBM 链路、真实 prediction-derived 策略或真实回测已经通过。
 
 ### 5. 可选：低价超短离线诊断 demo
 
@@ -245,7 +245,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
 
 该闭环只证明合成 demo 数据上的本地脚本可执行。
 
-`prediction_scope=latest_probability_repeated_for_scoring` 表示最新预测概率被重复写入该标的所有行，供评分脚本消费当前概率，不是逐日历史预测序列。评分摘要中的 `prediction_source=external_unverified lightgbm_not_executed_by_this_script=true` 表示评分脚本本身不验证上游训练过程。
+`prediction_scope=latest_probability_repeated_for_scoring` 表示最新预测概率被重复写入该标的所有行，供评分脚本消费当前概率，不是逐日历史预测序列。评分摘要中的 `prediction_source=external_unverified prediction_model_executed_by_score_script=false lightgbm_not_executed_by_this_script=true` 表示评分脚本本身不验证上游训练过程，也不执行预测模型。
 
 即使上一条命令刚生成了 `prediction_score`，仍需单独核验训练窗口、标签、特征、时间序列切分、跳过标的和未来泄漏风险。LightGBM 质量边界以 `docs/prediction-derived-profile.md` 的“LightGBM 质量边界”为准；不能把候选数或退出码写成真实策略收益、真实可交易性、真实 A 股全市场有效性或模型质量已证明。
 
@@ -508,7 +508,7 @@ python3 scripts/validate_walk_forward_artifacts.py \
 
 常见字段映射：akshare 中文列需映射为 `股票代码 -> symbol`、`日期 -> date`、`成交量 -> volume`、`成交额 -> amount`、`换手率 -> turn`，`stock_zh_a_daily` 英文字段需映射 `volume -> volume`、`amount -> amount`、`turnover -> turn`，其中 `成交额` 或 `amount` 不得映射为 `volume`；tushare 需将 `ts_code` 去掉 `.SZ`/`.SH` 后写入 `symbol`，`trade_date -> date`，`vol -> volume`，`amount -> amount`，`turnover_rate -> turn`；yfinance 需将 `Date/Symbol/Open/High/Low/Close/Volume` 映射为小写标准字段。yfinance 映射后只满足通用 OHLCV；若用于 prediction-derived，还必须外部补齐 `market=A-share`、真实上游 `prediction_score`、以及 `turn` 或 `turnover`，不能从 yfinance OHLCV 自动推断。不要把 `Adj Close` 静默替换为 `close`；使用复权价时要记录复权口径。多源合并时统一保留一个预测列，推荐先生成 `prediction_score = coalesce(prediction_score, prediction)`。
 
-`score_candidates.py` 的 CLI 摘要会报告输入文件名、`input_symbols`、股票池过滤、历史不足、输入异常、单股失败、阈值过滤、`turnover_assumption`、`effective_empty_result`、`empty_result_reason` 和最终候选数量。股票池过滤包含 `market_filtered_symbols`、`prefix_allow_filtered_symbols`、`prefix_excluded_symbols` 分项。`threshold_failures` 是各阈值独立失败计数，不是互斥分类，不能和 `threshold_failed_symbols` 相加对账。prediction-derived 路径还会标记 `prediction_source=external_unverified`，表示脚本只消费上游预测，不验证该列是否由真实 LightGBM 链路生成。今日 runner 的 `prediction_input_source` 与 `prediction_model_executed_by_runner` 是优先机器字段；`lightgbm_output_source` 与 `lightgbm_executed_by_runner` 仅为旧产物兼容字段。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。
+`score_candidates.py` 的 CLI 摘要会报告输入文件名、`input_symbols`、股票池过滤、历史不足、输入异常、单股失败、阈值过滤、`turnover_assumption`、`effective_empty_result`、`empty_result_reason` 和最终候选数量。股票池过滤包含 `market_filtered_symbols`、`prefix_allow_filtered_symbols`、`prefix_excluded_symbols` 分项。`threshold_failures` 是各阈值独立失败计数，不是互斥分类，不能和 `threshold_failed_symbols` 相加对账。prediction-derived 路径还会标记 `prediction_source=external_unverified` 和 `prediction_model_executed_by_score_script=false`，表示脚本只消费上游预测，不执行或验证预测模型。今日 runner 的 `prediction_input_source` 与 `prediction_model_executed_by_runner` 是优先机器字段；`lightgbm_output_source`、`lightgbm_executed_by_runner` 和 `lightgbm_not_executed_by_this_script` 仅为旧产物兼容字段。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。
 
 自动化流水线应把 `failed_symbols=0`、`insufficient_history_symbols=0`、`effective_empty_result=false` 作为成功门槛；也可在 CLI 中显式传入 `--fail-on-skipped` 和 `--fail-on-empty-result`，让跳过标的或 0 候选直接返回非 0。`failed_symbols>0` 表示存在单股运行期异常，即使脚本仍输出了其他候选，也应进入人工复核或失败处理。成功摘要会输出截断样例，例如 `failed_symbol_examples`、`insufficient_history_symbol_examples`，用于定位需要复核的标的。
 

@@ -38,6 +38,9 @@
   "disclosure": {
     "prediction_policy": "not_used",
     "prediction_mode": false,
+    "prediction_input_source": "not_used",
+    "prediction_model_executed_by_runner": false,
+    "prediction_model_executed_by_score_script": false,
     "lightgbm_not_used": true,
     "risk_note": "通用示例配置只表达技术因子评分，不使用 prediction-derived 输入，不证明真实成交、收益或 LightGBM 质量。"
   },

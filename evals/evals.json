@@ -180,12 +180,12 @@
     {
       "id": 9,
       "prompt": "我已经有带 prediction_score 的 prediction-derived 本地 CSV，运行评分脚本后看到 prediction_source=external_unverified，这是什么意思？",
-      "expected_output": "应说明 prediction-derived 评分脚本只消费上游 prediction_score，不训练或验证真实 LightGBM 链路；external_unverified 表示预测列来源未由当前脚本验证，仍需单独核验上游生成过程。",
+      "expected_output": "应说明 prediction-derived 评分脚本只消费上游 prediction_score，不训练或验证真实 LightGBM 链路；external_unverified 表示预测列来源未由当前脚本验证，prediction_model_executed_by_score_script=false 表示评分脚本没有训练或执行预测模型，仍需单独核验上游生成过程。",
       "files": [],
       "assertions": [
         {
           "name": "解释 prediction_source",
-          "description": "输出应解释 prediction_source=external_unverified 的含义。"
+          "description": "输出应解释 prediction_source=external_unverified 和 prediction_model_executed_by_score_script=false 的含义。"
         },
         {
           "name": "不伪造上游验证",
@@ -756,7 +756,7 @@
     {
       "id": 33,
       "prompt": "同一份 prediction-derived 输入普通 score_candidates.py 退出 0，但 stdout 里 candidates=0 effective_empty_result=true empty_result_reason=threshold_filtered_all threshold_failures=min_prediction_score:1。加 --fail-on-empty-result 后退出 3，stderr 是 strict gate failed; effective_empty_result=true ... output_not_written=true。能不能说 prediction-derived 候选生成通过，只是生成了空结果表？",
-      "expected_output": "应说明普通模式退出 0 是成功空结果，不是产生有效候选；必须披露 scored_symbols、threshold_failed_symbols、threshold_failures、candidates=0、effective_empty_result=true 和 empty_result_reason=threshold_filtered_all。加 --fail-on-empty-result 后退出 3 且 output_not_written=true，表示严格候选门禁失败，ERROR_SUMMARY 只是失败摘要，不能说 prediction-derived 候选生成通过或已生成有效候选表。还应说明 prediction_source=external_unverified 不代表上游 LightGBM 已验证。",
+      "expected_output": "应说明普通模式退出 0 是成功空结果，不是产生有效候选；必须披露 scored_symbols、threshold_failed_symbols、threshold_failures、candidates=0、effective_empty_result=true 和 empty_result_reason=threshold_filtered_all。加 --fail-on-empty-result 后退出 3 且 output_not_written=true，表示严格候选门禁失败，ERROR_SUMMARY 只是失败摘要，不能说 prediction-derived 候选生成通过或已生成有效候选表。还应说明 prediction_source=external_unverified 不代表上游 LightGBM 已验证，prediction_model_executed_by_score_script=false 表示评分脚本未执行预测模型。",
       "files": [],
       "assertions": [
         {
@@ -773,7 +773,7 @@
         },
         {
           "name": "不外推 LightGBM",
-          "description": "输出应说明 prediction_source=external_unverified 不代表上游 LightGBM 已验证。"
+          "description": "输出应说明 prediction_source=external_unverified 不代表上游 LightGBM 已验证，并说明 prediction_model_executed_by_score_script=false。"
         }
       ]
     },
@@ -1753,7 +1753,7 @@
       "files": [
         {
           "path": "run_manifest.json",
-          "content": "{\"runner\":\"run_today_a_share_selection\",\"requested_mode\":\"auto\",\"mode\":\"prediction\",\"mode_decision\":\"auto_prediction\",\"mode_decision_reason\":\"prediction_required_columns_present\",\"prediction_mode\":true,\"prediction_input_source\":\"external_input\",\"prediction_model_executed_by_runner\":false,\"lightgbm_not_used\":false,\"lightgbm_executed_by_runner\":false,\"source_scope\":\"local_prices_input\",\"steps\":[{\"step\":\"validate\",\"command\":[\"python\",\"scripts/validate_ohlcv.py\"],\"returncode\":0,\"allowed_returncodes\":[0]},{\"step\":\"score\",\"command\":[\"python\",\"scripts/score_candidates.py\"],\"returncode\":0,\"allowed_returncodes\":[0],\"stdout\":\"OK: prediction_source=external_unverified lightgbm_not_executed_by_this_script=true candidates=7\"}]}"
+          "content": "{\"runner\":\"run_today_a_share_selection\",\"requested_mode\":\"auto\",\"mode\":\"prediction\",\"mode_decision\":\"auto_prediction\",\"mode_decision_reason\":\"prediction_required_columns_present\",\"prediction_mode\":true,\"prediction_input_source\":\"external_input\",\"prediction_model_executed_by_runner\":false,\"lightgbm_not_used\":false,\"lightgbm_executed_by_runner\":false,\"source_scope\":\"local_prices_input\",\"steps\":[{\"step\":\"validate\",\"command\":[\"python\",\"scripts/validate_ohlcv.py\"],\"returncode\":0,\"allowed_returncodes\":[0]},{\"step\":\"score\",\"command\":[\"python\",\"scripts/score_candidates.py\"],\"returncode\":0,\"allowed_returncodes\":[0],\"stdout\":\"OK: prediction_source=external_unverified prediction_model_executed_by_score_script=false lightgbm_not_executed_by_this_script=true candidates=7\"}]}"
         }
       ],
       "assertions": [

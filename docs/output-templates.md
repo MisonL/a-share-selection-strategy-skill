@@ -9,6 +9,7 @@
 | `output_written=false` 或 strict gate 非 0 | 对应失败模板，如历史窗口不足、prediction-derived 缺 prediction | 不能写成 0 候选成功 |
 | `effective_empty_result=true` | 0 候选结果 | 说明成功空结果原因，不证明策略有效 |
 | `prediction_source=external_unverified` | prediction-derived prediction 仅为外部输入 | 不能说预测源真实、训练质量或无泄漏已证明 |
+| `prediction_model_executed_by_score_script=false` | 评分脚本只消费预测列 | 不能说 score_candidates 训练或执行了预测模型 |
 | `prediction_input_source=not_used` 或 `mode=generic` | 今日入口 generic 技术评分 | 不能写成 prediction-derived/LightGBM 结果 |
 | `prediction_model_executed_by_runner=false` | 今日入口或外部 prediction 评分 | 不能说 runner 训练或执行了预测模型 |
 | `lightgbm_*` 字段 | 旧产物兼容字段 | 新报告优先引用中性的 prediction 字段 |
@@ -498,6 +499,7 @@
 - 数据限制：
 - 证据路径：
 - `prediction_source`：
+- `prediction_model_executed_by_score_script`：
 - `raw_symbols/predicted_symbols/skipped_symbols`：
 - `tradability_model`：
 - `limit_rules_model`：

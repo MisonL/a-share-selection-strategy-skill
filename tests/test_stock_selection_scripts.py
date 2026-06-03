@@ -443,6 +443,7 @@ class StockSelectionScriptTests(unittest.TestCase):
             self.assertIn("empty_result_reason=threshold_filtered_all", stdout)
             self.assertIn("candidates=0", stdout)
             self.assertIn("prediction_source=external_unverified", stdout)
+            self.assertIn("prediction_model_executed_by_score_script=false", stdout)
 
 if __name__ == "__main__":
     unittest.main()

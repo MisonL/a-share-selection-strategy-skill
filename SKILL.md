@@ -220,6 +220,7 @@ uv run --with pandas --with numpy --with baostock python scripts/run_today_a_sha
 - 主趋势分是上游 LightGBM 输出的上涨概率 `prediction` 或 `prediction_score`，不是动量近似。
 - `score_candidates.py` 只消费预测列，不训练 LightGBM，也不会用技术因子伪造机器学习预测。若 `prediction_score` 和 `prediction` 同时存在，当前评分优先消费 `prediction_score`；冲突时不能用较高的 `prediction` 解释阈值通过，应先统一或审计预测列。
 - `prediction_source=external_unverified` 表示当前脚本只消费外部预测，不验证其训练窗口、标签定义、特征、标准化或未来泄漏风险。
+- `prediction_model_executed_by_score_script=false` 是评分脚本的优先机器字段，表示评分脚本没有训练或执行预测模型；`lightgbm_not_executed_by_this_script=true` 是旧产物兼容字段。
 - `generate_lightgbm_predictions.py` 是可选上游生成器；真实门禁必须启用 `--fail-on-skipped`，或检查 `raw_symbols == predicted_symbols` 且 `skipped_symbols == 0`。下游评分成功只覆盖已写出的预测行，不能反推被上游跳过的标的也通过。
 - `prediction_summary.json` 应审计 `feature_columns`、`split_method`、`scaler_fit_scope`、`label_definition`、`prediction_scope`，以及每个 symbol 的训练日期窗口、训练标签分布和 `skipped_reason`；字段完整只证明本次生成链路可审计。LightGBM 质量边界以 `docs/prediction-derived-profile.md` 的“LightGBM 质量边界”为准。
 - `prediction_scope=latest_probability_repeated_for_scoring` 表示生成器把最新预测概率重复写入该标的所有行，供评分脚本消费当前概率；这不是逐日历史预测序列。

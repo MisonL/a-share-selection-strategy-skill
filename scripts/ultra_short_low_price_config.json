@@ -58,6 +58,9 @@
   "disclosure": {
     "prediction_policy": "not_used",
     "prediction_mode": false,
+    "prediction_input_source": "not_used",
+    "prediction_model_executed_by_runner": false,
+    "prediction_model_executed_by_score_script": false,
     "lightgbm_not_used": true,
     "risk_note": "低价超短剖面只表达通用技术因子约束，不证明真实成交、涨跌停、收益或 LightGBM 质量。"
   },

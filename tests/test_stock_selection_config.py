@@ -47,6 +47,9 @@ class StockSelectionConfigTests(unittest.TestCase):
         self.assertTrue(config["thresholds"]["exclude_st"])
         self.assertEqual("1", config["thresholds"]["require_tradestatus"])
         self.assertTrue(config["thresholds"]["exclude_one_word_bar"])
+        self.assertEqual("not_used", config["disclosure"]["prediction_input_source"])
+        self.assertFalse(config["disclosure"]["prediction_model_executed_by_runner"])
+        self.assertFalse(config["disclosure"]["prediction_model_executed_by_score_script"])
         self.assertTrue(config["disclosure"]["lightgbm_not_used"])
 
     def test_core_configs_carry_disclosure_boundaries(self) -> None:
@@ -54,16 +57,25 @@ class StockSelectionConfigTests(unittest.TestCase):
             "example_config.json": {
                 "prediction_policy": "not_used",
                 "prediction_mode": False,
+                "prediction_input_source": "not_used",
+                "prediction_model_executed_by_runner": False,
+                "prediction_model_executed_by_score_script": False,
                 "lightgbm_not_used": True,
             },
             "prediction_profile_config.json": {
                 "prediction_policy": "external_required",
                 "prediction_mode": True,
+                "prediction_input_source": "external_required",
+                "prediction_model_executed_by_runner": False,
+                "prediction_model_executed_by_score_script": False,
                 "lightgbm_not_used": False,
             },
             "ultra_short_low_price_config.json": {
                 "prediction_policy": "not_used",
                 "prediction_mode": False,
+                "prediction_input_source": "not_used",
+                "prediction_model_executed_by_runner": False,
+                "prediction_model_executed_by_score_script": False,
                 "lightgbm_not_used": True,
             },
         }

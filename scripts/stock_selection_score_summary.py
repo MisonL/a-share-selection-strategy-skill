@@ -59,6 +59,7 @@ def print_detail_lines(summary: dict[str, Any]) -> None:
     if summary.get("prediction_source"):
         print(
             "INFO: prediction_source=external_unverified "
+            "prediction_model_executed_by_score_script=false "
             "lightgbm_not_executed_by_this_script=true"
         )
 

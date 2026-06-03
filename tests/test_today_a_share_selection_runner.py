@@ -52,6 +52,8 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertTrue(manifest["lightgbm_not_used"])
         self.assertFalse(manifest["lightgbm_executed_by_runner"])
         self.assertFalse(manifest["consumes_prediction_columns"])
+        self.assertEqual("not_used", manifest["prediction_input_source"])
+        self.assertFalse(manifest["prediction_model_executed_by_runner"])
         self.assertEqual("not_used", manifest["lightgbm_output_source"])
         self.assertEqual("completed", summary["status"])
         self.assertEqual("auto", summary["requested_mode"])
@@ -60,7 +62,10 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("missing_prediction_columns:prediction", summary["mode_decision_reason"])
         self.assertFalse(summary["lightgbm_executed_by_runner"])
         self.assertFalse(summary["consumes_prediction_columns"])
+        self.assertEqual("not_used", summary["prediction_input_source"])
+        self.assertFalse(summary["prediction_model_executed_by_runner"])
         self.assertEqual("not_used", summary["lightgbm_output_source"])
+        self.assertIn("prediction_input_source=not_used", summary["boundary"])
         self.assertEqual([], summary["failed_steps"])
         self.assertEqual(0, summary["spot_rows"])
         self.assertEqual(2, summary["score"]["raw_symbols"])
@@ -131,6 +136,8 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertFalse(manifest["lightgbm_not_used"])
         self.assertFalse(manifest["lightgbm_executed_by_runner"])
         self.assertTrue(manifest["consumes_prediction_columns"])
+        self.assertEqual("external_input", manifest["prediction_input_source"])
+        self.assertFalse(manifest["prediction_model_executed_by_runner"])
         self.assertEqual("external_input", manifest["lightgbm_output_source"])
 
     def test_explicit_mode_rejects_conflicting_config(self) -> None:

@@ -1696,7 +1696,7 @@
     {
       "id": 70,
       "prompt": "我想离线测试今天低价超短入口，最好 demo 能覆盖价格超限、成交额不足、换手不足、ST、停牌和一字板诊断。Agent 应该怎么跑，怎么解释结果？",
-      "expected_output": "应使用 create_demo_data.py --scenario low-price-ultra-short --days 160 生成本地样本，再用 run_today_a_share_selection.py --mode auto 或 score_candidates.py + ultra_short_low_price_config.json 运行。输出应检查 summary.json 的 requested_mode、mode、mode_decision、lightgbm_not_used，以及 diagnostics.csv 的 failed_thresholds、failed_thresholds_zh、selection_status、short_reason。必须说明该 demo 只验证低价超短 profile 和诊断展示覆盖，不是今日真实 A 股扫描、prediction-derived/LightGBM 结果、真实收益、真实成交或涨跌停门禁。",
+      "expected_output": "应使用 create_demo_data.py --scenario low-price-ultra-short --days 160 生成本地样本，再用 run_today_a_share_selection.py --mode auto 或 score_candidates.py + ultra_short_low_price_config.json 运行。输出应检查 summary.json 的 requested_mode、mode、mode_decision、prediction_input_source、prediction_model_executed_by_runner、lightgbm_not_used，以及 diagnostics.csv 的 failed_thresholds、failed_thresholds_zh、selection_status、short_reason。必须说明该 demo 只验证低价超短 profile 和诊断展示覆盖，不是今日真实 A 股扫描、prediction-derived/LightGBM 结果、真实收益、真实成交或涨跌停门禁。",
       "files": [],
       "assertions": [
         {
@@ -1709,7 +1709,7 @@
         },
         {
           "name": "检查 summary 和 diagnostics",
-          "description": "输出应要求检查 mode_decision、lightgbm_not_used、failed_thresholds_zh、selection_status 和 short_reason。"
+          "description": "输出应要求检查 mode_decision、prediction_input_source、prediction_model_executed_by_runner、lightgbm_not_used、failed_thresholds_zh、selection_status 和 short_reason。"
         },
         {
           "name": "限定 demo 含义",
@@ -1720,11 +1720,11 @@
     {
       "id": 71,
       "prompt": "根据附件里的 summary.json 和 diagnostics.csv 摘要，解释这次低价超短离线 demo 跑出来了什么。",
-      "expected_output": "应说明 requested_mode=auto、mode=generic、mode_decision=auto_generic、lightgbm_not_used=true、lightgbm_executed_by_runner=false，候选输出行数 candidate_rows=1，诊断行数 diagnostic_rows=7，价格输入行数 prices_rows=1120。应把唯一候选解释为本地合成 demo 的 generic 低价超短结果，并披露 diagnostics 覆盖 max_close、min_amount、min_turn、exclude_st、require_tradestatus、exclude_one_word_bar 等失败原因。不得写成真实今日 A 股扫描、prediction-derived/LightGBM 结果、真实收益、真实成交或涨跌停门禁。",
+      "expected_output": "应说明 requested_mode=auto、mode=generic、mode_decision=auto_generic、prediction_input_source=not_used、prediction_model_executed_by_runner=false、lightgbm_not_used=true、lightgbm_executed_by_runner=false，候选输出行数 candidate_rows=1，诊断行数 diagnostic_rows=7，价格输入行数 prices_rows=1120。应把唯一候选解释为本地合成 demo 的 generic 低价超短结果，并披露 diagnostics 覆盖 max_close、min_amount、min_turn、exclude_st、require_tradestatus、exclude_one_word_bar 等失败原因。不得写成真实今日 A 股扫描、prediction-derived/LightGBM 结果、真实收益、真实成交或涨跌停门禁。",
       "files": [
         {
           "path": "summary.json",
-          "content": "{\"status\":\"completed\",\"requested_mode\":\"auto\",\"mode\":\"generic\",\"mode_decision\":\"auto_generic\",\"mode_decision_reason\":\"missing_prediction_columns:prediction\",\"prediction_mode\":false,\"lightgbm_not_used\":true,\"lightgbm_executed_by_runner\":false,\"source_scope\":\"local_prices_input\",\"prices_rows\":1120,\"candidate_rows\":1,\"diagnostic_rows\":7,\"score\":{\"raw_symbols\":7,\"candidates\":1,\"threshold_failures\":\"max_close:1,min_amount:1,min_turn:1,exclude_st:1,require_tradestatus:1,exclude_one_word_bar:1\"}}"
+          "content": "{\"status\":\"completed\",\"requested_mode\":\"auto\",\"mode\":\"generic\",\"mode_decision\":\"auto_generic\",\"mode_decision_reason\":\"missing_prediction_columns:prediction\",\"prediction_mode\":false,\"prediction_input_source\":\"not_used\",\"prediction_model_executed_by_runner\":false,\"lightgbm_not_used\":true,\"lightgbm_executed_by_runner\":false,\"source_scope\":\"local_prices_input\",\"prices_rows\":1120,\"candidate_rows\":1,\"diagnostic_rows\":7,\"score\":{\"raw_symbols\":7,\"candidates\":1,\"threshold_failures\":\"max_close:1,min_amount:1,min_turn:1,exclude_st:1,require_tradestatus:1,exclude_one_word_bar:1\"}}"
         },
         {
           "path": "diagnostics.csv",
@@ -1734,7 +1734,7 @@
       "assertions": [
         {
           "name": "读取 summary 顶层字段",
-          "description": "输出应引用 requested_mode、mode、mode_decision、lightgbm_executed_by_runner、prices_rows、candidate_rows 和 diagnostic_rows。"
+          "description": "输出应引用 requested_mode、mode、mode_decision、prediction_input_source、prediction_model_executed_by_runner、lightgbm_executed_by_runner、prices_rows、candidate_rows 和 diagnostic_rows。"
         },
         {
           "name": "解释 diagnostics 机器字段",
@@ -1749,11 +1749,11 @@
     {
       "id": 72,
       "prompt": "附件里的 run_manifest.json 表示今天 A 股 runner 已经执行完。能不能说 runner 跑了 LightGBM 并生成了 prediction-derived 预测？",
-      "expected_output": "应明确不能这样说。manifest 虽然 mode=prediction、mode_decision=auto_prediction、lightgbm_not_used=false，但 lightgbm_executed_by_runner=false，且步骤只有 validate 和 score，没有 generate_lightgbm_predictions.py。合规解释是输入已经包含 prediction-derived 必需列，runner 使用外部 prediction/prediction_score 做评分；不能说本 runner 训练、执行或验证了 LightGBM，也不能证明 prediction 源真实、训练窗口无泄漏或模型质量有效。",
+      "expected_output": "应明确不能这样说。manifest 虽然 mode=prediction、mode_decision=auto_prediction、prediction_input_source=external_input、lightgbm_not_used=false，但 prediction_model_executed_by_runner=false、lightgbm_executed_by_runner=false，且步骤只有 validate 和 score，没有 generate_lightgbm_predictions.py。合规解释是输入已经包含 prediction-derived 必需列，runner 使用外部 prediction/prediction_score 做评分；不能说本 runner 训练、执行或验证了 LightGBM，也不能证明 prediction 源真实、训练窗口无泄漏或模型质量有效。",
       "files": [
         {
           "path": "run_manifest.json",
-          "content": "{\"runner\":\"run_today_a_share_selection\",\"requested_mode\":\"auto\",\"mode\":\"prediction\",\"mode_decision\":\"auto_prediction\",\"mode_decision_reason\":\"prediction_required_columns_present\",\"prediction_mode\":true,\"lightgbm_not_used\":false,\"lightgbm_executed_by_runner\":false,\"source_scope\":\"local_prices_input\",\"steps\":[{\"step\":\"validate\",\"command\":[\"python\",\"scripts/validate_ohlcv.py\"],\"returncode\":0,\"allowed_returncodes\":[0]},{\"step\":\"score\",\"command\":[\"python\",\"scripts/score_candidates.py\"],\"returncode\":0,\"allowed_returncodes\":[0],\"stdout\":\"OK: prediction_source=external_unverified lightgbm_not_executed_by_this_script=true candidates=7\"}]}"
+          "content": "{\"runner\":\"run_today_a_share_selection\",\"requested_mode\":\"auto\",\"mode\":\"prediction\",\"mode_decision\":\"auto_prediction\",\"mode_decision_reason\":\"prediction_required_columns_present\",\"prediction_mode\":true,\"prediction_input_source\":\"external_input\",\"prediction_model_executed_by_runner\":false,\"lightgbm_not_used\":false,\"lightgbm_executed_by_runner\":false,\"source_scope\":\"local_prices_input\",\"steps\":[{\"step\":\"validate\",\"command\":[\"python\",\"scripts/validate_ohlcv.py\"],\"returncode\":0,\"allowed_returncodes\":[0]},{\"step\":\"score\",\"command\":[\"python\",\"scripts/score_candidates.py\"],\"returncode\":0,\"allowed_returncodes\":[0],\"stdout\":\"OK: prediction_source=external_unverified lightgbm_not_executed_by_this_script=true candidates=7\"}]}"
         }
       ],
       "assertions": [
@@ -1763,7 +1763,7 @@
         },
         {
           "name": "检查 runner 执行字段",
-          "description": "输出应引用 lightgbm_executed_by_runner=false 和 steps 中没有预测生成步骤。"
+          "description": "输出应引用 prediction_model_executed_by_runner=false、lightgbm_executed_by_runner=false 和 steps 中没有预测生成步骤。"
         },
         {
           "name": "保留预测质量边界",

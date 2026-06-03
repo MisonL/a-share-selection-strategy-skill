@@ -94,7 +94,7 @@ uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py 
 
 检查重点：
 
-- `summary.json` 中 `requested_mode=auto`、`mode=generic`、`mode_decision=auto_generic`、`consumes_prediction_columns=false`、`lightgbm_not_used=true`、`lightgbm_output_source=not_used`、`lightgbm_executed_by_runner=false`、`prices_rows=1120`、`candidate_rows=1`、`diagnostic_rows=7`。
+- `summary.json` 中 `requested_mode=auto`、`mode=generic`、`mode_decision=auto_generic`、`consumes_prediction_columns=false`、`prediction_input_source=not_used`、`prediction_model_executed_by_runner=false`、`lightgbm_not_used=true`、`lightgbm_output_source=not_used`、`lightgbm_executed_by_runner=false`、`prices_rows=1120`、`candidate_rows=1`、`diagnostic_rows=7`。
 - `diagnostics.csv` 中的 `failed_thresholds`、`failed_thresholds_zh`、`selection_status`、`short_reason`。
 - 价格、成交额、换手率、ST、停牌和一字板失败项只能解释为本地 demo 诊断覆盖，不能写成真实可交易性或全市场结论。
 
@@ -323,7 +323,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
 
 如果 `candidates=0` 且 `effective_empty_result=true`，这表示脚本成功运行但没有标的通过当前阈值；不要写成“产生候选股”。用 `score_diagnostics.csv` 查看每个已评分 symbol 的 `failed_thresholds`。如果 metadata 中 `fallback_errors` 非空，必须说明主接口失败且已使用 fallback provider；fallback 成功不等于主接口稳定可用。akshare 输出可满足通用 OHLCV 和 `turn` 口径，但仍不生成真实 `prediction/prediction_score`，不能直接解释成 prediction-derived 或 LightGBM 链路通过。
 
-本地已落地行情可以使用今日选股总控 CLI 串联校验、评分和诊断。默认 `--mode auto` 会先检查输入是否包含 prediction-derived 必需列；缺少 `prediction` 或 `prediction_score` 时，会显式选择 generic 低价超短剖面，并在 `run_manifest.json` 记录 `requested_mode`、实际 `mode`、`mode_decision` 和 `mode_decision_reason`。若输入包含 prediction-derived 必需列，auto 会使用外部 prediction 评分，但 `consumes_prediction_columns=true`、`lightgbm_output_source=external_input`、`lightgbm_executed_by_runner=false` 仍表示总控 CLI 只消费输入预测列，没有训练或执行 LightGBM。它不是静默降级，也不生成 LightGBM prediction：
+本地已落地行情可以使用今日选股总控 CLI 串联校验、评分和诊断。默认 `--mode auto` 会先检查输入是否包含 prediction-derived 必需列；缺少 `prediction` 或 `prediction_score` 时，会显式选择 generic 低价超短剖面，并在 `run_manifest.json` 记录 `requested_mode`、实际 `mode`、`mode_decision` 和 `mode_decision_reason`。若输入包含 prediction-derived 必需列，auto 会使用外部 prediction 评分，但 `consumes_prediction_columns=true`、`prediction_input_source=external_input`、`prediction_model_executed_by_runner=false` 仍表示总控 CLI 只消费输入预测列，没有训练或执行预测模型。`lightgbm_output_source` 和 `lightgbm_executed_by_runner` 是兼容旧产物的别名字段；新报告优先引用中性字段。它不是静默降级，也不生成 LightGBM prediction：
 
 ```bash
 uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py \
@@ -508,7 +508,7 @@ python3 scripts/validate_walk_forward_artifacts.py \
 
 常见字段映射：akshare 中文列需映射为 `股票代码 -> symbol`、`日期 -> date`、`成交量 -> volume`、`成交额 -> amount`、`换手率 -> turn`，`stock_zh_a_daily` 英文字段需映射 `volume -> volume`、`amount -> amount`、`turnover -> turn`，其中 `成交额` 或 `amount` 不得映射为 `volume`；tushare 需将 `ts_code` 去掉 `.SZ`/`.SH` 后写入 `symbol`，`trade_date -> date`，`vol -> volume`，`amount -> amount`，`turnover_rate -> turn`；yfinance 需将 `Date/Symbol/Open/High/Low/Close/Volume` 映射为小写标准字段。yfinance 映射后只满足通用 OHLCV；若用于 prediction-derived，还必须外部补齐 `market=A-share`、真实上游 `prediction_score`、以及 `turn` 或 `turnover`，不能从 yfinance OHLCV 自动推断。不要把 `Adj Close` 静默替换为 `close`；使用复权价时要记录复权口径。多源合并时统一保留一个预测列，推荐先生成 `prediction_score = coalesce(prediction_score, prediction)`。
 
-`score_candidates.py` 的 CLI 摘要会报告输入文件名、`input_symbols`、股票池过滤、历史不足、输入异常、单股失败、阈值过滤、`turnover_assumption`、`effective_empty_result`、`empty_result_reason` 和最终候选数量。股票池过滤包含 `market_filtered_symbols`、`prefix_allow_filtered_symbols`、`prefix_excluded_symbols` 分项。`threshold_failures` 是各阈值独立失败计数，不是互斥分类，不能和 `threshold_failed_symbols` 相加对账。prediction-derived 路径还会标记 `prediction_source=external_unverified`，表示脚本只消费上游预测，不验证该列是否由真实 LightGBM 链路生成。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。
+`score_candidates.py` 的 CLI 摘要会报告输入文件名、`input_symbols`、股票池过滤、历史不足、输入异常、单股失败、阈值过滤、`turnover_assumption`、`effective_empty_result`、`empty_result_reason` 和最终候选数量。股票池过滤包含 `market_filtered_symbols`、`prefix_allow_filtered_symbols`、`prefix_excluded_symbols` 分项。`threshold_failures` 是各阈值独立失败计数，不是互斥分类，不能和 `threshold_failed_symbols` 相加对账。prediction-derived 路径还会标记 `prediction_source=external_unverified`，表示脚本只消费上游预测，不验证该列是否由真实 LightGBM 链路生成。今日 runner 的 `prediction_input_source` 与 `prediction_model_executed_by_runner` 是优先机器字段；`lightgbm_output_source` 与 `lightgbm_executed_by_runner` 仅为旧产物兼容字段。直接调用 Python API 时，`input` 字段由调用方自行记录或注入。
 
 自动化流水线应把 `failed_symbols=0`、`insufficient_history_symbols=0`、`effective_empty_result=false` 作为成功门槛；也可在 CLI 中显式传入 `--fail-on-skipped` 和 `--fail-on-empty-result`，让跳过标的或 0 候选直接返回非 0。`failed_symbols>0` 表示存在单股运行期异常，即使脚本仍输出了其他候选，也应进入人工复核或失败处理。成功摘要会输出截断样例，例如 `failed_symbol_examples`、`insufficient_history_symbol_examples`，用于定位需要复核的标的。
 

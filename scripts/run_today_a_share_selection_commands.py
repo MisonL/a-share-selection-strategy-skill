@@ -130,6 +130,8 @@ def initial_manifest(args: Any) -> dict[str, Any]:
         "fail_on_skipped": bool(args.fail_on_skipped),
         "prediction_mode": args.mode == "prediction",
         "consumes_prediction_columns": args.mode == "prediction",
+        "prediction_input_source": "external_input" if args.mode == "prediction" else "not_used",
+        "prediction_model_executed_by_runner": False,
         "lightgbm_not_used": args.mode != "prediction",
         "lightgbm_output_source": "external_input" if args.mode == "prediction" else "not_used",
         "lightgbm_executed_by_runner": False,

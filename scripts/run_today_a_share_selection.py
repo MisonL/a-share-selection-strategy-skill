@@ -215,6 +215,8 @@ def apply_mode_resolution(context: RunContext, resolution: ModeResolution) -> No
             "config_path": str(Path(context.args.output_dir) / config.name),
             "prediction_mode": consumes_prediction,
             "consumes_prediction_columns": consumes_prediction,
+            "prediction_input_source": "external_input" if consumes_prediction else "not_used",
+            "prediction_model_executed_by_runner": False,
             "lightgbm_not_used": not consumes_prediction,
             "lightgbm_output_source": "external_input" if consumes_prediction else "not_used",
             "lightgbm_executed_by_runner": False,

@@ -11,13 +11,15 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "scripts"
+SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SCRIPTS = SKILL_ROOT / "scripts"
 TESTS = ROOT / "tests"
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(TESTS))
 
 import backtest_buy_hold as backtest  # noqa: E402
 from helpers import build_frame  # noqa: E402
+from stock_selection_backtest_rows import completed_or_incomplete_row  # noqa: E402
 from stock_selection_model_contracts import (  # noqa: E402
     LIMIT_RULES_MODEL_NOT_MODELED,
     TRADABILITY_MODEL_ENTRY_EXIT,
@@ -147,6 +149,26 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
             backtest.run_backtest(prices, candidate, hold_days=5, cost_bps=-1)
         with self.assertRaisesRegex(ValueError, "slippage-bps"):
             backtest.run_backtest(prices, candidate, hold_days=5, slippage_bps=-1)
+
+    def test_zero_entry_close_is_incomplete_not_divide_by_zero(self) -> None:
+        prices = build_frame(days=130)
+        history = prices[prices["symbol"] == "000002"].reset_index(drop=True)
+        history.loc[20, "close"] = 0.0
+
+        result = completed_or_incomplete_row(
+            symbol="000002",
+            signal_date=history.loc[20, "date"],
+            history=history,
+            entry_pos=20,
+            exit_pos=25,
+            holding_days=5,
+            cost_bps=0.0,
+            slippage_bps=0.0,
+            require_tradable_bars=False,
+        )
+
+        self.assertEqual("incomplete", result["status"])
+        self.assertEqual("zero_entry_close", result["missing_reason"])
 
     def test_require_tradable_bars_marks_non_tradable_entry(self) -> None:
         prices = build_frame(days=130)

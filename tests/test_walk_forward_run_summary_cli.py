@@ -12,7 +12,8 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "scripts"
+SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import summarize_walk_forward_run as run_summary  # noqa: E402
@@ -219,6 +220,16 @@ def backtest_row(symbol: str, value: float) -> dict[str, object]:
         "tradability_model": TRADABILITY_MODEL_ENTRY_EXIT,
         "limit_rules_model": LIMIT_RULES_MODEL_NOT_MODELED,
     }
+
+
+class CompleteTradesTests(unittest.TestCase):
+    def test_numeric_missing_data_flag_excludes_trade(self) -> None:
+        frame = pd.DataFrame([backtest_row("000001", 0.01)])
+        frame["missing_data"] = 1.0
+
+        complete = run_summary.complete_trades(frame)
+
+        self.assertTrue(complete.empty)
 
 
 def write_equity(path: Path) -> None:

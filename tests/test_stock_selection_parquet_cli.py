@@ -12,11 +12,13 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "scripts"
+SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import score_candidates as scorer  # noqa: E402
 import validate_ohlcv  # noqa: E402
+from stock_selection_data import read_table  # noqa: E402
 from helpers import build_frame  # noqa: E402
 
 
@@ -89,6 +91,18 @@ class StockSelectionParquetCliTests(unittest.TestCase):
             ):
                 self.assertAlmostEqual(csv_score, parquet_score, places=12)
             self.assertIn("input=prices.parquet", parquet_stdout)
+
+    def test_read_table_keeps_parquet_symbol_column_as_text(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "numeric-symbol.parquet"
+            pd.DataFrame([{"symbol": 12345, "date": "2026-05-30"}]).to_parquet(
+                path,
+                index=False,
+            )
+
+            loaded = read_table(path)
+
+        self.assertEqual("12345", loaded["symbol"].iloc[0])
 
 
 if __name__ == "__main__":

@@ -8,10 +8,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "scripts"
+SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import fetch_baostock_a_share as fetcher  # noqa: E402
+from stock_selection_tradability import tradability_stats  # noqa: E402
 
 
 class FetchBaostockAShareTests(unittest.TestCase):
@@ -52,6 +54,16 @@ class FetchBaostockAShareTests(unittest.TestCase):
         self.assertEqual("0.5", rows[0]["turn"])
         self.assertEqual("10.0", rows[0]["preclose"])
         self.assertEqual("1", rows[0]["tradestatus"])
+
+    def test_tradability_stats_handles_missing_symbol_column(self) -> None:
+        frame = fetcher.pd.DataFrame([{"tradestatus": "0", "isST": "1"}])
+
+        stats = tradability_stats(frame)
+
+        self.assertEqual(1, stats["non_trading_rows"])
+        self.assertEqual([], stats["non_trading_symbols"])
+        self.assertEqual(1, stats["st_rows"])
+        self.assertEqual([], stats["st_symbols"])
 
     def test_write_outputs_writes_metadata_json(self) -> None:
         metadata = {

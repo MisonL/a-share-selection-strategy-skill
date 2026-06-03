@@ -7,6 +7,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SCRIPTS = SKILL_ROOT / "scripts"
 
 CLI_HELP_ENTRIES = [
     "allocate_candidate_capital.py",
@@ -66,7 +68,7 @@ HELP_CONTRACT_EXCLUDED_HELPERS = [
 
 class CliHelpContractClassificationTests(unittest.TestCase):
     def test_all_scripts_are_classified_as_cli_or_helper(self) -> None:
-        all_scripts = {path.name for path in (ROOT / "scripts").glob("*.py")}
+        all_scripts = {path.name for path in (SKILL_ROOT / "scripts").glob("*.py")}
         classified = set(CLI_HELP_ENTRIES) | set(HELP_CONTRACT_EXCLUDED_HELPERS)
 
         self.assertEqual(all_scripts, classified)
@@ -74,7 +76,7 @@ class CliHelpContractClassificationTests(unittest.TestCase):
 
     def test_helper_modules_are_excluded_from_cli_help_contract(self) -> None:
         for script_name in HELP_CONTRACT_EXCLUDED_HELPERS:
-            script = ROOT / f"scripts/{script_name}"
+            script = SCRIPTS / script_name
             with self.subTest(script=script.name):
                 source = script.read_text(encoding="utf-8")
                 result = subprocess.run(

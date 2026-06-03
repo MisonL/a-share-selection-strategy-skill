@@ -12,7 +12,8 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "scripts"
+SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import validate_walk_forward_artifacts as artifact_cli  # noqa: E402
@@ -91,6 +92,18 @@ class WalkForwardArtifactCliTests(unittest.TestCase):
 
         self.assertEqual(0, code)
         self.assertEqual("", stderr)
+
+    def test_cli_rejects_null_summary_final_equity_without_crashing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(Path(tmpdir))
+            summary = read_json(root / "prediction_run_summary.json")
+            summary["equity"]["final_equity"] = None
+            write_json(root / "prediction_run_summary.json", summary)
+
+            code, _stdout, stderr = call_cli(root, root / "artifact_validation.json")
+
+        self.assertEqual(3, code)
+        self.assertIn("summary_equity_final_mismatch", stderr)
 
 
 def call_cli(root: Path, output: Path, extra_args: list[str] | None = None) -> tuple[int, str, str]:

@@ -6,7 +6,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "scripts"
+SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import score_candidates as scorer  # noqa: E402
@@ -88,7 +89,7 @@ class StockSelectionConfigTests(unittest.TestCase):
                 self.assertIn("risk_note", disclosure)
 
     def test_openai_agent_manifest_has_required_interface_fields(self) -> None:
-        text = (ROOT / "agents/openai.yaml").read_text(encoding="utf-8")
+        text = (SKILL_ROOT / "agents/openai.yaml").read_text(encoding="utf-8")
         self.assertIn('display_name: "Stock Selection Strategy"', text)
         self.assertIn("short_description:", text)
         self.assertIn("default_prompt:", text)

@@ -13,21 +13,22 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install dependencies
-        run: python -m pip install -r requirements-parquet.txt
+        run: python3 -m pip install -r skills/stock-selection-strategy/requirements-parquet.txt
       - name: Validate JSON files
         run: |
-          python -m json.tool evals/evals.json >/tmp/stock-selection-evals.json
-          python -m json.tool scripts/example_config.json >/tmp/stock-selection-example-config.json
-          python -m json.tool scripts/prediction_profile_config.json >/tmp/stock-selection-prediction-config.json
+          python3 -m json.tool skills/stock-selection-strategy/evals/evals.json >/tmp/stock-selection-evals.json
+          python3 -m json.tool skills/stock-selection-strategy/scripts/example_config.json >/tmp/stock-selection-example-config.json
+          python3 -m json.tool skills/stock-selection-strategy/scripts/prediction_profile_config.json >/tmp/stock-selection-prediction-config.json
+          python3 -m json.tool skills/stock-selection-strategy/scripts/ultra_short_low_price_config.json >/tmp/stock-selection-ultra-short-config.json
       - name: Validate agent manifest
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           import yaml
           from pathlib import Path
-          assert yaml.safe_load(Path("agents/openai.yaml").read_text())["interface"]["display_name"]
+          assert yaml.safe_load(Path("skills/stock-selection-strategy/agents/openai.yaml").read_text())["interface"]["display_name"]
           PY
       - name: Compile scripts
         run: |
-          PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python -m py_compile scripts/*.py
+          PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile skills/stock-selection-strategy/scripts/*.py
       - name: Run tests
-        run: PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s tests -v
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v

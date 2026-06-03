@@ -10,6 +10,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SCRIPTS = SKILL_ROOT / "scripts"
 TESTS = ROOT / "tests"
 
 
@@ -35,7 +37,7 @@ def read_constant(module_path: Path, name: str) -> str:
     raise AssertionError(f"{name} string constant not found in {module_path}")
 
 
-CALENDAR_MODEL = read_constant(ROOT / "scripts/stock_selection_calendar_contract.py", "CALENDAR_MODEL")
+CALENDAR_MODEL = read_constant(SKILL_ROOT / "scripts/stock_selection_calendar_contract.py", "CALENDAR_MODEL")
 CLI_HELP_ENTRIES = load_cli_help_entries()
 FETCH_CORE_OPTIONS = frozenset(
     {
@@ -208,7 +210,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
         }
         self.assertEqual(set(CLI_HELP_ENTRIES), set(cases))
         for script_name, expected_options in cases.items():
-            script = ROOT / f"scripts/{script_name}"
+            script = SCRIPTS / script_name
             with self.subTest(script=script.name):
                 result = subprocess.run(
                     [sys.executable, "-S", str(script), "--help"],
@@ -224,19 +226,19 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                     self.assertIn(option, result.stdout)
 
     def test_runtime_paths_still_fail_without_dataframe_dependencies(self) -> None:
-        validate_script = ROOT / "scripts/validate_ohlcv.py"
-        score_script = ROOT / "scripts/score_candidates.py"
-        fetch_baostock_script = ROOT / "scripts/fetch_baostock_a_share.py"
-        fetch_akshare_script = ROOT / "scripts/fetch_akshare_a_share.py"
-        fetch_yfinance_script = ROOT / "scripts/fetch_yfinance_ohlcv.py"
-        lightgbm_script = ROOT / "scripts/generate_lightgbm_predictions.py"
-        slice_script = ROOT / "scripts/slice_prices_as_of.py"
-        allocate_script = ROOT / "scripts/allocate_candidate_capital.py"
-        portfolio_allocate_script = ROOT / "scripts/allocate_portfolio_candidate_capital.py"
-        backtest_script = ROOT / "scripts/backtest_buy_hold.py"
-        equity_curve_script = ROOT / "scripts/portfolio_equity_curve.py"
-        overlap_report_script = ROOT / "scripts/portfolio_overlap_report.py"
-        run_summary_script = ROOT / "scripts/summarize_walk_forward_run.py"
+        validate_script = SKILL_ROOT / "scripts/validate_ohlcv.py"
+        score_script = SKILL_ROOT / "scripts/score_candidates.py"
+        fetch_baostock_script = SKILL_ROOT / "scripts/fetch_baostock_a_share.py"
+        fetch_akshare_script = SKILL_ROOT / "scripts/fetch_akshare_a_share.py"
+        fetch_yfinance_script = SKILL_ROOT / "scripts/fetch_yfinance_ohlcv.py"
+        lightgbm_script = SKILL_ROOT / "scripts/generate_lightgbm_predictions.py"
+        slice_script = SKILL_ROOT / "scripts/slice_prices_as_of.py"
+        allocate_script = SKILL_ROOT / "scripts/allocate_candidate_capital.py"
+        portfolio_allocate_script = SKILL_ROOT / "scripts/allocate_portfolio_candidate_capital.py"
+        backtest_script = SKILL_ROOT / "scripts/backtest_buy_hold.py"
+        equity_curve_script = SKILL_ROOT / "scripts/portfolio_equity_curve.py"
+        overlap_report_script = SKILL_ROOT / "scripts/portfolio_overlap_report.py"
+        run_summary_script = SKILL_ROOT / "scripts/summarize_walk_forward_run.py"
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "candidates.csv"
@@ -271,7 +273,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                     "--input",
                     str(Path(tmpdir) / "missing-prices.csv"),
                     "--config",
-                    str(ROOT / "scripts/example_config.json"),
+                    str(SKILL_ROOT / "scripts/example_config.json"),
                     "--output",
                     str(output),
                 ],

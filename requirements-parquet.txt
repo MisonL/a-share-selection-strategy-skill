@@ -1,2 +1,0 @@
--r requirements.txt
-pyarrow>=14.0

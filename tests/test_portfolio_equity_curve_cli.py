@@ -11,7 +11,8 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "scripts"
+SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import portfolio_equity_curve as equity_curve  # noqa: E402
@@ -96,6 +97,13 @@ class PortfolioEquityCurveCliTests(unittest.TestCase):
         frame = pd.DataFrame([{"signal_date": "2026-05-12", "return": 0.01}])
 
         with self.assertRaisesRegex(ValueError, "missing_data"):
+            equity_curve.build_equity_curve([frame], initial_equity=1.0)
+
+    def test_numeric_missing_data_flag_excludes_trade(self) -> None:
+        frame = backtest_frame("2026-05-12", [0.01])
+        frame["missing_data"] = 1.0
+
+        with self.assertRaisesRegex(ValueError, "no complete trades"):
             equity_curve.build_equity_curve([frame], initial_equity=1.0)
 
 

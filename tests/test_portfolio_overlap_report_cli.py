@@ -11,7 +11,8 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "scripts"
+SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SCRIPTS = SKILL_ROOT / "scripts"
 sys_path = __import__("sys").path
 sys_path.insert(0, str(SCRIPTS))
 
@@ -44,6 +45,23 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
         self.assertEqual(["2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15"], daily["date"].tolist())
         self.assertEqual(2, len(overlaps))
         self.assertEqual(["000001"], sorted(overlaps["symbol"].unique().tolist()))
+
+    def test_numeric_missing_data_flag_excludes_trade(self) -> None:
+        frame = pd.DataFrame(
+            [
+                {
+                    **trade("000001", "2026-05-12", "2026-05-12", "2026-05-14"),
+                    "missing_data": 1.0,
+                }
+            ]
+        )
+
+        daily, overlaps, summary = overlap_report.build_overlap_report([frame])
+
+        self.assertTrue(daily.empty)
+        self.assertTrue(overlaps.empty)
+        self.assertEqual(0, summary["complete_trades"])
+        self.assertEqual(1, summary["incomplete_trades"])
 
     def test_calendar_model_is_pandas_business_day_not_exchange_calendar(self) -> None:
         frame = pd.DataFrame(

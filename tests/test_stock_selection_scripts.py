@@ -12,11 +12,14 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "scripts"
+SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import score_candidates as scorer  # noqa: E402
 from stock_selection_data import read_table  # noqa: E402
+from stock_selection_prepare import prepare_frame  # noqa: E402
+from stock_selection_universe import apply_universe_filter  # noqa: E402
 import validate_ohlcv  # noqa: E402
 from helpers import build_frame, load_config, permissive_thresholds  # noqa: E402
 
@@ -68,6 +71,12 @@ class StockSelectionScriptTests(unittest.TestCase):
         errors = validate_ohlcv.validate_frame(frame, min_history_rows=120)
         self.assertIn("preserve leading zeros as text", "; ".join(errors))
 
+    def test_validate_rejects_five_digit_numeric_damaged_symbol(self) -> None:
+        frame = build_frame()
+        frame["symbol"] = "12345"
+        errors = validate_ohlcv.validate_frame(frame, min_history_rows=120)
+        self.assertIn("preserve leading zeros as text", "; ".join(errors))
+
     def test_yyyymmdd_dates_are_parsed_as_calendar_dates(self) -> None:
         config = load_config("example_config.json")
         frame = build_frame()
@@ -81,6 +90,15 @@ class StockSelectionScriptTests(unittest.TestCase):
         empty = pd.DataFrame(columns=validate_ohlcv.REQUIRED_COLUMNS)
         with self.assertRaisesRegex(ValueError, "input data is empty"):
             scorer.score_candidates(empty, config)
+
+    def test_missing_symbol_rows_are_dropped_not_stringified(self) -> None:
+        frame = build_frame()
+        frame.loc[0, "symbol"] = pd.NA
+
+        prepared = prepare_frame(frame, validate_ohlcv.parse_dates)
+
+        self.assertNotIn("nan", set(prepared["symbol"].astype(str).str.lower()))
+        self.assertEqual(len(frame) - 1, len(prepared))
 
     def test_validate_cli_error_includes_input_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -163,6 +181,21 @@ class StockSelectionScriptTests(unittest.TestCase):
         self.assertEqual(2, summary["universe_filtered_symbols"])
         self.assertEqual(0, summary["candidates"])
         self.assertEqual("universe_filtered_all", summary["empty_result_reason"])
+
+    def test_universe_filtering_handles_numeric_symbol_dtype(self) -> None:
+        frame = pd.DataFrame([{"symbol": 2}, {"symbol": 600001}])
+        universe = {
+            "universe": {
+                "symbol_prefix_allow_regex": r"^(60|68|00|30)",
+                "symbol_prefix_exclude": ["8", "4"],
+            }
+        }
+
+        result, summary = apply_universe_filter(frame, universe)
+
+        self.assertEqual(["600001"], result["symbol"].tolist())
+        self.assertEqual(1, summary["prefix_allow_filtered_symbols"])
+        self.assertEqual(0, summary["prefix_excluded_symbols"])
 
     def test_explosion_score_is_zero_below_volume_window(self) -> None:
         config = load_config("example_config.json")
@@ -351,6 +384,20 @@ class StockSelectionScriptTests(unittest.TestCase):
         self.assertEqual(8.88, selected["spot_price"])
         diagnostic = diagnostics[diagnostics["symbol"].astype(str).eq("2")].iloc[0]
         self.assertEqual("软件服务", diagnostic["spot_industry"])
+
+    def test_spot_merge_matches_numeric_scored_symbol_to_text_spot(self) -> None:
+        config = load_config("example_config.json")
+        config["thresholds"] = permissive_thresholds(120)
+        frame = build_frame(include_turn=True)
+        frame = frame[frame["symbol"].eq("600001")].copy()
+        frame["symbol"] = 600001
+        spot = pd.DataFrame([{"symbol": "600001", "spot_price": 8.88}])
+
+        candidates, summary = scorer.score_candidates(frame, config, spot)
+
+        self.assertEqual(1, summary["spot_matched_symbols"])
+        selected = candidates[candidates["symbol"].astype(str).eq("600001")].iloc[0]
+        self.assertEqual(8.88, selected["spot_price"])
 
     def test_ultra_short_profile_filters_prices_above_max_close(self) -> None:
         config = load_config("ultra_short_low_price_config.json")

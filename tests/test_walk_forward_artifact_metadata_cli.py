@@ -52,6 +52,20 @@ class WalkForwardArtifactMetadataCliTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertIn("metadata_invalid_rows=0 dropped_invalid_rows=10", stderr)
 
+    def test_cli_uses_distinct_raw_invalid_rows_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(Path(tmpdir))
+            write_metadata(root, invalid_rows=0, dropped_invalid_rows=0, raw_non_trading_rows=5)
+
+            code, _stdout, stderr = call_cli(
+                root,
+                root / "artifact_validation.json",
+                ["--allow-dropped-invalid-rows"],
+            )
+
+        self.assertEqual(3, code)
+        self.assertIn("metadata_raw_invalid_rows=5 invalid_rows=0", stderr)
+
 
 def write_metadata(root: Path, **updates: object) -> None:
     path = root / "metadata.json"

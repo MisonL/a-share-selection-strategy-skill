@@ -11,10 +11,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "scripts"
+SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import run_today_a_share_selection as runner  # noqa: E402
+from run_today_a_share_selection_helpers import spot_rows, tabular_row_count  # noqa: E402
 from helpers import build_frame  # noqa: E402
 
 
@@ -309,6 +311,28 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             summary["spot_metadata"]["allowed_failure_actions"],
         )
 
+    def test_summary_preserves_zero_filtered_spot_metadata_count(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            (output / "spot_metadata.json").write_text(
+                json.dumps({"raw_items": 100, "filtered_items": 0}),
+                encoding="utf-8",
+            )
+            manifest = {"output_dir": str(output)}
+
+            rows = spot_rows(manifest)
+
+        self.assertEqual(0, rows)
+
+    def test_tabular_row_count_counts_csv_records_with_embedded_newlines(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "rows.csv"
+            path.write_text('symbol,name\n000001,"Alpha\nName"\n000002,Beta\n', encoding="utf-8")
+
+            rows = tabular_row_count(path)
+
+        self.assertEqual(2, rows)
+
     def test_runner_builds_history_fetch_before_validate_when_prices_are_omitted(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
@@ -594,6 +618,36 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(["000001"], manifest["history_symbols"])
         self.assertEqual(3, selected["raw_spot_rows"])
         self.assertEqual(1, selected["filtered_spot_rows"])
+
+    def test_runner_does_not_zero_pad_numeric_parquet_spot_symbols(self) -> None:
+        pd = __import__("pandas")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            spot = root / "spot.parquet"
+            output = root / "run"
+            pd.DataFrame(
+                [{"symbol": 1, "spot_price": 8.2, "spot_amount": 200000000}]
+            ).to_parquet(spot, index=False)
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--spot-input",
+                    str(spot),
+                    "--history-source",
+                    "baostock",
+                    "--derive-symbols-from-spot",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+
+            with self.assertRaisesRegex(ValueError, "zero history symbols"):
+                runner.run_pipeline(context)
 
     def test_runner_counts_parquet_spot_rows_in_summary(self) -> None:
         pd = __import__("pandas")

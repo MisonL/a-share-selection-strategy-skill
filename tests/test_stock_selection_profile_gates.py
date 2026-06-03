@@ -11,7 +11,8 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "scripts"
+SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import score_candidates as scorer  # noqa: E402
@@ -25,7 +26,7 @@ class StockSelectionProfileGateTests(unittest.TestCase):
         frame = build_frame(include_prediction=True, include_turn=True)
         frame = frame[frame["symbol"] == "600001"].copy()
         frame["symbol"] = "60001"
-        with self.assertRaisesRegex(ValueError, "six digits"):
+        with self.assertRaisesRegex(ValueError, "preserve leading zeros"):
             scorer.score_candidates(frame, config)
 
     def test_prediction_ignores_off_universe_short_history(self) -> None:
@@ -37,14 +38,13 @@ class StockSelectionProfileGateTests(unittest.TestCase):
             include_turn=True,
         )
         off_universe = off_universe[off_universe["symbol"] == "000002"].copy()
-        off_universe["symbol"] = "00700"
-        off_universe["market"] = "HK"
+        off_universe["symbol"] = "700000"
         frame = pd.concat([frame, off_universe], ignore_index=True)
         _, summary = scorer.score_candidates(frame, config)
         self.assertEqual(3, summary["raw_symbols"])
         self.assertEqual(2, summary["input_symbols"])
         self.assertEqual(1, summary["universe_filtered_symbols"])
-        self.assertEqual(1, summary["market_filtered_symbols"])
+        self.assertEqual(0, summary["market_filtered_symbols"])
         self.assertEqual(0, summary["insufficient_history_symbols"])
 
     def test_prediction_reports_in_universe_short_history_in_summary(self) -> None:

@@ -12,7 +12,8 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "scripts"
+SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import fetch_eastmoney_a_share_spot as eastmoney  # noqa: E402
@@ -99,6 +100,21 @@ class FetchEastmoneyAShareSpotTests(unittest.TestCase):
         self.assertEqual(2, len(rows))
         self.assertEqual(2, metadata["retry_attempts_per_page"])
         self.assertFalse(metadata["partial_result"])
+
+    def test_page_items_accepts_dict_diff_payload(self) -> None:
+        data = {
+            "data": {
+                "diff": {
+                    "0": {"f12": "000001"},
+                    "1": {"f12": "600000"},
+                    "metadata": "ignored",
+                }
+            }
+        }
+
+        rows = eastmoney.page_items(data)
+
+        self.assertEqual(["000001", "600000"], [row["f12"] for row in rows])
 
 
 class FakeOpener:

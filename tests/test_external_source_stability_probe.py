@@ -11,7 +11,8 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "scripts"
+SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import probe_external_source_stability as probe  # noqa: E402
@@ -82,6 +83,15 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
         adjust_check = [item for item in matched if item["name"] == "adjustflag_matches_request"][0]
         self.assertEqual(True, adjust_check["passed"])
 
+    def test_baostock_adjustflag_missing_value_does_not_raise(self) -> None:
+        command = ["python", "fetch_baostock_a_share.py", "--adjust"]
+        metadata = valid_metadata("baostock")
+
+        checks = probe.source_checks("baostock", metadata, command)
+        adjust_check = [item for item in checks if item["name"] == "adjustflag_matches_request"][0]
+
+        self.assertEqual(False, adjust_check["passed"])
+
     def test_cli_returns_strict_error_when_required_source_fails(self) -> None:
         original_run = probe.run_command
         probe.run_command = FakeExecutor(fail_sources={"yfinance"})
@@ -106,18 +116,59 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
         self.assertEqual(False, summary["summary"]["sources"]["yfinance"]["all_passed"])
         self.assertEqual("not_proven", summary["summary"]["long_term_stability_claim"])
 
+    def test_probe_records_command_timeout_as_failed_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = args_for(output)
+            args.command_timeout_seconds = 1.0
+            manifest = probe.initial_manifest(args)
+            probe.run_probe(
+                args,
+                output_dir=output / "runs",
+                manifest=manifest,
+                executor=TimeoutExecutor("yfinance"),
+            )
+
+        yfinance = [item for item in manifest["results"] if item["source"] == "yfinance"][0]
+        self.assertEqual(124, yfinance["returncode"])
+        self.assertIn("timed out", yfinance["stderr"])
+        self.assertEqual(False, yfinance["passed"])
+        self.assertEqual(["yfinance_passed_runs=0 runs=1"], probe.strict_errors(manifest))
+
 
 class FakeExecutor:
     def __init__(self, fail_sources: set[str] | None = None) -> None:
         self.fail_sources = fail_sources or set()
 
-    def __call__(self, command: list[str]) -> subprocess.CompletedProcess[str]:
+    def __call__(
+        self,
+        command: list[str],
+        timeout: float | None = None,
+    ) -> subprocess.CompletedProcess[str]:
         source = source_from_command(command)
         metadata_path = metadata_path_from_command(command)
         metadata_path.parent.mkdir(parents=True, exist_ok=True)
         if source in self.fail_sources:
             metadata_path.write_text(json.dumps(failed_metadata(source), ensure_ascii=False), encoding="utf-8")
             return subprocess.CompletedProcess(command, 3, stdout="", stderr=f"{source} failed")
+        metadata_path.write_text(json.dumps(valid_metadata(source), ensure_ascii=False), encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, stdout=f"{source} ok", stderr="")
+
+
+class TimeoutExecutor:
+    def __init__(self, source: str) -> None:
+        self.source = source
+
+    def __call__(
+        self,
+        command: list[str],
+        timeout: float | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        source = source_from_command(command)
+        if source == self.source:
+            raise subprocess.TimeoutExpired(command, timeout or 0)
+        metadata_path = metadata_path_from_command(command)
+        metadata_path.parent.mkdir(parents=True, exist_ok=True)
         metadata_path.write_text(json.dumps(valid_metadata(source), ensure_ascii=False), encoding="utf-8")
         return subprocess.CompletedProcess(command, 0, stdout=f"{source} ok", stderr="")
 

@@ -17,6 +17,7 @@
 | --- | --- | --- |
 | `prediction_source=external_unverified` | 评分脚本消费了外部预测列 | 预测源真实、无泄漏或质量有效 |
 | `prediction_model_executed_by_score_script=false` | 评分脚本没有执行预测模型 | 上游模型已经通过门禁 |
+| `prediction_input_source=external_input` | 候选或诊断产物中的预测列来自输入文件 | 当前脚本训练或生成了预测列 |
 | `prediction_scope=latest_probability_repeated_for_scoring` | 最新概率被重复写入评分窗口 | 逐日历史预测序列 |
 | `holdout_auc` | 本次同一 symbol 时间后缀 AUC 可计算 | 全市场样本外泛化或概率校准 |
 

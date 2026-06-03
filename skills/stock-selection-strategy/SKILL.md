@@ -123,7 +123,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `ultra_short_low_price_config.json`：通用技术评分低价超短剖面，表达 `3 <= close <= 10`、成交量/成交额/换手硬阈值、排除 ST/停牌/一字板，以及更高短线爆发权重；不使用也不伪造 prediction-derived/LightGBM prediction。
 - `create_demo_data.py`：生成可复制运行的本地 demo CSV；`--scenario low-price-ultra-short` 会生成更多低价超短诊断样本。
 - `validate_ohlcv.py`：校验本地 CSV/Parquet 行情文件。
-- `score_candidates.py`：读取本地行情文件并输出候选股 CSV；可用 `--spot-input` 合并实时价、涨跌幅、行业和成交额展示字段，但这些字段不参与核心评分。
+- `score_candidates.py`：读取本地行情文件并输出候选股 CSV；可用 `--spot-input` 合并实时价、涨跌幅、行业和成交额展示字段，但这些字段不参与核心评分。spot symbol 列支持 `symbol/code/code_id/stock_code/ticker/Ticker`，`sh.600000`、`600000.SH`、`sz.000001`、`000001.SZ` 会归一化为六位代码后匹配。
 - `run_today_a_share_selection.py`：总控 CLI，串联可选实时快照、可选仓库内历史取数、`validate_ohlcv.py`、`score_candidates.py` 和诊断输出，写出 `run_manifest.json`、`summary.json`、`candidates.csv`、`diagnostics.csv`；当前不证明实时全市场扫描完成。
 - `fetch_eastmoney_a_share_spot.py`：东方财富 A 股实时快照入口，输出 `spot.csv` 和 `metadata.json`，记录 `requested_pages`、`successful_pages`、`failed_pages`、`raw_items`、`filtered_items`、`snapshot_time`、`partial_result`。
 - `generate_lightgbm_predictions.py`：可选 LightGBM 预测生成器，输出 `prediction_score`。
@@ -162,7 +162,7 @@ uv run --with pandas --with numpy python skills/stock-selection-strategy/scripts
 预期口径：
 
 - `prices.csv` 不含 `prediction_score`，`--mode auto` 应选择 `mode=generic`、`mode_decision=auto_generic`、`consumes_prediction_columns=false`、`prediction_input_source=not_used`、`prediction_model_executed_by_runner=false`、`lightgbm_not_used=true`、`lightgbm_output_source=not_used`、`lightgbm_executed_by_runner=false`。
-- `summary.json` 顶层的 `candidate_rows`、`diagnostic_rows` 和 `prices_rows` 是输出文件行数；嵌套 `score.candidates` 来自 `score_candidates.py` stdout 摘要。
+- `summary.json` 顶层的 `candidate_rows`、`diagnostic_rows`、`prices_rows`、`spot_matched_symbols` 是输出文件和评分摘要的快速核对字段；嵌套 `score.candidates` 来自 `score_candidates.py` stdout 摘要。
 - `summary.json` 的 `*_output_written` 字段表示对应输出文件是否真实存在；失败 run 中有输出路径不等于候选或诊断文件已生成。
 - `run_manifest.json.steps[]` 使用字段 `step`、`command`、`returncode`、`allowed_returncodes`、`stdout` 和 `stderr`。
 - 该样本只用于验证低价、成交额、换手率、ST、停牌和一字板诊断，不代表真实今日 A 股扫描。
@@ -207,6 +207,8 @@ uv run --with pandas --with numpy python skills/stock-selection-strategy/scripts
 | `prediction` | 用户坚持 prediction-derived 口径 | 缺字段时必须失败，不能自动改 generic |
 | `generic` | 用户明确接受通用技术评分 | 不得写成 prediction-derived 或模型预测结果 |
 
+generic 技术评分不消费输入中的 `prediction` 或 `prediction_score` 列；即使原始文件带有这些列，候选和诊断输出也应披露 `prediction_input_source=not_used`，并以技术因子计算 `trend_score`。
+
 ```bash
 uv run --with pandas --with numpy python skills/stock-selection-strategy/scripts/run_today_a_share_selection.py \
   --prices-input /path/to/prices.csv \
@@ -249,8 +251,9 @@ uv run --with pandas --with numpy --with baostock python skills/stock-selection-
 | 文件 | 检查字段 |
 | --- | --- |
 | `run_manifest.json` | 每一步命令、退出码、stdout/stderr、允许退出码 |
-| `summary.json` | `requested_mode`、`mode`、`mode_decision`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`prediction_mode`、`consumes_prediction_columns`、`prediction_input_source`、`prediction_model_executed_by_runner`、`source_scope`、`prices_rows`、`candidate_rows`、`diagnostic_rows`、`spot_rows`、`*_output_written`、失败步骤 |
-| `diagnostics.csv` | 机器字段 `failed_thresholds`，展示字段 `failed_thresholds_zh`、`selection_status`、`short_reason` |
+| `summary.json` | `requested_mode`、`mode`、`mode_decision`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`prediction_mode`、`consumes_prediction_columns`、`prediction_input_source`、`prediction_model_executed_by_runner`、`source_scope`、`prices_rows`、`candidate_rows`、`diagnostic_rows`、`spot_rows`、`spot_matched_symbols`、`*_output_written`、失败步骤 |
+| `candidates.csv` | 候选字段、spot 展示字段、prediction 披露字段；prediction-derived 时检查 `prediction_source`、`prediction_input_source`、`prediction_model_executed_by_score_script` |
+| `diagnostics.csv` | 机器字段 `failed_thresholds`，展示字段 `failed_thresholds_zh`、`selection_status`、`short_reason`，以及与候选一致的 prediction 披露字段 |
 | `spot_metadata` | `partial_result`、`failed_pages`、`retry_attempts_per_page`、`allowed_failure_actions` |
 
 `lightgbm_not_used`、`lightgbm_output_source`、`lightgbm_executed_by_runner` 是旧产物兼容字段；报告时优先引用中性的 prediction 字段。

@@ -14,6 +14,7 @@
 | `prediction_model_executed_by_score_script=false` | 评分脚本只消费预测列 | 不能说 score_candidates 训练或执行了预测模型 |
 | `prediction_input_source=not_used` 或 `mode=generic` | 今日入口 generic 技术评分 | 不能写成 prediction-derived/LightGBM 结果 |
 | `prediction_model_executed_by_runner=false` | 今日入口或外部 prediction 评分 | 不能说 runner 训练或执行了预测模型 |
+| `spot_matched_symbols` | spot 展示字段实际匹配到评分股票数 | 不能证明实时全市场扫描完整 |
 | `lightgbm_*` 字段 | 旧产物兼容字段 | 新报告优先引用中性的 prediction 字段 |
 
 ## 模板分组
@@ -514,6 +515,7 @@
 ## 过滤摘要
 - 输入股票数：
 - `prices_rows/candidate_rows/diagnostic_rows`：
+- `spot_rows/spot_matched_symbols`：
 - 剔除数量和原因：
 - 最终候选数：
 

@@ -91,8 +91,9 @@ uv run --with pandas --with numpy python skills/stock-selection-strategy/scripts
 
 检查：
 
-- `summary.json`: `requested_mode`、`mode`、`mode_decision`、`mode_decision_reason`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`prediction_input_source`、`prediction_model_executed_by_runner`、`candidate_rows`、`diagnostic_rows`、`candidates_output_written`、`diagnostics_output_written`。
-- `diagnostics.csv`: `failed_thresholds`、`failed_thresholds_zh`、`selection_status`、`short_reason`。
+- `summary.json`: `requested_mode`、`mode`、`mode_decision`、`mode_decision_reason`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`prediction_input_source`、`prediction_model_executed_by_runner`、`candidate_rows`、`diagnostic_rows`、`spot_matched_symbols`、`candidates_output_written`、`diagnostics_output_written`。
+- `candidates.csv`: 候选字段、spot 展示字段，以及 prediction 披露字段。
+- `diagnostics.csv`: `failed_thresholds`、`failed_thresholds_zh`、`selection_status`、`short_reason`，以及与候选一致的 prediction 披露字段。
 - 价格、成交额、换手率、ST、停牌和一字板失败项只代表 demo 覆盖，不代表真实今日 A 股扫描。
 
 ## Parquet 输入
@@ -219,6 +220,10 @@ uv run --with pandas --with numpy --with baostock python skills/stock-selection-
 ```
 
 `selected_symbols.json` 只证明按 spot 字段筛出了历史抓取列表，不证明实时全市场扫描完整，也不证明这些标的最终通过历史评分。
+
+本地或抓取的 spot 输入在历史筛选和 `score_candidates.py --spot-input` 中使用同一套 symbol 归一化规则：symbol 列支持 `symbol/code/code_id/stock_code/ticker/Ticker`，`sh.600000`、`600000.SH`、`sz.000001`、`000001.SZ` 会归一化为六位代码后匹配。`summary.json.spot_matched_symbols` 是排查 spot 展示字段是否实际合并的首选字段。
+
+generic 技术评分不消费输入中的 `prediction` 或 `prediction_score` 列。需要使用外部预测列时，必须走 prediction-derived 配置或今日入口的 `mode=prediction`/`auto -> prediction`。
 
 ## 真实行情入口
 

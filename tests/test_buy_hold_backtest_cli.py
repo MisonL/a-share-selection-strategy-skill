@@ -11,7 +11,7 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SKILL_ROOT = ROOT / "skills" / "a-share-selection-strategy"
 SCRIPTS = SKILL_ROOT / "scripts"
 TESTS = ROOT / "tests"
 sys.path.insert(0, str(SCRIPTS))
@@ -19,8 +19,8 @@ sys.path.insert(0, str(TESTS))
 
 import backtest_buy_hold as backtest  # noqa: E402
 from helpers import build_frame  # noqa: E402
-from stock_selection_backtest_rows import completed_or_incomplete_row  # noqa: E402
-from stock_selection_model_contracts import (  # noqa: E402
+from a_share_selection_backtest_rows import completed_or_incomplete_row  # noqa: E402
+from a_share_selection_model_contracts import (  # noqa: E402
     LIMIT_RULES_MODEL_NOT_MODELED,
     TRADABILITY_MODEL_ENTRY_EXIT,
     TRADABILITY_MODEL_HOLDING_PERIOD,

@@ -1,8 +1,8 @@
-# 通用选股策略 Skill
+# A-Share Selection Strategy
 
-面向 AI Agent 的通用选股策略 Skill。它把候选筛选拆成可验证流程：数据契约校验、因子计算、硬过滤、排序、诊断和汇报。
+面向 AI Agent 的 A 股选股策略 Skill。它把候选筛选拆成可验证流程：数据契约校验、因子计算、硬过滤、排序、诊断和汇报。
 
-本仓库默认处理已经落地的本地 CSV 或 Parquet 数据。联网取数只作为显式入口，必须先写成本地文件和 metadata，再进入同一套校验、评分和汇报流程。
+本仓库默认处理已经落地的本地 CSV 或 Parquet 数据，A 股是默认工作流。联网取数只作为显式入口，必须先写成本地文件和 metadata，再进入同一套校验、评分和汇报流程。
 
 ## 目录结构
 
@@ -10,7 +10,7 @@ Skill 按标准外层容器存放：
 
 ```text
 skills/
-  stock-selection-strategy/
+  a-share-selection-strategy/
     SKILL.md
     agents/openai.yaml
     evals/evals.json
@@ -19,64 +19,64 @@ skills/
     scripts/
 ```
 
-仓库根目录只保留项目说明、约束、CI 和测试。脚本稳定入口都在 `skills/stock-selection-strategy/scripts/`。
+仓库根目录只保留项目说明、约束、CI 和测试。脚本稳定入口都在 `skills/a-share-selection-strategy/scripts/`。
 
 ## 从哪里开始
 
 | 目标 | 入口 |
 | --- | --- |
-| AI Agent 接手任务 | [skills/stock-selection-strategy/SKILL.md](skills/stock-selection-strategy/SKILL.md) |
+| AI Agent 接手任务 | [skills/a-share-selection-strategy/SKILL.md](skills/a-share-selection-strategy/SKILL.md) |
 | 仓库执行约束 | [AGENTS.md](AGENTS.md) |
-| 完整命令 cookbook | [skills/stock-selection-strategy/references/runbook.md](skills/stock-selection-strategy/references/runbook.md) |
-| 文档索引和历史报告 | [skills/stock-selection-strategy/references/index.md](skills/stock-selection-strategy/references/index.md) |
-| 因子、字段、输出口径 | [skills/stock-selection-strategy/references/factor-framework.md](skills/stock-selection-strategy/references/factor-framework.md) |
-| 预测列消费边界 | [skills/stock-selection-strategy/references/prediction-derived-profile.md](skills/stock-selection-strategy/references/prediction-derived-profile.md) |
-| 汇报模板 | [skills/stock-selection-strategy/references/output-templates.md](skills/stock-selection-strategy/references/output-templates.md) |
+| 完整命令 cookbook | [skills/a-share-selection-strategy/references/runbook.md](skills/a-share-selection-strategy/references/runbook.md) |
+| 文档索引和历史报告 | [skills/a-share-selection-strategy/references/index.md](skills/a-share-selection-strategy/references/index.md) |
+| 因子、字段、输出口径 | [skills/a-share-selection-strategy/references/factor-framework.md](skills/a-share-selection-strategy/references/factor-framework.md) |
+| 预测列消费边界 | [skills/a-share-selection-strategy/references/prediction-derived-profile.md](skills/a-share-selection-strategy/references/prediction-derived-profile.md) |
+| 汇报模板 | [skills/a-share-selection-strategy/references/output-templates.md](skills/a-share-selection-strategy/references/output-templates.md) |
 
 ## 核心入口
 
 | 能力 | CLI |
 | --- | --- |
-| 行情契约校验 | `skills/stock-selection-strategy/scripts/validate_ohlcv.py` |
-| 候选评分 | `skills/stock-selection-strategy/scripts/score_candidates.py` |
-| 今日 A 股总控 | `skills/stock-selection-strategy/scripts/run_today_a_share_selection.py` |
-| 本地 demo 数据 | `skills/stock-selection-strategy/scripts/create_demo_data.py` |
-| 低价超短剖面 | `skills/stock-selection-strategy/scripts/ultra_short_low_price_config.json` |
-| 预测列消费剖面 | `skills/stock-selection-strategy/scripts/prediction_profile_config.json` |
+| 行情契约校验 | `skills/a-share-selection-strategy/scripts/validate_ohlcv.py` |
+| 候选评分 | `skills/a-share-selection-strategy/scripts/score_candidates.py` |
+| 今日 A 股总控 | `skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py` |
+| 本地 demo 数据 | `skills/a-share-selection-strategy/scripts/create_demo_data.py` |
+| 低价超短剖面 | `skills/a-share-selection-strategy/scripts/ultra_short_low_price_config.json` |
+| 预测列消费剖面 | `skills/a-share-selection-strategy/scripts/prediction_profile_config.json` |
 
-脚本以 CLI 为稳定入口。Python 复用时需自行将 `skills/stock-selection-strategy/scripts/` 加入 `PYTHONPATH` 或 `sys.path`。
+脚本以 CLI 为稳定入口。Python 复用时需自行将 `skills/a-share-selection-strategy/scripts/` 加入 `PYTHONPATH` 或 `sys.path`。
 
 ## 快速 demo
 
 以下命令使用合成 demo 数据，只验证本地链路，不证明真实行情、真实预测、真实回测或收益。
 
 ```bash
-python3 skills/stock-selection-strategy/scripts/create_demo_data.py --output /tmp/stock-selection-demo
+python3 skills/a-share-selection-strategy/scripts/create_demo_data.py --output /tmp/a-share-selection-demo
 
-uv run --with pandas --with numpy python skills/stock-selection-strategy/scripts/validate_ohlcv.py \
-  --input /tmp/stock-selection-demo/prices.csv
+uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/validate_ohlcv.py \
+  --input /tmp/a-share-selection-demo/prices.csv
 
-uv run --with pandas --with numpy python skills/stock-selection-strategy/scripts/score_candidates.py \
-  --input /tmp/stock-selection-demo/prices.csv \
-  --config skills/stock-selection-strategy/scripts/example_config.json \
-  --output /tmp/stock-selection-demo/candidates.csv
+uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/score_candidates.py \
+  --input /tmp/a-share-selection-demo/prices.csv \
+  --config skills/a-share-selection-strategy/scripts/example_config.json \
+  --output /tmp/a-share-selection-demo/candidates.csv
 ```
 
 低价超短总控 demo：
 
 ```bash
-python3 skills/stock-selection-strategy/scripts/create_demo_data.py \
-  --output /tmp/stock-selection-low-price-demo \
+python3 skills/a-share-selection-strategy/scripts/create_demo_data.py \
+  --output /tmp/a-share-selection-low-price-demo \
   --days 160 \
   --scenario low-price-ultra-short
 
-uv run --with pandas --with numpy python skills/stock-selection-strategy/scripts/run_today_a_share_selection.py \
-  --prices-input /tmp/stock-selection-low-price-demo/prices.csv \
-  --output-dir /tmp/stock-selection-low-price-demo/today \
+uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py \
+  --prices-input /tmp/a-share-selection-low-price-demo/prices.csv \
+  --output-dir /tmp/a-share-selection-low-price-demo/today \
   --mode auto
 ```
 
-更多 Parquet、联网取数、历史回测和门禁命令见 [runbook](skills/stock-selection-strategy/references/runbook.md)。
+更多 Parquet、联网取数、历史回测和门禁命令见 [runbook](skills/a-share-selection-strategy/references/runbook.md)。
 
 ## 数据契约
 
@@ -112,16 +112,16 @@ prediction-derived 输入必须包含：
 ## 验证
 
 ```bash
-python3 -m json.tool skills/stock-selection-strategy/evals/evals.json >/tmp/stock-selection-evals.json
-python3 -m json.tool skills/stock-selection-strategy/scripts/example_config.json >/tmp/stock-selection-example-config.json
-python3 -m json.tool skills/stock-selection-strategy/scripts/prediction_profile_config.json >/tmp/stock-selection-prediction-config.json
-python3 -m json.tool skills/stock-selection-strategy/scripts/ultra_short_low_price_config.json >/tmp/stock-selection-ultra-short-config.json
+python3 -m json.tool skills/a-share-selection-strategy/evals/evals.json >/tmp/a-share-selection-evals.json
+python3 -m json.tool skills/a-share-selection-strategy/scripts/example_config.json >/tmp/a-share-selection-example-config.json
+python3 -m json.tool skills/a-share-selection-strategy/scripts/prediction_profile_config.json >/tmp/a-share-selection-prediction-config.json
+python3 -m json.tool skills/a-share-selection-strategy/scripts/ultra_short_low_price_config.json >/tmp/a-share-selection-ultra-short-config.json
 uv run --with pyyaml python - <<'PY'
 import yaml
 from pathlib import Path
-assert yaml.safe_load(Path("skills/stock-selection-strategy/agents/openai.yaml").read_text())["interface"]["display_name"]
+assert yaml.safe_load(Path("skills/a-share-selection-strategy/agents/openai.yaml").read_text())["interface"]["display_name"]
 PY
-PYTHONPYCACHEPREFIX=/tmp/stock-selection-pycache python3 -m py_compile skills/stock-selection-strategy/scripts/*.py
+PYTHONPYCACHEPREFIX=/tmp/a-share-selection-pycache python3 -m py_compile skills/a-share-selection-strategy/scripts/*.py
 PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy --with pyarrow python -m unittest discover -s tests -v
 ```
 
@@ -129,7 +129,7 @@ Skill 结构校验器来自本机 skill-creator，不随本仓库发布：
 
 ```bash
 QUICK_VALIDATE=/path/to/skill-creator/scripts/quick_validate.py
-uv run --with pyyaml python "$QUICK_VALIDATE" skills/stock-selection-strategy
+uv run --with pyyaml python "$QUICK_VALIDATE" skills/a-share-selection-strategy
 ```
 
 ## 授权

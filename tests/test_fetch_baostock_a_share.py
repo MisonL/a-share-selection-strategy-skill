@@ -8,12 +8,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SKILL_ROOT = ROOT / "skills" / "a-share-selection-strategy"
 SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import fetch_baostock_a_share as fetcher  # noqa: E402
-from stock_selection_tradability import tradability_stats  # noqa: E402
+from a_share_selection_tradability import tradability_stats  # noqa: E402
 
 
 class FetchBaostockAShareTests(unittest.TestCase):

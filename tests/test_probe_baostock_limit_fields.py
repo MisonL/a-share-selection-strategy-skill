@@ -10,12 +10,12 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SKILL_ROOT = ROOT / "skills" / "a-share-selection-strategy"
 SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import probe_baostock_limit_fields as probe  # noqa: E402
-from stock_selection_model_contracts import LIMIT_RULES_MODEL_NOT_MODELED  # noqa: E402
+from a_share_selection_model_contracts import LIMIT_RULES_MODEL_NOT_MODELED  # noqa: E402
 
 
 class ProbeBaostockLimitFieldsTests(unittest.TestCase):

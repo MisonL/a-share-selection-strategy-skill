@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SKILL_ROOT = ROOT / "skills" / "a-share-selection-strategy"
 SCRIPTS = SKILL_ROOT / "scripts"
 
 CLI_HELP_ENTRIES = [
@@ -40,25 +40,25 @@ HELP_CONTRACT_EXCLUDED_HELPERS = [
     "run_today_a_share_selection_helpers.py",
     "run_today_a_share_selection_history.py",
     "run_today_a_share_selection_modes.py",
-    "stock_selection_backtest_rows.py",
-    "stock_selection_calendar_contract.py",
-    "stock_selection_candidate_fields.py",
-    "stock_selection_capital.py",
-    "stock_selection_config.py",
-    "stock_selection_disclosure.py",
-    "stock_selection_diagnostic_labels.py",
-    "stock_selection_data.py",
-    "stock_selection_diagnostics.py",
-    "stock_selection_metrics.py",
-    "stock_selection_model_contracts.py",
-    "stock_selection_output.py",
-    "stock_selection_profile.py",
-    "stock_selection_prepare.py",
-    "stock_selection_score_summary.py",
-    "stock_selection_symbols.py",
-    "stock_selection_spot.py",
-    "stock_selection_tradability.py",
-    "stock_selection_universe.py",
+    "a_share_selection_backtest_rows.py",
+    "a_share_selection_calendar_contract.py",
+    "a_share_selection_candidate_fields.py",
+    "a_share_selection_capital.py",
+    "a_share_selection_config.py",
+    "a_share_selection_disclosure.py",
+    "a_share_selection_diagnostic_labels.py",
+    "a_share_selection_data.py",
+    "a_share_selection_diagnostics.py",
+    "a_share_selection_metrics.py",
+    "a_share_selection_model_contracts.py",
+    "a_share_selection_output.py",
+    "a_share_selection_profile.py",
+    "a_share_selection_prepare.py",
+    "a_share_selection_score_summary.py",
+    "a_share_selection_symbols.py",
+    "a_share_selection_spot.py",
+    "a_share_selection_tradability.py",
+    "a_share_selection_universe.py",
     "walk_forward_allocation_checks.py",
     "walk_forward_artifact_checks.py",
     "walk_forward_metadata_checks.py",
@@ -95,5 +95,5 @@ class CliHelpContractClassificationTests(unittest.TestCase):
                 if result.returncode != 0:
                     self.assertRegex(
                         result.stderr,
-                        "ModuleNotFoundError|pandas|numpy|stock_selection_data",
+                        "ModuleNotFoundError|pandas|numpy|a_share_selection_data",
                     )

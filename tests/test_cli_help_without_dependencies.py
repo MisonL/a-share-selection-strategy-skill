@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SKILL_ROOT = ROOT / "skills" / "a-share-selection-strategy"
 SCRIPTS = SKILL_ROOT / "scripts"
 TESTS = ROOT / "tests"
 
@@ -37,7 +37,7 @@ def read_constant(module_path: Path, name: str) -> str:
     raise AssertionError(f"{name} string constant not found in {module_path}")
 
 
-CALENDAR_MODEL = read_constant(SKILL_ROOT / "scripts/stock_selection_calendar_contract.py", "CALENDAR_MODEL")
+CALENDAR_MODEL = read_constant(SKILL_ROOT / "scripts/a_share_selection_calendar_contract.py", "CALENDAR_MODEL")
 CLI_HELP_ENTRIES = load_cli_help_entries()
 FETCH_CORE_OPTIONS = frozenset(
     {

@@ -9,12 +9,12 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL_ROOT = ROOT / "skills" / "stock-selection-strategy"
+SKILL_ROOT = ROOT / "skills" / "a-share-selection-strategy"
 SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import run_baostock_walk_forward as runner  # noqa: E402
-from stock_selection_model_contracts import (  # noqa: E402
+from a_share_selection_model_contracts import (  # noqa: E402
     LIMIT_RULES_MODEL_NOT_MODELED,
     TRADABILITY_MODEL_HOLDING_PERIOD,
 )

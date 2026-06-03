@@ -14,6 +14,7 @@ class ModeResolution:
     mode: str
     decision: str
     reason: str
+    missing_prediction_column_groups: tuple[str, ...] = ()
 
 
 def resolve_mode(args: Any) -> ModeResolution:
@@ -34,7 +35,7 @@ def resolve_mode(args: Any) -> ModeResolution:
     missing = missing_prediction_column_groups(input_columns(Path(args.prices_input)))
     if missing:
         reason = "missing_prediction_columns:" + ",".join(missing)
-        return ModeResolution("generic", "auto_generic", reason)
+        return ModeResolution("generic", "auto_generic", reason, tuple(missing))
     return ModeResolution("prediction", "auto_prediction", "prediction_required_columns_present")
 
 

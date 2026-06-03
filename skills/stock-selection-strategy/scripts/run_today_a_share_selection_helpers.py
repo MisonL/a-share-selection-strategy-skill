@@ -20,6 +20,11 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "mode": manifest["mode"],
         "mode_decision": manifest.get("mode_decision", ""),
         "mode_decision_reason": manifest.get("mode_decision_reason", ""),
+        "missing_prediction_column_groups": manifest.get(
+            "missing_prediction_column_groups",
+            [],
+        ),
+        "missing_prediction_requirement": manifest.get("missing_prediction_requirement", ""),
         "prediction_mode": manifest["prediction_mode"],
         "consumes_prediction_columns": manifest.get("consumes_prediction_columns", False),
         "prediction_input_source": prediction_input_source(manifest),
@@ -37,8 +42,11 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "diagnostic_rows": tabular_row_count(diagnostics),
         "score": score_summary(manifest),
         "prices_output": str(prices),
+        "prices_output_written": prices.exists(),
         "candidates_output": str(candidates),
+        "candidates_output_written": candidates.exists(),
         "diagnostics_output": str(diagnostics),
+        "diagnostics_output_written": diagnostics.exists(),
         "boundary": boundary_for(manifest),
     }
 
@@ -164,7 +172,9 @@ def parse_score_stdout(stdout: str) -> dict[str, Any]:
         if line.startswith("OK: ") or line.startswith("ERROR_SUMMARY: "):
             parsed.update(parse_key_values(line.split(": ", 1)[1]))
         elif line.startswith("INFO: threshold_failures="):
-            parsed["threshold_failures"] = line.split("=", 1)[1]
+            counts_text = line.split("=", 1)[1]
+            parsed["threshold_failures"] = counts_text
+            parsed["threshold_failures_by_rule"] = parse_count_pairs(counts_text)
     return parsed
 
 
@@ -187,6 +197,19 @@ def parse_value(value: str) -> Any:
         return int(value)
     except ValueError:
         return value
+
+
+def parse_count_pairs(text: str) -> dict[str, int]:
+    counts = {}
+    for item in text.split(","):
+        if not item or ":" not in item:
+            continue
+        name, count = item.split(":", 1)
+        try:
+            counts[name] = int(count)
+        except ValueError:
+            continue
+    return counts
 
 
 def write_json(data: dict[str, Any], path: Path) -> None:

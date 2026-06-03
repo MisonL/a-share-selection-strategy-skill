@@ -104,6 +104,7 @@ prediction-derived 输入必须包含：
 - 不得伪造行情、候选股、LightGBM prediction、回测收益或联网结果。
 - `effective_empty_result=true` 表示成功运行但没有候选，不等于策略有效。
 - `output_written=false` 表示输入失败或严格门禁失败，不能写成成功 0 候选。
+- `summary.json` 中有输出路径不代表文件已生成；以 `prices_output_written`、`candidates_output_written`、`diagnostics_output_written` 为准。
 - `failed_symbols` 大于 0 时必须披露，即使其他候选已输出。
 - 中文展示字段只能从机器字段派生，不能反向覆盖机器事实。
 - 真实行情接入、真实 prediction 生成、真实策略回测是外部门禁，不能用本地 smoke test 代替。

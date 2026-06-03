@@ -41,7 +41,8 @@
 ## 无法直接选股
 - 缺少本地行情文件或明确数据源，不能生成候选股。
 - 不能提供示例候选名单，也不能用常识、记忆行情或热门股补全名单和理由。
-- 需要补充：市场、周期、时间范围、目标风格、CSV/Parquet 路径或联网取数授权。
+- 已提供的市场、周期或目标风格可以保留；仍缺少 CSV/Parquet 路径或明确联网取数授权时不能继续。
+- 如市场、周期、时间范围或目标风格也未提供，需要一并补充。
 - 本地行情最小字段：`symbol`、`date`、`open`、`high`、`low`、`close`、`volume`。
 - 可验证后再执行：先校验数据，再评分和解释结果。
 ```
@@ -124,6 +125,7 @@
 - `fetch_yfinance_ohlcv.py --market` 只把标签写入 CSV 和 metadata，不校验 symbol 所属市场、交易所或交易日历。
 - metadata 中 `source=yfinance`、`market=A-share` 和基础 `validate_ohlcv.py` 通过，不能写成 A 股数据源或 A 股交易日历门禁通过。
 - 如果 symbol 仍是 `AAPL` 这类非六位代码，prediction-derived A 股 profile 应按 symbol 格式门禁显式失败。
+- 常见错误文本是 `prediction-derived A-share symbols must be six digits` 和 `market labels do not prove A-share source or calendar`。
 - 报告时必须披露真实数据源、requested symbols、market 标签来源，以及 prediction-derived profile 校验结果。
 ```
 
@@ -408,6 +410,7 @@
 ```markdown
 ## 无法按 prediction-derived 原口径评分
 - 输入缺少 `prediction` 或 `prediction_score`，不能生成 prediction-derived 候选股。
+- 常见错误文本是 `prediction-derived profile requires prediction or prediction_score column`。
 - `prediction` 是上游 LightGBM 概率，不得用动量分、固定 `0.5`、mock 值或技术指标近似冒充。
 - 当前可做：
   - 先提供或生成可追溯的上游 `prediction_score`，再运行 prediction-derived 评分。

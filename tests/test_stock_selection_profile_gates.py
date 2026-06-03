@@ -78,6 +78,29 @@ class StockSelectionProfileGateTests(unittest.TestCase):
                 )
         self.assertEqual(1, code)
         self.assertIn("prediction or prediction_score", stderr.getvalue())
+        self.assertIn("instead of substituting technical indicators", stderr.getvalue())
+
+    def test_validate_cli_rejects_yfinance_market_label_as_ashare_proof(self) -> None:
+        frame = build_frame(include_prediction=True, include_turn=True)
+        frame["symbol"] = "AAPL"
+        frame["market"] = "A-share"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            frame.to_csv(input_path, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = validate_ohlcv.main(
+                    [
+                        "--input",
+                        str(input_path),
+                        "--config",
+                        str(SCRIPTS / "prediction_profile_config.json"),
+                    ]
+                )
+        self.assertEqual(1, code)
+        self.assertIn("symbols must be six digits", stderr.getvalue())
+        self.assertIn("market labels do not prove A-share source", stderr.getvalue())
 
     def test_validate_cli_with_prediction_config_rejects_market_alias(self) -> None:
         frame = build_frame(include_prediction=True, include_turn=True)

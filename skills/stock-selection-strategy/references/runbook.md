@@ -91,7 +91,7 @@ uv run --with pandas --with numpy python skills/stock-selection-strategy/scripts
 
 检查：
 
-- `summary.json`: `requested_mode`、`mode`、`mode_decision`、`mode_decision_reason`、`prediction_input_source`、`prediction_model_executed_by_runner`、`candidate_rows`、`diagnostic_rows`。
+- `summary.json`: `requested_mode`、`mode`、`mode_decision`、`mode_decision_reason`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`prediction_input_source`、`prediction_model_executed_by_runner`、`candidate_rows`、`diagnostic_rows`、`candidates_output_written`、`diagnostics_output_written`。
 - `diagnostics.csv`: `failed_thresholds`、`failed_thresholds_zh`、`selection_status`、`short_reason`。
 - 价格、成交额、换手率、ST、停牌和一字板失败项只代表 demo 覆盖，不代表真实今日 A 股扫描。
 

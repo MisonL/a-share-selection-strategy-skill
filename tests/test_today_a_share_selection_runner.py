@@ -51,6 +51,11 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual("generic", manifest["mode"])
         self.assertEqual("auto_generic", manifest["mode_decision"])
         self.assertIn("missing_prediction_columns:prediction", manifest["mode_decision_reason"])
+        self.assertEqual(["prediction"], manifest["missing_prediction_column_groups"])
+        self.assertEqual(
+            "prediction_or_prediction_score",
+            manifest["missing_prediction_requirement"],
+        )
         self.assertTrue(manifest["lightgbm_not_used"])
         self.assertFalse(manifest["lightgbm_executed_by_runner"])
         self.assertFalse(manifest["consumes_prediction_columns"])
@@ -62,6 +67,11 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual("generic", summary["mode"])
         self.assertEqual("auto_generic", summary["mode_decision"])
         self.assertIn("missing_prediction_columns:prediction", summary["mode_decision_reason"])
+        self.assertEqual(["prediction"], summary["missing_prediction_column_groups"])
+        self.assertEqual(
+            "prediction_or_prediction_score",
+            summary["missing_prediction_requirement"],
+        )
         self.assertFalse(summary["lightgbm_executed_by_runner"])
         self.assertFalse(summary["consumes_prediction_columns"])
         self.assertEqual("not_used", summary["prediction_input_source"])
@@ -77,8 +87,11 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(2, summary["candidate_rows"])
         self.assertEqual(2, summary["diagnostic_rows"])
         self.assertTrue(summary["prices_output"].endswith("prices.csv"))
+        self.assertTrue(summary["prices_output_written"])
         self.assertTrue(summary["candidates_output"].endswith("candidates.csv"))
+        self.assertTrue(summary["candidates_output_written"])
         self.assertTrue(summary["diagnostics_output"].endswith("diagnostics.csv"))
+        self.assertTrue(summary["diagnostics_output_written"])
 
     def test_prediction_runner_fails_without_prediction_and_keeps_manifest(self) -> None:
         frame = build_frame(
@@ -108,10 +121,13 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
         self.assertEqual(3, code)
         self.assertIn("step=validate", stderr)
+        self.assertIn("prediction-derived profile requires prediction", stderr)
         self.assertEqual(["validate"], [step["step"] for step in manifest["steps"]])
         self.assertEqual(["validate"], summary["failed_steps"])
         self.assertEqual("failed", summary["status"])
         self.assertTrue(manifest["prediction_mode"])
+        self.assertFalse(summary["candidates_output_written"])
+        self.assertFalse(summary["diagnostics_output_written"])
 
     def test_auto_runner_uses_prediction_when_prediction_columns_exist(self) -> None:
         frame = build_frame(include_prediction=True, include_turn=True)

@@ -16,7 +16,11 @@ def profile_column_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list[s
     if config.get("universe", {}).get("market") and "market" not in frame.columns:
         errors.append("prediction-derived profile requires market column")
     if not any(column in frame.columns for column in ["prediction", "prediction_score"]):
-        errors.append("prediction-derived profile requires prediction or prediction_score column")
+        errors.append(
+            "prediction-derived profile requires prediction or prediction_score column; "
+            "provide an external prediction input instead of substituting technical "
+            "indicators or fixed values"
+        )
     if not any(column in frame.columns for column in ["turn", "turnover"]):
         errors.append("prediction-derived profile requires turn or turnover column")
     return errors
@@ -59,7 +63,8 @@ def prediction_value_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list
         if invalid_count:
             errors.append(
                 "prediction-derived A-share symbols must be six digits; "
-                f"invalid_symbols={invalid_count}"
+                f"invalid_symbols={invalid_count}; market labels do not prove "
+                "A-share source or calendar"
             )
     prediction_frame = market_frame if not market_frame.empty else frame
     prediction_error = prediction_value_error(prediction_frame)

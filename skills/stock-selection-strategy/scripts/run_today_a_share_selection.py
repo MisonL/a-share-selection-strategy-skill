@@ -66,7 +66,8 @@ def main(argv: list[str] | None = None) -> int:
         write_json(summary_view(manifest, "failed"), output / "summary.json")
         print(
             f"ERROR: strict gate failed; step={exc.step} returncode={exc.returncode} "
-            f"output_written=true manifest={manifest_path}",
+            f"output_written=true manifest={manifest_path} "
+            f"step_stderr={exc.stderr_first_line}",
             file=sys.stderr,
         )
         return 3
@@ -130,10 +131,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 class StepFailure(RuntimeError):
-    def __init__(self, step: str, returncode: int) -> None:
+    def __init__(self, step: str, returncode: int, stderr: str = "") -> None:
         super().__init__(f"{step} failed with returncode {returncode}")
         self.step = step
         self.returncode = returncode
+        self.stderr_first_line = first_error_line(stderr)
 
 
 def run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -212,6 +214,10 @@ def apply_mode_resolution(context: RunContext, resolution: ModeResolution) -> No
             "mode": resolution.mode,
             "mode_decision": resolution.decision,
             "mode_decision_reason": resolution.reason,
+            "missing_prediction_column_groups": list(
+                resolution.missing_prediction_column_groups
+            ),
+            "missing_prediction_requirement": missing_prediction_requirement(resolution),
             "config_path": str(Path(context.args.output_dir) / config.name),
             "prediction_mode": consumes_prediction,
             "consumes_prediction_columns": consumes_prediction,
@@ -241,7 +247,7 @@ def run_step(context: RunContext, step: Step) -> None:
     context.manifest["steps"].append(step_record(step, result))
     write_json(context.manifest, context.manifest_path)
     if result.returncode != 0:
-        raise StepFailure(step.name, result.returncode)
+        raise StepFailure(step.name, result.returncode, result.stderr)
 
 
 def step_record(step: Step, result: subprocess.CompletedProcess[str]) -> dict[str, Any]:
@@ -253,6 +259,21 @@ def step_record(step: Step, result: subprocess.CompletedProcess[str]) -> dict[st
         "stdout": result.stdout,
         "stderr": result.stderr,
     }
+
+
+def first_error_line(text: str) -> str:
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped:
+            return stripped
+    return ""
+
+
+def missing_prediction_requirement(resolution: ModeResolution) -> str:
+    missing = set(resolution.missing_prediction_column_groups)
+    if "prediction" not in missing:
+        return ""
+    return "prediction_or_prediction_score"
 
 
 if __name__ == "__main__":

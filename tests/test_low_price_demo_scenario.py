@@ -125,6 +125,17 @@ class LowPriceDemoScenarioTests(unittest.TestCase):
         self.assertEqual(7, summary["diagnostic_rows"])
         self.assertEqual(7, len(diagnostics))
         self.assertIn("threshold_failures", summary["score"])
+        self.assertEqual(
+            {
+                "exclude_one_word_bar": 1,
+                "exclude_st": 1,
+                "max_close": 1,
+                "min_amount": 1,
+                "min_turn": 1,
+                "require_tradestatus": 1,
+            },
+            summary["score"]["threshold_failures_by_rule"],
+        )
 
 
 def failure_map(diagnostics: pd.DataFrame) -> dict[str, set[str]]:

@@ -39,8 +39,8 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 
 | 用户意图 | 首选动作 | 不能声称 |
 |----------|----------|----------|
-| 只说“帮我选股”但无数据源 | 用“无法直接选股”模板，要求本地行情文件或联网授权 | 不能给示例候选名单 |
-| 要“今日 A 股”“10 元以内超短” | 优先 `run_today_a_share_selection.py --mode auto` | generic 结果不能写成 prediction-derived/LightGBM |
+| 只说“帮我选股”“今日 A 股”或“短线一点”，但无数据源 | 用“无法直接选股”模板，要求本地行情文件或联网授权 | 不能给示例候选名单 |
+| 要“今日 A 股”“10 元以内超短”，且已有本地行情或明确联网授权 | 优先 `run_today_a_share_selection.py --mode auto` | generic 结果不能写成 prediction-derived/LightGBM |
 | 要 prediction-derived 且已有预测列 | `validate_ohlcv.py --config prediction_profile_config.json` 后评分 | 评分通过不证明预测源真实 |
 | 要 prediction-derived 但缺 `prediction_score` | `--mode prediction` 应显式失败，或先跑真实预测生成器 | 不能用技术指标替代 prediction |
 | 要离线 demo 全链路 | 读 `references/runbook.md` 的本地 demo 和单信号日定位链路 | demo 不能写成真实收益 |
@@ -51,7 +51,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 
 1. 没有本地行情文件，也没有明确联网授权时，停止并使用“无法直接选股”模板。
 2. 有本地行情文件时，先运行 `validate_ohlcv.py`；缺字段或重复日期要显式失败。
-3. 用户要求“今日 A 股”“10 元以内超短”时，优先走 `run_today_a_share_selection.py --mode auto`。
+3. 用户要求“今日 A 股”“10 元以内超短”时，只有在已有本地行情文件或明确联网授权后，才优先走 `run_today_a_share_selection.py --mode auto`。
 4. 用户坚持 prediction-derived 口径时，必须要求 `market=A-share`、`prediction` 或 `prediction_score`、`turn` 或 `turnover`；缺字段时使用 `--mode prediction` 暴露失败。
 5. 用户接受通用技术评分时，使用 `skills/stock-selection-strategy/scripts/example_config.json` 或 `skills/stock-selection-strategy/scripts/ultra_short_low_price_config.json`；报告必须写明不是 prediction-derived 或模型预测结果。
 6. 任何联网取数结果都先落地为本地 CSV/Parquet 和 metadata，再校验、评分和解释。
@@ -163,6 +163,7 @@ uv run --with pandas --with numpy python skills/stock-selection-strategy/scripts
 
 - `prices.csv` 不含 `prediction_score`，`--mode auto` 应选择 `mode=generic`、`mode_decision=auto_generic`、`consumes_prediction_columns=false`、`prediction_input_source=not_used`、`prediction_model_executed_by_runner=false`、`lightgbm_not_used=true`、`lightgbm_output_source=not_used`、`lightgbm_executed_by_runner=false`。
 - `summary.json` 顶层的 `candidate_rows`、`diagnostic_rows` 和 `prices_rows` 是输出文件行数；嵌套 `score.candidates` 来自 `score_candidates.py` stdout 摘要。
+- `summary.json` 的 `*_output_written` 字段表示对应输出文件是否真实存在；失败 run 中有输出路径不等于候选或诊断文件已生成。
 - `run_manifest.json.steps[]` 使用字段 `step`、`command`、`returncode`、`allowed_returncodes`、`stdout` 和 `stderr`。
 - 该样本只用于验证低价、成交额、换手率、ST、停牌和一字板诊断，不代表真实今日 A 股扫描。
 
@@ -248,13 +249,13 @@ uv run --with pandas --with numpy --with baostock python skills/stock-selection-
 | 文件 | 检查字段 |
 | --- | --- |
 | `run_manifest.json` | 每一步命令、退出码、stdout/stderr、允许退出码 |
-| `summary.json` | `requested_mode`、`mode`、`mode_decision`、`prediction_mode`、`consumes_prediction_columns`、`prediction_input_source`、`prediction_model_executed_by_runner`、`source_scope`、`prices_rows`、`candidate_rows`、`diagnostic_rows`、`spot_rows`、失败步骤 |
+| `summary.json` | `requested_mode`、`mode`、`mode_decision`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`prediction_mode`、`consumes_prediction_columns`、`prediction_input_source`、`prediction_model_executed_by_runner`、`source_scope`、`prices_rows`、`candidate_rows`、`diagnostic_rows`、`spot_rows`、`*_output_written`、失败步骤 |
 | `diagnostics.csv` | 机器字段 `failed_thresholds`，展示字段 `failed_thresholds_zh`、`selection_status`、`short_reason` |
 | `spot_metadata` | `partial_result`、`failed_pages`、`retry_attempts_per_page`、`allowed_failure_actions` |
 
 `lightgbm_not_used`、`lightgbm_output_source`、`lightgbm_executed_by_runner` 是旧产物兼容字段；报告时优先引用中性的 prediction 字段。
 
-如果用户坚持 prediction-derived 口径，使用 `--mode prediction`。缺少 `prediction` 或 `prediction_score` 时，入口应在 validate 阶段失败并写出 manifest；不得自动改走通用评分。只有 `--mode auto` 或用户明确接受非 prediction-derived 结果时，才可进入 generic 技术评分。
+如果用户坚持 prediction-derived 口径，使用 `--mode prediction`。缺少 `prediction` 或 `prediction_score` 时，入口应在 validate 阶段失败并写出 manifest；stderr 会带出失败步骤的首行错误，summary 中 `candidates_output_written=false` 和 `diagnostics_output_written=false` 表示没有生成候选或诊断文件。不得自动改走通用评分。只有 `--mode auto` 或用户明确接受非 prediction-derived 结果时，才可进入 generic 技术评分。
 
 ## prediction-derived 默认剖面
 

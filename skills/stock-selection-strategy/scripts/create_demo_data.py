@@ -71,7 +71,12 @@ def main(argv: list[str] | None = None) -> int:
         days=args.days,
         scenario=args.scenario,
     )
-    print(f"OK: wrote demo data to {output}")
+    print(
+        f"OK: wrote demo data to {output} "
+        "prices=prices.csv "
+        "synthetic_prediction_input=prices_with_prediction.csv "
+        "synthetic_prediction_proves_real_model=false"
+    )
     return 0
 
 

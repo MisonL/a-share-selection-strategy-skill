@@ -20,7 +20,9 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "mode_decision": manifest.get("mode_decision", ""),
         "mode_decision_reason": manifest.get("mode_decision_reason", ""),
         "prediction_mode": manifest["prediction_mode"],
+        "consumes_prediction_columns": manifest.get("consumes_prediction_columns", False),
         "lightgbm_not_used": manifest["lightgbm_not_used"],
+        "lightgbm_output_source": manifest.get("lightgbm_output_source", "unknown"),
         "lightgbm_executed_by_runner": manifest.get("lightgbm_executed_by_runner", False),
         "source_scope": manifest["source_scope"],
         "steps": len(manifest["steps"]),
@@ -112,11 +114,13 @@ def boundary_for(manifest: dict[str, Any]) -> str:
     if manifest["prediction_mode"]:
         return (
             "prediction-derived mode requires external prediction or prediction_score in the input. "
-            "The runner does not execute LightGBM. "
+            "The runner consumes prediction columns from input and does not execute LightGBM. "
+            f"lightgbm_output_source={manifest.get('lightgbm_output_source', 'unknown')} "
             f"lightgbm_executed_by_runner=false mode_decision={decision} reason={reason}"
         )
     return (
         "Generic technical mode; not prediction-derived and not LightGBM-backed. "
+        f"consumes_prediction_columns={str(manifest.get('consumes_prediction_columns', False)).lower()} "
         f"lightgbm_executed_by_runner=false mode_decision={decision} reason={reason}"
     )
 
@@ -169,7 +173,9 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
         "OK: runner=run_today_a_share_selection "
         f"mode={manifest['mode']} steps={len(manifest['steps'])} "
         f"prediction_mode={str(manifest['prediction_mode']).lower()} "
+        f"consumes_prediction_columns={str(manifest.get('consumes_prediction_columns', False)).lower()} "
         f"lightgbm_not_used={str(manifest['lightgbm_not_used']).lower()} "
+        f"lightgbm_output_source={manifest.get('lightgbm_output_source', 'unknown')} "
         "lightgbm_executed_by_runner=false "
         f"manifest={output / 'run_manifest.json'} summary={output / 'summary.json'}"
     )

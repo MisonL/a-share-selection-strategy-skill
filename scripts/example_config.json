@@ -35,6 +35,12 @@
     "min_close": 3.0,
     "min_history_rows": 120
   },
+  "disclosure": {
+    "prediction_policy": "not_used",
+    "prediction_mode": false,
+    "lightgbm_not_used": true,
+    "risk_note": "通用示例配置只表达技术因子评分，不使用 prediction-derived 输入，不证明真实成交、收益或 LightGBM 质量。"
+  },
   "output": {
     "max_candidates": 50
   }

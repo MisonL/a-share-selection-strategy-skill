@@ -206,14 +206,17 @@ def run_spot_path(args: argparse.Namespace) -> Path | None:
 def apply_mode_resolution(context: RunContext, resolution: ModeResolution) -> None:
     context.args.resolved_mode = resolution.mode
     config = selected_config(context.args)
+    consumes_prediction = resolution.mode == "prediction"
     context.manifest.update(
         {
             "mode": resolution.mode,
             "mode_decision": resolution.decision,
             "mode_decision_reason": resolution.reason,
             "config_path": str(Path(context.args.output_dir) / config.name),
-            "prediction_mode": resolution.mode == "prediction",
-            "lightgbm_not_used": resolution.mode != "prediction",
+            "prediction_mode": consumes_prediction,
+            "consumes_prediction_columns": consumes_prediction,
+            "lightgbm_not_used": not consumes_prediction,
+            "lightgbm_output_source": "external_input" if consumes_prediction else "not_used",
             "lightgbm_executed_by_runner": False,
             "source_scope": source_scope(context.args),
         }

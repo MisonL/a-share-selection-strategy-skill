@@ -94,7 +94,7 @@ uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py 
 
 检查重点：
 
-- `summary.json` 中 `requested_mode=auto`、`mode=generic`、`mode_decision=auto_generic`、`lightgbm_not_used=true`、`lightgbm_executed_by_runner=false`、`prices_rows=1120`、`candidate_rows=1`、`diagnostic_rows=7`。
+- `summary.json` 中 `requested_mode=auto`、`mode=generic`、`mode_decision=auto_generic`、`consumes_prediction_columns=false`、`lightgbm_not_used=true`、`lightgbm_output_source=not_used`、`lightgbm_executed_by_runner=false`、`prices_rows=1120`、`candidate_rows=1`、`diagnostic_rows=7`。
 - `diagnostics.csv` 中的 `failed_thresholds`、`failed_thresholds_zh`、`selection_status`、`short_reason`。
 - 价格、成交额、换手率、ST、停牌和一字板失败项只能解释为本地 demo 诊断覆盖，不能写成真实可交易性或全市场结论。
 
@@ -323,7 +323,7 @@ uv run --with pandas --with numpy python scripts/score_candidates.py \
 
 如果 `candidates=0` 且 `effective_empty_result=true`，这表示脚本成功运行但没有标的通过当前阈值；不要写成“产生候选股”。用 `score_diagnostics.csv` 查看每个已评分 symbol 的 `failed_thresholds`。如果 metadata 中 `fallback_errors` 非空，必须说明主接口失败且已使用 fallback provider；fallback 成功不等于主接口稳定可用。akshare 输出可满足通用 OHLCV 和 `turn` 口径，但仍不生成真实 `prediction/prediction_score`，不能直接解释成 prediction-derived 或 LightGBM 链路通过。
 
-本地已落地行情可以使用今日选股总控 CLI 串联校验、评分和诊断。默认 `--mode auto` 会先检查输入是否包含 prediction-derived 必需列；缺少 `prediction` 或 `prediction_score` 时，会显式选择 generic 低价超短剖面，并在 `run_manifest.json` 记录 `requested_mode`、实际 `mode`、`mode_decision` 和 `mode_decision_reason`。若输入包含 prediction-derived 必需列，auto 会使用外部 prediction 评分，但 `lightgbm_executed_by_runner=false` 仍表示总控 CLI 没有训练或执行 LightGBM。它不是静默降级，也不生成 LightGBM prediction：
+本地已落地行情可以使用今日选股总控 CLI 串联校验、评分和诊断。默认 `--mode auto` 会先检查输入是否包含 prediction-derived 必需列；缺少 `prediction` 或 `prediction_score` 时，会显式选择 generic 低价超短剖面，并在 `run_manifest.json` 记录 `requested_mode`、实际 `mode`、`mode_decision` 和 `mode_decision_reason`。若输入包含 prediction-derived 必需列，auto 会使用外部 prediction 评分，但 `consumes_prediction_columns=true`、`lightgbm_output_source=external_input`、`lightgbm_executed_by_runner=false` 仍表示总控 CLI 只消费输入预测列，没有训练或执行 LightGBM。它不是静默降级，也不生成 LightGBM prediction：
 
 ```bash
 uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py \

@@ -26,7 +26,10 @@ def resolve_mode(args: Any) -> ModeResolution:
         return ModeResolution(
             "generic",
             "auto_generic",
-            "history_fetch_inputs_do_not_include_prediction",
+            (
+                "history_fetch_inputs_do_not_include_prediction;"
+                "use_mode_prediction_with_external_prediction_columns_for_prediction_scoring"
+            ),
         )
     missing = missing_prediction_column_groups(input_columns(Path(args.prices_input)))
     if missing:

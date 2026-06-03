@@ -55,6 +55,12 @@
     "high_signal_min": 0.8,
     "medium_signal_min": 0.6
   },
+  "disclosure": {
+    "prediction_policy": "external_required",
+    "prediction_mode": true,
+    "lightgbm_not_used": false,
+    "risk_note": "prediction-derived 剖面消费外部 prediction 或 prediction_score；评分脚本和今日 runner 不训练或验证 LightGBM，也不证明真实收益、可交易性或模型泛化质量。"
+  },
   "output": {
     "max_candidates": 50
   }

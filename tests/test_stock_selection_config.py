@@ -49,6 +49,32 @@ class StockSelectionConfigTests(unittest.TestCase):
         self.assertTrue(config["thresholds"]["exclude_one_word_bar"])
         self.assertTrue(config["disclosure"]["lightgbm_not_used"])
 
+    def test_core_configs_carry_disclosure_boundaries(self) -> None:
+        expected = {
+            "example_config.json": {
+                "prediction_policy": "not_used",
+                "prediction_mode": False,
+                "lightgbm_not_used": True,
+            },
+            "prediction_profile_config.json": {
+                "prediction_policy": "external_required",
+                "prediction_mode": True,
+                "lightgbm_not_used": False,
+            },
+            "ultra_short_low_price_config.json": {
+                "prediction_policy": "not_used",
+                "prediction_mode": False,
+                "lightgbm_not_used": True,
+            },
+        }
+        for name, fields in expected.items():
+            with self.subTest(name=name):
+                config = stock_selection_config.load_config(SCRIPTS / name)
+                disclosure = config["disclosure"]
+                for key, value in fields.items():
+                    self.assertEqual(value, disclosure[key])
+                self.assertIn("risk_note", disclosure)
+
     def test_openai_agent_manifest_has_required_interface_fields(self) -> None:
         text = (ROOT / "agents/openai.yaml").read_text(encoding="utf-8")
         self.assertIn('display_name: "Stock Selection Strategy"', text)

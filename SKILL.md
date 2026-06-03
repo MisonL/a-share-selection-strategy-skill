@@ -126,7 +126,7 @@ uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py 
 
 预期口径：
 
-- `prices.csv` 不含 `prediction_score`，`--mode auto` 应选择 `mode=generic`、`mode_decision=auto_generic`、`lightgbm_not_used=true`、`lightgbm_executed_by_runner=false`。
+- `prices.csv` 不含 `prediction_score`，`--mode auto` 应选择 `mode=generic`、`mode_decision=auto_generic`、`consumes_prediction_columns=false`、`lightgbm_not_used=true`、`lightgbm_output_source=not_used`、`lightgbm_executed_by_runner=false`。
 - `summary.json` 顶层的 `candidate_rows`、`diagnostic_rows` 和 `prices_rows` 是输出文件行数；嵌套 `score.candidates` 来自 `score_candidates.py` stdout 摘要。
 - `run_manifest.json.steps[]` 使用字段 `step`、`command`、`returncode`、`allowed_returncodes`、`stdout` 和 `stderr`。
 - 该样本只用于验证低价、成交额、换手率、ST、停牌和一字板诊断，不代表真实今日 A 股扫描。
@@ -162,7 +162,7 @@ uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py 
 
 ## 今日选股入口
 
-当用户要求“今日选股”“10 元以内超短爆发”时，优先使用 `run_today_a_share_selection.py --mode auto`。如果本地行情文件缺少 prediction-derived 必需列，auto 会显式选择 generic 低价超短剖面，并在 manifest 记录 `requested_mode`、实际 `mode`、`mode_decision` 和 `mode_decision_reason`；这不是静默降级。若输入包含 prediction-derived 必需列，auto 会走 prediction-derived 外部 prediction 评分，但 `lightgbm_executed_by_runner=false` 仍表示本 runner 没有训练或执行 LightGBM。该入口可合并本地或东方财富实时快照作为展示字段，也可显式调用仓库内 baostock/akshare 历史取数脚本，但不证明实时全市场扫描完成。
+当用户要求“今日选股”“10 元以内超短爆发”时，优先使用 `run_today_a_share_selection.py --mode auto`。如果本地行情文件缺少 prediction-derived 必需列，auto 会显式选择 generic 低价超短剖面，并在 manifest 记录 `requested_mode`、实际 `mode`、`mode_decision` 和 `mode_decision_reason`；这不是静默降级。若输入包含 prediction-derived 必需列，auto 会走 prediction-derived 外部 prediction 评分，但 `consumes_prediction_columns=true`、`lightgbm_output_source=external_input`、`lightgbm_executed_by_runner=false` 仍表示本 runner 只消费输入预测列，没有训练或执行 LightGBM。该入口可合并本地或东方财富实时快照作为展示字段，也可显式调用仓库内 baostock/akshare 历史取数脚本；历史抓取本身不会生成 prediction，若要 prediction-derived 口径必须显式提供外部预测列或使用 `--mode prediction` 暴露缺口，不证明实时全市场扫描完成。
 
 ```bash
 uv run --with pandas --with numpy python scripts/run_today_a_share_selection.py \
@@ -204,7 +204,7 @@ uv run --with pandas --with numpy --with baostock python scripts/run_today_a_sha
 输出检查重点：
 
 - `run_manifest.json`：每一步命令、退出码、stdout/stderr 和允许退出码。
-- `summary.json`：`requested_mode`、实际 `mode`、`mode_decision`、`prediction_mode`、`lightgbm_not_used`、`lightgbm_executed_by_runner`、`source_scope`、`prices_rows`、`candidate_rows`、`diagnostic_rows`、`spot_rows` 和失败步骤。
+- `summary.json`：`requested_mode`、实际 `mode`、`mode_decision`、`prediction_mode`、`consumes_prediction_columns`、`lightgbm_not_used`、`lightgbm_output_source`、`lightgbm_executed_by_runner`、`source_scope`、`prices_rows`、`candidate_rows`、`diagnostic_rows`、`spot_rows` 和失败步骤。
 - `diagnostics.csv`：保留机器字段 `failed_thresholds`，并附带展示层字段 `failed_thresholds_zh`、`selection_status`、`short_reason`。
 - `spot_metadata`：如果抓取实时快照，必须检查 `partial_result`、`failed_pages`、`retry_attempts_per_page` 和 `allowed_failure_actions`；允许动作包括重试、显式使用部分快照、换源并披露 scope，或在用户接受时复用已落地快照，不得静默改口径。
 

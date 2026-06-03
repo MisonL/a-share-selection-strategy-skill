@@ -477,7 +477,7 @@
 - 股票池过滤：
 - 因子和权重：
 - `requested_mode/mode/mode_decision`：
-- `prediction_mode/lightgbm_not_used/lightgbm_executed_by_runner`：
+- `prediction_mode/consumes_prediction_columns/lightgbm_not_used/lightgbm_output_source/lightgbm_executed_by_runner`：
 - `source_scope`：
 
 ## 候选结果

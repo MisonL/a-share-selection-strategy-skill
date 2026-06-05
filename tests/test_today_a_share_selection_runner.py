@@ -156,8 +156,14 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(["validate"], summary["failed_steps"])
         self.assertEqual("failed", summary["status"])
         self.assertTrue(manifest["prediction_mode"])
-        self.assertTrue(manifest["consumes_prediction_columns"])
+        self.assertFalse(manifest["consumes_prediction_columns"])
+        self.assertEqual("not_used", manifest["prediction_input_source"])
+        self.assertEqual("external_input", manifest["requested_prediction_input_source"])
+        self.assertEqual("not_used", manifest["lightgbm_output_source"])
+        self.assertEqual("external_input", manifest["requested_lightgbm_output_source"])
         self.assertFalse(summary["consumes_prediction_columns"])
+        self.assertEqual("not_used", summary["prediction_input_source"])
+        self.assertEqual("external_input", summary["requested_prediction_input_source"])
         self.assertEqual(["prediction"], manifest["missing_prediction_column_groups"])
         self.assertEqual(
             "prediction_or_prediction_score",
@@ -288,8 +294,10 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertFalse(manifest["lightgbm_executed_by_runner"])
         self.assertTrue(manifest["consumes_prediction_columns"])
         self.assertEqual("external_input", manifest["prediction_input_source"])
+        self.assertEqual("external_input", manifest["requested_prediction_input_source"])
         self.assertFalse(manifest["prediction_model_executed_by_runner"])
         self.assertEqual("external_input", manifest["lightgbm_output_source"])
+        self.assertEqual("external_input", manifest["requested_lightgbm_output_source"])
 
     def test_no_html_report_removes_stale_report_in_reused_output_dir(self) -> None:
         frame = build_frame(include_turn=True, include_tradability=True)

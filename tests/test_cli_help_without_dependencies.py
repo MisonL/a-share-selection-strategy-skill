@@ -227,6 +227,47 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 for option in expected_options:
                     self.assertIn(option, result.stdout)
 
+    def test_external_source_help_discloses_metadata_boundaries(self) -> None:
+        cases = {
+            "run_today_a_share_selection.py": [
+                "metadata still require validation",
+                "--fail-on-partial-spot",
+                "partial_result=true",
+                "--allow-partial-history",
+                "metadata must be checked",
+            ],
+            "fetch_eastmoney_a_share_spot.py": [
+                "local CSV and metadata",
+                "do not prove full-market coverage",
+                "partial_result=true",
+            ],
+            "fetch_baostock_a_share.py": [
+                "local CSV and metadata",
+                "metadata and gate review",
+                "failed, empty, invalid, or non-trading rows",
+            ],
+            "fetch_akshare_a_share.py": [
+                "local CSV and metadata",
+                "Fallback providers and partial symbols",
+                "failed, empty, invalid, or fallback-affected rows",
+            ],
+        }
+        for script_name, expected_texts in cases.items():
+            script = SCRIPTS / script_name
+            with self.subTest(script=script.name):
+                result = subprocess.run(
+                    [sys.executable, "-S", str(script), "--help"],
+                    cwd=ROOT,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                self.assertEqual(0, result.returncode, result.stderr)
+                normalized_stdout = " ".join(result.stdout.split())
+                for expected in expected_texts:
+                    self.assertIn(expected, normalized_stdout)
+
     def test_runtime_paths_still_fail_without_dataframe_dependencies(self) -> None:
         validate_script = SKILL_ROOT / "scripts/validate_ohlcv.py"
         score_script = SKILL_ROOT / "scripts/score_candidates.py"

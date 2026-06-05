@@ -49,14 +49,23 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Fetch Eastmoney A-share spot data.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Fetch Eastmoney A-share spot data into local CSV and metadata. "
+            "Partial pages or a small requested page set do not prove full-market coverage."
+        )
+    )
     parser.add_argument("--output", required=True, help="Output spot CSV path.")
     parser.add_argument("--metadata-output", required=True, help="Output metadata JSON path.")
     parser.add_argument("--pages", type=positive_int, default=1, help="Pages to request.")
     parser.add_argument("--page-size", type=positive_int, default=100)
     parser.add_argument("--timeout-seconds", type=float, default=10.0)
     parser.add_argument("--retries", type=non_negative_int, default=1)
-    parser.add_argument("--fail-on-partial", action="store_true")
+    parser.add_argument(
+        "--fail-on-partial",
+        action="store_true",
+        help="Return non-zero when metadata partial_result=true.",
+    )
     return parser
 
 

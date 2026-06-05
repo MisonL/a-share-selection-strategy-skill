@@ -188,11 +188,17 @@ def apply_mode_resolution(context: RunContext, resolution: ModeResolution) -> No
             "missing_prediction_requirement": missing_prediction_requirement(resolution),
             "config_path": str(Path(context.args.output_dir) / config.name),
             "prediction_mode": consumes_prediction,
-            "consumes_prediction_columns": consumes_prediction,
-            "prediction_input_source": "external_input" if consumes_prediction else "not_used",
+            "consumes_prediction_columns": False,
+            "prediction_input_source": "not_used",
+            "requested_prediction_input_source": (
+                "external_input" if consumes_prediction else "not_used"
+            ),
             "prediction_model_executed_by_runner": False,
             "lightgbm_not_used": not consumes_prediction,
-            "lightgbm_output_source": "external_input" if consumes_prediction else "not_used",
+            "lightgbm_output_source": "not_used",
+            "requested_lightgbm_output_source": (
+                "external_input" if consumes_prediction else "not_used"
+            ),
             "lightgbm_executed_by_runner": False,
             "source_scope": source_scope(context.args),
         }
@@ -213,6 +219,8 @@ def source_scope(args: argparse.Namespace) -> str:
 def run_step(context: RunContext, step: Step) -> None:
     result = context.executor(step.command)
     context.manifest["steps"].append(step_record(step, result))
+    if step.name == "score":
+        update_prediction_consumption(context.manifest)
     helpers.write_json(context.manifest, context.manifest_path)
     if result.returncode != 0:
         raise StepFailure(step.name, result.returncode, result.stderr)
@@ -227,6 +235,13 @@ def step_record(step: Step, result: subprocess.CompletedProcess[str]) -> dict[st
         "stdout": result.stdout,
         "stderr": result.stderr,
     }
+
+
+def update_prediction_consumption(manifest: dict[str, Any]) -> None:
+    consumed = helpers.prediction_columns_consumed(manifest)
+    manifest["consumes_prediction_columns"] = consumed
+    manifest["prediction_input_source"] = "external_input" if consumed else "not_used"
+    manifest["lightgbm_output_source"] = "external_input" if consumed else "not_used"
 
 
 def first_error_line(text: str) -> str:

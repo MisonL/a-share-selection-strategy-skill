@@ -30,9 +30,17 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "prediction_mode": manifest["prediction_mode"],
         "consumes_prediction_columns": prediction_columns_consumed(manifest, score),
         "prediction_input_source": prediction_input_source(manifest),
+        "requested_prediction_input_source": manifest.get(
+            "requested_prediction_input_source",
+            manifest.get("prediction_input_source", "unknown"),
+        ),
         "prediction_model_executed_by_runner": prediction_model_executed_by_runner(manifest),
         "lightgbm_not_used": manifest["lightgbm_not_used"],
         "lightgbm_output_source": manifest.get("lightgbm_output_source", "unknown"),
+        "requested_lightgbm_output_source": manifest.get(
+            "requested_lightgbm_output_source",
+            manifest.get("lightgbm_output_source", "unknown"),
+        ),
         "lightgbm_executed_by_runner": manifest.get("lightgbm_executed_by_runner", False),
         "source_scope": manifest["source_scope"],
         "input_metadata": manifest.get("input_metadata", {}),
@@ -161,6 +169,8 @@ def boundary_for(manifest: dict[str, Any]) -> str:
                 "Prediction mode was requested, but the runner did not consume prediction "
                 "columns because scoring did not complete. "
                 f"prediction_input_source={prediction_input_source(manifest)} "
+                "requested_prediction_input_source="
+                f"{manifest.get('requested_prediction_input_source', 'unknown')} "
                 f"prediction_model_executed_by_runner={str(prediction_model_executed_by_runner(manifest)).lower()} "
                 "lightgbm_executed_by_runner=false "
                 f"mode_decision={decision} reason={reason}"
@@ -177,6 +187,8 @@ def boundary_for(manifest: dict[str, Any]) -> str:
         "Generic technical mode; not prediction-derived and not LightGBM-backed. "
         f"consumes_prediction_columns={str(manifest.get('consumes_prediction_columns', False)).lower()} "
         f"prediction_input_source={prediction_input_source(manifest)} "
+        "requested_prediction_input_source="
+        f"{manifest.get('requested_prediction_input_source', 'unknown')} "
         f"prediction_model_executed_by_runner={str(prediction_model_executed_by_runner(manifest)).lower()} "
         f"lightgbm_executed_by_runner=false mode_decision={decision} reason={reason}"
     )

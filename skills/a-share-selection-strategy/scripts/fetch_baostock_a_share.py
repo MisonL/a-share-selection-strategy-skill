@@ -17,14 +17,23 @@ NUMERIC_COLUMNS = ["open", "high", "low", "close", "volume", "amount", "turn"]
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Fetch baostock A-share daily data.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Fetch baostock A-share daily data into local CSV and metadata. "
+            "Exit 0 plus written files still require metadata and gate review."
+        )
+    )
     parser.add_argument("--symbols", required=True, help="Comma-separated six-digit symbols.")
     parser.add_argument("--start-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
     parser.add_argument("--end-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
     parser.add_argument("--output", required=True, help="Output CSV path.")
     parser.add_argument("--metadata-output", required=True, help="Output metadata JSON path.")
     parser.add_argument("--adjust", default="3", help="baostock adjustflag. Default: 3.")
-    parser.add_argument("--fail-on-fetch-error", action="store_true")
+    parser.add_argument(
+        "--fail-on-fetch-error",
+        action="store_true",
+        help="Fail if metadata contains failed, empty, invalid, or non-trading rows.",
+    )
     parser.add_argument(
         "--drop-invalid-rows",
         action="store_true",

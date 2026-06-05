@@ -37,15 +37,28 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Fetch akshare A-share daily data.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Fetch akshare A-share daily data into local CSV and metadata. "
+            "Fallback providers and partial symbols must be disclosed before candidate claims."
+        )
+    )
     parser.add_argument("--symbols", required=True, help="Comma-separated six-digit symbols.")
     parser.add_argument("--start-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
     parser.add_argument("--end-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
     parser.add_argument("--output", required=True, help="Output CSV path.")
     parser.add_argument("--metadata-output", required=True, help="Output metadata JSON path.")
     parser.add_argument("--adjust", default="", help="akshare adjust value. Default: empty.")
-    parser.add_argument("--fail-on-fetch-error", action="store_true")
-    parser.add_argument("--drop-invalid-rows", action="store_true")
+    parser.add_argument(
+        "--fail-on-fetch-error",
+        action="store_true",
+        help="Fail if metadata contains failed, empty, invalid, or fallback-affected rows.",
+    )
+    parser.add_argument(
+        "--drop-invalid-rows",
+        action="store_true",
+        help="Explicitly drop invalid OHLCV rows and disclose dropped counts in metadata.",
+    )
     return parser
 
 

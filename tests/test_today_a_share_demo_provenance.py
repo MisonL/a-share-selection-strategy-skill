@@ -74,6 +74,12 @@ class TodayAShareDemoProvenanceTests(unittest.TestCase):
         self.assertEqual("low-price-ultra-short", summary["input_metadata"]["scenario"])
         self.assertIn("Synthetic demo data", report)
         self.assertIn("not real market data", report)
+        self.assertIn("Source type", report)
+        self.assertIn("synthetic_demo", report)
+        self.assertIn("Real market data", report)
+        self.assertIn(">False<", report)
+        self.assertIn("Scenario", report)
+        self.assertIn("low-price-ultra-short", report)
 
     def test_runner_artifacts_carry_synthetic_demo_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

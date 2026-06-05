@@ -120,13 +120,23 @@ def limit_panel(summary: dict[str, Any], language: str) -> str:
 
 
 def technical_details(summary: dict[str, Any], language: str) -> str:
+    metadata = summary.get("input_metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
     fields = [
         (i18n("requested_mode", language), summary.get("requested_mode")),
         (i18n("mode_decision", language), summary.get("mode_decision")),
         (i18n("consumes_prediction_columns", language), summary.get("consumes_prediction_columns")),
         (i18n("prediction_input_source", language), summary.get("prediction_input_source")),
+        (
+            i18n("requested_prediction_input_source", language),
+            summary.get("requested_prediction_input_source"),
+        ),
         (i18n("prediction_model_executed_by_runner", language), summary.get("prediction_model_executed_by_runner")),
         (i18n("source_scope", language), summary.get("source_scope")),
+        (i18n("source_type", language), metadata.get("source_type", "unknown")),
+        (i18n("real_market_data", language), metadata.get("real_market_data", "unknown")),
+        (i18n("scenario", language), metadata.get("scenario", "")),
     ]
     rows = "".join(f"<dt>{label}</dt><dd>{esc(value)}</dd>" for label, value in fields)
     return (

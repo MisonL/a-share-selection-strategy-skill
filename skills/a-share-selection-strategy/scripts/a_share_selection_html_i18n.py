@@ -42,11 +42,18 @@ TEXT = {
         "zh": "是否已消费预测列",
     },
     "prediction_input_source": {"en": "Prediction input source", "zh": "预测输入来源"},
+    "requested_prediction_input_source": {
+        "en": "Requested prediction input source",
+        "zh": "请求的预测输入来源",
+    },
     "prediction_model_executed_by_runner": {
         "en": "Prediction model executed by runner",
         "zh": "总控是否执行预测模型",
     },
     "source_scope": {"en": "Source scope", "zh": "数据来源范围"},
+    "source_type": {"en": "Source type", "zh": "来源类型"},
+    "real_market_data": {"en": "Real market data", "zh": "真实行情数据"},
+    "scenario": {"en": "Scenario", "zh": "场景"},
     "machine_boundary": {"en": "Machine boundary", "zh": "机器边界"},
     "scoring_method": {"en": "Scoring Method", "zh": "评分方式"},
     "why_this_mode": {"en": "Why this mode", "zh": "为什么用这个模式"},

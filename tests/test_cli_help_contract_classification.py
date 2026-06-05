@@ -43,6 +43,7 @@ HELP_CONTRACT_EXCLUDED_HELPERS = [
     "run_today_a_share_selection_modes.py",
     "run_today_a_share_selection_outputs.py",
     "run_today_a_share_selection_parser.py",
+    "run_today_a_share_selection_provenance.py",
     "a_share_selection_backtest_rows.py",
     "a_share_selection_calendar_contract.py",
     "a_share_selection_candidate_fields.py",

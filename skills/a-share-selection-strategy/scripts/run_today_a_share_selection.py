@@ -30,6 +30,7 @@ from run_today_a_share_selection_input_metadata import input_metadata_for_prices
 from run_today_a_share_selection_modes import ModeResolution, resolve_mode
 from run_today_a_share_selection_outputs import clear_stale_run_outputs, finalize_outputs
 from run_today_a_share_selection_parser import build_parser
+from run_today_a_share_selection_provenance import annotate_run_csv_outputs
 
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -131,6 +132,7 @@ def run_pipeline(context: RunContext) -> None:
         )
     run_step(context, Step("validate", validate_command(context.args, prices)))
     run_step(context, Step("score", score_command(context.args, prices, candidates, diagnostics, spot)))
+    annotate_run_csv_outputs(context.manifest, candidates, diagnostics)
 
 
 def prepare_inputs(

@@ -254,6 +254,9 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
     )
 
     view = summary_view(manifest, "completed")
+    metadata = manifest.get("input_metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
     paths = f"manifest={output / 'run_manifest.json'} summary={output / 'summary.json'}"
     html_report = html_report_stdout_value(manifest, output)
     html_error = html_report_error_stdout(manifest)
@@ -267,9 +270,18 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
         f"lightgbm_not_used={str(manifest['lightgbm_not_used']).lower()} "
         f"lightgbm_output_source={manifest.get('lightgbm_output_source', 'unknown')} "
         "lightgbm_executed_by_runner=false "
+        f"metadata_source={metadata_stdout_value(metadata.get('source_type'))} "
+        f"real_market_data={metadata_stdout_value(metadata.get('real_market_data'))} "
         f"prices_rows={view['prices_rows']} "
         f"candidate_rows={view['candidate_rows']} "
         f"diagnostic_rows={view['diagnostic_rows']} "
         f"spot_matched_symbols={view['spot_matched_symbols']} "
         f"{paths} html_report={html_report}{html_error}"
     )
+
+
+def metadata_stdout_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return str(value).lower()
+    text = str(value).strip() if value is not None else ""
+    return text or "unknown"

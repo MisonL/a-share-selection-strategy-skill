@@ -143,4 +143,4 @@ uv run --with pyyaml python "$QUICK_VALIDATE" skills/a-share-selection-strategy
 
 ## 授权
 
-当前仓库未声明开源许可证。除 GitHub 平台允许的浏览和 clone 能力外，本仓库暂未授予复制、修改、分发或商用授权。若需要公开复用，应先由维护者选择并添加明确的 `LICENSE` 文件。
+本仓库使用 MIT License，详见 [LICENSE](LICENSE)。

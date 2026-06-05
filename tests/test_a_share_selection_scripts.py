@@ -72,13 +72,52 @@ class AShareSelectionScriptTests(unittest.TestCase):
         frame = build_frame()
         frame["symbol"] = "1"
         errors = validate_ohlcv.validate_frame(frame, min_history_rows=120)
-        self.assertIn("preserve leading zeros as text", "; ".join(errors))
+        joined = "; ".join(errors)
+        self.assertIn("preserve leading zeros as text", joined)
+        self.assertIn("examples=", joined)
+        self.assertIn("row=2", joined)
+        self.assertIn("symbol=1", joined)
 
     def test_validate_rejects_five_digit_numeric_damaged_symbol(self) -> None:
         frame = build_frame()
         frame["symbol"] = "12345"
         errors = validate_ohlcv.validate_frame(frame, min_history_rows=120)
-        self.assertIn("preserve leading zeros as text", "; ".join(errors))
+        joined = "; ".join(errors)
+        self.assertIn("preserve leading zeros as text", joined)
+        self.assertIn("examples=", joined)
+        self.assertIn("symbol=12345", joined)
+        self.assertIn("row=2", joined)
+
+    def test_validate_numeric_errors_include_field_values(self) -> None:
+        frame = build_frame()
+        frame["open"] = frame["open"].astype("object")
+        frame.loc[0, "open"] = "bad"
+        frame.loc[1, "close"] = 0
+        frame.loc[2, "volume"] = -1
+        errors = validate_ohlcv.validate_frame(frame, min_history_rows=120)
+        joined = "; ".join(errors)
+
+        self.assertIn("column open has 1 non-numeric values", joined)
+        self.assertIn("open=bad", joined)
+        self.assertIn("column close has 1 non-positive values", joined)
+        self.assertIn("close=0", joined)
+        self.assertIn("column volume has 1 negative values", joined)
+        self.assertIn("volume=-1", joined)
+
+    def test_validate_date_and_duplicate_errors_include_examples(self) -> None:
+        frame = build_frame()
+        frame.loc[0, "date"] = "bad-date"
+        duplicate = frame.iloc[[1]].copy()
+        duplicate["date"] = pd.to_datetime(duplicate["date"]).dt.strftime("%Y%m%d")
+        frame = pd.concat([frame, duplicate], ignore_index=True)
+        errors = validate_ohlcv.validate_frame(frame, min_history_rows=120)
+        joined = "; ".join(errors)
+
+        self.assertIn("column date has 1 invalid values", joined)
+        self.assertIn("date=bad-date", joined)
+        self.assertIn("duplicate symbol/date rows", joined)
+        self.assertIn("examples=", joined)
+        self.assertIn("normalized_date=", joined)
 
     def test_validate_reports_available_errors_when_required_column_missing(self) -> None:
         frame = build_frame()

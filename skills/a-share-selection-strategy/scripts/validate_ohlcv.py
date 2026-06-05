@@ -11,6 +11,7 @@ from typing import Iterable
 
 REQUIRED_COLUMNS = ["symbol", "date", "open", "high", "low", "close", "volume"]
 PRICE_COLUMNS = ["open", "high", "low", "close"]
+MAX_ERROR_EXAMPLES = 5
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -109,22 +110,30 @@ def validate_available_columns(
 
 def validate_required_values(frame: pd.DataFrame) -> Iterable[str]:
     for column in REQUIRED_COLUMNS:
-        missing_count = int(frame[column].isna().sum())
+        mask = frame[column].isna()
+        missing_count = int(mask.sum())
         if missing_count:
-            yield f"column {column} has {missing_count} missing values"
+            yield (
+                f"column {column} has {missing_count} missing values"
+                f"{error_examples(frame, mask, field=column)}"
+            )
 
 
 def validate_symbols(frame: pd.DataFrame) -> Iterable[str]:
     symbols = frame["symbol"].astype(str).str.strip()
     empty_count = int((symbols == "").sum())
     if empty_count:
-        yield f"column symbol has {empty_count} empty values"
+        yield (
+            f"column symbol has {empty_count} empty values"
+            f"{error_examples(frame, symbols == '')}"
+        )
     damaged = symbols.str.fullmatch(r"\d{1,5}", na=False)
     damaged_count = int(damaged.sum())
     if damaged_count:
         yield (
             f"column symbol has {damaged_count} values that look numeric-damaged; "
             "preserve leading zeros as text"
+            f"{error_examples(frame, damaged)}"
         )
 
 
@@ -137,31 +146,101 @@ def validate_numeric_column(frame: pd.DataFrame, column: str) -> Iterable[str]:
     values = pd.to_numeric(frame[column], errors="coerce")
     invalid_count = int(values.isna().sum())
     if invalid_count:
-        yield f"column {column} has {invalid_count} non-numeric values"
+        yield (
+            f"column {column} has {invalid_count} non-numeric values"
+            f"{error_examples(frame, values.isna(), field=column)}"
+        )
     if column in PRICE_COLUMNS:
-        non_positive = int((values <= 0).sum())
+        mask = values <= 0
+        non_positive = int(mask.sum())
         if non_positive:
-            yield f"column {column} has {non_positive} non-positive values"
+            yield (
+                f"column {column} has {non_positive} non-positive values"
+                f"{error_examples(frame, mask, field=column)}"
+            )
     else:
-        negative = int((values < 0).sum())
+        mask = values < 0
+        negative = int(mask.sum())
         if negative:
-            yield f"column {column} has {negative} negative values"
+            yield (
+                f"column {column} has {negative} negative values"
+                f"{error_examples(frame, mask, field=column)}"
+            )
 
 
 def validate_dates(frame: pd.DataFrame) -> Iterable[str]:
     dates = parse_dates(frame["date"])
     invalid_count = int(dates.isna().sum())
     if invalid_count:
-        yield f"column date has {invalid_count} invalid values"
+        yield (
+            f"column date has {invalid_count} invalid values"
+            f"{error_examples(frame, dates.isna(), field='date')}"
+        )
 
 
 def validate_duplicates(frame: pd.DataFrame) -> Iterable[str]:
     checked = frame[["symbol"]].copy()
     checked["date"] = parse_dates(frame["date"])
     checked = checked.dropna(subset=["date"])
+    duplicated = checked.duplicated(subset=["symbol", "date"], keep=False)
     duplicate_count = int(checked.duplicated(subset=["symbol", "date"]).sum())
     if duplicate_count:
-        yield f"found {duplicate_count} duplicate symbol/date rows"
+        yield (
+            f"found {duplicate_count} duplicate symbol/date rows"
+            f"{duplicate_examples(frame, checked[duplicated])}"
+        )
+
+
+def error_examples(
+    frame: pd.DataFrame,
+    mask: pd.Series,
+    *,
+    field: str | None = None,
+) -> str:
+    rows = []
+    selected = frame.loc[mask.fillna(False)].head(MAX_ERROR_EXAMPLES)
+    for index, row in selected.iterrows():
+        item = example_base(index, row)
+        if field:
+            item.append(f"{field}={display_value(row.get(field, ''))}")
+        rows.append(",".join(item))
+    return format_examples(rows)
+
+
+def duplicate_examples(frame: pd.DataFrame, duplicates: pd.DataFrame) -> str:
+    rows = []
+    for index, row in duplicates.head(MAX_ERROR_EXAMPLES).iterrows():
+        source = frame.loc[index]
+        item = example_base(index, source)
+        item.append(f"normalized_date={row['date'].date().isoformat()}")
+        rows.append(",".join(item))
+    return format_examples(rows)
+
+
+def example_base(index: object, row: pd.Series) -> list[str]:
+    return [
+        f"row={csv_line(index)}",
+        f"symbol={display_value(row.get('symbol', ''))}",
+        f"date={display_value(row.get('date', ''))}",
+    ]
+
+
+def csv_line(index: object) -> int:
+    try:
+        return int(index) + 2
+    except (TypeError, ValueError):
+        return 0
+
+
+def display_value(value: object) -> str:
+    text = str(value)
+    return text.replace(",", "\\,").replace("\n", "\\n")
+
+
+def format_examples(rows: list[str]) -> str:
+    if not rows:
+        return ""
+    return " examples=" + " | ".join(rows)
 
 
 def validate_history(frame: pd.DataFrame, min_history_rows: int) -> Iterable[str]:

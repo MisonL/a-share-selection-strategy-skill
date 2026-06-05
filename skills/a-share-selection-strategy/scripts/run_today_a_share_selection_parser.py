@@ -23,6 +23,9 @@ def parser_description() -> str:
         "market plus prediction/prediction_score plus turn/turnover use "
         "prediction-derived external-prediction scoring; otherwise the runner "
         "uses the generic low-price profile. This runner never executes LightGBM. "
+        "Standard outputs are run_manifest.json, summary.json, report.html, "
+        "candidates.csv, diagnostics.csv, and CSV intermediate files; strict "
+        "all-Parquet output is not supported by this CLI. "
         "Without --prices-input, explicit history fetch options are required; "
         "landed files and metadata still require validation before any candidate claim."
     )

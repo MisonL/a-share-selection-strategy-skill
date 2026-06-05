@@ -82,6 +82,42 @@ class AllocateCandidateCapitalCliTests(unittest.TestCase):
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn("unallocated_candidates=1", stderr.getvalue())
 
+    def test_cli_success_discloses_local_sizing_boundary(self) -> None:
+        prices = build_frame(days=130)
+        candidate = prices[prices["symbol"] == "000002"].iloc[[20]][["symbol", "date"]]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            prices_path = Path(tmpdir) / "prices.csv"
+            candidates_path = Path(tmpdir) / "candidates.csv"
+            output_path = Path(tmpdir) / "allocated.csv"
+            prices.to_csv(prices_path, index=False)
+            candidate.to_csv(candidates_path, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = allocator.main(
+                    [
+                        "--prices",
+                        str(prices_path),
+                        "--candidates",
+                        str(candidates_path),
+                        "--output",
+                        str(output_path),
+                        "--cash-budget",
+                        "100000",
+                        "--lot-size",
+                        "100",
+                    ]
+                )
+            output_exists = output_path.exists()
+
+        self.assertEqual(0, code, stderr.getvalue())
+        self.assertTrue(output_exists)
+        self.assertIn("lot_size=100", stdout.getvalue())
+        self.assertIn(
+            "claim_boundary=local_sizing_not_broker_order",
+            stdout.getvalue(),
+        )
+
     def test_missing_signal_close_is_rejected(self) -> None:
         prices = build_frame(days=130)
         candidate = pd.DataFrame([{"symbol": "000002", "date": "2030-01-01"}])

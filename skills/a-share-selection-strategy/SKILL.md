@@ -124,10 +124,10 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `create_demo_data.py`：生成可复制运行的本地 demo CSV；`--scenario low-price-ultra-short` 会生成更多低价超短诊断样本。
 - `validate_ohlcv.py`：校验本地 CSV/Parquet 行情文件。
 - `score_candidates.py`：读取本地行情文件并输出候选股 CSV；可用 `--spot-input` 合并实时价、涨跌幅、行业和成交额展示字段，但这些字段不参与核心评分。spot symbol 列支持 `symbol/code/code_id/stock_code/ticker/Ticker`，`sh.600000`、`600000.SH`、`sz.000001`、`000001.SZ` 会归一化为六位代码后匹配。
-- `run_today_a_share_selection.py`：总控 CLI，串联可选实时快照、可选仓库内历史取数、`validate_ohlcv.py`、`score_candidates.py` 和诊断输出，写出 `run_manifest.json`、`summary.json`、`report.html`、`candidates.csv`、`diagnostics.csv`；当前不证明实时全市场扫描完成。`report.html` 是人类可读展示层，支持 `--html-report-language auto|zh|en` 和浏览器内中英文切换，可用 `--no-html-report` 关闭，不能替代 JSON/CSV 机器事实。
+- `run_today_a_share_selection.py`：总控 CLI，串联可选实时快照、可选仓库内历史取数、`validate_ohlcv.py`、`score_candidates.py` 和诊断输出，标准输出 `run_manifest.json`、`summary.json`、`report.html`、`candidates.csv`、`diagnostics.csv`，并使用 CSV 中间产物；当前不支持严格全 Parquet 输出，也不证明实时全市场扫描完成。`report.html` 是人类可读展示层，支持 `--html-report-language auto|zh|en` 和浏览器内中英文切换，可用 `--no-html-report` 关闭，不能替代 JSON/CSV 机器事实。
 - `fetch_eastmoney_a_share_spot.py`：东方财富 A 股实时快照入口，输出 `spot.csv` 和 `metadata.json`，记录 `requested_pages`、`successful_pages`、`failed_pages`、`raw_items`、`filtered_items`、`snapshot_time`、`partial_result`。
 - `generate_lightgbm_predictions.py`：可选 LightGBM 预测生成器，输出 `prediction_score`。
-- `allocate_candidate_capital.py`：可选候选资金分配脚本，按信号日 close、现金预算和 lot size 生成可追溯 sizing 字段；候选表已有资金字段时默认拒绝，只有显式 `--overwrite-capital-fields` 才重算覆盖。
+- `allocate_candidate_capital.py`：可选候选资金分配脚本，按信号日 close、现金预算和 lot size 生成可追溯 sizing 字段；stdout 会披露 `cash_budget`、`lot_size`、`capital_model` 和 `claim_boundary=local_sizing_not_broker_order`。候选表已有资金字段时默认拒绝，只有显式 `--overwrite-capital-fields` 才重算覆盖；输出不能解释为真实成交、券商订单或真实现金容量证明。
 - `backtest_buy_hold.py`：可选 close-to-close buy-hold 基线回测，可透传候选表资金字段。`--require-tradable-bars` 只检查入场和退出 bar；`--require-tradable-holding-period` 检查价格表内从入场到退出的已观测 bar 都满足 `tradestatus=1`，并输出 `tradability_model=tradestatus_holding_period_bars`。
 - `portfolio_equity_curve.py`：可选等权组合资金曲线生成器，读取一个或多个回测 CSV，并支持 final equity / max drawdown 失败门槛。默认只按 complete trades 等权计算权益曲线，不使用输入 `weight` 加权；`incomplete_trades>0` 时 `OK` 和 `final_equity` 不代表全量回测通过，严格门禁需显式使用 `--fail-on-incomplete`。
 - `portfolio_overlap_report.py`：可选组合并发持仓、同标的重叠、资金字段完整性，以及权重、名义金额和预留现金容量门禁报告。未传 `--require-capital-fields` 时，单项金额门禁可只验证自身字段；若 `capital_fields_missing` 非空或 `weight_capacity_verifiable=false`，不能说完整组合容量字段已验证。`calendar_model=business_day_closed_interval` 来自 pandas 工作日闭区间，不是交易所日历、节假日、停复牌或真实可交易日历门禁。
@@ -189,7 +189,7 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 
 校验规则：
 
-- `validate_ohlcv.py` 会拒绝 1 到 3 位纯数字 `symbol`，用于捕获前导零损坏。
+- `validate_ohlcv.py` 会拒绝 1 到 5 位纯数字 `symbol`，用于捕获前导零损坏。
 - 同一股票同一日期不能重复。
 - 每只股票必须有足够历史窗口；prediction-derived 默认至少 120 条日线。
 - prediction-derived 的 `market` 必须使用精确值 `A-share`。

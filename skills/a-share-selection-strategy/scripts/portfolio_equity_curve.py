@@ -16,7 +16,10 @@ MAX_DRAWDOWN_FLOOR = 0.0
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Build an equal-weight equity curve from backtest outputs."
+        description=(
+            "Build an equal-weight equity curve from backtest outputs. Defaults "
+            "to complete trades only; use --fail-on-incomplete for strict gates."
+        )
     )
     parser.add_argument("--backtests", nargs="+", required=True, help="Backtest CSV/Parquet paths.")
     parser.add_argument("--output", required=True, help="Output equity curve CSV path.")

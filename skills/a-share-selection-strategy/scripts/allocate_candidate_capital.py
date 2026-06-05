@@ -10,7 +10,12 @@ from typing import Any
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Allocate capital fields for candidates.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Allocate local sizing fields for candidates. Outputs are traceable "
+            "cash-budget and lot-size calculations, not broker orders or real fills."
+        )
+    )
     parser.add_argument("--prices", required=True, help="Path to OHLCV CSV/Parquet.")
     parser.add_argument("--candidates", required=True, help="Path to candidates CSV/Parquet.")
     parser.add_argument("--output", required=True, help="Path to output CSV.")
@@ -194,9 +199,11 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
         f"allocated_candidates={summary['allocated_candidates']} "
         f"unallocated_candidates={summary['unallocated_candidates']} "
         f"cash_budget={summary['cash_budget']} "
+        f"lot_size={summary['lot_size']} "
         f"total_cash_reserved={summary['total_cash_reserved']} "
         f"cash_remaining={summary['cash_remaining']} "
-        f"capital_model={summary['capital_model']} output={output}"
+        f"capital_model={summary['capital_model']} "
+        f"claim_boundary=local_sizing_not_broker_order output={output}"
     )
 
 

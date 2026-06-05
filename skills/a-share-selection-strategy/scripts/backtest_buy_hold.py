@@ -21,7 +21,10 @@ class BacktestOptions:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Run a minimal close-to-close buy-hold backtest."
+        description=(
+            "Run a minimal close-to-close buy-hold backtest. This is a local "
+            "baseline, not a promise of future returns or real tradability."
+        )
     )
     parser.add_argument("--prices", required=True, help="Path to OHLCV CSV/Parquet.")
     parser.add_argument("--candidates", required=True, help="Path to candidates CSV.")

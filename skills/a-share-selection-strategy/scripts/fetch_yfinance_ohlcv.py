@@ -25,13 +25,23 @@ YFINANCE_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Fetch yfinance OHLCV data.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Fetch yfinance OHLCV data into local CSV and metadata JSON files. "
+            "The --market value is an output label only, not source, exchange, "
+            "or calendar proof."
+        )
+    )
     parser.add_argument("--symbols", required=True, help="Comma-separated ticker symbols.")
     parser.add_argument("--start-date", required=True, help="YYYY-MM-DD.")
     parser.add_argument("--end-date", required=True, help="YYYY-MM-DD.")
     parser.add_argument("--output", required=True, help="Output CSV path.")
     parser.add_argument("--metadata-output", required=True, help="Output metadata JSON path.")
-    parser.add_argument("--market", default="US", help="Market label to write. Default: US.")
+    parser.add_argument(
+        "--market",
+        default="US",
+        help="Market label to write; this is not source, exchange, or calendar proof.",
+    )
     parser.add_argument(
         "--timeout-seconds",
         type=float,
@@ -225,7 +235,8 @@ def print_summary(
         f"{prefix}: source=yfinance rows={metadata['rows']} "
         f"symbol_count={metadata['symbol_count']} "
         f"failed_symbols={len(metadata['failed_symbols'])} "
-        f"empty_symbols={len(metadata['empty_symbols'])} output={output}"
+        f"empty_symbols={len(metadata['empty_symbols'])} "
+        f"market_label_only=true output={output}"
     )
 
 

@@ -251,6 +251,47 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "Fallback providers and partial symbols",
                 "failed, empty, invalid, or fallback-affected rows",
             ],
+            "fetch_yfinance_ohlcv.py": [
+                "local CSV and metadata JSON",
+                "output label only",
+                "calendar proof",
+            ],
+        }
+        for script_name, expected_texts in cases.items():
+            script = SCRIPTS / script_name
+            with self.subTest(script=script.name):
+                result = subprocess.run(
+                    [sys.executable, "-S", str(script), "--help"],
+                    cwd=ROOT,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                self.assertEqual(0, result.returncode, result.stderr)
+                normalized_stdout = " ".join(result.stdout.split())
+                for expected in expected_texts:
+                    self.assertIn(expected, normalized_stdout)
+
+    def test_cli_help_discloses_runner_and_sizing_boundaries(self) -> None:
+        cases = {
+            "run_today_a_share_selection.py": [
+                "Standard outputs are run_manifest.json, summary.json, report.html, candidates.csv, diagnostics.csv",
+                "strict all-Parquet output is not supported by this CLI",
+            ],
+            "allocate_candidate_capital.py": [
+                "not broker orders or real fills",
+                "--lot-size",
+            ],
+            "backtest_buy_hold.py": [
+                "close-to-close buy-hold backtest",
+                "local baseline",
+                "not a promise of future returns or real tradability",
+            ],
+            "portfolio_equity_curve.py": [
+                "Defaults to complete trades only",
+                "--fail-on-incomplete",
+            ],
         }
         for script_name, expected_texts in cases.items():
             script = SCRIPTS / script_name

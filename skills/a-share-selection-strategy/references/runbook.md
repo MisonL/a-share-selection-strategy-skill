@@ -120,7 +120,7 @@ uv run --with pandas --with numpy --with pyarrow python skills/a-share-selection
   --output /tmp/a-share-selection-demo/candidates_parquet.csv
 ```
 
-当前候选输出仍是 CSV。若用户要求全链路中间完全不出现 CSV，必须先说明需要改造脚本输出、runner 固定路径、artifact validator 和测试。
+当前候选输出和今日总控标准产物仍包含 CSV。`run_today_a_share_selection.py` 标准输出为 `run_manifest.json`、`summary.json`、`report.html`、`candidates.csv`、`diagnostics.csv`，并会使用 CSV 中间产物。若用户要求全链路中间完全不出现 CSV，必须先说明需要改造脚本输出、runner 固定路径、artifact validator 和测试。
 
 ## Prediction 生成 Demo
 
@@ -447,6 +447,8 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/portfolio_overlap_report.py --backtests prediction_backtest.csv --daily-output prediction_daily_positions.csv --overlap-output prediction_overlap.csv --summary-output prediction_overlap_summary.json --max-gross-weight 1.0 --max-gross-notional 1000000 --max-cash-reserved 1000000 --require-capital-fields
 uv run --with pandas python skills/a-share-selection-strategy/scripts/summarize_walk_forward_run.py --run-dir RUN_DIR --output RUN_DIR/prediction_run_summary.json --expected-symbol-count N --required-tradability-model tradestatus_entry_exit_only --required-limit-rules-model not_modeled
 ```
+
+`allocate_candidate_capital.py` 的 stdout 必须披露 `cash_budget`、`lot_size`、`capital_model` 和 `claim_boundary=local_sizing_not_broker_order`。这些字段只证明本地 sizing 计算可追溯，不能解释为真实成交、券商订单或真实现金容量证明。严格回测汇总应对 `portfolio_equity_curve.py` 显式使用 `--fail-on-incomplete`，否则默认只基于 complete trades 生成权益曲线。
 
 ## 验证命令
 

@@ -98,6 +98,7 @@ class FetchYfinanceOhlcvTests(unittest.TestCase):
 
         self.assertEqual(0, code)
         self.assertIn("OK: source=yfinance rows=1", stdout.getvalue())
+        self.assertIn("market_label_only=true", stdout.getvalue())
         self.assertEqual(1, saved["rows"])
         self.assertEqual(7.0, saved["timeout_seconds"])
         self.assertEqual(7.0, calls[0]["timeout"])

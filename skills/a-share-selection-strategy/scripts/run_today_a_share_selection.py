@@ -26,6 +26,7 @@ from run_today_a_share_selection_history import (
     history_symbols,
     validate_history_inputs,
 )
+from run_today_a_share_selection_input_metadata import input_metadata_for_prices
 from run_today_a_share_selection_modes import ModeResolution, resolve_mode
 from run_today_a_share_selection_outputs import clear_stale_run_outputs, finalize_outputs
 from run_today_a_share_selection_parser import build_parser
@@ -114,6 +115,7 @@ def run_pipeline(context: RunContext) -> None:
     diagnostics = output / "diagnostics.csv"
     spot = run_spot_path(context.args)
     validate_preflight_inputs(context.args, spot)
+    context.manifest["input_metadata"] = input_metadata_for_prices(context.args.prices_input)
     clear_stale_run_outputs(context.args, output)
     context.manifest["run_outputs_initialized"] = True
     prepare_inputs(context.args, output, prices, spot)

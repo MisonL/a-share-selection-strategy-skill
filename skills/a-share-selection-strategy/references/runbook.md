@@ -7,7 +7,7 @@
 - 所有脚本以本地文件为稳定入口。
 - 联网取数必须先落地 CSV/Parquet 和 metadata，再进入校验、评分和汇报。
 - 本地 demo 只证明脚本链路可执行，不证明真实行情、真实 prediction、真实回测或收益。
-- 任何 `output_written=true` 只表示报告已写出；退出码、`quality_errors`、`errors` 和门禁字段仍是最终事实。
+- 任何 `output_written=true` 只表示对应产物或诊断报告已落盘；退出码、`quality_errors`、`errors` 和门禁字段仍是最终事实。
 
 ## 环境准备
 
@@ -37,6 +37,7 @@ python3 -m venv /tmp/a-share-selection-skill-venv
 | 海外 OHLCV 取数 | `yfinance` |
 
 完全离线环境必须提前准备解释器、wheelhouse 或包缓存。依赖失败时应显式报告，不能改用 mock 数据或跳过依赖。
+若只做离线只读测试且本机已有依赖缓存，可把下面的 `uv run --with ...` 改成 `uv run --offline --with ...`；缓存缺依赖时应报告环境问题，而不是联网或改用模拟成功。
 
 ## 本地 Demo
 
@@ -86,12 +87,13 @@ python3 skills/a-share-selection-strategy/scripts/create_demo_data.py \
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py \
   --prices-input /tmp/a-share-selection-low-price-demo/prices.csv \
   --output-dir /tmp/a-share-selection-low-price-demo/today \
-  --mode auto
+  --mode auto \
+  --html-report-language zh
 ```
 
 检查：
 
-- `summary.json`: `requested_mode`、`mode`、`mode_decision`、`mode_decision_reason`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`prediction_input_source`、`prediction_model_executed_by_runner`、`candidate_rows`、`diagnostic_rows`、`spot_matched_symbols`、`html_report_language`、`html_report_initial_language`、`html_report_error_type`、`candidates_output_written`、`diagnostics_output_written`。
+- `summary.json`: `requested_mode`、`mode`、`mode_decision`、`mode_decision_reason`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`prediction_input_source`、`prediction_model_executed_by_runner`、`candidate_rows`、`diagnostic_rows`、`spot_matched_symbols`、`input_metadata`、`html_report_language`、`html_report_initial_language`、`html_report_error_type`、`candidates_output_written`、`diagnostics_output_written`。
 - `report.html`: 浏览器可读汇总，展示候选、诊断、步骤和证据路径；默认 `--html-report-language auto` 跟随运行环境，也可传 `zh` 或 `en` 并在浏览器内切换；只从已写出的 JSON/CSV 派生，不能替代退出码或机器字段。
 - `candidates.csv`: 候选字段、spot 展示字段，以及 prediction 披露字段。
 - `diagnostics.csv`: `failed_thresholds`、`failed_thresholds_zh`、`selection_status`、`short_reason`，以及与候选一致的 prediction 披露字段。
@@ -168,7 +170,7 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 | 输入 | 实际 mode | 口径 |
 | --- | --- | --- |
 | 缺少 prediction-derived 必需列 | `generic` | 低价超短通用技术评分 |
-| 已有 `market`、`prediction` 或 `prediction_score`、`turn` 或 `turnover` | `prediction` | 消费外部 prediction 输入 |
+| 同时已有 `market` + (`prediction` 或 `prediction_score`) + (`turn` 或 `turnover`) | `prediction` | 消费外部 prediction 输入 |
 
 显式 `--mode prediction` 缺字段时必须失败并保留 manifest，不得自动改走通用评分。
 

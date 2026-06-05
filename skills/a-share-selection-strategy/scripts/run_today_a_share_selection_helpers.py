@@ -28,13 +28,14 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         ),
         "missing_prediction_requirement": manifest.get("missing_prediction_requirement", ""),
         "prediction_mode": manifest["prediction_mode"],
-        "consumes_prediction_columns": manifest.get("consumes_prediction_columns", False),
+        "consumes_prediction_columns": prediction_columns_consumed(manifest, score),
         "prediction_input_source": prediction_input_source(manifest),
         "prediction_model_executed_by_runner": prediction_model_executed_by_runner(manifest),
         "lightgbm_not_used": manifest["lightgbm_not_used"],
         "lightgbm_output_source": manifest.get("lightgbm_output_source", "unknown"),
         "lightgbm_executed_by_runner": manifest.get("lightgbm_executed_by_runner", False),
         "source_scope": manifest["source_scope"],
+        "input_metadata": manifest.get("input_metadata", {}),
         "steps": len(manifest["steps"]),
         "failed_steps": [step["step"] for step in failed],
         "spot_metadata": spot_metadata_view(manifest) if run_outputs_initialized else {},
@@ -71,6 +72,16 @@ def prediction_model_executed_by_runner(manifest: dict[str, Any]) -> bool:
             manifest.get("lightgbm_executed_by_runner", False),
         )
     )
+
+
+def prediction_columns_consumed(
+    manifest: dict[str, Any],
+    score: dict[str, Any] | None = None,
+) -> bool:
+    if not manifest.get("prediction_mode"):
+        return False
+    summary = score if score is not None else score_summary(manifest)
+    return str(summary.get("prediction_input_source", "")) == "external_input"
 
 
 def spot_metadata_view(manifest: dict[str, Any]) -> dict[str, Any]:
@@ -145,6 +156,15 @@ def boundary_for(manifest: dict[str, Any]) -> str:
     decision = manifest.get("mode_decision", "")
     reason = manifest.get("mode_decision_reason", "")
     if manifest["prediction_mode"]:
+        if not prediction_columns_consumed(manifest):
+            return (
+                "Prediction mode was requested, but the runner did not consume prediction "
+                "columns because scoring did not complete. "
+                f"prediction_input_source={prediction_input_source(manifest)} "
+                f"prediction_model_executed_by_runner={str(prediction_model_executed_by_runner(manifest)).lower()} "
+                "lightgbm_executed_by_runner=false "
+                f"mode_decision={decision} reason={reason}"
+            )
         return (
             "prediction-derived mode requires external prediction or prediction_score in the input. "
             "The runner consumes prediction columns from input and does not execute a prediction model. "

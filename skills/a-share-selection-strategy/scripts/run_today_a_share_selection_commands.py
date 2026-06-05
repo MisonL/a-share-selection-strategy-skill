@@ -132,6 +132,7 @@ def initial_manifest(args: Any) -> dict[str, Any]:
         "html_report_language": args.html_report_language,
         "html_report_initial_language": "",
         "run_outputs_initialized": False,
+        "input_metadata": {},
         "prediction_mode": args.mode == "prediction",
         "consumes_prediction_columns": args.mode == "prediction",
         "prediction_input_source": "external_input" if args.mode == "prediction" else "not_used",

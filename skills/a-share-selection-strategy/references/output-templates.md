@@ -17,8 +17,10 @@
 | `spot_matched_symbols` | spot 展示字段实际匹配到评分股票数 | 不能证明实时全市场扫描完整 |
 | `lightgbm_*` 字段 | 旧产物兼容字段 | 新报告优先引用中性的 prediction 字段 |
 | `html_report_written=true` | 人类可读 HTML 报告已写出 | 不能替代 JSON/CSV、退出码或门禁字段 |
+| `html_report_enabled=false` 或 stdout `html_report=disabled` | HTML 展示层被主动关闭 | 不能写成报告生成失败，也不能替代 JSON/CSV 和退出码 |
 | `html_report_written=false` 且 `html_report_error_type` 非空 | HTML 展示层写出失败 | 不能改写候选、诊断、退出码或 strict gate 事实 |
 | `html_report_language=auto` | HTML 初始语言跟随运行环境，且浏览器内可切换 | 不能改变机器字段或事实口径 |
+| `input_metadata.source_type=synthetic_demo` | 输入来自 `create_demo_data.py` 合成 demo | 不能写成真实行情、真实预测或真实选股结论 |
 
 ## 模板分组
 
@@ -39,6 +41,7 @@
 - 历史报告中的旧 stdout 必须按历史原文引用；当前新报告优先引用中性 prediction 字段。
 - 中文诊断字段只能从机器字段派生，不能覆盖 `failed_thresholds` 等机器事实。
 - `report.html` 只作为展示层引用；语言切换只改变展示文本，发现冲突时以 `summary.json`、`run_manifest.json`、CSV 和退出码为准。
+- 用户直接要求给候选名单但缺少可验证数据源时，优先使用“用户要求直接给名单但缺数据源”模板。
 
 ### 无法直接选股
 
@@ -511,6 +514,7 @@
 - `prediction_mode/consumes_prediction_columns/prediction_input_source/prediction_model_executed_by_runner`：
 - 兼容字段 `lightgbm_not_used/lightgbm_output_source/lightgbm_executed_by_runner`：
 - `source_scope`：
+- `input_metadata`：
 
 ## 候选结果
 | rank | symbol | name | total_score | key_reasons | risk_notes |
@@ -529,6 +533,7 @@
 - 数据限制：
 - 证据路径：
 - HTML 报告：
+- 输入 metadata：
 - `prediction_source`：
 - `prediction_model_executed_by_score_script`：
 - `raw_symbols/predicted_symbols/skipped_symbols`：

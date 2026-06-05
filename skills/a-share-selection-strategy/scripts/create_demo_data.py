@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import math
 from datetime import date, timedelta
 from pathlib import Path
@@ -59,18 +60,7 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("days must be >= 1")
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=True)
-    write_csv(
-        output / "prices.csv",
-        include_prediction=False,
-        days=args.days,
-        scenario=args.scenario,
-    )
-    write_csv(
-        output / "prices_with_prediction.csv",
-        include_prediction=True,
-        days=args.days,
-        scenario=args.scenario,
-    )
+    write_demo_outputs(output, days=args.days, scenario=args.scenario)
     print(
         f"OK: wrote demo data to {output} "
         "prices=prices.csv "
@@ -78,6 +68,35 @@ def main(argv: list[str] | None = None) -> int:
         "synthetic_prediction_proves_real_model=false"
     )
     return 0
+
+
+def write_demo_outputs(output: Path, *, days: int, scenario: str) -> None:
+    write_csv(
+        output / "prices.csv",
+        include_prediction=False,
+        days=days,
+        scenario=scenario,
+    )
+    write_csv(
+        output / "prices_with_prediction.csv",
+        include_prediction=True,
+        days=days,
+        scenario=scenario,
+    )
+    write_metadata(output / "metadata.json", days=days, scenario=scenario)
+
+
+def write_metadata(path: Path, *, days: int, scenario: str) -> None:
+    data = {
+        "source_type": "synthetic_demo",
+        "scenario": scenario,
+        "days": days,
+        "prices": "prices.csv",
+        "synthetic_prediction_input": "prices_with_prediction.csv",
+        "synthetic_prediction_proves_real_model": False,
+        "real_market_data": False,
+    }
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def write_csv(

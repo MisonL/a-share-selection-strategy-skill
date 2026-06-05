@@ -39,6 +39,7 @@ HELP_CONTRACT_EXCLUDED_HELPERS = [
     "run_today_a_share_selection_commands.py",
     "run_today_a_share_selection_helpers.py",
     "run_today_a_share_selection_history.py",
+    "run_today_a_share_selection_input_metadata.py",
     "run_today_a_share_selection_modes.py",
     "run_today_a_share_selection_outputs.py",
     "run_today_a_share_selection_parser.py",

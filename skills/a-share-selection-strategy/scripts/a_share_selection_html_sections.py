@@ -29,6 +29,7 @@ from a_share_selection_html_modes import (
     prediction_status_key,
     scoring_method_key,
 )
+from run_today_a_share_selection_input_metadata import is_synthetic_demo
 
 
 DISPLAY_CANDIDATE_COLUMNS = (
@@ -253,6 +254,12 @@ def status_label_key(status: str) -> str:
 
 
 def data_scope_value(summary: dict[str, Any], language: str) -> str:
+    metadata = summary.get("input_metadata", {})
+    if isinstance(metadata, dict) and is_synthetic_demo(metadata):
+        scenario = str(metadata.get("scenario", "unknown"))
+        en = f"Synthetic demo data ({scenario}); not real market data."
+        zh = f"合成 demo 数据（{scenario}）；不是真实行情。"
+        return bilingual(en, zh, language)
     source_scope = str(summary.get("source_scope", ""))
     if source_scope == "local_prices_input":
         return i18n("generic_scope_value", language)

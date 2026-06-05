@@ -149,22 +149,23 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/validate_ohlcv.py --input /tmp/a-share-selection-demo/prices_with_prediction.csv --config skills/a-share-selection-strategy/scripts/prediction_profile_config.json
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/score_candidates.py --input /tmp/a-share-selection-demo/prices.csv --config skills/a-share-selection-strategy/scripts/example_config.json --output /tmp/a-share-selection-demo/candidates.csv
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/score_candidates.py --input /tmp/a-share-selection-demo/prices_with_prediction.csv --config skills/a-share-selection-strategy/scripts/prediction_profile_config.json --output /tmp/a-share-selection-demo/prediction_candidates.csv
-uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py --prices-input /tmp/a-share-selection-demo/prices.csv --output-dir /tmp/a-share-selection-demo/today-low-price --mode auto
+uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py --prices-input /tmp/a-share-selection-demo/prices.csv --output-dir /tmp/a-share-selection-demo/today-low-price --mode auto --html-report-language zh
 ```
 
 低价超短离线诊断样本：
 
 ```bash
 python3 skills/a-share-selection-strategy/scripts/create_demo_data.py --output /tmp/a-share-selection-low-price-demo --days 160 --scenario low-price-ultra-short
-uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py --prices-input /tmp/a-share-selection-low-price-demo/prices.csv --output-dir /tmp/a-share-selection-low-price-demo/today --mode auto
+uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py --prices-input /tmp/a-share-selection-low-price-demo/prices.csv --output-dir /tmp/a-share-selection-low-price-demo/today --mode auto --html-report-language zh
 ```
 
 预期口径：
 
 - `prices.csv` 不含 `prediction_score`，`--mode auto` 应选择 `mode=generic`、`mode_decision=auto_generic`、`consumes_prediction_columns=false`、`prediction_input_source=not_used`、`prediction_model_executed_by_runner=false`、`lightgbm_not_used=true`、`lightgbm_output_source=not_used`、`lightgbm_executed_by_runner=false`。
 - `summary.json` 顶层的 `candidate_rows`、`diagnostic_rows`、`prices_rows`、`spot_matched_symbols` 是输出文件和评分摘要的快速核对字段；嵌套 `score.candidates` 来自 `score_candidates.py` stdout 摘要。
-- `summary.json` 的 `*_output_written` 字段表示对应输出文件是否真实存在；失败 run 中有输出路径不等于候选或诊断文件已生成。
-- `summary.json` 的 `html_report/html_report_written` 只说明人类可读报告是否写出；`html_report_language` 是请求语言，`html_report_initial_language` 是生成时初始语言。报告内容从已落地 JSON/CSV 派生，不能覆盖失败步骤、partial result 或 strict gate 事实；报告写出失败时记录 `html_report_error_type/html_report_error`，不替代机器产物状态。
+- `summary.json` 的 `*_output_written` 字段表示本次 run 初始化输出后对应产物是否有效写出；失败 run 中有输出路径或旧文件物理存在，不等于本次候选或诊断文件已生成。
+- `summary.json` 的 `input_metadata.source_type=synthetic_demo` 表示输入来自 `create_demo_data.py` 合成 demo，不是真实行情。
+- `summary.json` 的 `html_report/html_report_written` 只说明人类可读报告是否写出；`html_report_language` 是请求语言，`html_report_initial_language` 是生成时初始语言。报告内容从已落地 JSON/CSV 派生，不能覆盖失败步骤、partial result 或 strict gate 事实；`--no-html-report` 会主动关闭报告且不表示写出失败；报告写出失败时记录 `html_report_error_type/html_report_error`，不替代机器产物状态。
 - `run_manifest.json.steps[]` 使用字段 `step`、`command`、`returncode`、`allowed_returncodes`、`stdout` 和 `stderr`。
 - 该样本只用于验证低价、成交额、换手率、ST、停牌和一字板诊断，不代表真实今日 A 股扫描。
 
@@ -199,12 +200,12 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 
 ## 今日选股入口
 
-当用户要求“今日选股”“10 元以内超短爆发”时，优先使用 `run_today_a_share_selection.py --mode auto`。如果本地行情文件缺少 prediction-derived 必需列，auto 会显式选择 generic 低价超短剖面，并在 manifest 记录 `requested_mode`、实际 `mode`、`mode_decision` 和 `mode_decision_reason`；这不是静默降级。若输入包含 prediction-derived 必需列，auto 会走 prediction-derived 外部 prediction 评分，但 `consumes_prediction_columns=true`、`prediction_input_source=external_input`、`prediction_model_executed_by_runner=false` 仍表示本 runner 只消费输入预测列，没有训练或执行预测模型。`lightgbm_output_source` 和 `lightgbm_executed_by_runner` 是旧产物兼容字段；新报告优先引用中性字段。该入口可合并本地或东方财富实时快照作为展示字段，也可显式调用仓库内 baostock/akshare 历史取数脚本；历史抓取本身不会生成 prediction，若要 prediction-derived 口径必须显式提供外部预测列或使用 `--mode prediction` 暴露缺口，不证明实时全市场扫描完成。
+当用户要求“今日选股”“10 元以内超短爆发”时，优先使用 `run_today_a_share_selection.py --mode auto`。如果本地行情文件缺少 prediction-derived 必需列，auto 会显式选择 generic 低价超短剖面，并在 manifest 记录 `requested_mode`、实际 `mode`、`mode_decision` 和 `mode_decision_reason`；这不是静默降级。若输入同时包含 `market`、`prediction` 或 `prediction_score`、以及 `turn` 或 `turnover` 三组字段，auto 会走 prediction-derived 外部 prediction 评分，但 `consumes_prediction_columns=true`、`prediction_input_source=external_input`、`prediction_model_executed_by_runner=false` 仍表示本 runner 只消费输入预测列，没有训练或执行预测模型；如果校验在评分前失败，summary 中 `consumes_prediction_columns=false` 表示本次没有实际消费预测列。`lightgbm_output_source` 和 `lightgbm_executed_by_runner` 是旧产物兼容字段；新报告优先引用中性字段。该入口可合并本地或东方财富实时快照作为展示字段，也可显式调用仓库内 baostock/akshare 历史取数脚本；历史抓取本身不会生成 prediction，若要 prediction-derived 口径必须显式提供外部预测列或使用 `--mode prediction` 暴露缺口，不证明实时全市场扫描完成。
 
 | mode | 触发条件 | 必须披露 |
 | --- | --- | --- |
 | `auto -> generic` | 缺少 prediction-derived 必需列 | `mode_decision_reason`、`prediction_input_source=not_used` |
-| `auto -> prediction` | 输入已有 `market`、`prediction` 或 `prediction_score`、`turn` 或 `turnover` | `prediction_input_source=external_input`、`prediction_model_executed_by_runner=false` |
+| `auto -> prediction` | 输入同时包含 `market` + (`prediction` 或 `prediction_score`) + (`turn` 或 `turnover`) | `prediction_input_source=external_input`、`prediction_model_executed_by_runner=false` |
 | `prediction` | 用户坚持 prediction-derived 口径 | 缺字段时必须失败，不能自动改 generic |
 | `generic` | 用户明确接受通用技术评分 | 不得写成 prediction-derived 或模型预测结果 |
 

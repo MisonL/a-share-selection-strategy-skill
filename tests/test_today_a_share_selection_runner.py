@@ -156,6 +156,8 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(["validate"], summary["failed_steps"])
         self.assertEqual("failed", summary["status"])
         self.assertTrue(manifest["prediction_mode"])
+        self.assertTrue(manifest["consumes_prediction_columns"])
+        self.assertFalse(summary["consumes_prediction_columns"])
         self.assertEqual(["prediction"], manifest["missing_prediction_column_groups"])
         self.assertEqual(
             "prediction_or_prediction_score",

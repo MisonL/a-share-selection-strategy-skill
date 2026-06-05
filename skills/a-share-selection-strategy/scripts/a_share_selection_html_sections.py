@@ -21,6 +21,7 @@ from a_share_selection_html_format import (
     i18n,
     table_cell,
 )
+from a_share_selection_html_history import history_selection_fields
 from a_share_selection_html_modes import (
     boundary_summary,
     limit_key,
@@ -82,6 +83,7 @@ def metric_grid(summary: dict[str, Any], language: str) -> str:
         (i18n("diagnostic_rows", language), summary.get("diagnostic_rows", 0)),
         (i18n("spot_rows", language), summary.get("spot_rows", 0)),
         (i18n("spot_matches", language), summary.get("spot_matched_symbols", 0)),
+        (i18n("history_symbols", language), summary.get("history_symbol_count", 0)),
         (i18n("failed_steps", language), len(summary.get("failed_steps", []))),
     ]
     cards = "".join(
@@ -138,6 +140,7 @@ def technical_details(summary: dict[str, Any], language: str) -> str:
         (i18n("real_market_data", language), metadata.get("real_market_data", "unknown")),
         (i18n("scenario", language), metadata.get("scenario", "")),
     ]
+    fields.extend(history_selection_fields(summary, language))
     rows = "".join(f"<dt>{label}</dt><dd>{esc(value)}</dd>" for label, value in fields)
     return (
         '<details class="technical-details">'
@@ -207,6 +210,8 @@ def evidence_paths(
         ("candidates_output", "candidates_output_written", "candidates_csv"),
         ("diagnostics_output", "diagnostics_output_written", "diagnostics_csv"),
         ("prices_output", "prices_output_written", "prices"),
+        ("selected_symbols_output", "selected_symbols_output_written", "selected_symbols_json"),
+        ("history_metadata_output", "history_metadata_output_written", "history_metadata_json"),
     ]
     for path_key, written_key, label_key in optional:
         if summary.get(written_key):

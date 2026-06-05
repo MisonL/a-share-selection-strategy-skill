@@ -42,6 +42,10 @@ class FetchEastmoneyAShareSpotTests(unittest.TestCase):
         self.assertEqual(0, metadata["pages_failed"])
         self.assertEqual(1, metadata["retry_attempts_per_page"])
         self.assertFalse(metadata["partial_result"])
+        self.assertEqual(
+            "requested_pages_snapshot_not_full_market_proof",
+            metadata["coverage_claim"],
+        )
 
     def test_cli_writes_partial_metadata_and_strict_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -72,14 +76,51 @@ class FetchEastmoneyAShareSpotTests(unittest.TestCase):
             rows = pd.read_csv(output)
 
         self.assertEqual(3, code)
+        self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
+        self.assertIn("coverage_claim=partial_not_full_market", stdout.getvalue())
         self.assertIn("partial_result=true", stderr.getvalue())
         self.assertTrue(data["partial_result"])
+        self.assertEqual("partial_not_full_market", data["coverage_claim"])
         self.assertEqual(1, len(data["failed_pages"]))
         self.assertIn(
             "use_partial_snapshot_only_with_partial_result_disclosure",
             data["allowed_failure_actions"],
         )
         self.assertEqual(2, len(rows))
+
+    def test_cli_default_partial_result_discloses_scope_without_strict_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "spot.csv"
+            metadata = Path(tmpdir) / "metadata.json"
+            stdout = StringIO()
+            stderr = StringIO()
+            old_open_url = eastmoney.open_url
+            eastmoney.open_url = FailingSecondPageOpener()
+            try:
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    code = eastmoney.main(
+                        [
+                            "--output",
+                            str(output),
+                            "--metadata-output",
+                            str(metadata),
+                            "--pages",
+                            "2",
+                            "--retries",
+                            "0",
+                        ]
+                    )
+            finally:
+                eastmoney.open_url = old_open_url
+            data = json.loads(metadata.read_text(encoding="utf-8"))
+            output_exists = output.exists()
+
+        self.assertEqual(0, code, stderr.getvalue())
+        self.assertTrue(stdout.getvalue().startswith("PARTIAL:"))
+        self.assertIn("partial_result=true", stdout.getvalue())
+        self.assertIn("coverage_claim=partial_not_full_market", stdout.getvalue())
+        self.assertEqual("partial_not_full_market", data["coverage_claim"])
+        self.assertTrue(output_exists)
 
     def test_fetch_retries_page_before_marking_failure(self) -> None:
         args = eastmoney.build_parser().parse_args(

@@ -654,6 +654,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 "raw_items": 100,
                 "filtered_items": 100,
                 "partial_result": True,
+                "coverage_claim": "partial_not_full_market",
                 "allowed_failure_actions": ["rerun_with_fail_on_partial"],
             }
             (output / "spot_metadata.json").write_text(
@@ -672,12 +673,18 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             }
 
             summary = summary_view(manifest, "completed")
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                runner.helpers.print_summary(manifest, output)
 
         self.assertTrue(summary["spot_metadata"]["partial_result"])
+        self.assertEqual("partial_not_full_market", summary["spot_metadata"]["coverage_claim"])
         self.assertEqual(
             ["rerun_with_fail_on_partial"],
             summary["spot_metadata"]["allowed_failure_actions"],
         )
+        self.assertIn("spot_partial_result=true", stdout.getvalue())
+        self.assertIn("spot_failed_pages=1", stdout.getvalue())
 
     def test_summary_preserves_zero_filtered_spot_metadata_count(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -810,12 +817,36 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
             runner.run_pipeline(context)
             selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            (output / "history_metadata.json").write_text(
+                json.dumps({"failed_symbols": [{"symbol": "600001", "error": "offline"}]}),
+                encoding="utf-8",
+            )
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                summary = summary_view(manifest, "completed")
+                runner.helpers.print_summary(manifest, output)
 
         self.assertEqual(["000001"], manifest["history_symbols"])
         self.assertEqual(["000001"], selected["selected_symbols"])
         self.assertEqual(1, selected["filtered_spot_rows"])
         self.assertEqual(1, selected["selected_symbol_count"])
         self.assertEqual(1, selected["max_history_symbols"])
+        self.assertEqual(4, summary["history_selection"]["raw_spot_rows"])
+        self.assertEqual(1, summary["history_selection"]["filtered_spot_rows"])
+        self.assertEqual(1, summary["history_selection"]["selected_symbol_count"])
+        self.assertEqual(1, summary["history_selection"]["max_history_symbols"])
+        self.assertFalse(summary["history_selection"]["allow_partial_history"])
+        self.assertEqual(
+            1,
+            summary["history_selection"]["history_metadata_failed_symbol_count"],
+        )
+        self.assertTrue(summary["selected_symbols_output_written"])
+        self.assertTrue(summary["history_metadata_output_written"])
+        self.assertIn("history_symbols=1", stdout.getvalue())
+        self.assertIn("raw_spot_rows=4", stdout.getvalue())
+        self.assertIn("filtered_spot_rows=1", stdout.getvalue())
+        self.assertIn("max_history_symbols=1", stdout.getvalue())
+        self.assertIn("allow_partial_history=false", stdout.getvalue())
 
     def test_runner_derives_history_symbols_from_common_spot_code_aliases(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

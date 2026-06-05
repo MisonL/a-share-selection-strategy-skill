@@ -179,10 +179,17 @@ def build_metadata(
         "filtered_items": len(rows),
         "snapshot_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "partial_result": bool(failed_pages),
+        "coverage_claim": coverage_claim(bool(failed_pages)),
         "allowed_failure_actions": allowed_failure_actions(bool(failed_pages), len(rows)),
         "output": str(Path(args.output)),
         "metadata_output": str(Path(args.metadata_output)),
     }
+
+
+def coverage_claim(partial_result: bool) -> str:
+    if partial_result:
+        return "partial_not_full_market"
+    return "requested_pages_snapshot_not_full_market_proof"
 
 
 def strict_errors(metadata: dict[str, Any], args: argparse.Namespace) -> list[str]:
@@ -224,13 +231,17 @@ def write_json(data: dict[str, Any], path: Path) -> None:
 
 
 def print_summary(metadata: dict[str, Any], prefix: str = "OK") -> None:
+    status = "PARTIAL" if prefix == "OK" and metadata["partial_result"] else prefix
     print(
-        f"{prefix}: source=eastmoney raw_items={metadata['raw_items']} "
+        f"{status}: source=eastmoney source_scope={metadata['source_scope']} "
+        f"requested_pages={metadata['requested_pages']} "
+        f"raw_items={metadata['raw_items']} filtered_items={metadata['filtered_items']} "
         f"retries={metadata['retry_attempts_per_page']} "
         f"successful_pages={metadata['successful_pages']} "
         f"pages_successful={metadata['pages_successful']} "
         f"failed_pages={len(metadata['failed_pages'])} "
         f"partial_result={str(metadata['partial_result']).lower()} "
+        f"coverage_claim={metadata['coverage_claim']} "
         f"output={metadata['output']} metadata={metadata['metadata_output']}"
     )
 

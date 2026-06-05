@@ -192,6 +192,40 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertNotIn("Stale Diagnostic", report)
         self.assertNotIn("Price is above the configured limit", report)
 
+    def test_report_shows_history_selection_evidence_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            selected = output / "selected_symbols.json"
+            history = output / "history_metadata.json"
+            selected.write_text('{"selected_symbols":["000001"]}\n', encoding="utf-8")
+            history.write_text('{"failed_symbols":[]}\n', encoding="utf-8")
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "history_symbol_count": 1,
+                    "history_selection": {
+                        "raw_spot_rows": 4,
+                        "filtered_spot_rows": 1,
+                        "selected_symbol_count": 1,
+                        "max_history_symbols": 1,
+                        "allow_partial_history": False,
+                        "history_metadata_failed_symbol_count": 0,
+                    },
+                    "selected_symbols_output": str(selected),
+                    "selected_symbols_output_written": True,
+                    "history_metadata_output": str(history),
+                    "history_metadata_output_written": True,
+                }
+            )
+            report = render_report(summary, {"steps": []}, language="en")
+
+        self.assertIn("History Symbols", report)
+        self.assertIn("Raw spot rows", report)
+        self.assertIn(">4<", report)
+        self.assertIn("Selected history symbols", report)
+        self.assertIn(">./selected_symbols.json</code>", report)
+        self.assertIn(">./history_metadata.json</code>", report)
+
     def test_non_finite_numeric_values_render_as_placeholder(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             candidates = Path(tmpdir) / "candidates.csv"

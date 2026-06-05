@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from run_today_a_share_selection_helpers import print_summary, summary_view, tabular_suffix, write_json
+import run_today_a_share_selection_helpers as helpers
 from run_today_a_share_selection_commands import (
     fetch_history_command,
     fetch_spot_command,
@@ -23,11 +23,12 @@ from run_today_a_share_selection_commands import (
     validate_command,
 )
 from run_today_a_share_selection_history import (
-    DEFAULT_HISTORY_SYMBOL_LIMIT,
     history_symbols,
     validate_history_inputs,
 )
 from run_today_a_share_selection_modes import ModeResolution, resolve_mode
+from run_today_a_share_selection_outputs import clear_stale_run_outputs, finalize_outputs
+from run_today_a_share_selection_parser import build_parser
 
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -57,13 +58,22 @@ def main(argv: list[str] | None = None) -> int:
     output = Path(args.output_dir)
     manifest_path = output / "run_manifest.json"
     manifest = initial_manifest(args)
+
+    def finish(status: str) -> None:
+        finalize_outputs(
+            args=args,
+            manifest=manifest,
+            manifest_path=manifest_path,
+            output=output,
+            status=status,
+        )
+
     try:
         output.mkdir(parents=True, exist_ok=True)
         context = RunContext(args, manifest, manifest_path, run_command)
         run_pipeline(context)
     except StepFailure as exc:
-        write_json(manifest, manifest_path)
-        write_json(summary_view(manifest, "failed"), output / "summary.json")
+        finish("failed")
         print(
             f"ERROR: strict gate failed; step={exc.step} returncode={exc.returncode} "
             f"output_written=true manifest={manifest_path} "
@@ -72,62 +82,16 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 3
     except Exception as exc:  # noqa: BLE001
-        write_json(manifest, manifest_path)
-        write_json(summary_view(manifest, "failed"), output / "summary.json")
+        finish("failed")
         print(
             f"ERROR: code=run_failed output_written=true manifest={manifest_path} "
             f"message={exc}",
             file=sys.stderr,
         )
         return 2
-    write_json(manifest, manifest_path)
-    write_json(summary_view(manifest, "completed"), output / "summary.json")
-    print_summary(manifest, output)
+    finish("completed")
+    helpers.print_summary(manifest, output)
     return 0
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Run local A-share selection gates. In --mode auto, inputs with "
-            "market plus prediction/prediction_score plus turn/turnover use prediction-derived "
-            "external-prediction scoring; otherwise the runner uses the generic "
-            "low-price profile. This runner never executes LightGBM."
-        )
-    )
-    parser.add_argument("--prices-input", help="Local CSV or Parquet prices.")
-    parser.add_argument("--output-dir", required=True, help="Output run directory.")
-    parser.add_argument("--mode", choices=["auto", "generic", "prediction"], default="auto")
-    parser.add_argument("--config", help="Override scoring config path.")
-    parser.add_argument("--spot-input", help="Optional local spot CSV or Parquet file.")
-    parser.add_argument(
-        "--fetch-spot",
-        choices=["eastmoney"],
-        help="Fetch spot snapshot before scoring.",
-    )
-    parser.add_argument("--spot-pages", type=positive_int, default=1)
-    parser.add_argument("--fail-on-partial-spot", action="store_true")
-    parser.add_argument("--history-source", choices=["akshare", "baostock"])
-    parser.add_argument("--symbols", help="Comma-separated six-digit symbols for history fetch.")
-    parser.add_argument("--start-date", help="History start date.")
-    parser.add_argument("--end-date", help="History end date.")
-    parser.add_argument(
-        "--derive-symbols-from-spot",
-        action="store_true",
-        help="Derive history symbols from the local or fetched spot snapshot.",
-    )
-    parser.add_argument(
-        "--max-history-symbols",
-        type=positive_int,
-        default=DEFAULT_HISTORY_SYMBOL_LIMIT,
-    )
-    parser.add_argument("--history-adjust", help="Forwarded adjust value for history fetch.")
-    parser.add_argument("--allow-partial-history", action="store_true")
-    parser.add_argument("--drop-invalid-history-rows", action="store_true")
-    parser.add_argument("--min-history-rows", type=positive_int, default=120)
-    parser.add_argument("--fail-on-empty-result", action="store_true")
-    parser.add_argument("--fail-on-skipped", action="store_true")
-    return parser
 
 
 class StepFailure(RuntimeError):
@@ -142,13 +106,6 @@ def run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, cwd=str(Path.cwd()), capture_output=True, text=True)
 
 
-def positive_int(value: str) -> int:
-    parsed = int(value)
-    if parsed < 1:
-        raise argparse.ArgumentTypeError("value must be positive")
-    return parsed
-
-
 def run_pipeline(context: RunContext) -> None:
     apply_mode_resolution(context, resolve_mode(context.args))
     output = Path(context.args.output_dir)
@@ -156,6 +113,9 @@ def run_pipeline(context: RunContext) -> None:
     candidates = output / "candidates.csv"
     diagnostics = output / "diagnostics.csv"
     spot = run_spot_path(context.args)
+    validate_preflight_inputs(context.args, spot)
+    clear_stale_run_outputs(context.args, output)
+    context.manifest["run_outputs_initialized"] = True
     prepare_inputs(context.args, output, prices, spot)
     if context.args.fetch_spot:
         run_step(context, Step("fetch_spot", fetch_spot_command(context.args, spot)))
@@ -174,12 +134,9 @@ def prepare_inputs(
     args: argparse.Namespace, output: Path, prices: Path, spot: Path | None
 ) -> None:
     output.mkdir(parents=True, exist_ok=True)
-    validate_history_inputs(args, spot)
     if args.prices_input:
         source = Path(args.prices_input)
-        if not source.exists():
-            raise FileNotFoundError(f"prices input not found: {source}")
-        if source.resolve() != prices.resolve():
+        if not helpers.same_existing_path(source, prices):
             shutil.copyfile(source, prices)
     config = selected_config(args)
     target_config = output / config.name
@@ -187,22 +144,28 @@ def prepare_inputs(
         shutil.copyfile(config, target_config)
     if args.spot_input and spot is not None:
         source_spot = Path(args.spot_input)
-        if not source_spot.exists():
-            raise FileNotFoundError(f"spot input not found: {source_spot}")
-        if source_spot.resolve() != spot.resolve():
+        if not helpers.same_existing_path(source_spot, spot):
             shutil.copyfile(source_spot, spot)
+
+
+def validate_preflight_inputs(args: argparse.Namespace, spot: Path | None) -> None:
+    validate_history_inputs(args, spot)
+    if args.prices_input and not Path(args.prices_input).exists():
+        raise FileNotFoundError(f"prices input not found: {Path(args.prices_input)}")
+    if args.spot_input and not Path(args.spot_input).exists():
+        raise FileNotFoundError(f"spot input not found: {Path(args.spot_input)}")
 
 
 def run_prices_path(args: argparse.Namespace) -> Path:
     if not args.prices_input:
         return Path(args.output_dir) / "prices.csv"
-    return Path(args.output_dir) / f"prices{tabular_suffix(args.prices_input)}"
+    return Path(args.output_dir) / f"prices{helpers.tabular_suffix(args.prices_input)}"
 
 
 def run_spot_path(args: argparse.Namespace) -> Path | None:
     if not args.spot_input and not args.fetch_spot:
         return None
-    return Path(args.output_dir) / f"spot{tabular_suffix(args.spot_input or '')}"
+    return Path(args.output_dir) / f"spot{helpers.tabular_suffix(args.spot_input or '')}"
 
 
 def apply_mode_resolution(context: RunContext, resolution: ModeResolution) -> None:
@@ -245,7 +208,7 @@ def source_scope(args: argparse.Namespace) -> str:
 def run_step(context: RunContext, step: Step) -> None:
     result = context.executor(step.command)
     context.manifest["steps"].append(step_record(step, result))
-    write_json(context.manifest, context.manifest_path)
+    helpers.write_json(context.manifest, context.manifest_path)
     if result.returncode != 0:
         raise StepFailure(step.name, result.returncode, result.stderr)
 

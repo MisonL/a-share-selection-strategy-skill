@@ -14,6 +14,7 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
     candidates = Path(manifest["output_dir"]) / "candidates.csv"
     diagnostics = Path(manifest["output_dir"]) / "diagnostics.csv"
     score = score_summary(manifest)
+    run_outputs_initialized = bool(manifest.get("run_outputs_initialized"))
     return {
         "runner": manifest["runner"],
         "status": status,
@@ -36,19 +37,19 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "source_scope": manifest["source_scope"],
         "steps": len(manifest["steps"]),
         "failed_steps": [step["step"] for step in failed],
-        "spot_metadata": spot_metadata_view(manifest),
-        "spot_rows": spot_rows(manifest),
+        "spot_metadata": spot_metadata_view(manifest) if run_outputs_initialized else {},
+        "spot_rows": spot_rows(manifest) if run_outputs_initialized else 0,
         "spot_matched_symbols": score.get("spot_matched_symbols", 0),
-        "prices_rows": tabular_row_count(prices),
-        "candidate_rows": tabular_row_count(candidates),
-        "diagnostic_rows": tabular_row_count(diagnostics),
+        "prices_rows": tabular_row_count(prices) if run_outputs_initialized else 0,
+        "candidate_rows": tabular_row_count(candidates) if run_outputs_initialized else 0,
+        "diagnostic_rows": tabular_row_count(diagnostics) if run_outputs_initialized else 0,
         "score": score,
         "prices_output": str(prices),
-        "prices_output_written": prices.exists(),
+        "prices_output_written": run_outputs_initialized and prices.exists(),
         "candidates_output": str(candidates),
-        "candidates_output_written": candidates.exists(),
+        "candidates_output_written": run_outputs_initialized and candidates.exists(),
         "diagnostics_output": str(diagnostics),
-        "diagnostics_output_written": diagnostics.exists(),
+        "diagnostics_output_written": run_outputs_initialized and diagnostics.exists(),
         "boundary": boundary_for(manifest),
     }
 
@@ -120,7 +121,7 @@ def tabular_suffix(source: str | Path) -> str:
 
 
 def tabular_row_count(path: Path) -> int:
-    if not path.exists():
+    if not path.is_file():
         return 0
     if path.suffix.lower() in {".parquet", ".pq"}:
         return parquet_row_count(path)
@@ -219,8 +220,23 @@ def write_json(data: dict[str, Any], path: Path) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def same_existing_path(left: Path, right: Path) -> bool:
+    try:
+        return left.samefile(right)
+    except OSError:
+        return False
+
+
 def print_summary(manifest: dict[str, Any], output: Path) -> None:
+    from run_today_a_share_selection_outputs import (
+        html_report_error_stdout,
+        html_report_stdout_value,
+    )
+
     view = summary_view(manifest, "completed")
+    paths = f"manifest={output / 'run_manifest.json'} summary={output / 'summary.json'}"
+    html_report = html_report_stdout_value(manifest, output)
+    html_error = html_report_error_stdout(manifest)
     print(
         "OK: runner=run_today_a_share_selection "
         f"mode={manifest['mode']} steps={len(manifest['steps'])} "
@@ -235,5 +251,5 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
         f"candidate_rows={view['candidate_rows']} "
         f"diagnostic_rows={view['diagnostic_rows']} "
         f"spot_matched_symbols={view['spot_matched_symbols']} "
-        f"manifest={output / 'run_manifest.json'} summary={output / 'summary.json'}"
+        f"{paths} html_report={html_report}{html_error}"
     )

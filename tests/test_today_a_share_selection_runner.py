@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,7 +19,12 @@ sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(TESTS))
 
 import run_today_a_share_selection as runner  # noqa: E402
-from run_today_a_share_selection_helpers import spot_rows, tabular_row_count  # noqa: E402
+from run_today_a_share_selection_helpers import (  # noqa: E402
+    summary_view,
+    spot_rows,
+    tabular_row_count,
+)
+from run_today_a_share_selection_outputs import clear_stale_run_outputs  # noqa: E402
 from helpers import build_frame  # noqa: E402
 
 
@@ -45,15 +51,23 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
             manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            report = (output / "report.html").read_text(encoding="utf-8")
 
         self.assertEqual(0, code, stderr)
         self.assertIn("runner=run_today_a_share_selection", stdout)
         self.assertIn("candidate_rows=2", stdout)
         self.assertIn("diagnostic_rows=2", stdout)
+        self.assertIn("html_report=", stdout)
+        self.assertIn("lightgbm_not_used=true", stdout)
+        self.assertIn("lightgbm_output_source=not_used", stdout)
+        self.assertIn("lightgbm_executed_by_runner=false", stdout)
         self.assertEqual(["validate", "score"], [step["step"] for step in manifest["steps"]])
         self.assertEqual("auto", manifest["requested_mode"])
         self.assertEqual("generic", manifest["mode"])
         self.assertEqual("auto_generic", manifest["mode_decision"])
+        self.assertTrue(manifest["html_report_enabled"])
+        self.assertEqual("auto", manifest["html_report_language"])
+        self.assertIn(manifest["html_report_initial_language"], {"zh", "en"})
         self.assertIn("missing_prediction_columns:prediction", manifest["mode_decision_reason"])
         self.assertEqual(["prediction"], manifest["missing_prediction_column_groups"])
         self.assertEqual(
@@ -96,6 +110,17 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertTrue(summary["candidates_output_written"])
         self.assertTrue(summary["diagnostics_output"].endswith("diagnostics.csv"))
         self.assertTrue(summary["diagnostics_output_written"])
+        self.assertTrue(summary["html_report"].endswith("report.html"))
+        self.assertTrue(summary["html_report_written"])
+        self.assertEqual("auto", summary["html_report_language"])
+        self.assertEqual(
+            manifest["html_report_initial_language"],
+            summary["html_report_initial_language"],
+        )
+        self.assertIn("A-Share Selection Strategy", report)
+        self.assertIn("Scoring Notes", report)
+        self.assertIn("Candidates", report)
+        self.assertIn('data-lang-mode="auto"', report)
 
     def test_prediction_runner_fails_without_prediction_and_keeps_manifest(self) -> None:
         frame = build_frame(
@@ -109,7 +134,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             output = root / "run"
             frame.to_csv(prices, index=False)
 
-            code, _stdout, stderr = call_runner(
+            code, stdout, stderr = call_runner(
                 [
                     "--prices-input",
                     str(prices),
@@ -122,6 +147,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
             manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            report = (output / "report.html").read_text(encoding="utf-8")
 
         self.assertEqual(3, code)
         self.assertIn("step=validate", stderr)
@@ -142,9 +168,16 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         )
         self.assertFalse(summary["candidates_output_written"])
         self.assertFalse(summary["diagnostics_output_written"])
+        self.assertTrue(summary["html_report_written"])
+        self.assertIn("Failed report", report)
+        self.assertIn("prediction-derived profile requires prediction", report)
+        self.assertIn("Missing required prediction columns", report)
+        self.assertIn("validation failed before scoring", report)
+        self.assertNotIn("Read from input columns", report)
+        self.assertNotIn("ranked candidates from prediction columns", report)
 
-    def test_auto_runner_uses_prediction_when_prediction_columns_exist(self) -> None:
-        frame = build_frame(include_prediction=True, include_turn=True)
+    def test_generic_validate_failure_report_does_not_claim_completed_scoring(self) -> None:
+        frame = build_frame(include_turn=False, include_tradability=True)
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "input.csv"
@@ -157,12 +190,96 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                     str(prices),
                     "--output-dir",
                     str(output),
+                    "--mode",
+                    "generic",
+                ]
+            )
+
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            report = (output / "report.html").read_text(encoding="utf-8")
+
+        self.assertEqual(3, code)
+        self.assertIn("step=validate", stderr)
+        self.assertEqual("failed", summary["status"])
+        self.assertEqual(["validate"], summary["failed_steps"])
+        self.assertTrue(summary["html_report_written"])
+        self.assertIn("Generic scoring not completed", report)
+        self.assertIn("validation or scoring did not complete", report)
+        self.assertNotIn("Generic technical scoring", report)
+        self.assertNotIn("filtered local A-share price data", report)
+        self.assertNotIn("ranked the rows that passed", report)
+
+    def test_failed_reused_output_dir_does_not_show_stale_candidates(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=True)
+        frame[["open", "high", "low", "close"]] = frame[
+            ["open", "high", "low", "close"]
+        ] * 0.75
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+
+            code, _stdout, stderr = call_runner(
+                ["--prices-input", str(prices), "--output-dir", str(output)]
+            )
+            self.assertEqual(0, code, stderr)
+            old_candidates = output / "candidates.csv"
+            old_diagnostics = output / "diagnostics.csv"
+            self.assertTrue(old_candidates.exists())
+            self.assertTrue(old_diagnostics.exists())
+            self.assertIn("Zero Prefix", old_candidates.read_text(encoding="utf-8"))
+
+            code, stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--output-dir",
+                    str(output),
+                    "--mode",
+                    "prediction",
+                ]
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            report = (output / "report.html").read_text(encoding="utf-8")
+            candidates_exists = (output / "candidates.csv").exists()
+            diagnostics_exists = (output / "diagnostics.csv").exists()
+
+            self.assertEqual(3, code)
+            self.assertIn("step=validate", stderr)
+            self.assertFalse(candidates_exists)
+            self.assertFalse(diagnostics_exists)
+            self.assertFalse(summary["candidates_output_written"])
+            self.assertFalse(summary["diagnostics_output_written"])
+            self.assertEqual(0, summary["candidate_rows"])
+            self.assertEqual(0, summary["diagnostic_rows"])
+            self.assertIn("No rows written for this run.", report)
+            self.assertNotIn("Zero Prefix", report)
+            self.assertNotIn("Shanghai", report)
+
+    def test_auto_runner_uses_prediction_when_prediction_columns_exist(self) -> None:
+        frame = build_frame(include_prediction=True, include_turn=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+
+            code, stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--output-dir",
+                    str(output),
                 ]
             )
 
             manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
 
         self.assertEqual(0, code, stderr)
+        self.assertIn("lightgbm_not_used=false", stdout)
+        self.assertIn("lightgbm_output_source=external_input", stdout)
+        self.assertIn("lightgbm_executed_by_runner=false", stdout)
         self.assertEqual("prediction", manifest["mode"])
         self.assertEqual("auto_prediction", manifest["mode_decision"])
         self.assertFalse(manifest["lightgbm_not_used"])
@@ -171,6 +288,140 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual("external_input", manifest["prediction_input_source"])
         self.assertFalse(manifest["prediction_model_executed_by_runner"])
         self.assertEqual("external_input", manifest["lightgbm_output_source"])
+
+    def test_no_html_report_removes_stale_report_in_reused_output_dir(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=True)
+        frame[["open", "high", "low", "close"]] = frame[
+            ["open", "high", "low", "close"]
+        ] * 0.75
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+
+            code, _stdout, stderr = call_runner(
+                ["--prices-input", str(prices), "--output-dir", str(output)]
+            )
+            self.assertEqual(0, code, stderr)
+            self.assertTrue((output / "report.html").exists())
+
+            code, stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--output-dir",
+                    str(output),
+                    "--no-html-report",
+                ]
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(0, code, stderr)
+            self.assertIn("html_report=disabled", stdout)
+            self.assertNotIn(f"html_report={output / 'report.html'}", stdout)
+            self.assertFalse((output / "report.html").exists())
+            self.assertFalse(summary["html_report_written"])
+
+    def test_html_report_write_failure_does_not_block_success_summary(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=True)
+        frame[["open", "high", "low", "close"]] = frame[
+            ["open", "high", "low", "close"]
+        ] * 0.75
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+            output.mkdir()
+            (output / "report.html").mkdir()
+
+            code, stdout, stderr = call_runner(
+                ["--prices-input", str(prices), "--output-dir", str(output)]
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(0, code, stderr)
+        self.assertIn("html_report=unavailable", stdout)
+        self.assertIn("html_report_error_type=IsADirectoryError", stdout)
+        self.assertEqual("completed", summary["status"])
+        self.assertFalse(summary["html_report_written"])
+        self.assertEqual("IsADirectoryError", summary["html_report_error_type"])
+        self.assertIn("report.html", summary["html_report_error"])
+        self.assertFalse(manifest["html_report_written"])
+        self.assertEqual("IsADirectoryError", manifest["html_report_error_type"])
+
+    def test_html_report_replaces_stale_symlink_without_corrupting_csv(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=True)
+        frame[["open", "high", "low", "close"]] = frame[
+            ["open", "high", "low", "close"]
+        ] * 0.75
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            output = root / "run"
+            report = output / "report.html"
+            candidates = output / "candidates.csv"
+            frame.to_csv(prices, index=False)
+
+            code, _stdout, stderr = call_runner(
+                ["--prices-input", str(prices), "--output-dir", str(output)]
+            )
+            self.assertEqual(0, code, stderr)
+            report.unlink()
+            report.symlink_to(candidates)
+
+            code, _stdout, stderr = call_runner(
+                ["--prices-input", str(prices), "--output-dir", str(output)]
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            candidates_text = candidates.read_text(encoding="utf-8")
+            report_text = report.read_text(encoding="utf-8")
+
+        self.assertEqual(0, code, stderr)
+        self.assertTrue(summary["html_report_written"])
+        self.assertFalse(report.is_symlink())
+        self.assertEqual(2, summary["candidate_rows"])
+        self.assertIn("Zero Prefix", candidates_text)
+        self.assertNotIn("<!doctype html>", candidates_text)
+        self.assertIn("<!doctype html>", report_text)
+
+    def test_html_report_write_failure_does_not_block_failed_summary(self) -> None:
+        frame = build_frame(
+            include_turn=True,
+            include_prediction=False,
+            include_tradability=True,
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+            output.mkdir()
+            (output / "report.html").mkdir()
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--output-dir",
+                    str(output),
+                    "--mode",
+                    "prediction",
+                ]
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(3, code)
+        self.assertIn("step=validate", stderr)
+        self.assertEqual("failed", summary["status"])
+        self.assertEqual(["validate"], summary["failed_steps"])
+        self.assertFalse(summary["html_report_written"])
+        self.assertEqual("IsADirectoryError", summary["html_report_error_type"])
+        self.assertFalse(manifest["html_report_written"])
+        self.assertEqual("IsADirectoryError", manifest["html_report_error_type"])
 
     def test_explicit_mode_rejects_conflicting_config(self) -> None:
         frame = build_frame(include_turn=True, include_tradability=True)
@@ -223,6 +474,81 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
         self.assertEqual(2, code)
         self.assertIn("history fetch options would be ignored", stderr)
+
+    def test_preflight_error_preserves_reused_output_files(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=True)
+        frame[["open", "high", "low", "close"]] = frame[
+            ["open", "high", "low", "close"]
+        ] * 0.75
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+
+            code, _stdout, stderr = call_runner(
+                ["--prices-input", str(prices), "--output-dir", str(output)]
+            )
+            self.assertEqual(0, code, stderr)
+            old_candidates = output / "candidates.csv"
+            old_diagnostics = output / "diagnostics.csv"
+            old_prices = output / "prices.csv"
+            self.assertTrue(old_candidates.exists())
+            self.assertTrue(old_diagnostics.exists())
+            self.assertTrue(old_prices.exists())
+            old_candidates_text = old_candidates.read_text(encoding="utf-8")
+            old_diagnostics_text = old_diagnostics.read_text(encoding="utf-8")
+            old_spot_metadata = output / "spot_metadata.json"
+            old_spot_metadata.write_text(
+                json.dumps(
+                    {
+                        "source": "eastmoney",
+                        "source_scope": "a_share_spot_snapshot",
+                        "requested_pages": 2,
+                        "successful_pages": 1,
+                        "failed_pages": [{"page": 2, "error": "disconnect"}],
+                        "raw_items": 100,
+                        "filtered_items": 100,
+                        "partial_result": True,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "baostock",
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                ]
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            report = (output / "report.html").read_text(encoding="utf-8")
+
+            self.assertEqual(2, code)
+            self.assertIn("history fetch options would be ignored", stderr)
+            self.assertEqual(old_candidates_text, old_candidates.read_text(encoding="utf-8"))
+            self.assertEqual(old_diagnostics_text, old_diagnostics.read_text(encoding="utf-8"))
+            self.assertTrue(old_prices.exists())
+            self.assertTrue(old_spot_metadata.exists())
+            self.assertEqual({}, summary["spot_metadata"])
+            self.assertEqual(0, summary["spot_rows"])
+            self.assertFalse(summary["candidates_output_written"])
+            self.assertFalse(summary["diagnostics_output_written"])
+            self.assertEqual(0, summary["candidate_rows"])
+            self.assertEqual(0, summary["diagnostic_rows"])
+            self.assertNotIn("Zero Prefix", report)
+            self.assertNotIn("eastmoney", report)
+            self.assertNotIn("disconnect", report)
 
     def test_runner_rejects_local_and_fetched_spot_inputs_together(self) -> None:
         frame = build_frame(include_turn=True, include_tradability=True)
@@ -331,10 +657,11 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 "lightgbm_not_used": True,
                 "source_scope": "local_prices_input",
                 "output_dir": str(output),
+                "run_outputs_initialized": True,
                 "steps": [],
             }
 
-            summary = runner.summary_view(manifest, "completed")
+            summary = summary_view(manifest, "completed")
 
         self.assertTrue(summary["spot_metadata"]["partial_result"])
         self.assertEqual(
@@ -363,6 +690,45 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             rows = tabular_row_count(path)
 
         self.assertEqual(2, rows)
+
+    def test_tabular_row_count_ignores_csv_directory_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "rows.csv"
+            path.mkdir()
+
+            rows = tabular_row_count(path)
+
+        self.assertEqual(0, rows)
+
+    def test_stale_cleanup_preserves_samefile_prices_input_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            source = output / "prices.CSV"
+            stale_alias = output / "prices.csv"
+            source.write_text("symbol,date,close\n000001,2026-01-01,8.0\n", encoding="utf-8")
+            if not stale_alias.exists():
+                stale_alias.hardlink_to(source)
+            args = SimpleNamespace(prices_input=str(source), spot_input=None, fetch_spot=None)
+
+            clear_stale_run_outputs(args, output)
+
+            self.assertTrue(source.exists())
+            self.assertTrue(stale_alias.exists())
+
+    def test_stale_cleanup_preserves_samefile_spot_input_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            source = output / "spot.PQ"
+            stale_alias = output / "spot.pq"
+            source.write_text("symbol,spot_price\n000001,8.0\n", encoding="utf-8")
+            if not stale_alias.exists():
+                stale_alias.hardlink_to(source)
+            args = SimpleNamespace(prices_input=None, spot_input=str(source), fetch_spot=None)
+
+            clear_stale_run_outputs(args, output)
+
+            self.assertTrue(source.exists())
+            self.assertTrue(stale_alias.exists())
 
     def test_runner_builds_history_fetch_before_validate_when_prices_are_omitted(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

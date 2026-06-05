@@ -105,6 +105,8 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--allow-partial-history",
                 "--fail-on-empty-result",
                 "--fail-on-skipped",
+                "--no-html-report",
+                "--html-report-language",
             },
             "generate_lightgbm_predictions.py": {
                 "--input",

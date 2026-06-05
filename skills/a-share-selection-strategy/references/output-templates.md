@@ -16,6 +16,9 @@
 | `prediction_model_executed_by_runner=false` | 今日入口或外部 prediction 评分 | 不能说 runner 训练或执行了预测模型 |
 | `spot_matched_symbols` | spot 展示字段实际匹配到评分股票数 | 不能证明实时全市场扫描完整 |
 | `lightgbm_*` 字段 | 旧产物兼容字段 | 新报告优先引用中性的 prediction 字段 |
+| `html_report_written=true` | 人类可读 HTML 报告已写出 | 不能替代 JSON/CSV、退出码或门禁字段 |
+| `html_report_written=false` 且 `html_report_error_type` 非空 | HTML 展示层写出失败 | 不能改写候选、诊断、退出码或 strict gate 事实 |
+| `html_report_language=auto` | HTML 初始语言跟随运行环境，且浏览器内可切换 | 不能改变机器字段或事实口径 |
 
 ## 模板分组
 
@@ -35,6 +38,7 @@
 - `output_written=false`、strict gate 非 0、输入门禁失败时，不得改写成成功空结果。
 - 历史报告中的旧 stdout 必须按历史原文引用；当前新报告优先引用中性 prediction 字段。
 - 中文诊断字段只能从机器字段派生，不能覆盖 `failed_thresholds` 等机器事实。
+- `report.html` 只作为展示层引用；语言切换只改变展示文本，发现冲突时以 `summary.json`、`run_manifest.json`、CSV 和退出码为准。
 
 ### 无法直接选股
 
@@ -524,6 +528,7 @@
 - 未验证：
 - 数据限制：
 - 证据路径：
+- HTML 报告：
 - `prediction_source`：
 - `prediction_model_executed_by_score_script`：
 - `raw_symbols/predicted_symbols/skipped_symbols`：

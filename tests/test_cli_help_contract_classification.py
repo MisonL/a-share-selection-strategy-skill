@@ -40,6 +40,8 @@ HELP_CONTRACT_EXCLUDED_HELPERS = [
     "run_today_a_share_selection_helpers.py",
     "run_today_a_share_selection_history.py",
     "run_today_a_share_selection_modes.py",
+    "run_today_a_share_selection_outputs.py",
+    "run_today_a_share_selection_parser.py",
     "a_share_selection_backtest_rows.py",
     "a_share_selection_calendar_contract.py",
     "a_share_selection_candidate_fields.py",
@@ -49,6 +51,13 @@ HELP_CONTRACT_EXCLUDED_HELPERS = [
     "a_share_selection_diagnostic_labels.py",
     "a_share_selection_data.py",
     "a_share_selection_diagnostics.py",
+    "a_share_selection_html_assets.py",
+    "a_share_selection_html_data.py",
+    "a_share_selection_html_format.py",
+    "a_share_selection_html_report.py",
+    "a_share_selection_html_i18n.py",
+    "a_share_selection_html_modes.py",
+    "a_share_selection_html_sections.py",
     "a_share_selection_metrics.py",
     "a_share_selection_model_contracts.py",
     "a_share_selection_output.py",
@@ -65,6 +74,9 @@ HELP_CONTRACT_EXCLUDED_HELPERS = [
     "walk_forward_portfolio_commands.py",
     "walk_forward_price_checks.py",
 ]
+HELPER_ARGPARSE_MODULES = {
+    "run_today_a_share_selection_parser.py",
+}
 
 
 class CliHelpContractClassificationTests(unittest.TestCase):
@@ -88,7 +100,8 @@ class CliHelpContractClassificationTests(unittest.TestCase):
                     check=False,
                 )
 
-                self.assertNotIn("argparse", source)
+                if script_name not in HELPER_ARGPARSE_MODULES:
+                    self.assertNotIn("argparse", source)
                 self.assertNotIn("def main(", source)
                 self.assertNotIn('__name__ == "__main__"', source)
                 self.assertNotIn("usage:", result.stdout)

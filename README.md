@@ -76,6 +76,8 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
   --mode auto
 ```
 
+总控 CLI 默认同时写出 `report.html`，用于浏览器查看候选、诊断、步骤和证据路径；报告支持中英文切换，默认 `--html-report-language auto` 跟随运行环境。它只是 `summary.json`、`run_manifest.json`、`candidates.csv` 和 `diagnostics.csv` 的展示层，不替代机器字段或退出码。自动化场景可传 `--no-html-report` 关闭。
+
 更多 Parquet、联网取数、历史回测和门禁命令见 [runbook](skills/a-share-selection-strategy/references/runbook.md)。
 
 ## 数据契约
@@ -105,6 +107,7 @@ prediction-derived 输入必须包含：
 - `effective_empty_result=true` 表示成功运行但没有候选，不等于策略有效。
 - `output_written=false` 表示输入失败或严格门禁失败，不能写成成功 0 候选。
 - `summary.json` 中有输出路径不代表文件已生成；以 `prices_output_written`、`candidates_output_written`、`diagnostics_output_written` 为准。
+- `report.html` 只用于人类阅读；事实仍以 JSON/CSV、退出码和门禁字段为准。若报告写出失败，`html_report_written=false` 并记录 `html_report_error_type/html_report_error`。
 - `failed_symbols` 大于 0 时必须披露，即使其他候选已输出。
 - 中文展示字段只能从机器字段派生，不能反向覆盖机器事实。
 - 真实行情接入、真实 prediction 生成、真实策略回测是外部门禁，不能用本地 smoke test 代替。

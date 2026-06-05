@@ -37,6 +37,10 @@ TEXT = {
     "failed_steps": {"en": "Failed Steps", "zh": "失败步骤数"},
     "requested_mode": {"en": "Requested mode", "zh": "请求模式"},
     "mode_decision": {"en": "Mode decision", "zh": "模式决策"},
+    "consumes_prediction_columns": {
+        "en": "Consumed prediction columns",
+        "zh": "是否已消费预测列",
+    },
     "prediction_input_source": {"en": "Prediction input source", "zh": "预测输入来源"},
     "prediction_model_executed_by_runner": {
         "en": "Prediction model executed by runner",

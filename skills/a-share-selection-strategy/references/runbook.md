@@ -94,6 +94,7 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 检查：
 
 - `summary.json`: `requested_mode`、`mode`、`mode_decision`、`mode_decision_reason`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`prediction_input_source`、`prediction_model_executed_by_runner`、`candidate_rows`、`diagnostic_rows`、`spot_matched_symbols`、`input_metadata`、`html_report_language`、`html_report_initial_language`、`html_report_error_type`、`candidates_output_written`、`diagnostics_output_written`。
+- `run_manifest.json`: `html_report_enabled=false` 表示 `--no-html-report` 主动关闭 HTML；此时 `summary.html_report_written=false` 且 `html_report_error_type=""` 不是报告生成失败。
 - `report.html`: 浏览器可读汇总，展示候选、诊断、步骤和证据路径；默认 `--html-report-language auto` 跟随运行环境，也可传 `zh` 或 `en` 并在浏览器内切换；只从已写出的 JSON/CSV 派生，不能替代退出码或机器字段。
 - `candidates.csv`: 候选字段、spot 展示字段，以及 prediction 披露字段。
 - `diagnostics.csv`: `failed_thresholds`、`failed_thresholds_zh`、`selection_status`、`short_reason`，以及与候选一致的 prediction 披露字段。

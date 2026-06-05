@@ -107,6 +107,7 @@ prediction-derived 输入必须包含：
 - `effective_empty_result=true` 表示成功运行但没有候选，不等于策略有效。
 - `output_written=false` 表示输入失败或严格门禁失败，不能写成成功 0 候选。
 - `summary.json` 中有输出路径或旧文件存在不代表本次文件已生成；以 `prices_output_written`、`candidates_output_written`、`diagnostics_output_written` 为准。
+- `input_metadata` 缺失或未声明 `real_market_data=true` 时，只能称为本地输入文件，不能写成真实行情源、今日全市场覆盖或数据源已验证。
 - `input_metadata.source_type=synthetic_demo` 表示输入来自合成 demo，不是真实行情或真实选股结论。
 - `report.html` 只用于人类阅读；事实仍以 JSON/CSV、退出码和门禁字段为准。若报告被 `--no-html-report` 主动关闭，不能写成报告生成失败；若报告写出失败，`html_report_written=false` 并记录 `html_report_error_type/html_report_error`。
 - `failed_symbols` 大于 0 时必须披露，即使其他候选已输出。

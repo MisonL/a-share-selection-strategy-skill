@@ -77,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
         finish("failed")
         print(
             f"ERROR: strict gate failed; step={exc.step} returncode={exc.returncode} "
-            f"output_written=true manifest={manifest_path} "
+            f"summary_written=true manifest_written=true manifest={manifest_path} "
             f"step_stderr={exc.stderr_first_line}",
             file=sys.stderr,
         )
@@ -85,7 +85,8 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:  # noqa: BLE001
         finish("failed")
         print(
-            f"ERROR: code=run_failed output_written=true manifest={manifest_path} "
+            f"ERROR: code=run_failed summary_written=true manifest_written=true "
+            f"manifest={manifest_path} "
             f"message={exc}",
             file=sys.stderr,
         )
@@ -114,8 +115,8 @@ def run_pipeline(context: RunContext) -> None:
     candidates = output / "candidates.csv"
     diagnostics = output / "diagnostics.csv"
     spot = run_spot_path(context.args)
-    validate_preflight_inputs(context.args, spot)
     context.manifest["input_metadata"] = input_metadata_for_prices(context.args.prices_input)
+    validate_preflight_inputs(context.args, spot)
     clear_stale_run_outputs(context.args, output)
     context.manifest["run_outputs_initialized"] = True
     prepare_inputs(context.args, output, prices, spot)

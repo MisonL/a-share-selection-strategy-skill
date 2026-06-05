@@ -74,6 +74,49 @@ class TodayAShareDemoProvenanceTests(unittest.TestCase):
         self.assertIn("Synthetic demo data", report)
         self.assertIn("not real market data", report)
 
+    def test_preflight_failure_keeps_synthetic_demo_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            demo = root / "demo"
+            output = root / "run"
+            create_demo_data.main(
+                [
+                    "--output",
+                    str(demo),
+                    "--days",
+                    "160",
+                    "--scenario",
+                    "low-price-ultra-short",
+                ]
+            )
+            code, _stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(demo / "prices.csv"),
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "baostock",
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--html-report-language",
+                    "en",
+                ]
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            report = (output / "report.html").read_text(encoding="utf-8")
+
+        self.assertEqual(2, code)
+        self.assertIn("history fetch options would be ignored", stderr)
+        self.assertEqual("synthetic_demo", summary["input_metadata"]["source_type"])
+        self.assertFalse(summary["input_metadata"]["real_market_data"])
+        self.assertIn("Synthetic demo data", report)
+        self.assertIn("not real market data", report)
+
 
 def call_runner(args: list[str]) -> tuple[int, str, str]:
     stdout = StringIO()

@@ -123,6 +123,7 @@ def technical_details(summary: dict[str, Any], language: str) -> str:
     fields = [
         (i18n("requested_mode", language), summary.get("requested_mode")),
         (i18n("mode_decision", language), summary.get("mode_decision")),
+        (i18n("consumes_prediction_columns", language), summary.get("consumes_prediction_columns")),
         (i18n("prediction_input_source", language), summary.get("prediction_input_source")),
         (i18n("prediction_model_executed_by_runner", language), summary.get("prediction_model_executed_by_runner")),
         (i18n("source_scope", language), summary.get("source_scope")),

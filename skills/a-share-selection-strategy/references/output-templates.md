@@ -21,6 +21,7 @@
 | `html_report_written=false` 且 `html_report_error_type` 非空 | HTML 展示层写出失败 | 不能改写候选、诊断、退出码或 strict gate 事实 |
 | `html_report_language=auto` | HTML 初始语言跟随运行环境，且浏览器内可切换 | 不能改变机器字段或事实口径 |
 | `input_metadata.source_type=synthetic_demo` | 输入来自 `create_demo_data.py` 合成 demo | 不能写成真实行情、真实预测或真实选股结论 |
+| `input_metadata={}` 或未声明 `real_market_data=true` | 本地行情文件来源未证明 | 不能写成真实行情源、今日全市场扫描或数据覆盖已验证 |
 
 ## 模板分组
 
@@ -72,6 +73,16 @@
 - 缺少真实 `turn` 或 `turnover` 时，不能自行估算并当作真实换手率；yfinance 通用链路只能披露 `turnover_assumption=neutral_series_missing_turnover`。
 - 数据窗口必须覆盖评分配置的最小历史行数；最近一个月通常不足默认 120 行历史，可能导致历史不足或候选不足。
 - 只有 `validate_ohlcv.py` 和 `score_candidates.py` 完成后，才能按真实输出解释候选、0 候选或不足 5 只的原因。
+```
+
+### 本地行情来源未证明
+
+```markdown
+## 本地输入文件来源未证明
+- 本次只验证了本地行情文件的字段、格式和评分流程，不能证明它是真实行情源、今日全市场覆盖或完整交易日历数据。
+- 必须披露 `source_scope`、`input_metadata`、价格文件路径、信号日期或文件内 `date_min/date_max`。
+- 当 `input_metadata={}` 或未声明 `real_market_data=true` 时，只能称为“本地输入文件评分结果”，不能写成“今日真实 A 股候选”。
+- 若需要真实行情口径，必须补齐数据源、抓取时间、复权口径、交易日历、覆盖范围和 metadata，再重新校验和评分。
 ```
 
 ### 联网取数截止日不是实际最后交易日

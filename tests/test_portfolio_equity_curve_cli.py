@@ -93,6 +93,55 @@ class PortfolioEquityCurveCliTests(unittest.TestCase):
         self.assertIn("final_equity=0.94 min_final_equity=0.98", stderr.getvalue())
         self.assertIn("max_drawdown=-0.06000000000000005", stderr.getvalue())
 
+    def test_cli_success_discloses_local_baseline_boundary(self) -> None:
+        frame = backtest_frame("2026-05-12", [0.05])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            backtest = Path(tmpdir) / "backtest.csv"
+            output = Path(tmpdir) / "equity.csv"
+            frame.to_csv(backtest, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = equity_curve.main(
+                    [
+                        "--backtests",
+                        str(backtest),
+                        "--output",
+                        str(output),
+                    ]
+                )
+            output_exists = output.exists()
+
+        self.assertEqual(0, code, stderr.getvalue())
+        self.assertTrue(output_exists)
+        self.assertIn(
+            "claim_boundary=local_complete_trades_baseline_not_return_promise",
+            stdout.getvalue(),
+        )
+
+    def test_cli_non_strict_incomplete_warns_about_excluded_trades(self) -> None:
+        frame = backtest_frame("2026-05-12", [0.05], incomplete_rows=1)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            backtest = Path(tmpdir) / "backtest.csv"
+            output = Path(tmpdir) / "equity.csv"
+            frame.to_csv(backtest, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = equity_curve.main(
+                    [
+                        "--backtests",
+                        str(backtest),
+                        "--output",
+                        str(output),
+                    ]
+                )
+
+        self.assertEqual(0, code, stderr.getvalue())
+        self.assertIn("incomplete_trades=1", stdout.getvalue())
+        self.assertIn("WARNING: incomplete_trades_excluded=1", stderr.getvalue())
+        self.assertIn("--fail-on-incomplete", stderr.getvalue())
+
     def test_rejects_missing_required_columns(self) -> None:
         frame = pd.DataFrame([{"signal_date": "2026-05-12", "return": 0.01}])
 

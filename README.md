@@ -46,6 +46,8 @@ skills/
 
 脚本以 CLI 为稳定入口。Python 复用时需自行将 `skills/a-share-selection-strategy/scripts/` 加入 `PYTHONPATH` 或 `sys.path`。
 
+仅说“帮我选今天 A 股”但未提供行情文件或明确联网授权时，不运行 CLI、不输出候选股，先使用“无法直接选股”模板。
+
 ## 快速 demo
 
 以下命令使用合成 demo 数据，只验证本地链路，不证明真实行情、真实预测、真实回测或收益。

@@ -32,7 +32,13 @@ def parser_description() -> str:
 
 
 def add_core_options(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--prices-input", help="Local CSV or Parquet prices.")
+    parser.add_argument(
+        "--prices-input",
+        help=(
+            "Local CSV or Parquet prices input; runner outputs still include "
+            "CSV artifacts."
+        ),
+    )
     parser.add_argument("--output-dir", required=True, help="Output run directory.")
     parser.add_argument("--mode", choices=["auto", "generic", "prediction"], default="auto")
     parser.add_argument("--config", help="Override scoring config path.")

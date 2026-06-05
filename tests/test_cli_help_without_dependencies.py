@@ -278,6 +278,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             "run_today_a_share_selection.py": [
                 "Standard outputs are run_manifest.json, summary.json, report.html, candidates.csv, diagnostics.csv",
                 "strict all-Parquet output is not supported by this CLI",
+                "runner outputs still include CSV artifacts",
             ],
             "allocate_candidate_capital.py": [
                 "not broker orders or real fills",

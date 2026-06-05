@@ -72,6 +72,8 @@ class TodayAShareDemoProvenanceTests(unittest.TestCase):
         self.assertEqual(0, code, stderr)
         self.assertEqual("synthetic_demo", summary["input_metadata"]["source_type"])
         self.assertEqual("low-price-ultra-short", summary["input_metadata"]["scenario"])
+        self.assertEqual("synthetic_demo", summary["source_type"])
+        self.assertFalse(summary["real_market_data"])
         self.assertIn("Synthetic demo data", report)
         self.assertIn("not real market data", report)
         self.assertIn("Source type", report)
@@ -162,6 +164,8 @@ class TodayAShareDemoProvenanceTests(unittest.TestCase):
         self.assertIn("history fetch options would be ignored", stderr)
         self.assertEqual("synthetic_demo", summary["input_metadata"]["source_type"])
         self.assertFalse(summary["input_metadata"]["real_market_data"])
+        self.assertEqual("synthetic_demo", summary["source_type"])
+        self.assertFalse(summary["real_market_data"])
         self.assertIn("Synthetic demo data", report)
         self.assertIn("not real market data", report)
 

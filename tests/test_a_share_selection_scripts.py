@@ -283,6 +283,20 @@ class AShareSelectionScriptTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "prediction or prediction_score"):
             scorer.score_candidates(frame, config)
 
+    def test_prediction_validation_reports_missing_turn_and_invalid_market_label_symbol(self) -> None:
+        config = load_config("prediction_profile_config.json")
+        frame = build_frame(include_prediction=True)
+        frame = frame[frame["symbol"].eq("000002")].copy()
+        frame["symbol"] = "AAPL"
+        frame["market"] = "A-share"
+        frame = frame.drop(columns=["turn"], errors="ignore")
+        errors = validate_ohlcv.validate_profile_columns(frame, config)
+        joined = "; ".join(errors)
+
+        self.assertIn("requires turn or turnover column", joined)
+        self.assertIn("symbols must be six digits", joined)
+        self.assertIn("market labels do not prove A-share source or calendar", joined)
+
     def test_prediction_requires_market_column(self) -> None:
         config = load_config("prediction_profile_config.json")
         frame = build_frame(include_prediction=True, include_turn=True)

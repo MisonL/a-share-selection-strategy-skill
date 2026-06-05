@@ -14,6 +14,9 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
     candidates = Path(manifest["output_dir"]) / "candidates.csv"
     diagnostics = Path(manifest["output_dir"]) / "diagnostics.csv"
     score = score_summary(manifest)
+    input_metadata = manifest.get("input_metadata", {})
+    if not isinstance(input_metadata, dict):
+        input_metadata = {}
     run_outputs_initialized = bool(manifest.get("run_outputs_initialized"))
     return {
         "runner": manifest["runner"],
@@ -43,7 +46,9 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         ),
         "lightgbm_executed_by_runner": manifest.get("lightgbm_executed_by_runner", False),
         "source_scope": manifest["source_scope"],
-        "input_metadata": manifest.get("input_metadata", {}),
+        "source_type": input_metadata.get("source_type", "unknown"),
+        "real_market_data": input_metadata.get("real_market_data", "unknown"),
+        "input_metadata": input_metadata,
         "steps": len(manifest["steps"]),
         "failed_steps": [step["step"] for step in failed],
         "spot_metadata": spot_metadata_view(manifest) if run_outputs_initialized else {},

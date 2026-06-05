@@ -258,9 +258,8 @@ def validate_profile_columns(
     frame: pd.DataFrame, config: dict
 ) -> Iterable[str]:
     errors = profile_column_errors(frame, config)
-    if errors:
-        return errors
-    return prediction_value_errors(frame, config)
+    errors.extend(prediction_value_errors(frame, config))
+    return errors
 
 
 if __name__ == "__main__":

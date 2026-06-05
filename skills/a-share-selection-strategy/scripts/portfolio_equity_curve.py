@@ -70,6 +70,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     print_summary(summary, args.output)
+    print_incomplete_warning(summary, args.fail_on_incomplete)
     return 0
 
 
@@ -233,9 +234,23 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
         f"max_drawdown={summary['max_drawdown']} "
         f"max_drawdown_peak_date={summary['max_drawdown_peak_date']} "
         f"max_drawdown_trough_date={summary['max_drawdown_trough_date']} "
+        "claim_boundary=local_complete_trades_baseline_not_return_promise "
         f"output={output}"
     )
-    print("INFO: portfolio_model=equal_weight_completed_trades")
+    print(
+        "INFO: portfolio_model=equal_weight_completed_trades "
+        "claim_boundary=local_complete_trades_baseline_not_return_promise"
+    )
+
+
+def print_incomplete_warning(summary: dict[str, Any], fail_on_incomplete: bool) -> None:
+    if fail_on_incomplete or not summary["incomplete_trades"]:
+        return
+    print(
+        "WARNING: incomplete_trades_excluded="
+        f"{summary['incomplete_trades']} use --fail-on-incomplete for strict gates",
+        file=sys.stderr,
+    )
 
 
 if __name__ == "__main__":

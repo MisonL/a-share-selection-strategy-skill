@@ -45,7 +45,12 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Probe external source stability through fetch CLIs.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Probe external source stability through fetch CLIs. Repeated success only covers this "
+            "run window and keeps long_term_stability_claim=not_proven."
+        )
+    )
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--summary-output", required=True)
     parser.add_argument("--iterations", type=positive_int, default=3)

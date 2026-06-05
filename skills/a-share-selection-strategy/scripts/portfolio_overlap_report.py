@@ -298,6 +298,7 @@ def write_outputs(
 
 
 def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> None:
+    missing = ",".join(summary["capital_fields_missing"]) or "none"
     print(
         f"{prefix}: trades={summary['trades']} "
         f"complete_trades={summary['complete_trades']} "
@@ -307,6 +308,8 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
         f"max_gross_notional={summary['max_gross_notional']} "
         f"max_cash_reserved={summary['max_cash_reserved']} "
         f"same_symbol_overlap_rows={summary['same_symbol_overlap_rows']} "
+        f"capital_fields_missing={missing} "
+        f"weight_capacity_verifiable={summary['weight_capacity_verifiable']} "
         f"cash_capacity_verifiable={summary['cash_capacity_verifiable']} "
         f"calendar_model={summary['calendar_model']} "
         f"output={output}"

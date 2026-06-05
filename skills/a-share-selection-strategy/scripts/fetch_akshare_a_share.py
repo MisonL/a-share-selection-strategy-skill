@@ -284,6 +284,8 @@ def strict_gate_errors(metadata: dict[str, Any], fail_on_fetch_error: bool) -> l
         errors.append(f"empty_symbols={len(metadata['empty_symbols'])}")
     if metadata["symbol_count"] != len(metadata["requested_symbols"]):
         errors.append(f"symbol_count={metadata['symbol_count']} requested_symbols={len(metadata['requested_symbols'])}")
+    if metadata["fallback_errors"]:
+        errors.append(f"fallback_errors={len(metadata['fallback_errors'])}")
     return errors
 
 

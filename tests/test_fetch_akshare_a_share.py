@@ -95,7 +95,7 @@ class FetchAkshareAShareTests(unittest.TestCase):
         self.assertEqual("stock_zh_a_hist", saved["symbols"][0]["provider"])
         self.assertEqual("000001", frame["symbol"].iloc[0])
 
-    def test_cli_falls_back_to_daily_when_hist_fails(self) -> None:
+    def test_cli_falls_back_to_daily_when_hist_fails_without_strict_gate(self) -> None:
         fake = fake_akshare(hist_error=ConnectionError("hist unavailable"))
         old_module = sys.modules.get("akshare")
         sys.modules["akshare"] = fake
@@ -117,7 +117,6 @@ class FetchAkshareAShareTests(unittest.TestCase):
                             str(output),
                             "--metadata-output",
                             str(metadata),
-                            "--fail-on-fetch-error",
                         ]
                     )
                 saved = json.loads(metadata.read_text(encoding="utf-8"))
@@ -132,6 +131,41 @@ class FetchAkshareAShareTests(unittest.TestCase):
         self.assertEqual(2000, frame["volume"].iloc[0])
         self.assertEqual(20400, frame["amount"].iloc[0])
         self.assertIn("hist unavailable", saved["fallback_errors"][0]["error"])
+
+    def test_cli_strict_fails_when_hist_fallback_used(self) -> None:
+        fake = fake_akshare(hist_error=ConnectionError("hist unavailable"))
+        old_module = sys.modules.get("akshare")
+        sys.modules["akshare"] = fake
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                output = Path(tmpdir) / "prices.csv"
+                metadata = Path(tmpdir) / "metadata.json"
+                stdout = StringIO()
+                stderr = StringIO()
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    code = fetcher.main(
+                        [
+                            "--symbols",
+                            "000001",
+                            "--start-date",
+                            "2026-05-01",
+                            "--end-date",
+                            "2026-05-29",
+                            "--output",
+                            str(output),
+                            "--metadata-output",
+                            str(metadata),
+                            "--fail-on-fetch-error",
+                        ]
+                    )
+                saved = json.loads(metadata.read_text(encoding="utf-8"))
+        finally:
+            restore_module("akshare", old_module)
+
+        self.assertEqual(3, code)
+        self.assertEqual(1, len(saved["fallback_errors"]))
+        self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
+        self.assertIn("fallback_errors=1", stderr.getvalue())
 
     def test_cli_strict_invalid_rows_returns_error_with_metadata(self) -> None:
         fake = fake_akshare(

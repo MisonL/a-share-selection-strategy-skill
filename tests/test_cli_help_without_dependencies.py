@@ -90,6 +90,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--akshare-symbols",
                 "--yfinance-symbols",
                 "--baostock-symbols",
+                "long_term_stability_claim=not_proven",
             },
             "run_today_a_share_selection.py": {
                 "--prices-input",
@@ -187,6 +188,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--expected-symbol-count",
                 "--expected-max-candidates",
                 "--expect-portfolio-violations",
+                "does not validate artifacts",
             },
             "validate_walk_forward_artifacts.py": WALK_FORWARD_MODEL_OPTIONS
             | {
@@ -200,6 +202,8 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--required-allocation-model",
                 "--manifest-validation",
                 "--allow-dropped-invalid-rows",
+                "not checked",
+                "capacity pass",
             },
             "score_candidates.py": {
                 "--input",

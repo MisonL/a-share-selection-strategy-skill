@@ -40,7 +40,12 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Validate a walk-forward run manifest.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Validate a walk-forward run manifest. This checks command records only; "
+            "it does not validate artifacts or prove real P1 gates."
+        )
+    )
     parser.add_argument("--manifest", required=True, help="run_manifest.json path.")
     parser.add_argument("--output", help="Optional JSON report path.")
     parser.add_argument("--signal-dates", nargs="+", required=True)
@@ -295,7 +300,10 @@ def write_json(data: dict[str, Any], path: Path) -> None:
 
 def print_summary(report: dict[str, Any], output: Path | None, prefix: str = "OK") -> None:
     target = f" output={output}" if output else ""
-    print(f"{prefix}: validator=validate_walk_forward_manifest steps={report['steps_checked']} errors={len(report['errors'])}{target}")
+    print(
+        f"{prefix}: validator=validate_walk_forward_manifest steps={report['steps_checked']} "
+        f"errors={len(report['errors'])} claim_boundary=manifest_only_not_artifact_validation{target}"
+    )
 
 
 if __name__ == "__main__":

@@ -31,7 +31,12 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Validate walk-forward artifacts.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Validate walk-forward artifacts. Without --manifest-validation the manifest is not checked; "
+            "portfolio_violations > 0 is not a capacity pass."
+        )
+    )
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--signal-dates", nargs="+", required=True)
@@ -58,8 +63,10 @@ def print_summary(report: dict[str, object], output: Path, prefix: str = "OK") -
         f"{prefix}: validator={VALIDATOR} signals={report['signals_checked']} "
         f"candidates={report['total_candidates']} "
         f"completed_trades={report['total_completed_trades']} "
+        f"manifest_checked={report['manifest_checked']} "
         f"portfolio_violations={report['portfolio_violations']} "
-        f"errors={len(report['errors'])} output={output}"
+        f"errors={len(report['errors'])} claim_boundary=artifact_validation_not_external_gate "
+        f"output={output}"
     )
 
 

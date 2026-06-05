@@ -34,6 +34,7 @@ class WalkForwardManifestCliTests(unittest.TestCase):
 
         self.assertEqual(0, code)
         self.assertIn("OK:", stdout)
+        self.assertIn("claim_boundary=manifest_only_not_artifact_validation", stdout)
         self.assertEqual("", stderr)
         self.assertEqual([], report["errors"])
         self.assertEqual(10, report["steps_checked"])

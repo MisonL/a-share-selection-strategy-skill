@@ -54,6 +54,33 @@ class SlicePricesAsOfTests(unittest.TestCase):
             self.assertEqual(0, code, stderr.getvalue())
             self.assertTrue(output_path.exists())
             self.assertIn("rows=20", stdout.getvalue())
+            self.assertIn("as_of_date_observed=true", stdout.getvalue())
+            self.assertIn("claim_boundary=as_of_cutoff_not_signal_day", stdout.getvalue())
+
+    def test_cli_discloses_when_as_of_date_is_not_observed(self) -> None:
+        frame = build_frame(days=3)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            output_path = Path(tmpdir) / "slice.csv"
+            frame.to_csv(input_path, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = slicer.main(
+                    [
+                        "--input",
+                        str(input_path),
+                        "--output",
+                        str(output_path),
+                        "--as-of-date",
+                        "2026-06-06",
+                    ]
+                )
+
+        self.assertEqual(0, code, stderr.getvalue())
+        self.assertIn("as_of_date=2026-06-06", stdout.getvalue())
+        self.assertIn("as_of_date_observed=false", stdout.getvalue())
+        self.assertIn("claim_boundary=as_of_cutoff_not_signal_day", stdout.getvalue())
 
     def test_empty_slice_is_error_without_output(self) -> None:
         frame = build_frame(days=5)

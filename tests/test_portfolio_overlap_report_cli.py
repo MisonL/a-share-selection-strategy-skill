@@ -121,6 +121,7 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
             self.assertTrue(daily.exists())
             self.assertTrue(overlaps.exists())
             self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
+            self.assertIn("capital_fields_missing=weight,notional,quantity,cash_reserved", stdout.getvalue())
             self.assertIn("max_open_positions=4 limit=3", stderr.getvalue())
             self.assertIn("same_symbol_overlap_rows=", stderr.getvalue())
             self.assertEqual(4, data["max_open_positions"])
@@ -200,6 +201,8 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertTrue(output_exists)
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
+        self.assertIn("capital_fields_missing=none", stdout.getvalue())
+        self.assertIn("weight_capacity_verifiable=True", stdout.getvalue())
         self.assertIn("max_gross_weight=1.15 limit=1.0", stderr.getvalue())
 
     def test_cli_max_gross_weight_requires_weight_column(self) -> None:

@@ -12,7 +12,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Slice local OHLCV data by date.")
     parser.add_argument("--input", required=True, help="Path to CSV or Parquet file.")
     parser.add_argument("--output", required=True, help="Path to output CSV file.")
-    parser.add_argument("--as-of-date", required=True, help="Inclusive YYYY-MM-DD date.")
+    parser.add_argument(
+        "--as-of-date",
+        required=True,
+        help="Inclusive YYYY-MM-DD cutoff date; not proof that this date exists as a signal day.",
+    )
     args = parser.parse_args(argv)
     try:
         ensure_runtime_dependencies()
@@ -86,10 +90,13 @@ def write_output(frame: pd.DataFrame, path: Path) -> None:
 def print_summary(frame: pd.DataFrame, as_of_date: str, output: str) -> None:
     ensure_runtime_dependencies()
     dates = parse_dates(frame["date"])
+    cutoff = parse_cutoff(as_of_date).normalize()
+    observed = bool((dates.dt.normalize() == cutoff).any())
     print(
         f"OK: rows={len(frame)} symbols={frame['symbol'].nunique()} "
         f"date_min={dates.min().date()} date_max={dates.max().date()} "
-        f"as_of_date={as_of_date} output={output}"
+        f"as_of_date={as_of_date} as_of_date_observed={str(observed).lower()} "
+        f"claim_boundary=as_of_cutoff_not_signal_day output={output}"
     )
 
 

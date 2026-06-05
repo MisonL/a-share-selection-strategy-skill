@@ -34,6 +34,8 @@ class WalkForwardArtifactCliTests(unittest.TestCase):
 
         self.assertEqual(0, code)
         self.assertIn("OK:", stdout)
+        self.assertIn("manifest_checked=True", stdout)
+        self.assertIn("claim_boundary=artifact_validation_not_external_gate", stdout)
         self.assertEqual("", stderr)
         self.assertEqual([], report["errors"])
         self.assertEqual(2, report["total_candidates"])

@@ -11,10 +11,9 @@ from a_share_selection_metrics import is_prediction_mode
 
 def profile_column_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list[str]:
     errors = threshold_column_errors(frame, config)
+    errors.extend(market_column_errors(frame, config))
     if not is_prediction_mode(config):
         return errors
-    if config.get("universe", {}).get("market") and "market" not in frame.columns:
-        errors.append("prediction-derived profile requires market column")
     if not any(column in frame.columns for column in ["prediction", "prediction_score"]):
         errors.append(
             "prediction-derived profile requires prediction or prediction_score column; "
@@ -24,6 +23,15 @@ def profile_column_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list[s
     if not any(column in frame.columns for column in ["turn", "turnover"]):
         errors.append("prediction-derived profile requires turn or turnover column")
     return errors
+
+
+def market_column_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list[str]:
+    market = config.get("universe", {}).get("market")
+    if not market or "market" in frame.columns:
+        return []
+    if is_prediction_mode(config):
+        return ["prediction-derived profile requires market column"]
+    return [f"{market} profile requires market column"]
 
 
 def threshold_column_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list[str]:
@@ -51,21 +59,18 @@ def threshold_column_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list
 
 
 def prediction_value_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list[str]:
-    if not is_prediction_mode(config):
-        return []
+    prediction_mode = is_prediction_mode(config)
     errors = []
     market = str(config.get("universe", {}).get("market", ""))
-    errors.extend(prediction_market_errors(frame, market))
+    errors.extend(profile_market_errors(frame, market, prediction_mode=prediction_mode))
     market_frame = prediction_market_frame(frame, market)
     if not market_frame.empty:
         invalid_symbols = ~market_frame["symbol"].astype(str).str.fullmatch(r"\d{6}")
         invalid_count = int(invalid_symbols.sum())
         if invalid_count:
-            errors.append(
-                "prediction-derived A-share symbols must be six digits; "
-                f"invalid_symbols={invalid_count}; market labels do not prove "
-                "A-share source or calendar"
-            )
+            errors.append(symbol_error_message(market, invalid_count, prediction_mode))
+    if not prediction_mode:
+        return errors
     prediction_frame = market_frame if not market_frame.empty else frame
     prediction_error = prediction_value_error(prediction_frame)
     if prediction_error:
@@ -73,7 +78,12 @@ def prediction_value_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list
     return errors
 
 
-def prediction_market_errors(frame: pd.DataFrame, market: str) -> list[str]:
+def profile_market_errors(
+    frame: pd.DataFrame,
+    market: str,
+    *,
+    prediction_mode: bool,
+) -> list[str]:
     if not market or "market" not in frame.columns:
         return []
     values = frame["market"].astype(str)
@@ -82,13 +92,37 @@ def prediction_market_errors(frame: pd.DataFrame, market: str) -> list[str]:
     invalid = (values != market) & a_share_like
     errors = []
     if invalid.any():
-        errors.append(
-            f"prediction-derived A-share rows must use market={market}; "
-            f"invalid_market_values={format_value_counts(values[invalid])}"
-        )
+        errors.append(market_value_message(market, values[invalid], prediction_mode))
     if (values == market).sum() == 0:
-        errors.append(f"prediction-derived profile requires at least one {market} row")
+        prefix = "prediction-derived profile" if prediction_mode else f"{market} profile"
+        errors.append(f"{prefix} requires at least one {market} row")
     return errors
+
+
+def market_value_message(
+    market: str,
+    values: pd.Series,
+    prediction_mode: bool,
+) -> str:
+    prefix = "prediction-derived A-share rows" if prediction_mode else f"{market} rows"
+    return (
+        f"{prefix} must use market={market}; "
+        f"invalid_market_values={format_value_counts(values)}"
+    )
+
+
+def symbol_error_message(
+    market: str,
+    invalid_count: int,
+    prediction_mode: bool,
+) -> str:
+    if prediction_mode:
+        return (
+            "prediction-derived A-share symbols must be six digits; "
+            f"invalid_symbols={invalid_count}; market labels do not prove "
+            "A-share source or calendar"
+        )
+    return f"{market} symbols must be six digits; invalid_symbols={invalid_count}"
 
 
 def prediction_market_frame(frame: pd.DataFrame, market: str) -> pd.DataFrame:

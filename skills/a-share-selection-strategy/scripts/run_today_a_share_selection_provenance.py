@@ -15,6 +15,13 @@ PROVENANCE_COLUMNS = (
     "consumes_prediction_columns",
     "prediction_model_executed_by_runner",
     "lightgbm_executed_by_runner",
+    "history_provider",
+    "history_partial_result",
+    "history_failed_symbol_count",
+    "history_empty_symbol_count",
+    "history_fallback_error_count",
+    "history_output_written",
+    "history_metadata_output_written",
 )
 
 
@@ -42,6 +49,16 @@ def provenance_fields(manifest: dict[str, Any]) -> dict[str, Any]:
             manifest.get("prediction_model_executed_by_runner", False)
         ),
         "lightgbm_executed_by_runner": bool(manifest.get("lightgbm_executed_by_runner", False)),
+        "history_provider": metadata.get("history_provider", ""),
+        "history_partial_result": metadata.get("history_partial_result", ""),
+        "history_failed_symbol_count": metadata.get("history_failed_symbol_count", ""),
+        "history_empty_symbol_count": metadata.get("history_empty_symbol_count", ""),
+        "history_fallback_error_count": metadata.get("history_fallback_error_count", ""),
+        "history_output_written": metadata.get("history_output_written", ""),
+        "history_metadata_output_written": metadata.get(
+            "history_metadata_output_written",
+            "",
+        ),
     }
 
 

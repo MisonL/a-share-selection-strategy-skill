@@ -49,6 +49,10 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     manifest = initial_manifest(args)
     manifest_path = Path(args.output_dir) / "run_manifest.json"
+    if args.offline_plan:
+        write_offline_plan(args, manifest, manifest_path)
+        print_summary(manifest, manifest_path)
+        return 0
     try:
         context = RunContext(
             args=args,
@@ -99,6 +103,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-tradable-holding-period", action="store_true")
     parser.add_argument("--expect-portfolio-violations", action="store_true")
     parser.add_argument("--drop-invalid-rows", action="store_true")
+    parser.add_argument(
+        "--offline-plan",
+        action="store_true",
+        help=(
+            "Write a planned run_manifest.json without executing fetch, prediction, "
+            "validation, scoring, sizing, backtest, equity, or summary commands."
+        ),
+    )
     return parser
 
 class StepFailure(RuntimeError):
@@ -144,6 +156,93 @@ def run_pipeline(context: RunContext) -> None:
     overlap_allowed = (0, 3) if args.expect_portfolio_violations else (0,)
     run_step(context, Step("portfolio_overlap", overlap_command(args, output, backtests), overlap_allowed))
     run_step(context, Step("summary", summary_command(args, output)))
+
+def write_offline_plan(
+    args: argparse.Namespace,
+    manifest: dict[str, Any],
+    manifest_path: Path,
+) -> None:
+    output = Path(args.output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    manifest.update(offline_plan_fields())
+    config_path = planned_config_path(args, output)
+    manifest["config_path"] = str(config_path)
+    prices = output / "prices.csv"
+    backtests = []
+    plan_step(manifest, Step("fetch", fetch_command(args, prices, output / "metadata.json")))
+    signals = []
+    for signal_date in args.signal_dates:
+        signal_dir = output / "signals" / signal_date
+        signal = SignalRun(signal_date=signal_date, prices=prices, paths=signal_paths(signal_dir))
+        signals.append(signal)
+        if args.allocation_model == ALLOCATION_MODEL_PORTFOLIO:
+            plan_signal_score(manifest, signal, config_path, "raw_candidates")
+        else:
+            plan_signal(manifest, args, signal, config_path)
+        backtests.append(signal.paths["backtest"])
+    if args.allocation_model == ALLOCATION_MODEL_PORTFOLIO:
+        plan_step(manifest, Step("portfolio_allocate", portfolio_allocate_command(args, output, signals)))
+        for signal in signals:
+            plan_step(manifest, Step(f"{signal.signal_date}:backtest", backtest_command(args, signal.prices, signal.paths)))
+    plan_step(manifest, Step("equity", equity_command(output, backtests)))
+    overlap_allowed = (0, 3) if args.expect_portfolio_violations else (0,)
+    plan_step(manifest, Step("portfolio_overlap", overlap_command(args, output, backtests), overlap_allowed))
+    plan_step(manifest, Step("summary", summary_command(args, output)))
+    write_json(manifest, manifest_path)
+
+def offline_plan_fields() -> dict[str, Any]:
+    return {
+        "execution_mode": "offline_plan",
+        "commands_executed": False,
+        "real_market_data_executed": False,
+        "prediction_model_executed": False,
+        "validation_executed": False,
+        "scoring_executed": False,
+        "sizing_executed": False,
+        "backtest_executed": False,
+        "claim_boundary": "offline_plan_manifest_only_not_real_market_prediction_or_backtest",
+    }
+
+def planned_config_path(args: argparse.Namespace, output: Path) -> Path:
+    if args.max_candidates is None:
+        return CONFIG_PATH
+    return output / "prediction_profile_config.json"
+
+def plan_signal(
+    manifest: dict[str, Any],
+    args: argparse.Namespace,
+    signal: SignalRun,
+    config_path: Path,
+) -> None:
+    plan_signal_score(manifest, signal, config_path, "candidates")
+    plan_step(manifest, Step(f"{signal.signal_date}:allocate", allocate_command(args, signal.prices, signal.paths)))
+    plan_step(manifest, Step(f"{signal.signal_date}:backtest", backtest_command(args, signal.prices, signal.paths)))
+
+def plan_signal_score(
+    manifest: dict[str, Any],
+    signal: SignalRun,
+    config_path: Path,
+    output_key: str,
+) -> None:
+    name = signal.signal_date
+    paths = signal.paths
+    plan_step(manifest, Step(f"{name}:slice", slice_command(signal.prices, paths["sliced"], name)))
+    plan_step(manifest, Step(f"{name}:predict", predict_command(paths)))
+    plan_step(manifest, Step(f"{name}:validate", validate_command(paths["predictions"], config_path)))
+    plan_step(manifest, Step(f"{name}:score", score_command(paths, config_path, paths[output_key])))
+
+def plan_step(manifest: dict[str, Any], step: Step) -> None:
+    manifest["steps"].append(
+        {
+            "step": step.name,
+            "command": step.command,
+            "returncode": None,
+            "allowed_returncodes": list(step.allowed),
+            "stdout": "",
+            "stderr": "",
+            "planned_only": True,
+        }
+    )
 
 def run_signal(context: RunContext, signal: SignalRun, config_path: Path) -> None:
     args = context.args

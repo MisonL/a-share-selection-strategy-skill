@@ -186,6 +186,73 @@ class AShareSelectionProfileGateTests(unittest.TestCase):
         self.assertIn("requires isST column", stderr.getvalue())
         self.assertIn("requires tradestatus column", stderr.getvalue())
 
+    def test_low_price_profile_rejects_missing_market_column(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=True)
+        frame = frame.drop(columns=["market"])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            frame.to_csv(input_path, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = validate_ohlcv.main(
+                    [
+                        "--input",
+                        str(input_path),
+                        "--config",
+                        str(SCRIPTS / "ultra_short_low_price_config.json"),
+                    ]
+                )
+
+        self.assertEqual(1, code)
+        self.assertIn("A-share profile requires market column", stderr.getvalue())
+
+    def test_low_price_profile_rejects_suffixed_ashare_symbols(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=True)
+        frame["symbol"] = frame["symbol"].map({"000002": "000002.SZ", "600001": "600001.SH"})
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            frame.to_csv(input_path, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = validate_ohlcv.main(
+                    [
+                        "--input",
+                        str(input_path),
+                        "--config",
+                        str(SCRIPTS / "ultra_short_low_price_config.json"),
+                    ]
+                )
+
+        self.assertEqual(1, code)
+        self.assertIn("A-share symbols must be six digits", stderr.getvalue())
+
+    def test_low_price_score_rejects_non_ashare_market_instead_of_empty_output(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=True)
+        frame["market"] = "HK"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            output_path = Path(tmpdir) / "candidates.csv"
+            frame.to_csv(input_path, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = scorer.main(
+                    [
+                        "--input",
+                        str(input_path),
+                        "--config",
+                        str(SCRIPTS / "ultra_short_low_price_config.json"),
+                        "--output",
+                        str(output_path),
+                    ]
+                )
+
+        self.assertEqual(2, code)
+        self.assertFalse(output_path.exists())
+        self.assertIn("requires at least one A-share row", stderr.getvalue())
+
     def test_cli_reports_in_universe_short_history_examples(self) -> None:
         frame = build_frame(include_prediction=True, include_turn=True)
         short = build_frame(days=10, include_prediction=True, include_turn=True)

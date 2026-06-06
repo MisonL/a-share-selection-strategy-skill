@@ -163,7 +163,10 @@ class FetchAkshareAShareTests(unittest.TestCase):
             restore_module("akshare", old_module)
 
         self.assertEqual(3, code)
+        self.assertFalse(output.exists())
         self.assertEqual(1, len(saved["fallback_errors"]))
+        self.assertFalse(saved["output_written"])
+        self.assertTrue(saved["metadata_output_written"])
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn("fallback_errors=1", stderr.getvalue())
 
@@ -211,10 +214,56 @@ class FetchAkshareAShareTests(unittest.TestCase):
             restore_module("akshare", old_module)
 
         self.assertEqual(3, code)
+        self.assertFalse(output.exists())
         self.assertEqual(1, saved["invalid_rows"])
         self.assertEqual(0, saved["dropped_invalid_rows"])
+        self.assertFalse(saved["output_written"])
+        self.assertTrue(saved["metadata_output_written"])
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn("invalid_rows=1", stderr.getvalue())
+
+    def test_cli_strict_error_removes_stale_outputs(self) -> None:
+        fake = fake_akshare(hist_error=ConnectionError("hist unavailable"))
+        old_module = sys.modules.get("akshare")
+        sys.modules["akshare"] = fake
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                output = Path(tmpdir) / "prices.csv"
+                metadata = Path(tmpdir) / "metadata.json"
+                output.write_text("symbol,date,close\n000001,2026-01-01,1\n", encoding="utf-8")
+                metadata.write_text('{"stale": true}\n', encoding="utf-8")
+                stdout = StringIO()
+                stderr = StringIO()
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    code = fetcher.main(
+                        [
+                            "--symbols",
+                            "000001",
+                            "--start-date",
+                            "2026-05-01",
+                            "--end-date",
+                            "2026-05-29",
+                            "--output",
+                            str(output),
+                            "--metadata-output",
+                            str(metadata),
+                            "--fail-on-fetch-error",
+                        ]
+                    )
+                output_exists = output.exists()
+                metadata_exists = metadata.exists()
+                saved = json.loads(metadata.read_text(encoding="utf-8"))
+        finally:
+            restore_module("akshare", old_module)
+
+        self.assertEqual(3, code)
+        self.assertFalse(output_exists)
+        self.assertTrue(metadata_exists)
+        self.assertEqual(1, len(saved["fallback_errors"]))
+        self.assertFalse(saved["output_written"])
+        self.assertTrue(saved["metadata_output_written"])
+        self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
+        self.assertIn("fallback_errors=1", stderr.getvalue())
 
 
 def valid_history() -> pd.DataFrame:

@@ -40,6 +40,8 @@ def main(argv: list[str] | None = None) -> int:
         help="Explicitly drop rows with invalid baostock OHLCV, amount, or turn values.",
     )
     args = parser.parse_args(argv)
+    output = Path(args.output)
+    metadata_output = Path(args.metadata_output)
     try:
         frame, metadata = fetch_prices(args)
         frame, metadata = apply_quality_policy(
@@ -47,16 +49,21 @@ def main(argv: list[str] | None = None) -> int:
             metadata,
             drop_invalid_rows=args.drop_invalid_rows,
         )
-        write_outputs(frame, metadata, Path(args.output), Path(args.metadata_output))
+        metadata = output_status(metadata, output_written=True, metadata_output_written=True)
+        write_outputs(frame, metadata, output, metadata_output)
     except Exception as exc:  # noqa: BLE001
+        remove_output(output)
         print(f"ERROR: code=fetch_failed output_written=false message={exc}", file=sys.stderr)
         return 2
     strict_errors = strict_gate_errors(metadata, fail_on_fetch_error=args.fail_on_fetch_error)
     if strict_errors:
+        metadata = output_status(metadata, output_written=False, metadata_output_written=True)
+        remove_output(output)
+        write_metadata(metadata, metadata_output)
         print_summary(metadata, prefix="ERROR_SUMMARY")
         print(
             "ERROR: strict gate failed; "
-            f"{'; '.join(strict_errors)} output_written=true",
+            f"{'; '.join(strict_errors)} output_written=false metadata_output_written=true",
             file=sys.stderr,
         )
         return 3
@@ -183,6 +190,19 @@ def build_metadata(
     }
 
 
+def output_status(
+    metadata: dict[str, Any],
+    *,
+    output_written: bool,
+    metadata_output_written: bool,
+) -> dict[str, Any]:
+    return {
+        **metadata,
+        "output_written": bool(output_written),
+        "metadata_output_written": bool(metadata_output_written),
+    }
+
+
 def apply_quality_policy(
     frame: pd.DataFrame,
     metadata: dict[str, Any],
@@ -282,11 +302,23 @@ def write_outputs(
 ) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(output, index=False)
+    write_metadata(metadata, metadata_output)
+
+
+def write_metadata(metadata: dict[str, Any], metadata_output: Path) -> None:
     metadata_output.parent.mkdir(parents=True, exist_ok=True)
     metadata_output.write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True),
         encoding="utf-8",
     )
+
+
+def remove_output(output: Path) -> None:
+    if not output.exists() and not output.is_symlink():
+        return
+    if output.is_dir() and not output.is_symlink():
+        return
+    output.unlink()
 
 
 def print_summary(metadata: dict[str, Any], prefix: str = "OK") -> None:

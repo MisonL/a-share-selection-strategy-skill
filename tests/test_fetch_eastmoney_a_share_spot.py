@@ -122,6 +122,46 @@ class FetchEastmoneyAShareSpotTests(unittest.TestCase):
         self.assertEqual("partial_not_full_market", data["coverage_claim"])
         self.assertTrue(output_exists)
 
+    def test_cli_raw_empty_strict_failure_removes_stale_output_and_keeps_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "spot.csv"
+            metadata = Path(tmpdir) / "metadata.json"
+            output.write_text("symbol,name\nSTALE,old\n", encoding="utf-8")
+            metadata.write_text('{"stale": true}\n', encoding="utf-8")
+            stdout = StringIO()
+            stderr = StringIO()
+            old_open_url = eastmoney.open_url
+            eastmoney.open_url = EmptyOpener()
+            try:
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    code = eastmoney.main(
+                        [
+                            "--output",
+                            str(output),
+                            "--metadata-output",
+                            str(metadata),
+                            "--pages",
+                            "1",
+                            "--retries",
+                            "0",
+                        ]
+                    )
+            finally:
+                eastmoney.open_url = old_open_url
+            data = json.loads(metadata.read_text(encoding="utf-8"))
+            output_exists = output.exists()
+            metadata_exists = metadata.exists()
+
+        self.assertEqual(3, code)
+        self.assertFalse(output_exists)
+        self.assertTrue(metadata_exists)
+        self.assertEqual(0, data["raw_items"])
+        self.assertFalse(data["output_written"])
+        self.assertTrue(data["metadata_output_written"])
+        self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
+        self.assertIn("raw_items=0", stderr.getvalue())
+        self.assertIn("output_written=false metadata_output_written=true", stderr.getvalue())
+
     def test_fetch_retries_page_before_marking_failure(self) -> None:
         args = eastmoney.build_parser().parse_args(
             [
@@ -183,6 +223,11 @@ class FailOnceOpener:
         if self.calls == 1:
             raise RuntimeError("temporary disconnect")
         return json.dumps(payload()).encode("utf-8")
+
+
+class EmptyOpener:
+    def __call__(self, _url: str, _timeout: float) -> bytes:
+        return json.dumps({"data": {"diff": []}}).encode("utf-8")
 
 
 def payload() -> dict[str, object]:

@@ -26,7 +26,10 @@ from run_today_a_share_selection_history import (
     history_symbols,
     validate_history_inputs,
 )
-from run_today_a_share_selection_input_metadata import input_metadata_for_prices
+from run_today_a_share_selection_input_metadata import (
+    history_metadata_for_output,
+    input_metadata_for_prices,
+)
 from run_today_a_share_selection_modes import ModeResolution, resolve_mode
 from run_today_a_share_selection_outputs import clear_stale_run_outputs, finalize_outputs
 from run_today_a_share_selection_parser import build_parser
@@ -219,6 +222,8 @@ def source_scope(args: argparse.Namespace) -> str:
 def run_step(context: RunContext, step: Step) -> None:
     result = context.executor(step.command)
     context.manifest["steps"].append(step_record(step, result))
+    if step.name == "fetch_history":
+        update_history_input_metadata(context.manifest)
     if step.name == "score":
         update_prediction_consumption(context.manifest)
     helpers.write_json(context.manifest, context.manifest_path)
@@ -242,6 +247,12 @@ def update_prediction_consumption(manifest: dict[str, Any]) -> None:
     manifest["consumes_prediction_columns"] = consumed
     manifest["prediction_input_source"] = "external_input" if consumed else "not_used"
     manifest["lightgbm_output_source"] = "external_input" if consumed else "not_used"
+
+
+def update_history_input_metadata(manifest: dict[str, Any]) -> None:
+    metadata = history_metadata_for_output(Path(manifest["output_dir"]))
+    if metadata:
+        manifest["input_metadata"] = metadata
 
 
 def first_error_line(text: str) -> str:

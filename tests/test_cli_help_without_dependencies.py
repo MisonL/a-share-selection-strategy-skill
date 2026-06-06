@@ -69,7 +69,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
     def test_core_navigation_help_does_not_import_pandas(self) -> None:
         cases = {
             "create_demo_data.py": {"--output", "--days"},
-            "run_baostock_walk_forward.py": set(),
+            "run_baostock_walk_forward.py": {"--offline-plan"},
             "probe_baostock_limit_fields.py": set(),
             "validate_ohlcv.py": {"--input", "--config", "--min-history-rows"},
             "fetch_baostock_a_share.py": FETCH_CORE_OPTIONS | {"--drop-invalid-rows"},
@@ -296,6 +296,11 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             "portfolio_equity_curve.py": [
                 "Defaults to complete trades only",
                 "--fail-on-incomplete",
+            ],
+            "run_baostock_walk_forward.py": [
+                "--offline-plan",
+                "without executing fetch, prediction",
+                "backtest, equity, or summary commands",
             ],
         }
         for script_name, expected_texts in cases.items():

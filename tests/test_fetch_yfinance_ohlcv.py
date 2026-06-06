@@ -137,16 +137,61 @@ class FetchYfinanceOhlcvTests(unittest.TestCase):
                             "--fail-on-fetch-error",
                         ]
                     )
-                self.assertTrue(output.exists())
                 saved = json.loads(metadata.read_text(encoding="utf-8"))
         finally:
             restore_module("yfinance", old_module)
 
         self.assertEqual(3, code)
+        self.assertFalse(output.exists())
         self.assertEqual(0, saved["rows"])
         self.assertEqual(["AAPL"], saved["empty_symbols"])
+        self.assertFalse(saved["output_written"])
+        self.assertTrue(saved["metadata_output_written"])
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn("rows=0", stderr.getvalue())
+        self.assertIn("empty_symbols=1", stderr.getvalue())
+
+    def test_cli_strict_error_removes_stale_outputs(self) -> None:
+        fake = fake_yfinance({"AAPL": pd.DataFrame()})
+        old_module = sys.modules.get("yfinance")
+        sys.modules["yfinance"] = fake
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                output = Path(tmpdir) / "prices.csv"
+                metadata = Path(tmpdir) / "metadata.json"
+                output.write_text("symbol,date,close\nSTALE,2026-01-01,1\n", encoding="utf-8")
+                metadata.write_text('{"stale": true}\n', encoding="utf-8")
+                stdout = StringIO()
+                stderr = StringIO()
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    code = fetcher.main(
+                        [
+                            "--symbols",
+                            "AAPL",
+                            "--start-date",
+                            "2026-05-01",
+                            "--end-date",
+                            "2026-05-29",
+                            "--output",
+                            str(output),
+                            "--metadata-output",
+                            str(metadata),
+                            "--fail-on-fetch-error",
+                        ]
+                    )
+                output_exists = output.exists()
+                metadata_exists = metadata.exists()
+                saved = json.loads(metadata.read_text(encoding="utf-8"))
+        finally:
+            restore_module("yfinance", old_module)
+
+        self.assertEqual(3, code)
+        self.assertFalse(output_exists)
+        self.assertTrue(metadata_exists)
+        self.assertEqual(["AAPL"], saved["empty_symbols"])
+        self.assertFalse(saved["output_written"])
+        self.assertTrue(saved["metadata_output_written"])
+        self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn("empty_symbols=1", stderr.getvalue())
 
 

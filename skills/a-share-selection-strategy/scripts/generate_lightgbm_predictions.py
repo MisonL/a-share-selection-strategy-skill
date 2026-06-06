@@ -44,6 +44,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--summary-output", help="Optional JSON summary output path.")
     parser.add_argument("--fail-on-skipped", action="store_true")
     args = parser.parse_args(argv)
+    output = Path(args.output)
+    summary_output = Path(args.summary_output) if args.summary_output else None
     try:
         ensure_runtime_dependencies()
         result, summary = generate_predictions(
@@ -54,16 +56,18 @@ def main(argv: list[str] | None = None) -> int:
         )
         if args.fail_on_skipped and summary["skipped_symbols"]:
             print_summary(summary, args.output, prefix="ERROR_SUMMARY")
+            remove_stale_outputs(output, summary_output)
             print(
                 "ERROR: strict gate failed; "
                 f"skipped_symbols={summary['skipped_symbols']} output_not_written=true",
                 file=sys.stderr,
             )
             return 3
-        write_output(result, Path(args.output))
-        if args.summary_output:
-            write_json_summary(summary, Path(args.summary_output))
+        write_output(result, output)
+        if summary_output is not None:
+            write_json_summary(summary, summary_output)
     except Exception as exc:  # noqa: BLE001
+        remove_stale_outputs(output, summary_output)
         print(
             "ERROR: code=bad_input "
             f"input={Path(args.input).name} output_written=false message={exc}",
@@ -354,6 +358,15 @@ def with_prediction(group: pd.DataFrame, probability: float, horizon: int) -> pd
 def write_output(frame: pd.DataFrame, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(path, index=False)
+
+
+def remove_stale_outputs(*paths: Path | None) -> None:
+    for path in paths:
+        if path is None or (not path.exists() and not path.is_symlink()):
+            continue
+        if path.is_dir() and not path.is_symlink():
+            continue
+        path.unlink()
 
 
 def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> None:

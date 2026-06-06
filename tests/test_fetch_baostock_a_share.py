@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 import json
 import sys
 import tempfile
@@ -83,6 +85,57 @@ class FetchBaostockAShareTests(unittest.TestCase):
             self.assertTrue(output.exists())
             saved = json.loads(meta.read_text(encoding="utf-8"))
         self.assertEqual("baostock", saved["source"])
+
+    def test_strict_failure_removes_stale_output_and_keeps_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "prices.csv"
+            meta = Path(tmpdir) / "metadata.json"
+            output.write_text("symbol,date,close\nSTALE,2026-01-01,1\n", encoding="utf-8")
+            meta.write_text('{"stale": true}\n', encoding="utf-8")
+            old_main = fetcher.fetch_prices
+            stdout = StringIO()
+            stderr = StringIO()
+            try:
+                def fake_fetch_prices(_args):
+                    frame = fetcher.pd.DataFrame([valid_row("000001", "2026-05-20")])
+                    metadata = metadata_for(["000001"], frame)
+                    metadata["failed_symbols"] = [{"symbol": "000001", "error": "offline"}]
+                    metadata["empty_symbols"] = ["000001"]
+                    metadata["symbol_count"] = 0
+                    return frame, metadata
+
+                fetcher.fetch_prices = fake_fetch_prices  # type: ignore[assignment]
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    code = fetcher.main(
+                        [
+                            "--symbols",
+                            "000001",
+                            "--start-date",
+                            "2026-05-20",
+                            "--end-date",
+                            "2026-05-20",
+                            "--output",
+                            str(output),
+                            "--metadata-output",
+                            str(meta),
+                            "--fail-on-fetch-error",
+                        ]
+                    )
+            finally:
+                fetcher.fetch_prices = old_main  # type: ignore[assignment]
+
+            saved = json.loads(meta.read_text(encoding="utf-8"))
+            output_exists = output.exists()
+            meta_exists = meta.exists()
+
+        self.assertEqual(3, code)
+        self.assertFalse(output_exists)
+        self.assertTrue(meta_exists)
+        self.assertEqual([{"symbol": "000001", "error": "offline"}], saved["failed_symbols"])
+        self.assertFalse(saved["output_written"])
+        self.assertTrue(saved["metadata_output_written"])
+        self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
+        self.assertIn("output_written=false metadata_output_written=true", stderr.getvalue())
 
     def test_quality_policy_reports_invalid_rows_without_dropping(self) -> None:
         frame = fetcher.pd.DataFrame(

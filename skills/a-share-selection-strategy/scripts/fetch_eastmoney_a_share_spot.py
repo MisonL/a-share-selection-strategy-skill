@@ -29,11 +29,15 @@ Opener = Callable[[str, float], bytes]
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    output = Path(args.output)
+    metadata_output = Path(args.metadata_output)
     try:
         rows, metadata = fetch_snapshot(args, open_url)
-        write_csv(Path(args.output), rows)
-        write_json(metadata, Path(args.metadata_output))
+        metadata = output_status(metadata, output_written=True, metadata_output_written=True)
+        write_csv(output, rows)
+        write_json(metadata, metadata_output)
     except Exception as exc:  # noqa: BLE001
+        remove_output(output)
         print(
             f"ERROR: code=fetch_failed output_written=false message={exc}",
             file=sys.stderr,
@@ -41,8 +45,18 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     errors = strict_errors(metadata, args)
     if errors:
+        if metadata["raw_items"] == 0:
+            metadata = output_status(metadata, output_written=False, metadata_output_written=True)
+            remove_output(output)
+            write_json(metadata, metadata_output)
         print_summary(metadata, prefix="ERROR_SUMMARY")
-        print(f"ERROR: strict gate failed; {'; '.join(errors)}", file=sys.stderr)
+        print(
+            "ERROR: strict gate failed; "
+            f"{'; '.join(errors)} "
+            f"output_written={str(metadata['output_written']).lower()} "
+            f"metadata_output_written={str(metadata['metadata_output_written']).lower()}",
+            file=sys.stderr,
+        )
         return 3
     print_summary(metadata)
     return 0
@@ -186,6 +200,19 @@ def build_metadata(
     }
 
 
+def output_status(
+    metadata: dict[str, Any],
+    *,
+    output_written: bool,
+    metadata_output_written: bool,
+) -> dict[str, Any]:
+    return {
+        **metadata,
+        "output_written": bool(output_written),
+        "metadata_output_written": bool(metadata_output_written),
+    }
+
+
 def coverage_claim(partial_result: bool) -> str:
     if partial_result:
         return "partial_not_full_market"
@@ -228,6 +255,14 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 def write_json(data: dict[str, Any], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def remove_output(path: Path) -> None:
+    if not path.exists() and not path.is_symlink():
+        return
+    if path.is_dir() and not path.is_symlink():
+        return
+    path.unlink()
 
 
 def print_summary(metadata: dict[str, Any], prefix: str = "OK") -> None:

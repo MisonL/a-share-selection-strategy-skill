@@ -20,17 +20,28 @@ SCHEMAS = [
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    output = Path(args.output)
+    metadata_output = Path(args.metadata_output)
     try:
         frame, metadata = fetch_prices(args)
         frame, metadata = apply_quality_policy(frame, metadata, args.drop_invalid_rows)
-        write_outputs(frame, metadata, Path(args.output), Path(args.metadata_output))
+        metadata = output_status(metadata, output_written=True, metadata_output_written=True)
+        write_outputs(frame, metadata, output, metadata_output)
     except Exception as exc:  # noqa: BLE001
+        remove_output(output)
         print(f"ERROR: code=fetch_failed output_written=false message={exc}", file=sys.stderr)
         return 2
     strict_errors = strict_gate_errors(metadata, args.fail_on_fetch_error)
     if strict_errors:
+        metadata = output_status(metadata, output_written=False, metadata_output_written=True)
+        remove_output(output)
+        write_metadata(metadata, metadata_output)
         print_summary(metadata, prefix="ERROR_SUMMARY")
-        print(f"ERROR: strict gate failed; {'; '.join(strict_errors)} output_written=true", file=sys.stderr)
+        print(
+            "ERROR: strict gate failed; "
+            f"{'; '.join(strict_errors)} output_written=false metadata_output_written=true",
+            file=sys.stderr,
+        )
         return 3
     print_summary(metadata)
     return 0
@@ -218,6 +229,19 @@ def build_metadata(
     }
 
 
+def output_status(
+    metadata: dict[str, Any],
+    *,
+    output_written: bool,
+    metadata_output_written: bool,
+) -> dict[str, Any]:
+    return {
+        **metadata,
+        "output_written": bool(output_written),
+        "metadata_output_written": bool(metadata_output_written),
+    }
+
+
 def apply_quality_policy(
     frame: pd.DataFrame,
     metadata: dict[str, Any],
@@ -292,8 +316,20 @@ def strict_gate_errors(metadata: dict[str, Any], fail_on_fetch_error: bool) -> l
 def write_outputs(frame: pd.DataFrame, metadata: dict[str, Any], output: Path, meta: Path) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(output, index=False)
+    write_metadata(metadata, meta)
+
+
+def write_metadata(metadata: dict[str, Any], meta: Path) -> None:
     meta.parent.mkdir(parents=True, exist_ok=True)
     meta.write_text(json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def remove_output(output: Path) -> None:
+    if not output.exists() and not output.is_symlink():
+        return
+    if output.is_dir() and not output.is_symlink():
+        return
+    output.unlink()
 
 
 def print_summary(metadata: dict[str, Any], prefix: str = "OK") -> None:

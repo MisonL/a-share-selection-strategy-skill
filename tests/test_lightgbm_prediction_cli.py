@@ -213,6 +213,41 @@ class LightgbmPredictionCliTests(unittest.TestCase):
         finally:
             generator.load_model_dependencies = original_loader
 
+    def test_cli_all_skipped_removes_stale_outputs(self) -> None:
+        frame = build_frame(days=120, include_turn=True)
+        deps = {"classifier": RecordingClassifier, "scaler": RecordingScaler}
+        original_loader = generator.load_model_dependencies
+        generator.load_model_dependencies = lambda: deps
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                input_path = Path(tmpdir) / "prices.csv"
+                output_path = Path(tmpdir) / "predictions.csv"
+                summary_path = Path(tmpdir) / "summary.json"
+                frame.to_csv(input_path, index=False)
+                output_path.write_text("stale prediction rows\n", encoding="utf-8")
+                summary_path.write_text('{"stale": true}\n', encoding="utf-8")
+                stderr = StringIO()
+                with redirect_stderr(stderr):
+                    code = generator.main(
+                        [
+                            "--input",
+                            str(input_path),
+                            "--output",
+                            str(output_path),
+                            "--summary-output",
+                            str(summary_path),
+                            "--min-history-rows",
+                            "150",
+                        ]
+                    )
+
+            self.assertEqual(2, code)
+            self.assertFalse(output_path.exists())
+            self.assertFalse(summary_path.exists())
+            self.assertIn("skipped_reasons=insufficient_history:2", stderr.getvalue())
+        finally:
+            generator.load_model_dependencies = original_loader
+
     def test_cli_fail_on_skipped_returns_error_without_output(self) -> None:
         full_history = build_frame(days=180, include_turn=True)
         short_history = build_frame(days=120, include_turn=True)
@@ -245,6 +280,48 @@ class LightgbmPredictionCliTests(unittest.TestCase):
             self.assertFalse(output_path.exists())
             self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
             self.assertIn("skipped_symbols=1", stdout.getvalue())
+            self.assertIn("output_not_written=true", stderr.getvalue())
+        finally:
+            generator.load_model_dependencies = original_loader
+
+    def test_cli_fail_on_skipped_removes_stale_prediction_output(self) -> None:
+        full_history = build_frame(days=180, include_turn=True)
+        short_history = build_frame(days=120, include_turn=True)
+        short_history = short_history[short_history["symbol"] == "600001"]
+        frame = full_history[full_history["symbol"] == "000002"]
+        frame = pd.concat([frame, short_history], ignore_index=True)
+        deps = {"classifier": RecordingClassifier, "scaler": RecordingScaler}
+        original_loader = generator.load_model_dependencies
+        generator.load_model_dependencies = lambda: deps
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                input_path = Path(tmpdir) / "prices.csv"
+                output_path = Path(tmpdir) / "predictions.csv"
+                summary_path = Path(tmpdir) / "summary.json"
+                frame.to_csv(input_path, index=False)
+                output_path.write_text("stale prediction rows\n", encoding="utf-8")
+                summary_path.write_text('{"stale": true}\n', encoding="utf-8")
+                stdout = StringIO()
+                stderr = StringIO()
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    code = generator.main(
+                        [
+                            "--input",
+                            str(input_path),
+                            "--output",
+                            str(output_path),
+                            "--summary-output",
+                            str(summary_path),
+                            "--min-history-rows",
+                            "150",
+                            "--fail-on-skipped",
+                        ]
+                    )
+
+            self.assertEqual(3, code)
+            self.assertFalse(output_path.exists())
+            self.assertFalse(summary_path.exists())
+            self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
             self.assertIn("output_not_written=true", stderr.getvalue())
         finally:
             generator.load_model_dependencies = original_loader

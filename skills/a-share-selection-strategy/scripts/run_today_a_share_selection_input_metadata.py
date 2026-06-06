@@ -30,5 +30,32 @@ def input_metadata_for_prices(prices_input: str | None) -> dict[str, Any]:
     return {key: data[key] for key in METADATA_KEYS if key in data}
 
 
+def history_metadata_for_output(output_dir: Path) -> dict[str, Any]:
+    metadata_path = output_dir / "history_metadata.json"
+    if not metadata_path.is_file():
+        return {}
+    data = json.loads(metadata_path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"history metadata must be a JSON object: {metadata_path}")
+    source = str(data.get("source", "external_fetch") or "external_fetch")
+    return {
+        "source_type": "external_fetch",
+        "source": source,
+        "history_provider": source,
+        "real_market_data": True,
+        "history_partial_result": bool(data.get("partial_result", False)),
+        "history_failed_symbol_count": len(list_value(data, "failed_symbols")),
+        "history_empty_symbol_count": len(list_value(data, "empty_symbols")),
+        "history_fallback_error_count": len(list_value(data, "fallback_errors")),
+        "history_output_written": bool(data.get("output_written", True)),
+        "history_metadata_output_written": bool(data.get("metadata_output_written", True)),
+    }
+
+
+def list_value(data: dict[str, Any], key: str) -> list[Any]:
+    value = data.get(key, [])
+    return value if isinstance(value, list) else []
+
+
 def is_synthetic_demo(metadata: dict[str, Any]) -> bool:
     return str(metadata.get("source_type", "")) == "synthetic_demo"

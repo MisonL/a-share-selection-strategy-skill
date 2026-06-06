@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 import json
@@ -775,6 +776,58 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(["000001", "600000"], manifest["history_symbols"])
         self.assertIn("--fail-on-fetch-error", manifest["steps"][0]["command"])
 
+    def test_history_fetch_metadata_propagates_to_summary_stdout_and_csvs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "baostock",
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args,
+                manifest,
+                output / "run_manifest.json",
+                history_metadata_executor,
+            )
+
+            runner.run_pipeline(context)
+            summary = summary_view(manifest, "completed")
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                runner.helpers.print_summary(manifest, output)
+            candidate_rows = csv_rows(output / "candidates.csv")
+            diagnostic_rows = csv_rows(output / "diagnostics.csv")
+
+        self.assertEqual("external_fetch", summary["source_type"])
+        self.assertTrue(summary["real_market_data"])
+        self.assertEqual("baostock", summary["input_metadata"]["source"])
+        self.assertEqual("baostock", summary["input_metadata"]["history_provider"])
+        self.assertEqual(1, summary["input_metadata"]["history_failed_symbol_count"])
+        self.assertEqual(0, summary["input_metadata"]["history_fallback_error_count"])
+        self.assertFalse(summary["input_metadata"]["history_output_written"])
+        self.assertTrue(summary["input_metadata"]["history_metadata_output_written"])
+        self.assertIn("metadata_source=external_fetch", stdout.getvalue())
+        self.assertIn("real_market_data=true", stdout.getvalue())
+        for row in candidate_rows + diagnostic_rows:
+            self.assertEqual("external_fetch", row["source_type"])
+            self.assertEqual("True", row["real_market_data"])
+            self.assertEqual("baostock", row["history_provider"])
+            self.assertEqual("1", row["history_failed_symbol_count"])
+            self.assertEqual("0", row["history_fallback_error_count"])
+            self.assertEqual("False", row["history_output_written"])
+            self.assertEqual("True", row["history_metadata_output_written"])
+
     def test_runner_can_derive_history_symbols_from_spot_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -1284,6 +1337,62 @@ def ok_executor(command: list[str]) -> subprocess.CompletedProcess[str]:
     if "score_candidates.py" in command[1]:
         stdout = "OK: raw_symbols=1 input_symbols=1 candidates=1 effective_empty_result=false\n"
     return subprocess.CompletedProcess(command, 0, stdout, "")
+
+
+def history_metadata_executor(command: list[str]) -> subprocess.CompletedProcess[str]:
+    script = Path(command[1]).name
+    if script.startswith("fetch_") and "a_share" in script:
+        Path(command[command.index("--output") + 1]).write_text(
+            "symbol,date,close\n000001,2026-01-01,8.0\n",
+            encoding="utf-8",
+        )
+        Path(command[command.index("--metadata-output") + 1]).write_text(
+            json.dumps(
+                {
+                    "source": "baostock",
+                    "requested_symbols": ["000001"],
+                    "rows": 0,
+                    "symbol_count": 0,
+                    "failed_symbols": [{"symbol": "000001", "error": "offline"}],
+                    "empty_symbols": ["000001"],
+                    "fallback_errors": [],
+                    "partial_result": True,
+                    "output_written": False,
+                    "metadata_output_written": True,
+                    "symbols": [
+                        {
+                            "symbol": "000001",
+                            "rows": 0,
+                            "date_min": "",
+                            "date_max": "",
+                        }
+                    ],
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    if script == "score_candidates.py":
+        Path(command[command.index("--output") + 1]).write_text(
+            "symbol,total_score\n000001,0.8\n",
+            encoding="utf-8",
+        )
+        Path(command[command.index("--diagnostics-output") + 1]).write_text(
+            "symbol,selection_status\n000001,selected\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            "OK: raw_symbols=1 input_symbols=1 candidates=1 effective_empty_result=false\n",
+            "",
+        )
+    return subprocess.CompletedProcess(command, 0, "", "")
+
+
+def csv_rows(path: Path) -> list[dict[str, str]]:
+    with path.open(encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
 
 
 if __name__ == "__main__":

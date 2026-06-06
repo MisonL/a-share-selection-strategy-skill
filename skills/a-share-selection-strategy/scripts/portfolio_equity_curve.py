@@ -18,7 +18,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
             "Build an equal-weight equity curve from backtest outputs. Defaults "
-            "to complete trades only; use --fail-on-incomplete for strict gates."
+            "to complete trades only; final_equity_excludes_incomplete=true. "
+            "Use --fail-on-incomplete for strict gates."
         )
     )
     parser.add_argument("--backtests", nargs="+", required=True, help="Backtest CSV/Parquet paths.")

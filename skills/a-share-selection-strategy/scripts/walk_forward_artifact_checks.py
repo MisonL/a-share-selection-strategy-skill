@@ -283,6 +283,13 @@ def report_view(
     errors: list[str],
 ) -> dict[str, Any]:
     portfolio_violations = len(summary.get("portfolio", {}).get("violations", []))
+    capacity_gate_pass = portfolio_violations == 0
+    if capacity_gate_pass:
+        capacity_gate_status = "pass"
+    elif expected_portfolio_violations:
+        capacity_gate_status = "expected_violation_not_pass"
+    else:
+        capacity_gate_status = "failed_not_pass"
     return {
         "schema_version": 1,
         "validator": validator,
@@ -294,7 +301,8 @@ def report_view(
         "final_equity": summary.get("equity", {}).get("final_equity"),
         "portfolio_violations": portfolio_violations,
         "expected_portfolio_violations": expected_portfolio_violations,
-        "capacity_gate_pass": portfolio_violations == 0,
+        "capacity_gate_pass": capacity_gate_pass,
+        "capacity_gate_status": capacity_gate_status,
         "claim_boundary": "artifact_validation_not_external_gate",
         "manifest_checked": manifest_checked,
         "errors": errors,

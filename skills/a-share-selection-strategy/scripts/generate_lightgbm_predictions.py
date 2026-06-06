@@ -32,6 +32,10 @@ MODEL_PARAMS = {
 }
 
 
+class PredictionDependencyError(RuntimeError):
+    """Raised when optional ML dependencies are unavailable."""
+
+
 def main(argv: list[str] | None = None) -> int:
     epilog = (
         "Use --summary-output and audit split_method, scaler_fit_scope, "
@@ -73,11 +77,20 @@ def main(argv: list[str] | None = None) -> int:
         write_output(result, output)
         if summary_output is not None:
             write_json_summary(summary, summary_output)
-    except Exception as exc:  # noqa: BLE001
+    except PredictionDependencyError as exc:
         remove_stale_outputs(output, summary_output)
         print(
-            "ERROR: code=bad_input "
+            "ERROR: code=dependency_error "
             f"input={Path(args.input).name} output_written=false message={exc}",
+            file=sys.stderr,
+        )
+        return 2
+    except Exception as exc:  # noqa: BLE001
+        remove_stale_outputs(output, summary_output)
+        all_skipped = " all_skipped=true" if "no symbols predicted;" in str(exc) else ""
+        print(
+            "ERROR: code=bad_input "
+            f"input={Path(args.input).name} output_written=false{all_skipped} message={exc}",
             file=sys.stderr,
         )
         return 2
@@ -189,7 +202,7 @@ def load_model_dependencies() -> dict[str, Any]:
         from lightgbm import LGBMClassifier
         from sklearn.preprocessing import StandardScaler
     except Exception as exc:  # noqa: BLE001
-        raise RuntimeError(
+        raise PredictionDependencyError(
             "LightGBM prediction requires lightgbm and scikit-learn"
         ) from exc
     return {"classifier": LGBMClassifier, "scaler": StandardScaler}
@@ -390,6 +403,12 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
             f"{','.join(summary['skipped_symbol_examples'])}"
         )
     print("INFO: split=time_series scaler_fit=train_split_only model=lightgbm")
+    print(
+        "INFO: model_quality_scope="
+        f"{summary['model_quality_scope']} "
+        "full_market_generalization="
+        f"{summary['model_quality_metrics']['full_market_generalization']}"
+    )
 
 
 if __name__ == "__main__":

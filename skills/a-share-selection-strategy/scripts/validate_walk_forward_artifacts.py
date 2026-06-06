@@ -35,7 +35,8 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Validate walk-forward artifacts. Existing run_manifest_validation.json is checked automatically; "
             "portfolio_violations > 0 is not a capacity pass."
-        )
+        ),
+        formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--output", required=True)
@@ -44,7 +45,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--expected-candidates", nargs="+", type=int, required=True)
     parser.add_argument("--expected-final-equity", type=float, required=True)
     parser.add_argument("--final-equity-tolerance", type=float, default=1e-12)
-    parser.add_argument("--expected-portfolio-violations", type=int, required=True)
+    parser.add_argument(
+        "--expected-portfolio-violations",
+        type=int,
+        required=True,
+        help="Expected known violation count; known violations only, not a capacity pass.",
+    )
     parser.add_argument("--required-allocation-model", default="equal_cash_budget_lot_floor")
     parser.add_argument("--required-tradability-model", required=True)
     parser.add_argument("--required-limit-rules-model", required=True)
@@ -67,6 +73,7 @@ def print_summary(report: dict[str, object], output: Path, prefix: str = "OK") -
         f"portfolio_violations={report['portfolio_violations']} "
         f"expected_portfolio_violations={report['expected_portfolio_violations']} "
         f"capacity_gate_pass={report['capacity_gate_pass']} "
+        f"capacity_gate_status={report['capacity_gate_status']} "
         f"errors={len(report['errors'])} claim_boundary=artifact_validation_not_external_gate "
         f"output={output}"
     )

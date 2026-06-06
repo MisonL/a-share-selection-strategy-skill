@@ -10,6 +10,8 @@ SPOT_METADATA_KEYS = (
     "coverage_claim",
     "failed_pages",
     "allowed_failure_actions",
+    "output_written",
+    "metadata_output_written",
 )
 
 

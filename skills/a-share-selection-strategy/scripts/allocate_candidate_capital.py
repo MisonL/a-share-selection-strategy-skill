@@ -13,7 +13,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
             "Allocate local sizing fields for candidates. Outputs are traceable "
-            "cash-budget and lot-size calculations, not broker orders or real fills."
+            "cash-budget and lot-size calculations, not broker orders or real fills. "
+            "Stdout includes claim_boundary=local_sizing_not_broker_order; "
+            "CSV includes sizing_claim_boundary=local_sizing_not_broker_order."
         )
     )
     parser.add_argument("--prices", required=True, help="Path to OHLCV CSV/Parquet.")

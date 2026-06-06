@@ -128,6 +128,8 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--cash-budget",
                 "--lot-size",
                 "--fail-on-unallocated",
+                "claim_boundary=local_sizing_not_broker_order",
+                "sizing_claim_boundary=local_sizing_not_broker_order",
             },
             "allocate_portfolio_candidate_capital.py": {
                 "--prices",
@@ -150,6 +152,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--require-tradable-bars",
                 "--require-tradable-holding-period",
                 "--fail-on-incomplete",
+                "incomplete output is not a successful backtest",
             },
             "portfolio_equity_curve.py": {
                 "--backtests",
@@ -158,6 +161,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--fail-on-incomplete",
                 "--min-final-equity",
                 "--max-drawdown-floor",
+                "final_equity_excludes_incomplete=true",
             },
             "portfolio_overlap_report.py": WALK_FORWARD_CAPACITY_OPTIONS
             | {
@@ -181,6 +185,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--fail-on-symbol-overlap",
                 "--expect-portfolio-violations",
                 "--allow-dropped-invalid-rows",
+                "known violations only, not a capacity pass",
             },
             "validate_walk_forward_manifest.py": WALK_FORWARD_MODEL_OPTIONS
             | {
@@ -191,6 +196,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--expected-max-candidates",
                 "--expect-portfolio-violations",
                 "does not validate artifacts",
+                "known violations only, not a capacity pass",
             },
             "validate_walk_forward_artifacts.py": WALK_FORWARD_MODEL_OPTIONS
             | {
@@ -206,6 +212,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--allow-dropped-invalid-rows",
                 "checked automatically",
                 "capacity pass",
+                "known violations only, not a capacity pass",
             },
             "score_candidates.py": {
                 "--input",
@@ -216,6 +223,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--fail-on-empty-result",
                 "external_unverified",
                 "does not train or execute LightGBM",
+                ".parquet/.pq output paths fail",
             },
         }
         self.assertEqual(set(CLI_HELP_ENTRIES), set(cases))
@@ -312,6 +320,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "external_unverified",
                 "does not train or execute LightGBM",
                 "strict empty results return non-zero",
+                "--output and --diagnostics-output accept CSV output paths only",
             ],
             "generate_lightgbm_predictions.py": [
                 "generation_audit_only",

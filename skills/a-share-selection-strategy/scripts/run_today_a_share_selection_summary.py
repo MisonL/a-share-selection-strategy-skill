@@ -66,6 +66,8 @@ def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "missing_prediction_requirement": manifest.get("missing_prediction_requirement", ""),
         "steps": len(manifest["steps"]),
         "failed_steps": [step["step"] for step in failed],
+        "run_error_type": manifest.get("run_error_type", ""),
+        "run_error": manifest.get("run_error", ""),
     }
 
 

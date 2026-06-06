@@ -158,6 +158,8 @@ def technical_details(summary: dict[str, Any], language: str) -> str:
     fields = [
         (i18n("requested_mode", language), summary.get("requested_mode")),
         (i18n("mode_decision", language), summary.get("mode_decision")),
+        ("run_error_type", summary.get("run_error_type", "")),
+        ("run_error", summary.get("run_error", "")),
         (i18n("consumes_prediction_columns", language), summary.get("consumes_prediction_columns")),
         (i18n("prediction_input_source", language), summary.get("prediction_input_source")),
         (

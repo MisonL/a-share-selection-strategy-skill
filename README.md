@@ -116,6 +116,7 @@ prediction-derived 输入必须包含：
 - `allocate_candidate_capital.py` 只生成本地可追溯 sizing 字段；必须保留 `cash_budget`、`lot_size`、`capital_model` 和 `claim_boundary=local_sizing_not_broker_order`，不得解释为真实成交、券商订单或真实现金容量证明。
 - `allocate_candidate_capital.py` 输出会附带 `sizing_claim_boundary=local_sizing_not_broker_order`；默认成功但存在 `unallocated` 行时会在 stdout 给出 warning，必须同时检查 `unallocated` 列和 `--fail-on-unallocated`。
 - `report.html` 只用于人类阅读；事实仍以 JSON/CSV、退出码和门禁字段为准。若报告被 `--no-html-report` 主动关闭，不能写成报告生成失败；若报告写出失败，`html_report_written=false` 并记录 `html_report_error_type/html_report_error`。
+- 候选、sizing、回测或资金曲线必须写明非投资建议、非交易指令、非真实成交、非收益证明。
 - `failed_symbols` 大于 0 时必须披露，即使其他候选已输出。
 - 中文展示字段只能从机器字段派生，不能反向覆盖机器事实。
 - 真实行情接入、真实 prediction 生成、真实策略回测是外部门禁，不能用本地 smoke test 代替。

@@ -77,8 +77,10 @@ class WalkForwardArtifactCliTests(unittest.TestCase):
         self.assertEqual(0, code)
         self.assertEqual("", stderr)
         self.assertIn("capacity_gate_pass=False", stdout)
+        self.assertIn("capacity_gate_status=expected_violation_not_pass", stdout)
         self.assertIn("expected_portfolio_violations=True", stdout)
         self.assertFalse(report["capacity_gate_pass"])
+        self.assertEqual("expected_violation_not_pass", report["capacity_gate_status"])
         self.assertTrue(report["expected_portfolio_violations"])
 
     def test_cli_rejects_missing_sizing_field(self) -> None:

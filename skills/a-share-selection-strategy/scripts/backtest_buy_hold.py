@@ -23,7 +23,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
             "Run a minimal close-to-close buy-hold backtest. This is a local "
-            "baseline, not a promise of future returns or real tradability."
+            "baseline, not a promise of future returns or real tradability. "
+            "Without --fail-on-incomplete, incomplete output is not a successful backtest."
         )
     )
     parser.add_argument("--prices", required=True, help="Path to OHLCV CSV/Parquet.")

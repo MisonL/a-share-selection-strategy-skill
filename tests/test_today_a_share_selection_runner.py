@@ -655,6 +655,8 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 "partial_result": True,
                 "coverage_claim": "partial_not_full_market",
                 "allowed_failure_actions": ["rerun_with_fail_on_partial"],
+                "output_written": False,
+                "metadata_output_written": True,
             }
             (output / "spot_metadata.json").write_text(
                 json.dumps(metadata),
@@ -677,6 +679,8 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 runner.helpers.print_summary(manifest, output)
 
         self.assertTrue(summary["spot_metadata"]["partial_result"])
+        self.assertFalse(summary["spot_metadata"]["output_written"])
+        self.assertTrue(summary["spot_metadata"]["metadata_output_written"])
         self.assertEqual("partial_not_full_market", summary["spot_metadata"]["coverage_claim"])
         self.assertEqual(
             ["rerun_with_fail_on_partial"],

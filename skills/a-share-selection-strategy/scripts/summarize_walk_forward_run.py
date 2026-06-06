@@ -62,7 +62,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-gross-notional", type=float)
     parser.add_argument("--max-cash-reserved", type=float)
     parser.add_argument("--fail-on-symbol-overlap", action="store_true")
-    parser.add_argument("--expect-portfolio-violations", action="store_true")
+    parser.add_argument(
+        "--expect-portfolio-violations",
+        action="store_true",
+        help="Allow known violations only, not a capacity pass.",
+    )
     parser.add_argument("--allow-dropped-invalid-rows", action="store_true")
     return parser
 
@@ -96,6 +100,10 @@ def build_run_summary(run_dir: Path, options: argparse.Namespace) -> dict[str, A
         "portfolio": portfolio,
         "expected_portfolio_violations": bool(options.expect_portfolio_violations),
         "capacity_gate_pass": not bool(portfolio["violations"]),
+        "capacity_gate_status": capacity_gate_status(
+            portfolio["violations"],
+            expect_portfolio_violations=options.expect_portfolio_violations,
+        ),
         "required_tradability_model_checked": bool(options.required_tradability_model),
         "required_limit_rules_model_checked": bool(options.required_limit_rules_model),
         "model_gates_checked": bool(
@@ -105,6 +113,18 @@ def build_run_summary(run_dir: Path, options: argparse.Namespace) -> dict[str, A
     }
     summary["quality_errors"] = quality_errors(summary, metadata, options)
     return summary
+
+
+def capacity_gate_status(
+    violations: list[str],
+    *,
+    expect_portfolio_violations: bool,
+) -> str:
+    if not violations:
+        return "pass"
+    if expect_portfolio_violations:
+        return "expected_violation_not_pass"
+    return "failed_not_pass"
 
 
 def signal_dirs(run_dir: Path, signal_dates: list[str] | None) -> list[Path]:
@@ -320,6 +340,7 @@ def print_summary(summary: dict[str, Any], output: Path, prefix: str = "OK") -> 
         f"portfolio_violations={len(summary['portfolio']['violations'])} "
         f"expected_portfolio_violations={summary['expected_portfolio_violations']} "
         f"capacity_gate_pass={summary['capacity_gate_pass']} "
+        f"capacity_gate_status={summary['capacity_gate_status']} "
         f"model_gates_checked={summary['model_gates_checked']} "
         f"quality_errors={len(summary['quality_errors'])} "
         f"claim_boundary=summary_not_external_gate output={output}"

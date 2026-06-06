@@ -53,7 +53,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--required-tradability-model", required=True)
     parser.add_argument("--required-limit-rules-model", required=True)
     parser.add_argument("--expected-max-candidates", type=int)
-    parser.add_argument("--expect-portfolio-violations", action="store_true")
+    parser.add_argument(
+        "--expect-portfolio-violations",
+        action="store_true",
+        help="Allow known violations only, not a capacity pass.",
+    )
     return parser
 
 
@@ -72,6 +76,11 @@ def build_report(manifest: dict[str, Any], args: argparse.Namespace) -> dict[str
             "manifest_runner": manifest.get("runner"),
             "signals": signal_dates,
             "steps_checked": len(steps) if isinstance(steps, list) else 0,
+            "artifact_checked": False,
+            "capacity_gate_pass": "not_checked",
+            "capacity_gate_status": "manifest_only_not_artifact_validation",
+            "portfolio_violations": "not_checked",
+            "model_gates_checked": "manifest_command_only",
             "errors": errors,
         }
     allocation_model = str(manifest.get("allocation_model", "equal_cash_budget_lot_floor"))
@@ -84,6 +93,11 @@ def build_report(manifest: dict[str, Any], args: argparse.Namespace) -> dict[str
         "manifest_runner": manifest.get("runner"),
         "signals": signal_dates,
         "steps_checked": len(steps) if isinstance(steps, list) else 0,
+        "artifact_checked": False,
+        "capacity_gate_pass": "not_checked",
+        "capacity_gate_status": "manifest_only_not_artifact_validation",
+        "portfolio_violations": "not_checked",
+        "model_gates_checked": "manifest_command_only",
         "errors": errors,
     }
 
@@ -326,9 +340,14 @@ def write_json(data: dict[str, Any], path: Path) -> None:
 
 def print_summary(report: dict[str, Any], output: Path | None, prefix: str = "OK") -> None:
     target = f" output={output}" if output else ""
+    artifact_checked = str(report["artifact_checked"]).lower()
     print(
         f"{prefix}: validator=validate_walk_forward_manifest steps={report['steps_checked']} "
-        f"errors={len(report['errors'])} claim_boundary=manifest_only_not_artifact_validation{target}"
+        f"errors={len(report['errors'])} artifact_checked={artifact_checked} "
+        f"capacity_gate_pass={report['capacity_gate_pass']} "
+        f"portfolio_violations={report['portfolio_violations']} "
+        f"model_gates_checked={report['model_gates_checked']} "
+        f"claim_boundary=manifest_only_not_artifact_validation{target}"
     )
 
 

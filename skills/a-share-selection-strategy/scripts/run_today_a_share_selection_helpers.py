@@ -63,6 +63,8 @@ def spot_metadata_view(manifest: dict[str, Any]) -> dict[str, Any]:
         "partial_result",
         "coverage_claim",
         "allowed_failure_actions",
+        "output_written",
+        "metadata_output_written",
     ]
     return {key: data.get(key) for key in keys if key in data}
 

@@ -87,6 +87,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 3
     except Exception as exc:  # noqa: BLE001
+        manifest["run_error_type"] = exc.__class__.__name__
+        manifest["run_error"] = str(exc)
         finish("failed")
         print(
             f"ERROR: code=run_failed summary_written=true manifest_written=true "

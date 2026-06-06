@@ -31,9 +31,15 @@ def build_parser() -> argparse.ArgumentParser:
         "prediction-derived config consumes existing prediction or prediction_score "
         "columns only; prediction_source=external_unverified means separate upstream "
         "audit is required. This script does not train or execute LightGBM. "
-        "strict empty results return non-zero when --fail-on-empty-result is set."
+        "strict empty results return non-zero when --fail-on-empty-result is set. "
+        "--output and --diagnostics-output accept CSV output paths only; "
+        ".parquet/.pq output paths fail."
     )
-    parser = argparse.ArgumentParser(description=description, epilog=epilog)
+    parser = argparse.ArgumentParser(
+        description=description,
+        epilog=epilog,
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
     parser.add_argument("--input", required=True, help="Path to CSV or Parquet file.")
     parser.add_argument("--config", required=True, help="Path to JSON config file.")
     parser.add_argument("--output", required=True, help="Path to output CSV file.")

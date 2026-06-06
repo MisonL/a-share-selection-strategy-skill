@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+import json
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,12 +45,21 @@ class TodayAShareRunnerFailureEvidenceTests(unittest.TestCase):
                     "2026-01-01",
                 ]
             )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            report = (output / "report.html").read_text(encoding="utf-8")
 
         self.assertEqual(2, code)
         self.assertIn("history fetch options would be ignored", stderr)
         self.assertIn("summary_written=true", stderr)
         self.assertIn("manifest_written=true", stderr)
         self.assertNotIn("output_written=true", stderr)
+        self.assertEqual("ValueError", summary["run_error_type"])
+        self.assertIn("history fetch options would be ignored", summary["run_error"])
+        self.assertEqual(summary["run_error"], manifest["run_error"])
+        self.assertIn("run_error_type", report)
+        self.assertIn("ValueError", report)
+        self.assertIn("history fetch options would be ignored", report)
 
 
 def call_runner(args: list[str]) -> tuple[int, str, str]:

@@ -154,7 +154,9 @@ class LightgbmPredictionCliTests(unittest.TestCase):
         frame = build_frame(days=180, include_turn=True)
         original_loader = generator.load_model_dependencies
         generator.load_model_dependencies = lambda: (_ for _ in ()).throw(
-            RuntimeError("LightGBM prediction requires lightgbm and scikit-learn")
+            generator.PredictionDependencyError(
+                "LightGBM prediction requires lightgbm and scikit-learn"
+            )
         )
         try:
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -177,7 +179,39 @@ class LightgbmPredictionCliTests(unittest.TestCase):
             self.assertEqual(2, code)
             self.assertFalse(output_path.exists())
             self.assertFalse(summary_path.exists())
+            self.assertIn("code=dependency_error", stderr.getvalue())
             self.assertIn("lightgbm and scikit-learn", stderr.getvalue())
+        finally:
+            generator.load_model_dependencies = original_loader
+
+    def test_cli_success_stdout_discloses_generation_quality_boundary(self) -> None:
+        frame = build_frame(days=180, include_turn=True)
+        deps = {"classifier": RecordingClassifier, "scaler": RecordingScaler}
+        original_loader = generator.load_model_dependencies
+        generator.load_model_dependencies = lambda: deps
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                input_path = Path(tmpdir) / "prices.csv"
+                output_path = Path(tmpdir) / "predictions.csv"
+                summary_path = Path(tmpdir) / "summary.json"
+                frame.to_csv(input_path, index=False)
+                stdout = StringIO()
+                stderr = StringIO()
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    code = generator.main(
+                        [
+                            "--input",
+                            str(input_path),
+                            "--output",
+                            str(output_path),
+                            "--summary-output",
+                            str(summary_path),
+                        ]
+                    )
+
+            self.assertEqual(0, code, stderr.getvalue())
+            self.assertIn("model_quality_scope=generation_audit_only", stdout.getvalue())
+            self.assertIn("full_market_generalization=not_proven", stdout.getvalue())
         finally:
             generator.load_model_dependencies = original_loader
 
@@ -209,6 +243,7 @@ class LightgbmPredictionCliTests(unittest.TestCase):
             self.assertEqual(2, code)
             self.assertFalse(output_path.exists())
             self.assertFalse(summary_path.exists())
+            self.assertIn("all_skipped=true", stderr.getvalue())
             self.assertIn("skipped_reasons=insufficient_history:2", stderr.getvalue())
         finally:
             generator.load_model_dependencies = original_loader

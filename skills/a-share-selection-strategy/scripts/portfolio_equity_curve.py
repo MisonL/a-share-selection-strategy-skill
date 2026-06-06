@@ -234,6 +234,8 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
         f"max_drawdown={summary['max_drawdown']} "
         f"max_drawdown_peak_date={summary['max_drawdown_peak_date']} "
         f"max_drawdown_trough_date={summary['max_drawdown_trough_date']} "
+        "complete_trades_only=true "
+        "final_equity_excludes_incomplete=true "
         "claim_boundary=local_complete_trades_baseline_not_return_promise "
         f"output={output}"
     )

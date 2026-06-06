@@ -337,6 +337,43 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         self.assertIn("slippage_bps=5.0", stdout.getvalue())
         self.assertIn("incomplete_trades=1", stderr.getvalue())
 
+    def test_cli_non_strict_missing_future_price_discloses_incomplete_boundary(self) -> None:
+        prices = build_frame(days=130)
+        history = prices[prices["symbol"] == "000002"].reset_index(drop=True)
+        candidate = history.iloc[[-2]][["symbol", "date"]]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            prices_path = Path(tmpdir) / "prices.csv"
+            candidates_path = Path(tmpdir) / "candidates.csv"
+            output_path = Path(tmpdir) / "backtest.csv"
+            prices.to_csv(prices_path, index=False)
+            candidate.to_csv(candidates_path, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = backtest.main(
+                    [
+                        "--prices",
+                        str(prices_path),
+                        "--candidates",
+                        str(candidates_path),
+                        "--output",
+                        str(output_path),
+                        "--hold-days",
+                        "5",
+                    ]
+                )
+            output_exists = output_path.exists()
+
+        self.assertEqual(0, code, stderr.getvalue())
+        self.assertTrue(output_exists)
+        self.assertIn("incomplete_trades=1", stdout.getvalue())
+        self.assertIn("missing_reason_counts=missing_future_price:1", stdout.getvalue())
+        self.assertIn(
+            "claim_boundary=incomplete_output_not_successful_backtest",
+            stdout.getvalue(),
+        )
+        self.assertIn("use --fail-on-incomplete", stdout.getvalue())
+
     def test_cli_expected_signal_date_returns_error_without_output(self) -> None:
         prices = build_frame(days=130)
         history = prices[prices["symbol"] == "000002"].reset_index(drop=True)

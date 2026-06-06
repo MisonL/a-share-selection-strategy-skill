@@ -316,6 +316,13 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
     )
     if summary["missing_reason_counts"]:
         print(f"INFO: missing_reason_counts={summary['missing_reason_counts']}")
+    if prefix == "OK" and summary["incomplete_trades"]:
+        print(
+            "WARNING: "
+            f"incomplete_trades={summary['incomplete_trades']} "
+            "claim_boundary=incomplete_output_not_successful_backtest "
+            "use --fail-on-incomplete for strict gates"
+        )
     print(
         "INFO: baseline=buy_hold_close_to_close "
         "cost_model=round_trip_bps slippage_model=round_trip_bps "

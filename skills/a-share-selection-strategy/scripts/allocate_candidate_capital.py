@@ -112,6 +112,7 @@ def allocate_capital(
     merged["capital_model"] = "equal_cash_budget_lot_floor"
     merged["cash_budget"] = float(cash_budget)
     merged["lot_size"] = int(lot_size)
+    merged["sizing_claim_boundary"] = "local_sizing_not_broker_order"
     merged["unallocated"] = merged["quantity"] <= 0
     output = merged.drop(columns=["_signal_date"])
     return output, build_summary(output, cash_budget, lot_size)
@@ -214,6 +215,12 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
         f"capital_model={summary['capital_model']} "
         f"claim_boundary=local_sizing_not_broker_order output={output}"
     )
+    if prefix == "OK" and summary["unallocated_candidates"]:
+        print(
+            "WARNING: "
+            f"unallocated_candidates={summary['unallocated_candidates']} "
+            "rows have quantity=0; use --fail-on-unallocated for strict gates"
+        )
 
 
 if __name__ == "__main__":

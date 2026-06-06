@@ -64,6 +64,9 @@ def main(argv: list[str] | None = None) -> int:
     output_path = Path(args.output)
     diagnostics_path = Path(args.diagnostics_output) if args.diagnostics_output else None
     try:
+        reject_parquet_output_suffix(output_path, "candidate output")
+        if diagnostics_path is not None:
+            reject_parquet_output_suffix(diagnostics_path, "diagnostics output")
         ensure_runtime_dependencies()
         config = load_config(Path(args.config))
         spot = read_table(Path(args.spot_input)) if args.spot_input else None
@@ -335,6 +338,11 @@ def ensure_output_columns(frame: pd.DataFrame) -> pd.DataFrame:
 def write_output(frame: pd.DataFrame, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(path, index=False)
+
+
+def reject_parquet_output_suffix(path: Path, label: str) -> None:
+    if path.suffix.lower() in {".parquet", ".pq"}:
+        raise ValueError(f"{label} supports CSV only; parquet output is not supported")
 
 
 def remove_stale_outputs(*paths: Path | None) -> None:

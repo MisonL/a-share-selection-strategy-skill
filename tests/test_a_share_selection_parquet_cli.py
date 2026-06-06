@@ -54,6 +54,25 @@ def run_score_cli(input_path: Path, output_path: Path) -> tuple[int, str, str]:
     return code, stdout.getvalue(), stderr.getvalue()
 
 
+class AShareSelectionOutputContractTests(unittest.TestCase):
+    def test_score_rejects_parquet_output_suffix_before_writing_csv_text(self) -> None:
+        frame = build_frame(include_turn=False)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            csv_input = base / "prices.csv"
+            output = base / "candidates.parquet"
+            frame.to_csv(csv_input, index=False)
+
+            code, stdout, stderr = run_score_cli(csv_input, output)
+            output_exists = output.exists()
+
+        self.assertEqual(2, code)
+        self.assertEqual("", stdout)
+        self.assertFalse(output_exists)
+        self.assertIn("output_not_written=true", stderr)
+        self.assertIn("candidate output supports CSV only", stderr)
+
+
 @unittest.skipUnless(HAS_PARQUET_ENGINE, "pyarrow or fastparquet is required")
 class AShareSelectionParquetCliTests(unittest.TestCase):
     def test_validate_and_score_parquet_matches_csv_output(self) -> None:

@@ -109,6 +109,7 @@ class AllocateCandidateCapitalCliTests(unittest.TestCase):
                     ]
                 )
             output_exists = output_path.exists()
+            output = pd.read_csv(output_path)
 
         self.assertEqual(0, code, stderr.getvalue())
         self.assertTrue(output_exists)
@@ -117,6 +118,41 @@ class AllocateCandidateCapitalCliTests(unittest.TestCase):
             "claim_boundary=local_sizing_not_broker_order",
             stdout.getvalue(),
         )
+        self.assertEqual(
+            ["local_sizing_not_broker_order"],
+            output["sizing_claim_boundary"].unique().tolist(),
+        )
+
+    def test_cli_non_strict_unallocated_warns_in_stdout(self) -> None:
+        prices = build_frame(days=130)
+        candidate = prices[prices["symbol"] == "000002"].iloc[[20]][["symbol", "date"]]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            prices_path = Path(tmpdir) / "prices.csv"
+            candidates_path = Path(tmpdir) / "candidates.csv"
+            output_path = Path(tmpdir) / "allocated.csv"
+            prices.to_csv(prices_path, index=False)
+            candidate.to_csv(candidates_path, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = allocator.main(
+                    [
+                        "--prices",
+                        str(prices_path),
+                        "--candidates",
+                        str(candidates_path),
+                        "--output",
+                        str(output_path),
+                        "--cash-budget",
+                        "1",
+                    ]
+                )
+            output_exists = output_path.exists()
+
+        self.assertEqual(0, code, stderr.getvalue())
+        self.assertTrue(output_exists)
+        self.assertIn("WARNING: unallocated_candidates=1", stdout.getvalue())
+        self.assertIn("--fail-on-unallocated", stdout.getvalue())
 
     def test_missing_signal_close_is_rejected(self) -> None:
         prices = build_frame(days=130)

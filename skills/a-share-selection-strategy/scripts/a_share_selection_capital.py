@@ -18,6 +18,7 @@ SIZING_FIELDS = [
     "cash_reserved",
     "notional",
     "weight",
+    "sizing_claim_boundary",
     "unallocated",
 ]
 DAILY_CAPACITY_FIELDS = {

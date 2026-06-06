@@ -102,6 +102,7 @@ prediction-derived 输入必须包含：
 - `turn` 或 `turnover`
 
 `score_candidates.py` 只消费外部提供的预测列，不训练、不生成、也不证明上游模型质量。
+`score_candidates.py --output` 目前只接受 `.csv`；把输出写成 `.parquet` 或 `.pq` 会显式失败。
 
 ## 汇报边界
 
@@ -113,6 +114,7 @@ prediction-derived 输入必须包含：
 - `input_metadata.source_type=synthetic_demo` 表示输入来自合成 demo，不是真实行情或真实选股结论。
 - `run_today_a_share_selection.py` 生成的 `candidates.csv` 和 `diagnostics.csv` 会附带 runner provenance 字段，例如 `source_type`、`real_market_data`、`mode_decision`、`consumes_prediction_columns`、`prediction_model_executed_by_runner`、`lightgbm_executed_by_runner`。
 - `allocate_candidate_capital.py` 只生成本地可追溯 sizing 字段；必须保留 `cash_budget`、`lot_size`、`capital_model` 和 `claim_boundary=local_sizing_not_broker_order`，不得解释为真实成交、券商订单或真实现金容量证明。
+- `allocate_candidate_capital.py` 输出会附带 `sizing_claim_boundary=local_sizing_not_broker_order`；默认成功但存在 `unallocated` 行时会在 stdout 给出 warning，必须同时检查 `unallocated` 列和 `--fail-on-unallocated`。
 - `report.html` 只用于人类阅读；事实仍以 JSON/CSV、退出码和门禁字段为准。若报告被 `--no-html-report` 主动关闭，不能写成报告生成失败；若报告写出失败，`html_report_written=false` 并记录 `html_report_error_type/html_report_error`。
 - `failed_symbols` 大于 0 时必须披露，即使其他候选已输出。
 - 中文展示字段只能从机器字段派生，不能反向覆盖机器事实。

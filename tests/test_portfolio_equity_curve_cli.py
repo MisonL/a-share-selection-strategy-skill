@@ -139,6 +139,8 @@ class PortfolioEquityCurveCliTests(unittest.TestCase):
 
         self.assertEqual(0, code, stderr.getvalue())
         self.assertIn("incomplete_trades=1", stdout.getvalue())
+        self.assertIn("complete_trades_only=true", stdout.getvalue())
+        self.assertIn("final_equity_excludes_incomplete=true", stdout.getvalue())
         self.assertIn("WARNING: incomplete_trades_excluded=1", stderr.getvalue())
         self.assertIn("--fail-on-incomplete", stderr.getvalue())
 

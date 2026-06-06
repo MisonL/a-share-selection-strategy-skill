@@ -244,6 +244,8 @@ uv run --with pandas --with numpy --with baostock python skills/a-share-selectio
   --fail-on-skipped
 ```
 
+若 `--end-date` 落在周末、节假日或其他无行情行日期，fetcher 可能仍退出 0 并写出上一实际交易日数据。报告时必须检查 `summary.json` 的 `history_selection.requested_end_date`、`history_metadata_actual_date_max`、`history_metadata_end_date_has_rows` 和 `history_metadata_symbol_date_ranges`；不能把请求截止日写成实际信号日或真实覆盖日。
+
 `--symbols` 接受六位 A 股代码，也接受 `sh.600000`、`sz.000001` 这类前缀形式；manifest 和 `selected_symbols.json` 会记录归一化后的六位代码。
 
 也可以用 `--fetch-spot eastmoney --derive-symbols-from-spot --max-history-symbols N` 先生成 `selected_symbols.json`，再抓历史。该文件只证明按 spot 字段筛出了历史抓取列表；仍必须检查 `spot_metadata.partial_result`、`history_metadata`、`validate` 和 `score` 步骤。spot 输入至少需要可识别的 symbol 列和 price/amount 字段；symbol 列支持 `symbol/code/code_id/stock_code/ticker/Ticker`，`sh.600000` 和 `sz.000001` 会归一化为六位代码，价格字段支持 `spot_price/price/close`，成交额字段支持 `spot_amount/amount`。

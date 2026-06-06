@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from datetime import date, datetime
 from typing import Any
 
 import run_today_a_share_selection_helpers as helpers
@@ -138,6 +139,7 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
     metadata = read_json_if_exists(metadata_path)
     selected_symbols = selected_symbol_values(selected_data, manifest)
     failed_symbols = metadata_list(metadata, "failed_symbols")
+    date_range = history_date_range_view(metadata, manifest)
     return {
         "source": selected_data.get("source", ""),
         "raw_spot_rows": selected_data.get("raw_spot_rows"),
@@ -150,6 +152,7 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
         "allow_partial_history": bool(manifest.get("allow_partial_history", False)),
         "history_metadata_failed_symbol_count": len(failed_symbols),
         "history_metadata_failed_symbols": failed_symbols,
+        **date_range,
         "selected_symbols_output": str(selected_path),
         "selected_symbols_output_written": selected_path.exists(),
         "history_metadata_output": str(metadata_path),
@@ -195,6 +198,55 @@ def selected_symbol_count(selected_data: dict[str, Any], selected_symbols: list[
 def metadata_list(metadata: dict[str, Any], key: str) -> list[Any]:
     value = metadata.get(key, [])
     return value if isinstance(value, list) else []
+
+
+def history_date_range_view(
+    metadata: dict[str, Any],
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    requested = normalized_history_date(metadata.get("end_date") or manifest.get("end_date") or "")
+    ranges = symbol_date_ranges(metadata)
+    date_max_values = [item["date_max"] for item in ranges if item["date_max"]]
+    actual_date_max = max(date_max_values) if date_max_values else ""
+    reached = [item for item in ranges if item["date_max"] == requested and requested]
+    return {
+        "requested_end_date": requested,
+        "history_metadata_actual_date_max": actual_date_max,
+        "history_metadata_all_symbols_reached_end_date": bool(
+            ranges and requested and len(reached) == len(ranges)
+        ),
+        "history_metadata_end_date_has_rows": bool(reached),
+        "history_metadata_symbol_date_ranges": ranges,
+    }
+
+
+def symbol_date_ranges(metadata: dict[str, Any]) -> list[dict[str, Any]]:
+    symbols = metadata.get("symbols", [])
+    if not isinstance(symbols, list):
+        return []
+    return [
+        {
+            "symbol": str(item.get("symbol", "")),
+            "date_min": normalized_history_date(item.get("date_min", "")),
+            "date_max": normalized_history_date(item.get("date_max", "")),
+            "rows": int(item.get("rows", 0) or 0),
+        }
+        for item in symbols
+        if isinstance(item, dict)
+    ]
+
+
+def normalized_history_date(value: Any) -> str:
+    text = str(value).strip()
+    if not text:
+        return ""
+    first = text.split()[0]
+    try:
+        if len(first) == 8 and first.isdigit():
+            return datetime.strptime(first, "%Y%m%d").date().isoformat()
+        return date.fromisoformat(first).isoformat()
+    except ValueError:
+        return text
 
 
 def history_symbol_count(manifest: dict[str, Any], history_selection: dict[str, Any]) -> int:

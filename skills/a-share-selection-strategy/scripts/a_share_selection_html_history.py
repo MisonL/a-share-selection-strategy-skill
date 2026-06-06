@@ -24,4 +24,13 @@ def history_selection_fields(
             i18n("history_failed_symbols", language),
             selection.get("history_metadata_failed_symbol_count", ""),
         ),
+        (i18n("history_requested_end_date", language), selection.get("requested_end_date", "")),
+        (
+            i18n("history_actual_date_max", language),
+            selection.get("history_metadata_actual_date_max", ""),
+        ),
+        (
+            i18n("history_end_date_has_rows", language),
+            selection.get("history_metadata_end_date_has_rows", ""),
+        ),
     ]

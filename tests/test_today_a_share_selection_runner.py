@@ -53,6 +53,8 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
             report = (output / "report.html").read_text(encoding="utf-8")
+            candidate_rows = csv_rows(output / "candidates.csv")
+            diagnostic_rows = csv_rows(output / "diagnostics.csv")
 
         self.assertEqual(0, code, stderr)
         self.assertIn("runner=run_today_a_share_selection", stdout)
@@ -102,6 +104,10 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(2, summary["score"]["raw_symbols"])
         self.assertEqual(2, summary["score"]["candidates"])
         self.assertFalse(summary["score"]["effective_empty_result"])
+        self.assertEqual(
+            "not_investment_advice_not_trade_instruction_not_real_fill_not_return_proof",
+            summary["advice_boundary"],
+        )
         self.assertEqual(len(frame), summary["prices_rows"])
         self.assertEqual(2, summary["candidate_rows"])
         self.assertEqual(2, summary["diagnostic_rows"])
@@ -121,7 +127,20 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("A-Share Selection Strategy", report)
         self.assertIn("Scoring Notes", report)
         self.assertIn("Candidates", report)
+        self.assertIn("not_investment_advice_not_trade_instruction_not_real_fill_not_return_proof", report)
         self.assertIn('data-lang-mode="auto"', report)
+        self.assertTrue(
+            all(row["advice_boundary"] == summary["advice_boundary"] for row in candidate_rows)
+        )
+        self.assertTrue(
+            all(row["advice_boundary"] == summary["advice_boundary"] for row in diagnostic_rows)
+        )
+        self.assertTrue(
+            all(
+                row["recommendation_boundary"] == "ranking_signal_not_buy_sell_instruction"
+                for row in candidate_rows
+            )
+        )
 
     def test_prediction_runner_fails_without_prediction_and_keeps_manifest(self) -> None:
         frame = build_frame(
@@ -265,6 +284,47 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             self.assertIn("No rows written for this run.", report)
             self.assertNotIn("Zero Prefix", report)
             self.assertNotIn("Shanghai", report)
+
+    def test_pre_mode_failure_clears_reused_output_files(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=True)
+        frame[["open", "high", "low", "close"]] = frame[
+            ["open", "high", "low", "close"]
+        ] * 0.75
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+
+            code, _stdout, stderr = call_runner(
+                ["--prices-input", str(prices), "--output-dir", str(output)]
+            )
+            self.assertEqual(0, code, stderr)
+            for name in ["prices.csv", "candidates.csv", "diagnostics.csv"]:
+                self.assertTrue((output / name).exists())
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--output-dir",
+                    str(output),
+                    "--mode",
+                    "prediction",
+                    "--config",
+                    str(SCRIPTS / "ultra_short_low_price_config.json"),
+                ]
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(2, code)
+            self.assertIn("explicit mode conflicts with config score_mode", stderr)
+            self.assertFalse((output / "prices.csv").exists())
+            self.assertFalse((output / "candidates.csv").exists())
+            self.assertFalse((output / "diagnostics.csv").exists())
+            self.assertFalse(summary["prices_output_written"])
+            self.assertFalse(summary["candidates_output_written"])
+            self.assertFalse(summary["diagnostics_output_written"])
 
     def test_auto_runner_uses_prediction_when_prediction_columns_exist(self) -> None:
         frame = build_frame(include_prediction=True, include_turn=True)
@@ -681,6 +741,10 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertTrue(summary["spot_metadata"]["partial_result"])
         self.assertFalse(summary["spot_metadata"]["output_written"])
         self.assertTrue(summary["spot_metadata"]["metadata_output_written"])
+        self.assertTrue(summary["spot_metadata_output"].endswith("spot_metadata.json"))
+        self.assertTrue(summary["spot_metadata_output_written"])
+        self.assertTrue(summary["spot_output"].endswith("spot.csv"))
+        self.assertFalse(summary["spot_output_written"])
         self.assertEqual("partial_not_full_market", summary["spot_metadata"]["coverage_claim"])
         self.assertEqual(
             ["rerun_with_fail_on_partial"],
@@ -688,6 +752,41 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         )
         self.assertIn("spot_partial_result=true", stdout.getvalue())
         self.assertIn("spot_failed_pages=1", stdout.getvalue())
+
+    def test_summary_embeds_score_symbol_examples(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            manifest = {
+                "runner": "run_today_a_share_selection",
+                "mode": "generic",
+                "prediction_mode": False,
+                "lightgbm_not_used": True,
+                "source_scope": "local_prices_input",
+                "output_dir": str(output),
+                "run_outputs_initialized": True,
+                "steps": [
+                    {
+                        "step": "score",
+                        "returncode": 0,
+                        "allowed_returncodes": [0],
+                        "stdout": (
+                            "OK: raw_symbols=3 input_symbols=3 candidates=1 "
+                            "effective_empty_result=false\n"
+                            "INFO: failed_symbol_examples=000003,000004\n"
+                            "INFO: insufficient_history_symbol_examples=300001\n"
+                        ),
+                        "stderr": "",
+                    }
+                ],
+            }
+
+            summary = summary_view(manifest, "completed")
+
+        self.assertEqual(["000003", "000004"], summary["score"]["failed_symbol_examples"])
+        self.assertEqual(
+            ["300001"],
+            summary["score"]["insufficient_history_symbol_examples"],
+        )
 
     def test_summary_preserves_zero_filtered_spot_metadata_count(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

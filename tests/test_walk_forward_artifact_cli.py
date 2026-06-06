@@ -103,6 +103,30 @@ class WalkForwardArtifactCliTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertIn("2026-05-12_backtest_signal_date_mismatch=2026-05-09", stderr)
 
+    def test_cli_rejects_missing_backtest_return_field(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(Path(tmpdir))
+            drop_column(root / "signals/2026-05-12/prediction_backtest.csv", "return")
+
+            code, _stdout, stderr = call_cli(root, root / "artifact_validation.json")
+
+        self.assertEqual(3, code)
+        self.assertIn("2026-05-12_backtest_missing_return", stderr)
+
+    def test_cli_rejects_non_numeric_backtest_return_field(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(Path(tmpdir))
+            rewrite_column(
+                root / "signals/2026-05-12/prediction_backtest.csv",
+                "return",
+                "not-a-number",
+            )
+
+            code, _stdout, stderr = call_cli(root, root / "artifact_validation.json")
+
+        self.assertEqual(3, code)
+        self.assertIn("2026-05-12_return=not-a-number", stderr)
+
     def test_cli_rejects_summary_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
@@ -291,6 +315,12 @@ def backtest_rows() -> list[dict[str, object]]:
             {
                 "symbol": row["symbol"],
                 "signal_date": "2026-05-12",
+                "entry_date": "2026-05-12",
+                "exit_date": "2026-05-19",
+                "entry_close": 10.5,
+                "exit_close": 10.4475,
+                "gross_return": -0.005,
+                "return": -0.005,
                 "status": "complete",
                 "missing_data": False,
                 "tradability_model": TRADABILITY_MODEL_ENTRY_EXIT,
@@ -359,6 +389,13 @@ def drop_column(path: Path, column: str) -> None:
 def rewrite_backtest_signal_date(path: Path, signal_date: str) -> None:
     rows = pd.read_csv(path, dtype={"symbol": str})
     rows.loc[0, "signal_date"] = signal_date
+    rows.to_csv(path, index=False)
+
+
+def rewrite_column(path: Path, column: str, value: object) -> None:
+    rows = pd.read_csv(path, dtype={"symbol": str})
+    rows[column] = rows[column].astype("object")
+    rows.loc[0, column] = value
     rows.to_csv(path, index=False)
 
 

@@ -8,6 +8,10 @@ from datetime import date, datetime
 from typing import Any
 
 import run_today_a_share_selection_helpers as helpers
+from a_share_selection_disclosure import (
+    ADVICE_BOUNDARY,
+    RECOMMENDATION_BOUNDARY,
+)
 
 
 def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
@@ -23,6 +27,8 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "source_type": input_metadata.get("source_type", "unknown"),
         "real_market_data": input_metadata.get("real_market_data", "unknown"),
         "input_metadata": input_metadata,
+        "advice_boundary": ADVICE_BOUNDARY,
+        "recommendation_boundary": RECOMMENDATION_BOUNDARY,
         **row_count_fields(manifest, paths, score, history_selection, initialized),
         "score": score,
         **output_path_fields(paths, initialized),
@@ -36,6 +42,8 @@ def summary_paths(manifest: dict[str, Any]) -> dict[str, Path]:
         "prices": helpers.prices_output_path(manifest),
         "candidates": output_dir / "candidates.csv",
         "diagnostics": output_dir / "diagnostics.csv",
+        "spot": helpers.spot_output_path(manifest),
+        "spot_metadata": output_dir / "spot_metadata.json",
         "selected_symbols": output_dir / "selected_symbols.json",
         "history_metadata": output_dir / "history_metadata.json",
     }
@@ -109,6 +117,10 @@ def row_count_fields(
         "prices_rows": row_count(paths["prices"], initialized),
         "candidate_rows": row_count(paths["candidates"], initialized),
         "diagnostic_rows": row_count(paths["diagnostics"], initialized),
+        "spot_output": str(paths["spot"]) if paths["spot"] else "",
+        "spot_output_written": initialized and paths["spot"] is not None and paths["spot"].exists(),
+        "spot_metadata_output": str(paths["spot_metadata"]),
+        "spot_metadata_output_written": initialized and paths["spot_metadata"].exists(),
     }
 
 

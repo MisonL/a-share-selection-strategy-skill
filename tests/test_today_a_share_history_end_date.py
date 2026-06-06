@@ -58,6 +58,7 @@ class TodayAShareHistoryEndDateTests(unittest.TestCase):
         self.assertIn("2026-06-05", report)
         self.assertIn("History end date has rows", report)
         self.assertIn(">False<", report)
+        self.assertIn("Requested 2026-06-06, actual latest 2026-06-05", report)
 
     def test_history_end_date_comparison_normalizes_supported_formats(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -5,6 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 
+ADVICE_BOUNDARY = "not_investment_advice_not_trade_instruction_not_real_fill_not_return_proof"
+RECOMMENDATION_BOUNDARY = "ranking_signal_not_buy_sell_instruction"
+
+
 def prediction_disclosure(config: dict[str, Any]) -> dict[str, Any]:
     prediction_mode = str(config.get("score_mode", "")).lower() == "prediction-derived"
     return {
@@ -12,6 +16,8 @@ def prediction_disclosure(config: dict[str, Any]) -> dict[str, Any]:
         "prediction_input_source": "external_input" if prediction_mode else "not_used",
         "prediction_model_executed_by_score_script": False,
         "lightgbm_not_executed_by_this_script": True,
+        "advice_boundary": ADVICE_BOUNDARY,
+        "recommendation_boundary": RECOMMENDATION_BOUNDARY,
     }
 
 

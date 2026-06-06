@@ -242,9 +242,23 @@ TEXT = {
     "candidates_csv": {"en": "Candidates CSV", "zh": "候选 CSV"},
     "diagnostics_csv": {"en": "Diagnostics CSV", "zh": "诊断 CSV"},
     "prices": {"en": "Prices", "zh": "行情文件"},
+    "spot_csv": {"en": "Spot CSV", "zh": "实时快照 CSV"},
+    "spot_metadata_json": {"en": "Spot Metadata JSON", "zh": "实时快照元数据 JSON"},
     "selected_symbols_json": {"en": "Selected Symbols JSON", "zh": "历史样本 JSON"},
     "history_metadata_json": {"en": "History Metadata JSON", "zh": "历史元数据 JSON"},
     "empty": {"en": "No rows written for this run.", "zh": "本次运行未写出相关行。"},
+    "written_empty": {
+        "en": "Output file was written, but it contains zero rows.",
+        "zh": "输出文件已写出，但包含 0 行。",
+    },
+    "no_table_rows": {
+        "en": "No rows to display for this completed run.",
+        "zh": "本次完成运行没有可展示行。",
+    },
+    "empty_steps": {
+        "en": "No pipeline steps recorded for this report.",
+        "zh": "本报告没有记录执行步骤。",
+    },
     "rank": {"en": "Rank", "zh": "排名"},
     "symbol": {"en": "Symbol", "zh": "代码"},
     "name": {"en": "Name", "zh": "名称"},

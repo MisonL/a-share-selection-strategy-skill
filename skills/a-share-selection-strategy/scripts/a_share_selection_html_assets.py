@@ -31,6 +31,8 @@ h2{margin-bottom:16px;font-size:18px}
 .limit-panel{margin-top:12px;border:1px solid #cbd5e1;border-left:4px solid var(--accent);border-radius:8px;padding:14px 16px;background:#f8fafc}
 .limit-panel strong{display:block;margin-bottom:4px}
 .limit-panel p{color:var(--muted)}
+.disclosure-alerts{margin:12px 0 0;padding:0;list-style:none;display:grid;gap:8px}
+.disclosure-alerts li{border:1px solid #fed7aa;border-left:4px solid #f97316;border-radius:8px;background:#fff7ed;padding:10px 12px;color:#7c2d12}
 .boundary{margin-top:14px;color:var(--muted)}
 .technical-details,.report-details{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
 .technical-details summary,.report-details summary{cursor:pointer;color:var(--muted);font-weight:700}

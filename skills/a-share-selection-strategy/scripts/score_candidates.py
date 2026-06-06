@@ -17,11 +17,13 @@ OUTPUT_COLUMNS = [
     "spot_price", "spot_pct_chg", "spot_amount", "spot_industry",
     "rsi", "volatility", "macd", "macd_status", "momentum_score", "trend_score",
     "prediction_score", "prediction_source", "prediction_input_source",
+    "prediction_model", "prediction_horizon_days", "prediction_scope",
     "prediction_model_executed_by_score_script",
     "lightgbm_not_executed_by_this_script",
     "explosion_score", "risk_score", "total_score", "ma15",
     "low_ma15_flag", "explosion_focus_flag", "low_price_explosion_flag",
-    "signal_tier", "recommendation", "key_reasons", "risk_notes", "data_window",
+    "signal_tier", "recommendation", "advice_boundary", "recommendation_boundary",
+    "key_reasons", "risk_notes", "data_window",
 ]
 
 
@@ -33,7 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
         "audit is required. This script does not train or execute LightGBM. "
         "strict empty results return non-zero when --fail-on-empty-result is set. "
         "--output and --diagnostics-output accept CSV output paths only; "
-        ".parquet/.pq output paths fail."
+        "CSV only; non-.csv output paths fail; .parquet/.pq output paths fail."
     )
     parser = argparse.ArgumentParser(
         description=description,
@@ -70,9 +72,9 @@ def main(argv: list[str] | None = None) -> int:
     output_path = Path(args.output)
     diagnostics_path = Path(args.diagnostics_output) if args.diagnostics_output else None
     try:
-        reject_parquet_output_suffix(output_path, "candidate output")
+        require_csv_output_suffix(output_path, "candidate output")
         if diagnostics_path is not None:
-            reject_parquet_output_suffix(diagnostics_path, "diagnostics output")
+            require_csv_output_suffix(diagnostics_path, "diagnostics output")
         ensure_runtime_dependencies()
         config = load_config(Path(args.config))
         spot = read_table(Path(args.spot_input)) if args.spot_input else None
@@ -346,9 +348,9 @@ def write_output(frame: pd.DataFrame, path: Path) -> None:
     frame.to_csv(path, index=False)
 
 
-def reject_parquet_output_suffix(path: Path, label: str) -> None:
-    if path.suffix.lower() in {".parquet", ".pq"}:
-        raise ValueError(f"{label} supports CSV only; parquet output is not supported")
+def require_csv_output_suffix(path: Path, label: str) -> None:
+    if path.suffix.lower() != ".csv":
+        raise ValueError(f"{label} supports CSV only; output suffix must be .csv")
 
 
 def remove_stale_outputs(*paths: Path | None) -> None:

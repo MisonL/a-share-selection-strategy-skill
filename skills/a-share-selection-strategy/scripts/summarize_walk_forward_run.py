@@ -160,6 +160,7 @@ def signal_summary(signal_dir: Path) -> dict[str, Any]:
         "predicted_symbols": int(prediction.get("predicted_symbols", 0)),
         "skipped_symbols": int(prediction.get("skipped_symbols", 0)),
         "candidates": int(len(candidates)),
+        "backtest_rows": int(len(backtest)),
         "completed_trades": int(len(complete)),
         "incomplete_trades": int(len(backtest) - len(complete)),
         "mean_return": float(returns.mean()) if not returns.empty else None,
@@ -245,6 +246,16 @@ def signal_errors(signal: dict[str, Any], options: argparse.Namespace) -> list[s
         errors.append(f"{signal['signal_date']}_empty_candidates")
     if signal["completed_trades"] <= 0:
         errors.append(f"{signal['signal_date']}_no_completed_trades")
+    if signal["backtest_rows"] != signal["candidates"]:
+        errors.append(
+            f"{signal['signal_date']}_backtest_rows={signal['backtest_rows']} "
+            f"candidates={signal['candidates']}"
+        )
+    if signal["completed_trades"] != signal["candidates"]:
+        errors.append(
+            f"{signal['signal_date']}_completed_trades={signal['completed_trades']} "
+            f"candidates={signal['candidates']}"
+        )
     if signal["incomplete_trades"]:
         errors.append(f"{signal['signal_date']}_incomplete_trades={signal['incomplete_trades']}")
     errors.extend(model_errors(signal, options))

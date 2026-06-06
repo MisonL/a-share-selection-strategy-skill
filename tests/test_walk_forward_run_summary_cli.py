@@ -100,6 +100,28 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
         self.assertIn("2026-05-12_skipped_symbols=1", stderr)
         self.assertIn("2026-05-12_skipped_symbols=1", data["quality_errors"])
 
+    def test_cli_rejects_backtest_rows_missing_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(Path(tmpdir))
+            backtest = root / "2026-05-12" / "prediction_backtest.csv"
+            rows = pd.read_csv(backtest, dtype={"symbol": str}).iloc[:1]
+            rows.to_csv(backtest, index=False)
+            output = Path(tmpdir) / "summary.json"
+
+            code, stdout, stderr = call_cli(root, output, ["--expected-symbol-count", "2"])
+            data = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(3, code)
+        self.assertIn("ERROR_SUMMARY:", stdout)
+        self.assertIn("2026-05-12_backtest_rows=1 candidates=2", stderr)
+        self.assertIn("2026-05-12_completed_trades=1 candidates=2", stderr)
+        self.assertIn("backtest_rows", data["signals"][0])
+        self.assertEqual(1, data["signals"][0]["backtest_rows"])
+        self.assertIn(
+            "2026-05-12_backtest_rows=1 candidates=2",
+            data["quality_errors"],
+        )
+
     def test_cli_fails_when_expected_portfolio_violation_is_absent(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir), portfolio_violates=False)

@@ -43,6 +43,19 @@ class TodayAShareExternalDisclosureTests(unittest.TestCase):
         self.assertIn("timeout", report)
         self.assertIn("spot_metadata.allowed_failure_actions", report)
 
+    def test_html_surfaces_partial_spot_warning_outside_raw_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            summary = minimal_summary(tmpdir, Path(tmpdir) / "diagnostics.csv")
+            summary["spot_metadata"] = {
+                "partial_result": True,
+                "coverage_claim": "partial_not_full_market",
+            }
+
+            report = render_report(summary, {"steps": []}, language="zh")
+
+        self.assertIn("部分实时快照", report)
+        self.assertIn("不能写成实时全市场扫描完成", report)
+
     def test_summary_and_html_disclose_history_fallback_provider(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)

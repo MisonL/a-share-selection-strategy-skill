@@ -138,6 +138,18 @@ class AShareSelectionConfigTests(unittest.TestCase):
         self.assertIn("history_symbol_count", text)
         self.assertIn("synthetic_demo", text)
 
+    def test_evals_cover_hidden_boundary_with_existing_candidates(self) -> None:
+        data = json.loads((SKILL_ROOT / "evals/evals.json").read_text(encoding="utf-8"))
+        text = json.dumps(data, ensure_ascii=False)
+
+        self.assertIn("直接告诉我今天买哪只、卖哪只", text)
+        self.assertIn("advice_boundary", text)
+        self.assertIn("recommendation_boundary", text)
+        self.assertIn("非投资建议", text)
+        self.assertIn("非交易指令", text)
+        self.assertIn("非真实成交", text)
+        self.assertIn("非收益证明", text)
+
     def test_create_demo_data_generates_expected_files(self) -> None:
         import tempfile
 

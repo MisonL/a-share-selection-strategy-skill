@@ -54,17 +54,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--min-history-rows", type=int, default=150)
     parser.add_argument("--summary-output", help="Optional JSON summary output path.")
     parser.add_argument("--fail-on-skipped", action="store_true")
+    parser.add_argument(
+        "--as-of-date",
+        help="Reject input rows after this YYYY-MM-DD as-of boundary.",
+    )
     args = parser.parse_args(argv)
     output = Path(args.output)
     summary_output = Path(args.summary_output) if args.summary_output else None
     try:
         ensure_runtime_dependencies()
+        frame = read_table(Path(args.input))
+        as_of = as_of_boundary(frame, args.as_of_date) if args.as_of_date else {}
         result, summary = generate_predictions(
-            read_table(Path(args.input)),
+            frame,
             horizon=args.horizon,
             train_ratio=args.train_ratio,
             min_history_rows=args.min_history_rows,
         )
+        if as_of:
+            result = annotate_as_of_boundary(result, as_of)
+            summary.update(as_of)
         if args.fail_on_skipped and summary["skipped_symbols"]:
             print_summary(summary, args.output, prefix="ERROR_SUMMARY")
             remove_stale_outputs(output, summary_output)
@@ -220,6 +229,33 @@ def prepare_frame(frame: pd.DataFrame) -> pd.DataFrame:
     result = result[(result[["open", "high", "low", "close"]] > 0).all(axis=1)]
     result = result[result["volume"] >= 0]
     return result.sort_values(["symbol", "date"]).reset_index(drop=True)
+
+
+def as_of_boundary(frame: pd.DataFrame, as_of_date: str) -> dict[str, Any]:
+    cutoff = pd.to_datetime(as_of_date, errors="coerce")
+    if pd.isna(cutoff):
+        raise ValueError(f"invalid as-of-date: {as_of_date}")
+    dates = parse_dates(frame["date"])
+    future_rows = int((dates > cutoff).sum())
+    if future_rows:
+        raise ValueError(
+            f"rows_after_as_of_date={future_rows} requested_as_of_date={as_of_date}"
+        )
+    actual = dates.dropna().max()
+    actual_text = "" if pd.isna(actual) else actual.date().isoformat()
+    requested = cutoff.date().isoformat()
+    return {
+        "requested_as_of_date": requested,
+        "actual_data_date": actual_text,
+        "as_of_date_observed": actual_text == requested,
+    }
+
+
+def annotate_as_of_boundary(frame: pd.DataFrame, boundary: dict[str, Any]) -> pd.DataFrame:
+    result = frame.copy()
+    for key, value in boundary.items():
+        result[key] = value
+    return result
 
 
 def predict_symbol(
@@ -390,11 +426,13 @@ def remove_stale_outputs(*paths: Path | None) -> None:
 
 
 def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> None:
+    as_of = as_of_summary_fields(summary)
     print(
         f"{prefix}: raw_symbols={summary['raw_symbols']} "
         f"predicted_symbols={summary['predicted_symbols']} "
         f"skipped_symbols={summary['skipped_symbols']} "
         f"horizon={summary['horizon']} train_ratio={summary['train_ratio']} "
+        f"{as_of}"
         f"output={output}"
     )
     if summary["skipped_symbol_examples"]:
@@ -408,6 +446,17 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
         f"{summary['model_quality_scope']} "
         "full_market_generalization="
         f"{summary['model_quality_metrics']['full_market_generalization']}"
+    )
+
+
+def as_of_summary_fields(summary: dict[str, Any]) -> str:
+    if not summary.get("requested_as_of_date"):
+        return ""
+    observed = str(summary.get("as_of_date_observed", False)).lower()
+    return (
+        f"requested_as_of_date={summary['requested_as_of_date']} "
+        f"actual_data_date={summary.get('actual_data_date', '')} "
+        f"as_of_date_observed={observed} "
     )
 
 

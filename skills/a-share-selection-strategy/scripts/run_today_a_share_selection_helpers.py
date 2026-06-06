@@ -20,6 +20,18 @@ def prices_output_path(manifest: dict[str, Any]) -> Path:
     return Path(manifest["output_dir"]) / f"prices{suffix}"
 
 
+def spot_output_path(manifest: dict[str, Any]) -> Path | None:
+    output_dir = Path(manifest["output_dir"])
+    if (
+        not manifest.get("spot_input")
+        and not manifest.get("fetch_spot")
+        and not (output_dir / "spot_metadata.json").exists()
+    ):
+        return None
+    source = str(manifest.get("spot_input", ""))
+    return output_dir / f"spot{tabular_suffix(source)}"
+
+
 def prediction_input_source(manifest: dict[str, Any]) -> str:
     return str(manifest.get("prediction_input_source", manifest.get("lightgbm_output_source", "unknown")))
 
@@ -79,10 +91,9 @@ def spot_rows(manifest: dict[str, Any]) -> int:
         if raw_items is not None:
             return int(raw_items)
         return 0
-    output_dir = Path(manifest["output_dir"])
-    if not manifest.get("spot_input"):
+    spot_path = spot_output_path(manifest)
+    if spot_path is None:
         return 0
-    spot_path = output_dir / f"spot{tabular_suffix(str(manifest['spot_input']))}"
     if not spot_path.exists():
         return 0
     return tabular_row_count(spot_path)
@@ -164,6 +175,12 @@ def parse_score_stdout(stdout: str) -> dict[str, Any]:
             counts_text = line.split("=", 1)[1]
             parsed["threshold_failures"] = counts_text
             parsed["threshold_failures_by_rule"] = parse_count_pairs(counts_text)
+        elif line.startswith("INFO: failed_symbol_examples="):
+            parsed["failed_symbol_examples"] = parse_csv_values(line.split("=", 1)[1])
+        elif line.startswith("INFO: insufficient_history_symbol_examples="):
+            parsed["insufficient_history_symbol_examples"] = parse_csv_values(
+                line.split("=", 1)[1]
+            )
     return parsed
 
 
@@ -199,6 +216,10 @@ def parse_count_pairs(text: str) -> dict[str, int]:
         except ValueError:
             continue
     return counts
+
+
+def parse_csv_values(text: str) -> list[str]:
+    return [item.strip() for item in text.split(",") if item.strip()]
 
 
 def write_json(data: dict[str, Any], path: Path) -> None:

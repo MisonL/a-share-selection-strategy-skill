@@ -21,7 +21,7 @@ sys.path.insert(0, str(TESTS))
 
 import generate_lightgbm_predictions as generator  # noqa: E402
 import score_candidates as scorer  # noqa: E402
-from helpers import build_frame, load_config  # noqa: E402
+from helpers import build_frame, load_config, permissive_thresholds  # noqa: E402
 
 
 class RecordingScaler:
@@ -130,6 +130,129 @@ class LightgbmPredictionCliTests(unittest.TestCase):
         self.assertEqual("single_class_holdout", saved["symbols"][0]["holdout_metric_reason"])
         self.assertIsNone(saved["symbols"][0]["holdout_auc"])
         self.assertIn("close.shift(-horizon)", saved["symbols"][0]["label_definition"])
+
+    def test_cli_rejects_rows_after_as_of_date_without_output(self) -> None:
+        frame = build_frame(days=180, include_turn=True)
+        deps = {"classifier": RecordingClassifier, "scaler": RecordingScaler}
+        original_loader = generator.load_model_dependencies
+        generator.load_model_dependencies = lambda: deps
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                input_path = Path(tmpdir) / "prices.csv"
+                output_path = Path(tmpdir) / "predictions.csv"
+                summary_path = Path(tmpdir) / "summary.json"
+                frame.to_csv(input_path, index=False)
+                stderr = StringIO()
+                with redirect_stderr(stderr):
+                    code = generator.main(
+                        [
+                            "--input",
+                            str(input_path),
+                            "--output",
+                            str(output_path),
+                            "--summary-output",
+                            str(summary_path),
+                            "--as-of-date",
+                            "2025-07-01",
+                        ]
+                    )
+
+            self.assertEqual(2, code)
+            self.assertFalse(output_path.exists())
+            self.assertFalse(summary_path.exists())
+            self.assertIn("rows_after_as_of_date", stderr.getvalue())
+            self.assertIn("output_written=false", stderr.getvalue())
+        finally:
+            generator.load_model_dependencies = original_loader
+
+    def test_cli_records_as_of_boundary_on_success(self) -> None:
+        frame = build_frame(days=180, include_turn=True)
+        as_of_date = str(sorted(frame["date"].unique())[-1])
+        deps = {"classifier": RecordingClassifier, "scaler": RecordingScaler}
+        original_loader = generator.load_model_dependencies
+        generator.load_model_dependencies = lambda: deps
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                input_path = Path(tmpdir) / "prices.csv"
+                output_path = Path(tmpdir) / "predictions.csv"
+                summary_path = Path(tmpdir) / "summary.json"
+                frame.to_csv(input_path, index=False)
+                stdout = StringIO()
+                stderr = StringIO()
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    code = generator.main(
+                        [
+                            "--input",
+                            str(input_path),
+                            "--output",
+                            str(output_path),
+                            "--summary-output",
+                            str(summary_path),
+                            "--as-of-date",
+                            as_of_date,
+                        ]
+                    )
+                predictions = pd.read_csv(output_path, dtype={"symbol": str})
+                saved = json.loads(summary_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(0, code, stderr.getvalue())
+            self.assertEqual({as_of_date}, set(predictions["requested_as_of_date"]))
+            self.assertEqual({as_of_date}, set(predictions["actual_data_date"]))
+            self.assertEqual({True}, set(predictions["as_of_date_observed"]))
+            self.assertEqual(as_of_date, saved["requested_as_of_date"])
+            self.assertEqual(as_of_date, saved["actual_data_date"])
+            self.assertTrue(saved["as_of_date_observed"])
+            self.assertIn(f"requested_as_of_date={as_of_date}", stdout.getvalue())
+        finally:
+            generator.load_model_dependencies = original_loader
+
+    def test_prediction_scoring_preserves_generation_provenance_outputs(self) -> None:
+        frame = build_frame(days=180, include_turn=True)
+        deps = {"classifier": RecordingClassifier, "scaler": RecordingScaler}
+        predictions, _summary = generator.generate_predictions(
+            frame,
+            horizon=5,
+            train_ratio=0.8,
+            min_history_rows=150,
+            model_deps=deps,
+        )
+        config = load_config("prediction_profile_config.json")
+        config["thresholds"]["min_prediction_score"] = 0.0
+        config["thresholds"]["min_history_rows"] = 120
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            input_path = root / "predictions.csv"
+            config_path = root / "config.json"
+            output_path = root / "candidates.csv"
+            diagnostics_path = root / "diagnostics.csv"
+            predictions.to_csv(input_path, index=False)
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = scorer.main(
+                    [
+                        "--input",
+                        str(input_path),
+                        "--config",
+                        str(config_path),
+                        "--output",
+                        str(output_path),
+                        "--diagnostics-output",
+                        str(diagnostics_path),
+                    ]
+                )
+            candidates = pd.read_csv(output_path, dtype={"symbol": str})
+            diagnostics = pd.read_csv(diagnostics_path, dtype={"symbol": str})
+
+        self.assertEqual(0, code, stderr.getvalue())
+        for frame_out in (candidates, diagnostics):
+            self.assertEqual({"lightgbm"}, set(frame_out["prediction_model"]))
+            self.assertEqual({5}, set(frame_out["prediction_horizon_days"]))
+            self.assertEqual(
+                {"latest_probability_repeated_for_scoring"},
+                set(frame_out["prediction_scope"]),
+            )
 
     def test_prediction_records_computed_holdout_auc_when_labels_vary(self) -> None:
         frame = oscillating_frame(days=180)

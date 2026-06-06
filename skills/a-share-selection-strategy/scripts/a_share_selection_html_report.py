@@ -24,11 +24,13 @@ from a_share_selection_html_sections import (
     boundary_panel,
     collapsible_details,
     evidence_list,
+    empty_key_for,
     hero,
     limited_table,
     metric_grid,
     section,
     steps_table,
+    zero_candidates_message,
 )
 from a_share_selection_html_modes import (
     candidate_section_key,
@@ -109,6 +111,8 @@ def report_sections(
                 truncated=candidates_truncated,
                 limit=HTML_REPORT_ROWS_LIMIT,
                 csv_path=summary.get("candidates_output", ""),
+                empty_key=empty_key_for(summary),
+                empty_html=zero_candidates_message(summary, language),
             ),
         ),
         section(
@@ -120,6 +124,7 @@ def report_sections(
                 truncated=diagnostics_truncated,
                 limit=HTML_DIAGNOSTIC_ROWS_LIMIT,
                 csv_path=summary.get("diagnostics_output", ""),
+                empty_key=empty_key_for(summary),
             ),
         ),
         section(

@@ -128,6 +128,7 @@ def boundary_panel(summary: dict[str, Any], language: str) -> str:
         f'<p class="explain-lead">{boundary_summary(summary, language)}</p>'
         f'<div class="note-grid">{boundary_cards(summary, language)}</div>'
         f'<div class="limit-panel">{limit_panel(summary, language)}</div>'
+        f"{disclosure_alerts(summary, language)}"
         f"{technical_details(summary, language)}"
     )
 
@@ -151,6 +152,44 @@ def limit_panel(summary: dict[str, Any], language: str) -> str:
     return f'<strong>{i18n("limits", language)}</strong><p>{i18n(key, language)}</p>'
 
 
+def disclosure_alerts(summary: dict[str, Any], language: str) -> str:
+    alerts = spot_alerts(summary, language) + history_alerts(summary, language)
+    if not alerts:
+        return ""
+    items = "".join(f"<li>{alert}</li>" for alert in alerts)
+    return f'<ul class="disclosure-alerts">{items}</ul>'
+
+
+def spot_alerts(summary: dict[str, Any], language: str) -> list[str]:
+    metadata = summary.get("spot_metadata", {})
+    if not isinstance(metadata, dict):
+        return []
+    partial = metadata.get("partial_result") is True
+    coverage = str(metadata.get("coverage_claim", ""))
+    if not partial and coverage != "partial_not_full_market":
+        return []
+    en = (
+        "Partial realtime snapshot; do not describe this as a completed live "
+        "full-market scan."
+    )
+    zh = "部分实时快照；不能写成实时全市场扫描完成。"
+    return [bilingual(en, zh, language)]
+
+
+def history_alerts(summary: dict[str, Any], language: str) -> list[str]:
+    selection = summary.get("history_selection", {})
+    if not isinstance(selection, dict):
+        return []
+    requested = str(selection.get("requested_end_date", ""))
+    actual = str(selection.get("history_metadata_actual_date_max", ""))
+    has_rows = selection.get("history_metadata_end_date_has_rows")
+    if not requested or not actual or has_rows is not False:
+        return []
+    en = f"Requested {requested}, actual latest {actual}."
+    zh = f"请求截止日 {requested}，历史实际最新日期 {actual}。"
+    return [bilingual(en, zh, language)]
+
+
 def technical_details(summary: dict[str, Any], language: str) -> str:
     metadata = summary.get("input_metadata", {})
     if not isinstance(metadata, dict):
@@ -171,9 +210,12 @@ def technical_details(summary: dict[str, Any], language: str) -> str:
         (i18n("source_type", language), metadata.get("source_type", "unknown")),
         (i18n("real_market_data", language), metadata.get("real_market_data", "unknown")),
         (i18n("scenario", language), metadata.get("scenario", "")),
+        ("advice_boundary", summary.get("advice_boundary", "")),
+        ("recommendation_boundary", summary.get("recommendation_boundary", "")),
     ]
     fields.extend(spot_metadata_fields(summary))
     fields.extend(history_selection_fields(summary, language))
+    fields.extend(score_detail_fields(summary))
     rows = "".join(f"<dt>{label}</dt><dd>{esc(value)}</dd>" for label, value in fields)
     return (
         '<details class="technical-details">'
@@ -190,12 +232,27 @@ def machine_boundary(summary: dict[str, Any], language: str) -> str:
     else:
         boundary = str(summary.get("boundary", ""))
         boundary_html = esc(boundary)
+    advice = str(summary.get("advice_boundary", ""))
+    if advice:
+        suffix = f" advice_boundary={esc(advice)}"
+        boundary_html = f"{boundary_html}{suffix}" if boundary_html else suffix.strip()
     if not boundary_html:
         return ""
     return (
         f'<p class="boundary"><strong>{i18n("machine_boundary", language)}:</strong> '
         f"{boundary_html}</p>"
     )
+
+
+def score_detail_fields(summary: dict[str, Any]) -> list[tuple[str, Any]]:
+    score = summary.get("score", {})
+    if not isinstance(score, dict):
+        return []
+    fields = []
+    for key in ("failed_symbol_examples", "insufficient_history_symbol_examples"):
+        if key in score:
+            fields.append((key, score.get(key)))
+    return fields
 
 
 def steps_table(steps: list[dict[str, Any]], language: str) -> str:
@@ -211,7 +268,12 @@ def steps_table(steps: list[dict[str, Any]], language: str) -> str:
         }
         for step in steps
     ]
-    return table(rows, ("step", "returncode", "allowed", "stderr"), language)
+    return table(
+        rows,
+        ("step", "returncode", "allowed", "stderr"),
+        language,
+        empty_key="empty_steps",
+    )
 
 
 def collapsible_details(label: str, content: str) -> str:
@@ -243,6 +305,8 @@ def evidence_paths(
         ("candidates_output", "candidates_output_written", "candidates_csv"),
         ("diagnostics_output", "diagnostics_output_written", "diagnostics_csv"),
         ("prices_output", "prices_output_written", "prices"),
+        ("spot_output", "spot_output_written", "spot_csv"),
+        ("spot_metadata_output", "spot_metadata_output_written", "spot_metadata_json"),
         ("selected_symbols_output", "selected_symbols_output_written", "selected_symbols_json"),
         ("history_metadata_output", "history_metadata_output_written", "history_metadata_json"),
     ]
@@ -256,9 +320,15 @@ def section(title: str, content: str) -> str:
     return f'<section class="section"><h2>{title}</h2>{content}</section>'
 
 
-def table(rows: list[dict[str, Any]], columns: tuple[str, ...], language: str) -> str:
+def table(
+    rows: list[dict[str, Any]],
+    columns: tuple[str, ...],
+    language: str,
+    *,
+    empty_key: str = "empty",
+) -> str:
     if not rows:
-        return f'<p class="empty">{i18n("empty", language)}</p>'
+        return f'<p class="empty">{i18n(empty_key, language)}</p>'
     header = "".join(f"<th>{i18n(column, language)}</th>" for column in columns)
     body = "".join(table_row(row, columns, language) for row in rows)
     return f'<div class="table-wrap"><table><thead><tr>{header}</tr></thead><tbody>{body}</tbody></table></div>'
@@ -272,11 +342,33 @@ def limited_table(
     truncated: bool,
     limit: int,
     csv_path: Any,
+    empty_key: str = "empty",
+    empty_html: str = "",
 ) -> str:
-    content = table(rows, columns, language)
+    if not rows and empty_html:
+        content = empty_html
+    else:
+        content = table(rows, columns, language, empty_key=empty_key)
     if not truncated:
         return content
     return content + truncation_note(limit=limit, csv_path=csv_path, language=language)
+
+
+def zero_candidates_message(summary: dict[str, Any], language: str) -> str:
+    score = summary.get("score", {})
+    if not isinstance(score, dict) or score.get("effective_empty_result") is not True:
+        return ""
+    reason = str(score.get("empty_result_reason", "unknown"))
+    en = (
+        "Completed run with zero candidates; effective_empty_result=true "
+        f"empty_result_reason={reason}."
+    )
+    zh = f"本次成功运行但没有候选；effective_empty_result=true empty_result_reason={reason}。"
+    return f'<p class="empty">{bilingual(en, zh, language)}</p>'
+
+
+def empty_key_for(summary: dict[str, Any]) -> str:
+    return "no_table_rows" if str(summary.get("status", "")) == "completed" else "empty"
 
 
 def truncation_note(*, limit: int, csv_path: Any, language: str) -> str:

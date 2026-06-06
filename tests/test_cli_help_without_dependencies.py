@@ -117,6 +117,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--min-history-rows",
                 "--summary-output",
                 "--fail-on-skipped",
+                "--as-of-date",
                 "generation_audit_only",
                 "skipped_symbols",
             },
@@ -223,6 +224,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--fail-on-empty-result",
                 "external_unverified",
                 "does not train or execute LightGBM",
+                "CSV only",
                 ".parquet/.pq output paths fail",
             },
         }

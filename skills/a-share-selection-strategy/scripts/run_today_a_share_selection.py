@@ -75,6 +75,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         output.mkdir(parents=True, exist_ok=True)
+        clear_stale_run_outputs(args, output)
+        manifest["run_outputs_initialized"] = True
         context = RunContext(args, manifest, manifest_path, run_command)
         run_pipeline(context)
     except StepFailure as exc:
@@ -122,7 +124,6 @@ def run_pipeline(context: RunContext) -> None:
     diagnostics = output / "diagnostics.csv"
     spot = run_spot_path(context.args)
     context.manifest["input_metadata"] = input_metadata_for_prices(context.args.prices_input)
-    clear_stale_run_outputs(context.args, output)
     context.manifest["run_outputs_initialized"] = True
     validate_preflight_inputs(context.args, spot)
     prepare_inputs(context.args, output, prices, spot)

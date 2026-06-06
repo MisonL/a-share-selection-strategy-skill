@@ -192,6 +192,36 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertNotIn("Stale Diagnostic", report)
         self.assertNotIn("Price is above the configured limit", report)
 
+    def test_report_distinguishes_written_empty_candidates_from_missing_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            candidates.write_text(
+                "rank,symbol,name,date,close,total_score,key_reasons,risk_notes\n",
+                encoding="utf-8",
+            )
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "candidate_rows": 0,
+                    "candidates_output": str(candidates),
+                    "candidates_output_written": True,
+                    "score": {
+                        "effective_empty_result": True,
+                        "empty_result_reason": "threshold_filtered_all",
+                    },
+                }
+            )
+
+            en_report = render_report(summary, {"steps": []}, language="en")
+            zh_report = render_report(summary, {"steps": []}, language="zh")
+
+        self.assertNotIn("No rows written for this run.", en_report)
+        self.assertIn("Completed run with zero candidates", en_report)
+        self.assertIn("effective_empty_result=true", en_report)
+        self.assertNotIn("本次运行未写出相关行。", zh_report)
+        self.assertIn("本次成功运行但没有候选", zh_report)
+
     def test_report_shows_history_selection_evidence_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
@@ -225,6 +255,43 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("Selected history symbols", report)
         self.assertIn(">./selected_symbols.json</code>", report)
         self.assertIn(">./history_metadata.json</code>", report)
+
+    def test_report_shows_spot_evidence_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            spot = output / "spot.csv"
+            metadata = output / "spot_metadata.json"
+            spot.write_text("symbol,spot_price\n000001,8.1\n", encoding="utf-8")
+            metadata.write_text('{"partial_result": true}\n', encoding="utf-8")
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "spot_output": str(spot),
+                    "spot_output_written": True,
+                    "spot_metadata_output": str(metadata),
+                    "spot_metadata_output_written": True,
+                }
+            )
+
+            report = render_report(summary, {"steps": []}, language="en")
+
+        self.assertIn(">./spot.csv</code>", report)
+        self.assertIn(">./spot_metadata.json</code>", report)
+
+    def test_report_shows_score_symbol_examples(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            summary = minimal_summary(tmpdir, Path(tmpdir) / "diagnostics.csv")
+            summary["score"] = {
+                "failed_symbol_examples": ["000003", "000004"],
+                "insufficient_history_symbol_examples": ["300001"],
+            }
+
+            report = render_report(summary, {"steps": []}, language="en")
+
+        self.assertIn("failed_symbol_examples", report)
+        self.assertIn("000003", report)
+        self.assertIn("insufficient_history_symbol_examples", report)
+        self.assertIn("300001", report)
 
     def test_non_finite_numeric_values_render_as_placeholder(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

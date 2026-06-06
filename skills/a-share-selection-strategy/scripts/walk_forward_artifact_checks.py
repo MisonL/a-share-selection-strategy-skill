@@ -14,6 +14,16 @@ from walk_forward_date_checks import date_after, same_calendar_date, same_date_l
 
 
 CAPITAL_FIELDS = ("weight", "notional", "quantity", "cash_reserved")
+BACKTEST_FIELDS = (
+    "signal_date", "entry_date", "exit_date", "entry_close", "exit_close",
+    "gross_return", "return", *CAPITAL_FIELDS, "status", "missing_data",
+    "tradability_model", "limit_rules_model", "hold_days_requested",
+    "cost_bps", "slippage_bps",
+)
+BACKTEST_NUMERIC_FIELDS = (
+    "entry_close", "exit_close", "gross_return", "return",
+    "cost_bps", "slippage_bps", *CAPITAL_FIELDS,
+)
 PRICE_COLUMNS = ("symbol", "date", "open", "high", "low", "close", "volume", "amount", "turn", "tradestatus", "isST")
 SIZED_COLUMNS = ("cash_budget", "lot_size", "capital_model", "signal_close", "cash_slot", "quantity", "cash_reserved", "notional", "weight", "unallocated")
 
@@ -186,7 +196,9 @@ def raw_candidate_errors(run_dir: Path, date: str, selected_count: int, args: An
 
 
 def backtest_errors(rows: list[dict[str, str]], date: str, expected: int, args: Any) -> list[str]:
-    errors = required_column_errors(rows, (*CAPITAL_FIELDS, "status", "missing_data"), f"{date}_backtest")
+    errors = required_column_errors(rows, BACKTEST_FIELDS, f"{date}_backtest")
+    if len(rows) != expected:
+        errors.append(f"{date}_backtest_rows={len(rows)} expected={expected}")
     bad_dates = [
         row.get("signal_date")
         for row in rows
@@ -213,11 +225,34 @@ def backtest_row_errors(row: dict[str, str], date: str, args: Any) -> list[str]:
     for key, expected in checks.items():
         if row.get(key) != expected:
             errors.append(f"{date}_{key}={row.get(key)}")
-    if float_value(row.get("cost_bps")) != args.cost_bps:
+    for key in BACKTEST_NUMERIC_FIELDS:
+        errors += numeric_field_errors(row, key, date)
+    if not same_calendar_date(row.get("entry_date", ""), date):
+        errors.append(f"{date}_entry_date={row.get('entry_date')}")
+    if row.get("exit_date") and date_after(row.get("entry_date", ""), row.get("exit_date", "")):
+        errors.append(f"{date}_exit_date={row.get('exit_date')}")
+    if safe_float(row.get("cost_bps")) != args.cost_bps:
         errors.append(f"{date}_cost_bps={row.get('cost_bps')}")
-    if float_value(row.get("slippage_bps")) != args.slippage_bps:
+    if safe_float(row.get("slippage_bps")) != args.slippage_bps:
         errors.append(f"{date}_slippage_bps={row.get('slippage_bps')}")
     return errors
+
+
+def numeric_field_errors(row: dict[str, str], key: str, date: str) -> list[str]:
+    if key not in row:
+        return []
+    try:
+        float_value(row.get(key))
+    except (TypeError, ValueError):
+        return [f"{date}_{key}={row.get(key)}"]
+    return []
+
+
+def safe_float(value: str | None) -> float | None:
+    try:
+        return float_value(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def equity_errors(

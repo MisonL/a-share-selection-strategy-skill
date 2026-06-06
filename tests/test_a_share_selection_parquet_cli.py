@@ -106,6 +106,19 @@ class AShareSelectionParquetCliTests(unittest.TestCase):
 
         self.assertEqual("12345", loaded["symbol"].iloc[0])
 
+    def test_validate_rejects_float_numeric_damaged_parquet_symbol(self) -> None:
+        frame = build_frame()
+        frame["symbol"] = 1.0
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "float-symbol.parquet"
+            frame.to_parquet(path, index=False)
+
+            code, _, stderr = run_validate_cli(path)
+
+        self.assertEqual(1, code)
+        self.assertIn("preserve leading zeros as text", stderr)
+        self.assertIn("symbol=1.0", stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

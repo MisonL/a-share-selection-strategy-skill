@@ -127,7 +127,7 @@ def validate_symbols(frame: pd.DataFrame) -> Iterable[str]:
             f"column symbol has {empty_count} empty values"
             f"{error_examples(frame, symbols == '')}"
         )
-    damaged = symbols.str.fullmatch(r"\d{1,5}", na=False)
+    damaged = symbols.str.fullmatch(r"(?:\d{1,5}|\d+\.0+)", na=False)
     damaged_count = int(damaged.sum())
     if damaged_count:
         yield (

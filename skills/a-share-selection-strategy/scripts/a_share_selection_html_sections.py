@@ -33,6 +33,7 @@ from a_share_selection_html_modes import (
     report_status_key,
     scoring_method_key,
 )
+from a_share_selection_html_spot import spot_metadata_fields
 from run_today_a_share_selection_input_metadata import is_synthetic_demo
 
 
@@ -143,6 +144,7 @@ def technical_details(summary: dict[str, Any], language: str) -> str:
         (i18n("real_market_data", language), metadata.get("real_market_data", "unknown")),
         (i18n("scenario", language), metadata.get("scenario", "")),
     ]
+    fields.extend(spot_metadata_fields(summary))
     fields.extend(history_selection_fields(summary, language))
     rows = "".join(f"<dt>{label}</dt><dd>{esc(value)}</dd>" for label, value in fields)
     return (

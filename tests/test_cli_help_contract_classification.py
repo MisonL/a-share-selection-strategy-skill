@@ -62,6 +62,7 @@ HELP_CONTRACT_EXCLUDED_HELPERS = [
     "a_share_selection_html_i18n.py",
     "a_share_selection_html_modes.py",
     "a_share_selection_html_sections.py",
+    "a_share_selection_html_spot.py",
     "a_share_selection_metrics.py",
     "a_share_selection_model_contracts.py",
     "a_share_selection_output.py",

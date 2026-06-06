@@ -33,4 +33,16 @@ def history_selection_fields(
             i18n("history_end_date_has_rows", language),
             selection.get("history_metadata_end_date_has_rows", ""),
         ),
+        (
+            "history_metadata_fallback_error_count",
+            selection.get("history_metadata_fallback_error_count", ""),
+        ),
+        (
+            "history_metadata_fallback_errors",
+            selection.get("history_metadata_fallback_errors", ""),
+        ),
+        (
+            "history_metadata_symbol_providers",
+            selection.get("history_metadata_symbol_providers", ""),
+        ),
     ]

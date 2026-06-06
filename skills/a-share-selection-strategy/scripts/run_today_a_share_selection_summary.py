@@ -139,6 +139,7 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
     metadata = read_json_if_exists(metadata_path)
     selected_symbols = selected_symbol_values(selected_data, manifest)
     failed_symbols = metadata_list(metadata, "failed_symbols")
+    fallback_errors = metadata_list(metadata, "fallback_errors")
     date_range = history_date_range_view(metadata, manifest)
     return {
         "source": selected_data.get("source", ""),
@@ -152,6 +153,9 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
         "allow_partial_history": bool(manifest.get("allow_partial_history", False)),
         "history_metadata_failed_symbol_count": len(failed_symbols),
         "history_metadata_failed_symbols": failed_symbols,
+        "history_metadata_fallback_error_count": len(fallback_errors),
+        "history_metadata_fallback_errors": fallback_errors,
+        "history_metadata_symbol_providers": symbol_providers(metadata),
         **date_range,
         "selected_symbols_output": str(selected_path),
         "selected_symbols_output_written": selected_path.exists(),
@@ -233,6 +237,20 @@ def symbol_date_ranges(metadata: dict[str, Any]) -> list[dict[str, Any]]:
         }
         for item in symbols
         if isinstance(item, dict)
+    ]
+
+
+def symbol_providers(metadata: dict[str, Any]) -> list[dict[str, str]]:
+    symbols = metadata.get("symbols", [])
+    if not isinstance(symbols, list):
+        return []
+    return [
+        {
+            "symbol": str(item.get("symbol", "")),
+            "provider": str(item.get("provider", "")),
+        }
+        for item in symbols
+        if isinstance(item, dict) and item.get("provider")
     ]
 
 

@@ -230,6 +230,7 @@ def history_date_range_view(
     return {
         "requested_end_date": requested,
         "history_metadata_actual_date_max": actual_date_max,
+        "history_metadata_symbols_reached_end_date_count": len(reached),
         "history_metadata_all_symbols_reached_end_date": bool(
             ranges and requested and len(reached) == len(ranges)
         ),

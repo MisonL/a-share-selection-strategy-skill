@@ -300,6 +300,10 @@ def runner_disclosure_stdout(view: dict[str, Any]) -> str:
                 f"{metadata_stdout_value(history.get('requested_end_date'))}",
                 "history_actual_date_max="
                 f"{metadata_stdout_value(history.get('history_metadata_actual_date_max'))}",
+                "history_symbols_reached_end_date_count="
+                f"{metadata_stdout_value(history.get('history_metadata_symbols_reached_end_date_count'))}",
+                "history_all_symbols_reached_end_date="
+                f"{metadata_stdout_value(history.get('history_metadata_all_symbols_reached_end_date'))}",
                 "history_end_date_has_rows="
                 f"{metadata_stdout_value(history.get('history_metadata_end_date_has_rows'))}",
             ]

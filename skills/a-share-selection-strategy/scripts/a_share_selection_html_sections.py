@@ -182,11 +182,26 @@ def history_alerts(summary: dict[str, Any], language: str) -> list[str]:
         return []
     requested = str(selection.get("requested_end_date", ""))
     actual = str(selection.get("history_metadata_actual_date_max", ""))
+    all_reached = selection.get("history_metadata_all_symbols_reached_end_date")
+    reached_count = selection.get("history_metadata_symbols_reached_end_date_count")
+    selected_count = selection.get("selected_symbol_count")
     has_rows = selection.get("history_metadata_end_date_has_rows")
-    if not requested or not actual or has_rows is not False:
+    if not requested or not actual:
         return []
-    en = f"Requested {requested}, actual latest {actual}."
-    zh = f"请求截止日 {requested}，历史实际最新日期 {actual}。"
+    if all_reached is True:
+        return []
+    if all_reached is not False and has_rows is not False:
+        return []
+    reached = reached_count if isinstance(reached_count, int) else "unknown"
+    total = selected_count if isinstance(selected_count, int) else "unknown"
+    en = (
+        f"Requested {requested}, actual latest {actual}; "
+        f"{reached}/{total} symbols reached the requested end date."
+    )
+    zh = (
+        f"请求截止日 {requested}，历史实际最新日期 {actual}；"
+        f"{reached}/{total} 个标的到达请求截止日。"
+    )
     return [bilingual(en, zh, language)]
 
 

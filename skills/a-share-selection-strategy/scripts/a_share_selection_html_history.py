@@ -30,6 +30,14 @@ def history_selection_fields(
             selection.get("history_metadata_actual_date_max", ""),
         ),
         (
+            "history_metadata_symbols_reached_end_date_count",
+            selection.get("history_metadata_symbols_reached_end_date_count", ""),
+        ),
+        (
+            "history_metadata_all_symbols_reached_end_date",
+            selection.get("history_metadata_all_symbols_reached_end_date", ""),
+        ),
+        (
             i18n("history_end_date_has_rows", language),
             selection.get("history_metadata_end_date_has_rows", ""),
         ),

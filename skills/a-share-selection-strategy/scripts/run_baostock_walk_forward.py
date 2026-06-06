@@ -108,7 +108,8 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Write a planned run_manifest.json without executing fetch, prediction, "
-            "validation, scoring, sizing, backtest, equity, or summary commands."
+            "validation, scoring, sizing, backtest, equity, or summary commands. "
+            "planned manifests cannot validate as executed runs."
         ),
     )
     return parser

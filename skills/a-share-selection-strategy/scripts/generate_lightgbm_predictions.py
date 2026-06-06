@@ -33,8 +33,15 @@ MODEL_PARAMS = {
 
 
 def main(argv: list[str] | None = None) -> int:
+    epilog = (
+        "Use --summary-output and audit split_method, scaler_fit_scope, "
+        "label_definition, prediction_scope, skipped_symbols, and "
+        "model_quality_scope=generation_audit_only. Downstream scoring success "
+        "does not prove skipped symbols or model quality."
+    )
     parser = argparse.ArgumentParser(
-        description="Generate LightGBM prediction_score for local OHLCV data."
+        description="Generate LightGBM prediction_score for local OHLCV data.",
+        epilog=epilog,
     )
     parser.add_argument("--input", required=True, help="Path to CSV or Parquet file.")
     parser.add_argument("--output", required=True, help="Path to output CSV file.")

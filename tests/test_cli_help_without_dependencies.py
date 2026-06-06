@@ -117,6 +117,8 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--min-history-rows",
                 "--summary-output",
                 "--fail-on-skipped",
+                "generation_audit_only",
+                "skipped_symbols",
             },
             "slice_prices_as_of.py": {"--input", "--output", "--as-of-date"},
             "allocate_candidate_capital.py": {
@@ -212,6 +214,8 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--spot-input",
                 "--fail-on-skipped",
                 "--fail-on-empty-result",
+                "external_unverified",
+                "does not train or execute LightGBM",
             },
         }
         self.assertEqual(set(CLI_HELP_ENTRIES), set(cases))
@@ -301,6 +305,18 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--offline-plan",
                 "without executing fetch, prediction",
                 "backtest, equity, or summary commands",
+                "planned manifests cannot validate as executed runs",
+            ],
+            "score_candidates.py": [
+                "prediction-derived config consumes existing prediction",
+                "external_unverified",
+                "does not train or execute LightGBM",
+                "strict empty results return non-zero",
+            ],
+            "generate_lightgbm_predictions.py": [
+                "generation_audit_only",
+                "skipped_symbols",
+                "scoring success does not prove skipped symbols or model quality",
             ],
         }
         for script_name, expected_texts in cases.items():

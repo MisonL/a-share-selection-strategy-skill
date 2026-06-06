@@ -43,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 3
-    print_summary(metadata)
+    print_summary(metadata, prefix=summary_prefix(metadata))
     return 0
 
 
@@ -311,6 +311,17 @@ def strict_gate_errors(metadata: dict[str, Any], fail_on_fetch_error: bool) -> l
     if metadata["fallback_errors"]:
         errors.append(f"fallback_errors={len(metadata['fallback_errors'])}")
     return errors
+
+
+def summary_prefix(metadata: dict[str, Any]) -> str:
+    if (
+        metadata["failed_symbols"]
+        or metadata["empty_symbols"]
+        or metadata["fallback_errors"]
+        or metadata["symbol_count"] != len(metadata["requested_symbols"])
+    ):
+        return "PARTIAL"
+    return "OK"
 
 
 def write_outputs(frame: pd.DataFrame, metadata: dict[str, Any], output: Path, meta: Path) -> None:

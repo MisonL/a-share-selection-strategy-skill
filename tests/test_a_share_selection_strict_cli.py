@@ -26,6 +26,7 @@ def run_score_cli(
     input_path: Path,
     output_path: Path,
     extra_args: list[str],
+    diagnostics_output: Path | None = None,
 ) -> tuple[int, str, str]:
     stdout = StringIO()
     stderr = StringIO()
@@ -38,6 +39,8 @@ def run_score_cli(
         str(output_path),
         *extra_args,
     ]
+    if diagnostics_output is not None:
+        args.extend(["--diagnostics-output", str(diagnostics_output)])
     with redirect_stdout(stdout), redirect_stderr(stderr):
         code = scorer.main(args)
     return code, stdout.getvalue(), stderr.getvalue()
@@ -99,6 +102,55 @@ class AShareSelectionStrictCliTests(unittest.TestCase):
         self.assertIn("ERROR_SUMMARY:", stdout)
         self.assertIn("effective_empty_result=true", stderr)
         self.assertIn("empty_result_reason=threshold_filtered_all", stderr)
+
+    def test_cli_bad_input_removes_stale_output_and_diagnostics(self) -> None:
+        frame = build_frame(include_prediction=True, include_turn=True)
+        frame = frame.drop(columns=["market"])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            output_path = Path(tmpdir) / "prediction_bad.csv"
+            diagnostics_path = Path(tmpdir) / "diagnostics.csv"
+            frame.to_csv(input_path, index=False)
+            output_path.write_text("stale-candidates\n", encoding="utf-8")
+            diagnostics_path.write_text("stale-diagnostics\n", encoding="utf-8")
+            code, _stdout, stderr = run_score_cli(
+                input_path,
+                output_path,
+                [],
+                diagnostics_output=diagnostics_path,
+            )
+            output_exists = output_path.exists()
+            diagnostics_exists = diagnostics_path.exists()
+        self.assertEqual(2, code)
+        self.assertFalse(output_exists)
+        self.assertFalse(diagnostics_exists)
+        self.assertIn("output_not_written=true", stderr)
+
+    def test_cli_strict_empty_removes_stale_output_and_diagnostics(self) -> None:
+        frame = build_frame(
+            include_prediction=True,
+            prediction_value=0.1,
+            include_turn=True,
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            output_path = Path(tmpdir) / "prediction_empty_strict.csv"
+            diagnostics_path = Path(tmpdir) / "diagnostics.csv"
+            frame.to_csv(input_path, index=False)
+            output_path.write_text("stale-candidates\n", encoding="utf-8")
+            diagnostics_path.write_text("stale-diagnostics\n", encoding="utf-8")
+            code, _stdout, stderr = run_score_cli(
+                input_path,
+                output_path,
+                ["--fail-on-empty-result"],
+                diagnostics_output=diagnostics_path,
+            )
+            output_exists = output_path.exists()
+            diagnostics_exists = diagnostics_path.exists()
+        self.assertEqual(3, code)
+        self.assertFalse(output_exists)
+        self.assertFalse(diagnostics_exists)
+        self.assertIn("output_not_written=true", stderr)
 
 
 if __name__ == "__main__":

@@ -63,6 +63,17 @@ def build_report(manifest: dict[str, Any], args: argparse.Namespace) -> dict[str
     errors.extend(top_level_errors(manifest, args, signal_dates))
     steps = manifest.get("steps", [])
     step_list = steps if isinstance(steps, list) else []
+    offline_errors = offline_plan_errors(manifest, step_list)
+    if offline_errors:
+        errors.extend(offline_errors)
+        return {
+            "schema_version": 1,
+            "validator": "validate_walk_forward_manifest",
+            "manifest_runner": manifest.get("runner"),
+            "signals": signal_dates,
+            "steps_checked": len(steps) if isinstance(steps, list) else 0,
+            "errors": errors,
+        }
     allocation_model = str(manifest.get("allocation_model", "equal_cash_budget_lot_floor"))
     errors.extend(step_order_errors(steps, signal_dates, allocation_model))
     errors.extend(step_record_errors(step_list, expect_overlap=args.expect_portfolio_violations))
@@ -75,6 +86,21 @@ def build_report(manifest: dict[str, Any], args: argparse.Namespace) -> dict[str
         "steps_checked": len(steps) if isinstance(steps, list) else 0,
         "errors": errors,
     }
+
+
+def offline_plan_errors(
+    manifest: dict[str, Any],
+    steps: list[dict[str, Any]],
+) -> list[str]:
+    offline_mode = manifest.get("execution_mode") == "offline_plan"
+    commands_not_executed = manifest.get("commands_executed") is False
+    all_planned = bool(steps) and all(item.get("planned_only") is True for item in steps)
+    if not (offline_mode or commands_not_executed or all_planned):
+        return []
+    return [
+        "offline_plan_manifest_not_executed",
+        "planned_only_manifest_cannot_validate_as_executed_run",
+    ]
 
 
 def top_level_errors(

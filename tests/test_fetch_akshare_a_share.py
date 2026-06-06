@@ -125,6 +125,7 @@ class FetchAkshareAShareTests(unittest.TestCase):
             restore_module("akshare", old_module)
 
         self.assertEqual(0, code)
+        self.assertTrue(stdout.getvalue().startswith("PARTIAL:"))
         self.assertIn("fallback_errors=1", stdout.getvalue())
         self.assertEqual("stock_zh_a_daily", saved["symbols"][0]["provider"])
         self.assertEqual("000001", frame["symbol"].iloc[0])

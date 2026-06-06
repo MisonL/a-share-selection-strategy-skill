@@ -89,6 +89,30 @@ class WalkForwardManifestCliTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertIn("steps_not_list", stderr)
 
+    def test_cli_rejects_offline_plan_manifest_with_clear_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest = Path(tmpdir) / "run_manifest.json"
+            output = Path(tmpdir) / "manifest_report.json"
+            data = build_manifest(["2026-05-12"])
+            data["execution_mode"] = "offline_plan"
+            data["commands_executed"] = False
+            data["claim_boundary"] = (
+                "offline_plan_manifest_only_not_real_market_prediction_or_backtest"
+            )
+            for item in data["steps"]:
+                item["returncode"] = None
+                item["planned_only"] = True
+            write_json(manifest, data)
+
+            code, stdout, stderr = call_cli(manifest, output, [])
+            report = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(3, code)
+        self.assertIn("ERROR_SUMMARY:", stdout)
+        self.assertIn("offline_plan_manifest_not_executed", stderr)
+        self.assertIn("planned_only_manifest_cannot_validate_as_executed_run", stderr)
+        self.assertIn("offline_plan_manifest_not_executed", report["errors"])
+
     def test_cli_checks_expected_max_candidates_when_requested(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             manifest = Path(tmpdir) / "run_manifest.json"

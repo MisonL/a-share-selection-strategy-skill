@@ -232,6 +232,8 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
   --fail-on-partial-spot
 ```
 
+若 spot 抓取失败或只拿到部分页，先读 `summary.json` 或 `spot_metadata.json` 中的 `failed_pages`、`partial_result`、`coverage_claim` 和 `allowed_failure_actions`。`coverage_claim=partial_not_full_market` 或 `partial_result=true` 只能解释为部分实时快照；即使后续候选、诊断或历史抓取产物存在，也不能写成实时全市场扫描完成。
+
 没有本地历史行情文件时，可显式让总控 CLI 抓历史。低价超短剖面需要 `tradestatus/isST` 等可交易字段，优先用 baostock；akshare 路径缺这些字段时应失败并披露，不能把它写成可交易性已验证：
 
 ```bash

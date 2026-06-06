@@ -151,6 +151,58 @@ class FetchYfinanceOhlcvTests(unittest.TestCase):
         self.assertIn("rows=0", stderr.getvalue())
         self.assertIn("empty_symbols=1", stderr.getvalue())
 
+    def test_cli_partial_default_stdout_discloses_partial_result(self) -> None:
+        fake = fake_yfinance(
+            {
+                "AAPL": pd.DataFrame(
+                    [
+                        {
+                            "Open": 10.0,
+                            "High": 11.0,
+                            "Low": 9.5,
+                            "Close": 10.5,
+                            "Volume": 1200,
+                        }
+                    ],
+                    index=pd.to_datetime(["2026-05-20"]),
+                ),
+                "MSFT": pd.DataFrame(),
+            }
+        )
+        old_module = sys.modules.get("yfinance")
+        sys.modules["yfinance"] = fake
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                output = Path(tmpdir) / "prices.csv"
+                metadata = Path(tmpdir) / "metadata.json"
+                stdout = StringIO()
+                with redirect_stdout(stdout):
+                    code = fetcher.main(
+                        [
+                            "--symbols",
+                            "AAPL,MSFT",
+                            "--start-date",
+                            "2026-05-01",
+                            "--end-date",
+                            "2026-05-29",
+                            "--output",
+                            str(output),
+                            "--metadata-output",
+                            str(metadata),
+                        ]
+                    )
+                saved = json.loads(metadata.read_text(encoding="utf-8"))
+                output_exists = output.exists()
+        finally:
+            restore_module("yfinance", old_module)
+
+        self.assertEqual(0, code)
+        self.assertTrue(output_exists)
+        self.assertTrue(saved["output_written"])
+        self.assertEqual(["MSFT"], saved["empty_symbols"])
+        self.assertTrue(stdout.getvalue().startswith("PARTIAL:"))
+        self.assertIn("empty_symbols=1", stdout.getvalue())
+
     def test_cli_strict_error_removes_stale_outputs(self) -> None:
         fake = fake_yfinance({"AAPL": pd.DataFrame()})
         old_module = sys.modules.get("yfinance")

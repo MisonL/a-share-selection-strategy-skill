@@ -27,7 +27,13 @@ OUTPUT_COLUMNS = [
 
 def build_parser() -> argparse.ArgumentParser:
     description = "Score stock candidates from local CSV or Parquet OHLCV data."
-    parser = argparse.ArgumentParser(description=description)
+    epilog = (
+        "prediction-derived config consumes existing prediction or prediction_score "
+        "columns only; prediction_source=external_unverified means separate upstream "
+        "audit is required. This script does not train or execute LightGBM. "
+        "strict empty results return non-zero when --fail-on-empty-result is set."
+    )
+    parser = argparse.ArgumentParser(description=description, epilog=epilog)
     parser.add_argument("--input", required=True, help="Path to CSV or Parquet file.")
     parser.add_argument("--config", required=True, help="Path to JSON config file.")
     parser.add_argument("--output", required=True, help="Path to output CSV file.")
@@ -55,6 +61,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    output_path = Path(args.output)
+    diagnostics_path = Path(args.diagnostics_output) if args.diagnostics_output else None
     try:
         ensure_runtime_dependencies()
         config = load_config(Path(args.config))
@@ -69,6 +77,7 @@ def main(argv: list[str] | None = None) -> int:
             fail_on_empty_result=args.fail_on_empty_result,
         )
         if strict_errors:
+            remove_stale_outputs(output_path, diagnostics_path)
             print_summary(summary, args.output, prefix="ERROR_SUMMARY")
             print(
                 "ERROR: strict gate failed; "
@@ -76,13 +85,14 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 3
-        write_output(candidates, Path(args.output))
+        write_output(candidates, output_path)
         if args.diagnostics_output:
             write_threshold_diagnostics(
                 summary.get("threshold_diagnostics", []),
-                Path(args.diagnostics_output),
+                diagnostics_path,
             )
     except (ImportError, ModuleNotFoundError) as exc:
+        remove_stale_outputs(output_path, diagnostics_path)
         print(
             "ERROR: code=dependency_error "
             f"input={Path(args.input).name} output_not_written=true message={exc}",
@@ -90,6 +100,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     except (FileNotFoundError, json.JSONDecodeError) as exc:
+        remove_stale_outputs(output_path, diagnostics_path)
         print(
             "ERROR: code=config_error "
             f"input={Path(args.input).name} output_not_written=true message={exc}",
@@ -97,6 +108,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     except ValueError as exc:
+        remove_stale_outputs(output_path, diagnostics_path)
         print(
             "ERROR: code=bad_input "
             f"input={Path(args.input).name} output_not_written=true message={exc}",
@@ -104,6 +116,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     except Exception as exc:  # noqa: BLE001
+        remove_stale_outputs(output_path, diagnostics_path)
         print(
             "ERROR: code=runtime_error "
             f"input={Path(args.input).name} output_not_written=true message={exc}",
@@ -322,6 +335,17 @@ def ensure_output_columns(frame: pd.DataFrame) -> pd.DataFrame:
 def write_output(frame: pd.DataFrame, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(path, index=False)
+
+
+def remove_stale_outputs(*paths: Path | None) -> None:
+    for path in paths:
+        if path is None:
+            continue
+        if not path.exists() and not path.is_symlink():
+            continue
+        if path.is_dir() and not path.is_symlink():
+            continue
+        path.unlink()
 
 
 if __name__ == "__main__":

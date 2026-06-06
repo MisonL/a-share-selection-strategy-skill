@@ -67,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 3
-    print_summary(metadata)
+    print_summary(metadata, prefix=summary_prefix(metadata))
     return 0
 
 
@@ -292,6 +292,17 @@ def strict_gate_errors(
                 f"symbol_count={metadata['symbol_count']} requested_symbols={requested}"
             )
     return errors
+
+
+def summary_prefix(metadata: dict[str, Any]) -> str:
+    requested = len(metadata["requested_symbols"])
+    if (
+        metadata["failed_symbols"]
+        or metadata["empty_symbols"]
+        or metadata["symbol_count"] != requested
+    ):
+        return "PARTIAL"
+    return "OK"
 
 
 def write_outputs(

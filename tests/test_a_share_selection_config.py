@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -127,6 +128,15 @@ class AShareSelectionConfigTests(unittest.TestCase):
         self.assertIn('display_name: "A-Share Selection Strategy"', text)
         self.assertIn("short_description:", text)
         self.assertIn("default_prompt:", text)
+
+    def test_evals_cover_partial_and_history_selection_disclosures(self) -> None:
+        data = json.loads((SKILL_ROOT / "evals/evals.json").read_text(encoding="utf-8"))
+        text = json.dumps(data, ensure_ascii=False)
+
+        self.assertIn("coverage_claim=partial_not_full_market", text)
+        self.assertIn("selected_symbols.json", text)
+        self.assertIn("history_symbol_count", text)
+        self.assertIn("synthetic_demo", text)
 
     def test_create_demo_data_generates_expected_files(self) -> None:
         import tempfile

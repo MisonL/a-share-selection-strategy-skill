@@ -1791,6 +1791,35 @@
           "description": "输出应列出重试、fail-on-partial、换源披露或用户接受后复用已落地快照。"
         }
       ]
+    },
+    {
+      "id": 74,
+      "prompt": "附件里的 summary.json 同时有 spot_metadata.coverage_claim=partial_not_full_market、selected_symbols.json 和 history_symbol_count；input_metadata.source_type=synthetic_demo。请解释这次 run 能说明什么。",
+      "expected_output": "应说明 coverage_claim=partial_not_full_market 和 partial_result=true 表示实时快照不是完整全市场覆盖；selected_symbols.json 只证明从 spot 输入派生了历史抓取列表，history_symbol_count 是实际用于历史抓取的标的数量，不证明全市场扫描或最终全部入选；input_metadata.source_type=synthetic_demo 表示输入来自本地合成 demo，不是真实行情。不得把这些产物写成真实今日全市场扫描、真实预测、真实收益或真实成交证明。",
+      "files": [
+        {
+          "path": "summary.json",
+          "content": "{\"status\":\"completed\",\"source_scope\":\"local_prices_input+eastmoney_spot_snapshot\",\"input_metadata\":{\"source_type\":\"synthetic_demo\",\"real_market_data\":false},\"spot_metadata\":{\"partial_result\":true,\"coverage_claim\":\"partial_not_full_market\",\"requested_pages\":5,\"successful_pages\":3,\"failed_pages\":[{\"page\":4,\"error\":\"timeout\"}],\"raw_items\":60,\"filtered_items\":50},\"history_symbol_count\":2,\"selected_symbols_output\":\"selected_symbols.json\",\"selected_symbols_output_written\":true,\"history_metadata_output\":\"history_metadata.json\",\"history_metadata_output_written\":true,\"candidate_rows\":1}"
+        },
+        {
+          "path": "selected_symbols.json",
+          "content": "{\"selected_symbols\":[\"000001\",\"600000\"],\"history_symbol_count\":2,\"max_history_symbols\":2,\"source\":\"spot_input\"}"
+        }
+      ],
+      "assertions": [
+        {
+          "name": "披露 partial coverage",
+          "description": "输出应引用 coverage_claim=partial_not_full_market，并说明不能写成完整实时全市场扫描。"
+        },
+        {
+          "name": "限定 selected symbols",
+          "description": "输出应说明 selected_symbols.json 和 history_symbol_count 只证明历史抓取列表和数量，不证明全市场覆盖或全部入选。"
+        },
+        {
+          "name": "识别 synthetic demo",
+          "description": "输出应说明 synthetic_demo 不是 真实行情、真实预测、真实收益或真实成交证明。"
+        }
+      ]
     }
   ]
 }

@@ -137,6 +137,49 @@ class FetchBaostockAShareTests(unittest.TestCase):
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn("output_written=false metadata_output_written=true", stderr.getvalue())
 
+    def test_partial_default_stdout_discloses_partial_result(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "prices.csv"
+            meta = Path(tmpdir) / "metadata.json"
+            old_main = fetcher.fetch_prices
+            stdout = StringIO()
+            try:
+                def fake_fetch_prices(_args):
+                    frame = fetcher.pd.DataFrame([valid_row("000001", "2026-05-20")])
+                    metadata = metadata_for(["000001", "600000"], frame)
+                    metadata["empty_symbols"] = ["600000"]
+                    metadata["symbol_count"] = 1
+                    return frame, metadata
+
+                fetcher.fetch_prices = fake_fetch_prices  # type: ignore[assignment]
+                with redirect_stdout(stdout):
+                    code = fetcher.main(
+                        [
+                            "--symbols",
+                            "000001,600000",
+                            "--start-date",
+                            "2026-05-20",
+                            "--end-date",
+                            "2026-05-20",
+                            "--output",
+                            str(output),
+                            "--metadata-output",
+                            str(meta),
+                        ]
+                    )
+            finally:
+                fetcher.fetch_prices = old_main  # type: ignore[assignment]
+
+            saved = json.loads(meta.read_text(encoding="utf-8"))
+            output_exists = output.exists()
+
+        self.assertEqual(0, code)
+        self.assertTrue(output_exists)
+        self.assertTrue(saved["output_written"])
+        self.assertEqual(["600000"], saved["empty_symbols"])
+        self.assertTrue(stdout.getvalue().startswith("PARTIAL:"))
+        self.assertIn("empty_symbols=1", stdout.getvalue())
+
     def test_quality_policy_reports_invalid_rows_without_dropping(self) -> None:
         frame = fetcher.pd.DataFrame(
             [

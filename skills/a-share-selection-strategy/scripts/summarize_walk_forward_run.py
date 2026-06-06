@@ -94,6 +94,14 @@ def build_run_summary(run_dir: Path, options: argparse.Namespace) -> dict[str, A
         "signals": signals,
         "equity": equity,
         "portfolio": portfolio,
+        "expected_portfolio_violations": bool(options.expect_portfolio_violations),
+        "capacity_gate_pass": not bool(portfolio["violations"]),
+        "required_tradability_model_checked": bool(options.required_tradability_model),
+        "required_limit_rules_model_checked": bool(options.required_limit_rules_model),
+        "model_gates_checked": bool(
+            options.required_tradability_model and options.required_limit_rules_model
+        ),
+        "claim_boundary": "summary_not_external_gate",
     }
     summary["quality_errors"] = quality_errors(summary, metadata, options)
     return summary
@@ -310,7 +318,11 @@ def print_summary(summary: dict[str, Any], output: Path, prefix: str = "OK") -> 
         f"completed_trades={sum(item['completed_trades'] for item in summary['signals'])} "
         f"incomplete_trades={sum(item['incomplete_trades'] for item in summary['signals'])} "
         f"portfolio_violations={len(summary['portfolio']['violations'])} "
-        f"quality_errors={len(summary['quality_errors'])} output={output}"
+        f"expected_portfolio_violations={summary['expected_portfolio_violations']} "
+        f"capacity_gate_pass={summary['capacity_gate_pass']} "
+        f"model_gates_checked={summary['model_gates_checked']} "
+        f"quality_errors={len(summary['quality_errors'])} "
+        f"claim_boundary=summary_not_external_gate output={output}"
     )
 
 

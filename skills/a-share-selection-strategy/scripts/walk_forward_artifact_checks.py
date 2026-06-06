@@ -10,6 +10,7 @@ from typing import Any
 from walk_forward_metadata_checks import metadata_gate_errors
 from walk_forward_price_checks import signal_price_errors
 from walk_forward_allocation_checks import allocation_errors
+from walk_forward_date_checks import date_after, same_calendar_date, same_date_list
 
 
 CAPITAL_FIELDS = ("weight", "notional", "quantity", "cash_reserved")
@@ -39,7 +40,16 @@ def build_artifact_report(run_dir: Path, args: Any, validator: str) -> dict[str,
     manifest_checked = bool(args.manifest_validation)
     if args.manifest_validation:
         errors += manifest_errors(load_json(Path(args.manifest_validation)), dates)
-    return report_view(run_dir, validator, dates, totals, summary, manifest_checked, errors)
+    return report_view(
+        run_dir,
+        validator,
+        dates,
+        totals,
+        summary,
+        manifest_checked,
+        args.expected_portfolio_violations > 0,
+        errors,
+    )
 
 
 def count_errors(dates: list[str], expected: list[int]) -> list[str]:
@@ -70,7 +80,7 @@ def summary_errors(summary: dict[str, Any], dates: list[str], expected: list[int
     if summary.get("quality_errors") != []:
         errors.append(f"quality_errors={summary.get('quality_errors')}")
     signals = summary.get("signals", [])
-    if [item.get("signal_date") for item in signals] != dates:
+    if not same_date_list([item.get("signal_date", "") for item in signals], dates):
         errors.append("summary_signal_dates_mismatch")
     for index, signal in enumerate(signals):
         if index < len(expected) and signal.get("candidates") != expected[index]:
@@ -112,7 +122,7 @@ def price_window_errors(rows: list[dict[str, str]], signal_date: str, symbols: l
     errors = required_column_errors(rows, PRICE_COLUMNS, f"{signal_date}_prices")
     if {row.get("symbol", "") for row in rows} != set(symbols):
         errors.append(f"{signal_date}_price_symbols_mismatch")
-    if any(row.get("date", "") > signal_date for row in rows):
+    if any(date_after(row.get("date", ""), signal_date) for row in rows):
         errors.append(f"{signal_date}_future_price_rows")
     return errors
 
@@ -136,7 +146,9 @@ def candidate_errors(
     errors = []
     if len(rows) != expected:
         errors.append(f"{signal_date}_{label}_rows={len(rows)} expected={expected}")
-    bad_dates = [row.get("date") for row in rows if row.get("date") != signal_date]
+    bad_dates = [
+        row.get("date") for row in rows if not same_calendar_date(row.get("date", ""), signal_date)
+    ]
     if bad_dates:
         errors.append(f"{signal_date}_{label}_date_mismatch={bad_dates[0]}")
     if not set(row.get("symbol", "") for row in rows).issubset(set(symbols)):
@@ -167,7 +179,11 @@ def raw_candidate_errors(run_dir: Path, date: str, selected_count: int, args: An
 
 def backtest_errors(rows: list[dict[str, str]], date: str, expected: int, args: Any) -> list[str]:
     errors = required_column_errors(rows, (*CAPITAL_FIELDS, "status", "missing_data"), f"{date}_backtest")
-    bad_dates = [row.get("signal_date") for row in rows if row.get("signal_date") != date]
+    bad_dates = [
+        row.get("signal_date")
+        for row in rows
+        if not same_calendar_date(row.get("signal_date", ""), date)
+    ]
     if bad_dates:
         errors.append(f"{date}_backtest_signal_date_mismatch={bad_dates[0]}")
     if count_complete(rows) != expected:
@@ -205,7 +221,7 @@ def equity_errors(
 ) -> list[str]:
     rows = read_csv(path)
     errors = required_column_errors(rows, ("signal_date", "positions", "incomplete_trades", "equity"), "equity")
-    if [row.get("signal_date") for row in rows] != dates:
+    if not same_date_list([row.get("signal_date", "") for row in rows], dates):
         errors.append("equity_signal_dates_mismatch")
     if sum_int(rows, "positions") != totals["completed_trades"]:
         errors.append(f"equity_positions={sum_int(rows, 'positions')}")
@@ -241,7 +257,7 @@ def manifest_errors(manifest: dict[str, Any], dates: list[str]) -> list[str]:
         errors.append(f"manifest_validator={manifest.get('validator')}")
     if manifest.get("errors") != []:
         errors.append(f"manifest_errors={len(manifest.get('errors', []))}")
-    if manifest.get("signals") != dates:
+    if not same_date_list([str(item) for item in manifest.get("signals", [])], dates):
         errors.append("manifest_signals_mismatch")
     if int(manifest.get("steps_checked", 0)) <= 0:
         errors.append(f"manifest_steps_checked={manifest.get('steps_checked')}")
@@ -255,8 +271,10 @@ def report_view(
     totals: dict[str, int],
     summary: dict[str, Any],
     manifest_checked: bool,
+    expected_portfolio_violations: bool,
     errors: list[str],
 ) -> dict[str, Any]:
+    portfolio_violations = len(summary.get("portfolio", {}).get("violations", []))
     return {
         "schema_version": 1,
         "validator": validator,
@@ -266,7 +284,10 @@ def report_view(
         "total_candidates": totals["candidates"],
         "total_completed_trades": totals["completed_trades"],
         "final_equity": summary.get("equity", {}).get("final_equity"),
-        "portfolio_violations": len(summary.get("portfolio", {}).get("violations", [])),
+        "portfolio_violations": portfolio_violations,
+        "expected_portfolio_violations": expected_portfolio_violations,
+        "capacity_gate_pass": portfolio_violations == 0,
+        "claim_boundary": "artifact_validation_not_external_gate",
         "manifest_checked": manifest_checked,
         "errors": errors,
     }

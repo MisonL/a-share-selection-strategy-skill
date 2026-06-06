@@ -176,6 +176,8 @@ def build_metadata(
         "start_date": args.start_date,
         "end_date": args.end_date,
         "market": args.market,
+        "market_label_only": True,
+        "source_claim_boundary": "market_label_not_source_exchange_or_calendar_proof",
         "timeout_seconds": float(args.timeout_seconds),
         "adjustment": "auto_adjust_false_close",
         "rows": int(len(frame)),

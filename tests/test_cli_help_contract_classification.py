@@ -75,6 +75,7 @@ HELP_CONTRACT_EXCLUDED_HELPERS = [
     "walk_forward_allocation_checks.py",
     "walk_forward_artifact_checks.py",
     "walk_forward_metadata_checks.py",
+    "walk_forward_date_checks.py",
     "walk_forward_portfolio_commands.py",
     "walk_forward_price_checks.py",
 ]

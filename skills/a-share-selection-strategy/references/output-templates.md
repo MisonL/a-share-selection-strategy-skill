@@ -143,6 +143,7 @@
 ```markdown
 ## Yfinance market 只是输出标签
 - `fetch_yfinance_ohlcv.py --market` 只把标签写入 CSV 和 metadata，不校验 symbol 所属市场、交易所或交易日历。
+- metadata 会写出 `market_label_only=true` 和 `source_claim_boundary=market_label_not_source_exchange_or_calendar_proof`；这些字段是边界披露，不是市场证明。
 - metadata 中 `source=yfinance`、`market=A-share` 和基础 `validate_ohlcv.py` 通过，不能写成 A 股数据源或 A 股交易日历门禁通过。
 - 如果 symbol 仍是 `AAPL` 这类非六位代码，prediction-derived A 股 profile 应按 symbol 格式门禁显式失败。
 - 常见错误文本是 `prediction-derived A-share symbols must be six digits` 和 `market labels do not prove A-share source or calendar`。
@@ -208,8 +209,8 @@
 - `run_manifest.json` 和 manifest validator 只证明命令步骤、退出码和门禁参数符合预期。
 - P1 通过还必须检查 `run_manifest_validation.json`、`run_artifact_validation.json`、真实 metadata、prediction summary、回测、权益曲线、allocation summary 和 overlap summary。
 - `portfolio_cash_lot_floor` 路径默认不应使用 `--expect-portfolio-violations`；`portfolio_violations` 必须为 0 才能说明当前组合容量门禁通过。
-- `summarize_walk_forward_run.py --expect-portfolio-violations` 退出 0 且 `quality_errors=[]` 只表示已知组合违规被显式允许复现；`portfolio_violations>0` 仍不是组合容量门禁通过。
-- `validate_walk_forward_artifacts.py` 退出 0 且 `errors=[]` 只表示 artifact 与传入期望一致；如果 `portfolio_violations>0`，说明复现的是已知组合违规，不是组合容量门禁通过。
+- `summarize_walk_forward_run.py --expect-portfolio-violations` 退出 0 且 `quality_errors=[]` 只表示已知组合违规被显式允许复现；`capacity_gate_pass=false` 或 `portfolio_violations>0` 仍不是组合容量门禁通过。
+- `validate_walk_forward_artifacts.py` 退出 0 且 `errors=[]` 只表示 artifact 与传入期望一致；如果 `capacity_gate_pass=false` 或 `portfolio_violations>0`，说明复现的是已知组合违规，不是组合容量门禁通过。
 - 即使 artifact validator 通过，也不能外推为真实成交容量、券商订单、涨跌停规则或全市场策略质量已验证。
 ```
 
@@ -281,7 +282,7 @@
 ## Summary 未验证模型口径
 - `summarize_walk_forward_run.py` 省略 `--required-tradability-model` 或 `--required-limit-rules-model` 时，不会对对应模型口径执行严格门禁。
 - 此时 `exit 0` 和 `quality_errors=[]` 只说明已启用的门槛通过，不能证明真实可交易性或涨跌停规则模型符合预期。
-- 必须披露 summary JSON 中实际的 `tradability_models` 和 `limit_rules_models`。
+- 必须披露 summary JSON 中实际的 `tradability_models`、`limit_rules_models` 和 `model_gates_checked`。
 - 若同一产物补传 required 参数后返回非 0，stderr 中的 `*_models=...` 才是模型口径未通过的门禁证据。
 - 合规路径是用 required 参数重跑 summary，并以该严格命令的退出码、`quality_errors` 和 stderr 作为模型口径结论。
 ```

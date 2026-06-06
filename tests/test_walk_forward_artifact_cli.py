@@ -51,6 +51,36 @@ class WalkForwardArtifactCliTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertIn("2026-05-12_future_price_rows", stderr)
 
+    def test_cli_rejects_mixed_format_future_price_leakage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(Path(tmpdir))
+            rename_signal_dir(root, "2026-05-12", "20260512")
+            append_price_row(root / "signals/20260512/prices_signal_window.csv", "2026-05-13")
+
+            code, _stdout, stderr = call_cli(
+                root,
+                root / "artifact_validation.json",
+                ["--signal-dates", "20260512"],
+            )
+
+        self.assertEqual(3, code)
+        self.assertIn("20260512_future_price_rows", stderr)
+
+    def test_cli_discloses_capacity_gate_failure_for_expected_violation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(Path(tmpdir))
+            output = root / "artifact_validation.json"
+
+            code, stdout, stderr = call_cli(root, output)
+            report = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(0, code)
+        self.assertEqual("", stderr)
+        self.assertIn("capacity_gate_pass=False", stdout)
+        self.assertIn("expected_portfolio_violations=True", stdout)
+        self.assertFalse(report["capacity_gate_pass"])
+        self.assertTrue(report["expected_portfolio_violations"])
+
     def test_cli_rejects_missing_sizing_field(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
@@ -289,6 +319,10 @@ def append_price_row(path: Path, date: str) -> None:
     rows = pd.read_csv(path, dtype={"symbol": str})
     rows = pd.concat([rows, pd.DataFrame([price_row("000001", date)])], ignore_index=True)
     rows.to_csv(path, index=False)
+
+
+def rename_signal_dir(root: Path, source: str, target: str) -> None:
+    (root / "signals" / source).rename(root / "signals" / target)
 
 
 def drop_column(path: Path, column: str) -> None:

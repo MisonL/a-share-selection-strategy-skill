@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from walk_forward_date_checks import normalized_date_text, same_calendar_date
+
 
 PRICE_TOLERANCE = 1e-9
 
@@ -33,10 +35,10 @@ def signal_close_map(
     duplicates: set[str] = set()
     errors = []
     for row in rows:
-        if row.get("date") != signal_date:
+        if not same_calendar_date(row.get("date", ""), signal_date):
             continue
         symbol = row.get("symbol", "")
-        key = (symbol, signal_date)
+        key = (symbol, normalized_date_text(signal_date) or signal_date)
         if key in values:
             duplicates.add(symbol)
             continue
@@ -58,7 +60,7 @@ def unique_keys(
     keys: set[tuple[str, str]] = set()
     duplicates: set[tuple[str, str]] = set()
     for row in rows:
-        key = (row.get("symbol", ""), row.get("date", ""))
+        key = (row.get("symbol", ""), normalized_date_text(row.get("date", "")) or row.get("date", ""))
         if key in keys:
             duplicates.add(key)
         keys.add(key)
@@ -83,7 +85,7 @@ def raw_close_errors(
         if value == "":
             errors.append(f"{signal_date}_{label}_missing_{field}")
             continue
-        key = (row.get("symbol", ""), row.get("date", ""))
+        key = (row.get("symbol", ""), normalized_date_text(row.get("date", "")) or row.get("date", ""))
         raw_close = close_map.get(key)
         if raw_close is None:
             errors.append(f"{signal_date}_{label}_missing_raw_close={key[0]}")

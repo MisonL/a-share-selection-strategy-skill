@@ -65,6 +65,8 @@ def print_summary(report: dict[str, object], output: Path, prefix: str = "OK") -
         f"completed_trades={report['total_completed_trades']} "
         f"manifest_checked={report['manifest_checked']} "
         f"portfolio_violations={report['portfolio_violations']} "
+        f"expected_portfolio_violations={report['expected_portfolio_violations']} "
+        f"capacity_gate_pass={report['capacity_gate_pass']} "
         f"errors={len(report['errors'])} claim_boundary=artifact_validation_not_external_gate "
         f"output={output}"
     )

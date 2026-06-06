@@ -37,9 +37,10 @@ def build_artifact_report(run_dir: Path, args: Any, validator: str) -> dict[str,
     totals = validate_signal_artifacts(run_dir, dates, symbols, args, errors)
     errors += equity_errors(run_dir / "prediction_equity_curve.csv", summary, dates, args, totals)
     errors += overlap_errors(overlap, summary, args)
-    manifest_checked = bool(args.manifest_validation)
-    if args.manifest_validation:
-        errors += manifest_errors(load_json(Path(args.manifest_validation)), dates)
+    manifest_path = manifest_validation_path(run_dir, args)
+    manifest_checked = manifest_path is not None
+    if manifest_path is not None:
+        errors += manifest_errors(load_json(manifest_path), dates)
     return report_view(
         run_dir,
         validator,
@@ -50,6 +51,13 @@ def build_artifact_report(run_dir: Path, args: Any, validator: str) -> dict[str,
         args.expected_portfolio_violations > 0,
         errors,
     )
+
+
+def manifest_validation_path(run_dir: Path, args: Any) -> Path | None:
+    if args.manifest_validation:
+        return Path(args.manifest_validation)
+    default_path = run_dir / "run_manifest_validation.json"
+    return default_path if default_path.is_file() else None
 
 
 def count_errors(dates: list[str], expected: list[int]) -> list[str]:

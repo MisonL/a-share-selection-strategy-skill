@@ -33,7 +33,7 @@ def main(argv: list[str] | None = None) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Validate walk-forward artifacts. Without --manifest-validation the manifest is not checked; "
+            "Validate walk-forward artifacts. Existing run_manifest_validation.json is checked automatically; "
             "portfolio_violations > 0 is not a capacity pass."
         )
     )

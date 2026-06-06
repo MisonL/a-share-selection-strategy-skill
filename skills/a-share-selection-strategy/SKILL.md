@@ -133,8 +133,8 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `portfolio_overlap_report.py`：可选组合并发持仓、同标的重叠、资金字段完整性，以及权重、名义金额和预留现金容量门禁报告。未传 `--require-capital-fields` 时，单项金额门禁可只验证自身字段；若 `capital_fields_missing` 非空或 `weight_capacity_verifiable=false`，不能说完整组合容量字段已验证。`calendar_model=business_day_closed_interval` 来自 pandas 工作日闭区间，不是交易所日历、节假日、停复牌或真实可交易日历门禁。
 - `summarize_walk_forward_run.py`：汇总 walk-forward run 目录，输出 `prediction_run_summary.json` 并执行 metadata、prediction、回测、资金曲线和组合容量门禁。`--required-tradability-model` 和 `--required-limit-rules-model` 只有传入时才检查模型口径；省略后 `quality_errors=[]` 不能说明这些模型门禁通过，应查看 `model_gates_checked`。`--expect-portfolio-violations` 只用于复现已知组合风险；退出 0 且 `quality_errors=[]` 时如果 `capacity_gate_pass=false` 或 `portfolio_violations>0`，仍不能说组合容量门禁通过。
 - `validate_walk_forward_manifest.py`：校验一键 runner manifest 的步骤顺序、退出码和门禁参数；不替代真实行情、prediction 或回测执行。
-- `validate_walk_forward_artifacts.py`：校验 walk-forward 复验目录中的真实 CSV/JSON artifact 内容，包括信号窗口、候选原始信号日 close、sizing 的 signal close、回测、资金曲线、组合 summary 和可选 manifest 校验报告。只有传入 `--manifest-validation` 时才检查 `run_manifest_validation.json`；报告中 `manifest_checked=false` 时不能说 manifest 门禁已纳入 artifact 复验。`--expected-portfolio-violations` 只校验违规数量符合预期；即使退出 0 且 `errors=[]`，`capacity_gate_pass=false` 或 `portfolio_violations>0` 仍表示组合容量门禁存在违规。
-- `slice_prices_as_of.py`：按信号日截断本地行情，防止用未来行情生成候选。`--as-of-date` 是包含该日及之前的截止日期，不保证输出存在该日期；候选信号日应以切片后的真实 `date_max` 或候选 CSV 的 `date` 为准。
+- `validate_walk_forward_artifacts.py`：校验 walk-forward 复验目录中的真实 CSV/JSON artifact 内容，包括信号窗口、候选原始信号日 close、sizing 的 signal close、回测、资金曲线、组合 summary 和 manifest 校验报告。传入 `--manifest-validation` 时检查该路径；未传但 run 目录存在 `run_manifest_validation.json` 时会自动纳入校验。报告中 `manifest_checked=false` 时不能说 manifest 门禁已纳入 artifact 复验。`--expected-portfolio-violations` 只校验违规数量符合预期；即使退出 0 且 `errors=[]`，`capacity_gate_pass=false` 或 `portfolio_violations>0` 仍表示组合容量门禁存在违规。
+- `slice_prices_as_of.py`：按信号日截断本地行情，防止用未来行情生成候选。`--as-of-date` 是包含该日及之前的截止日期，不保证输出存在该日期；切片输出会写入 `requested_as_of_date`、`actual_data_date`、`as_of_date_observed`，下游候选、诊断和 HTML 报告也会保留这些字段。候选信号日应以切片后的真实 `date_max`、`actual_data_date` 或候选 CSV 的 `date` 为准。
 - `fetch_baostock_a_share.py`：可选 baostock A 股日线取数脚本，输出本地行情 CSV 和 metadata JSON，包含 `tradestatus/preclose/pctChg/isST` 门禁字段。
 - `fetch_akshare_a_share.py`：可选 akshare A 股日线取数脚本，先尝试中文列接口，失败时记录 fallback 并转用 `stock_zh_a_daily`。
 - `fetch_yfinance_ohlcv.py`：可选 yfinance 日线取数脚本，输出本地通用 OHLCV CSV 和 metadata JSON；用 `--timeout-seconds` 显式限制每票拉取超时。非严格模式可能写出部分 symbol，门禁必须检查 `symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`，或使用 `--fail-on-fetch-error`。fetch metadata 的 `end_date` 是请求截止日；实际最后交易日必须看每个 symbol 的 `date_max`。`--market` 只是写入输出标签，metadata 中 `market_label_only=true` 和 `source_claim_boundary=market_label_not_source_exchange_or_calendar_proof` 不证明 yfinance 数据源、交易所或交易日历变成对应市场。
@@ -318,7 +318,7 @@ total_score =
 - `empty_result_reason` 会区分 `universe_filtered_all`、`threshold_filtered_all` 等成功空结果原因。
 - 所有股票都因历史不足或输入异常无法评分时，脚本应显式失败。
 - `validate_ohlcv.py --min-history-rows 0` 或低于评分配置的历史门槛，只能证明基础字段和 profile 字段校验通过；不能证明 `score_candidates.py` 可按配置评分。
-- `slice_prices_as_of.py` 退出 0 只说明切片文件写出且非空；如果切到较早日期，仍要对切片后的文件重新校验并以 `score_candidates.py` 的历史窗口、退出码和 `insufficient_history_symbols` 为准。
+- `slice_prices_as_of.py` 退出 0 只说明切片文件写出且非空；如果切到较早日期，仍要检查 `requested_as_of_date`、`actual_data_date`、`as_of_date_observed`，并对切片后的文件重新校验，以 `score_candidates.py` 的历史窗口、退出码和 `insufficient_history_symbols` 为准。
 - `threshold_failures` 是各阈值独立失败计数，不是互斥分类。
 - 自动化门禁可传入 `--fail-on-skipped` 和 `--fail-on-empty-result`，让跳过标的或 0 候选以非 0 退出。
 - `failed_symbols>0` 表示存在单股运行期异常，即使输出其他候选，也应进入复核或失败处理。

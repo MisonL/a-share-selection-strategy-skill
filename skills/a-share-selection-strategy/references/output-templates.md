@@ -218,11 +218,12 @@
 
 ```markdown
 ## Manifest 门禁未纳入 artifact 复验
-- `validate_walk_forward_artifacts.py` 未传 `--manifest-validation` 时，不会读取或校验 `run_manifest_validation.json`。
-- `artifact_validation.json` 中 `manifest_checked=false` 是明确证据，不能说 manifest 门禁也通过。
+- `validate_walk_forward_artifacts.py` 未传 `--manifest-validation` 且 run 目录不存在 `run_manifest_validation.json` 时，不会校验 manifest 报告。
+- 未传 `--manifest-validation` 但 run 目录存在 `run_manifest_validation.json` 时，artifact validator 会自动读取并校验该报告。
+- `artifact_validation.json` 中 `manifest_checked=false` 是明确证据，不能说 manifest 门禁也通过；`manifest_checked=true` 但 `errors` 含 `manifest_errors` 时也不能说通过。
 - `exit 0` 和 `errors=[]` 只表示当前 artifact 内容与传入期望一致，不覆盖 manifest validator 的步骤顺序、退出码或门禁参数。
-- 如果同一 run 的 manifest validation 报告有 errors，只有传入 `--manifest-validation` 后 artifact validator 才会暴露 `manifest_errors`。
-- 合规路径是单独检查 `run_manifest_validation.json`，或把它传给 `--manifest-validation` 后重跑 artifact validator。
+- 如果同一 run 的 manifest validation 报告放在非默认路径，必须用 `--manifest-validation` 显式传入后重跑 artifact validator。
+- 合规路径是检查 `run_manifest_validation.json`、确认 artifact validator 输出的 `manifest_checked` 和 `errors`，必要时显式传 `--manifest-validation`。
 ```
 
 ### 组合 allocation 裁剪
@@ -261,7 +262,8 @@
 ```markdown
 ## 切片截止日不是实际信号日
 - `slice_prices_as_of.py --as-of-date` 是包含该日期及之前的截断，不要求该日期本身存在交易行。
-- 必须披露 stdout 中的 `date_max`；后续候选的真实信号日以候选 CSV 的 `date` 或切片后的 `date_max` 为准。
+- 必须披露 stdout 中的 `date_max` 和 `actual_data_date`，并检查切片、候选、诊断或 HTML 报告中的 `requested_as_of_date`、`actual_data_date`、`as_of_date_observed`。
+- 后续候选的真实信号日以候选 CSV 的 `date`、切片后的 `date_max` 或 `actual_data_date` 为准。
 - 当 `as_of_date` 是周末、节假日或非交易日时，不能把请求的 as-of 日期写成候选信号日。
 - 若必须验证精确信号日存在，应检查价格表和候选表的实际 `date`，或用后续 artifact price validator 做一致性门禁。
 ```
@@ -509,7 +511,7 @@
 ```markdown
 ## 切片后仍不能评分
 - 原始 prediction-derived 文件通过 `validate_ohlcv.py`，不代表 `slice_prices_as_of.py` 截断后的文件仍满足评分历史窗口。
-- `slice_prices_as_of.py` 退出 0 只说明切片结果非空并已写出；必须披露切片 stdout 中的 `rows`、`date_min` 和 `date_max`。
+- `slice_prices_as_of.py` 退出 0 只说明切片结果非空并已写出；必须披露切片 stdout 中的 `rows`、`date_min`、`date_max`、`actual_data_date` 和 `as_of_date_observed`。
 - 对切片后的文件重新运行校验和评分；最终以 `score_candidates.py` 的退出码、`insufficient_history_symbols` 和 `output_written` 为准。
 - `code=bad_input output_written=false` 或 `insufficient_history_symbols>0` 表示切片后不可评分，不是成功 0 候选。
 - 合规表述是“原始文件校验通过、切片步骤成功，但切片后历史窗口未通过；需要选择更晚 as-of 日期或补足历史后重跑”。

@@ -1043,8 +1043,8 @@
     },
     {
       "id": 44,
-      "prompt": "slice_prices_as_of.py --as-of-date 2025-06-21 退出 0，stdout 是 OK: rows=244 symbols=2 date_min=2025-01-02 date_max=2025-06-20 as_of_date=2025-06-21。随后 score_candidates.py 也退出 0，候选 CSV 里的 date 全是 2025-06-20。能不能把这批候选汇报成 2025-06-21 信号日的候选？",
-      "expected_output": "应说明不能这样汇报；slice_prices_as_of.py 的 --as-of-date 是包含该日期及之前的截断条件，不保证输出存在 2025-06-21 交易行。stdout 明确 date_max=2025-06-20，候选 CSV 的 date 也全是 2025-06-20，因此真实候选信号日是 2025-06-20。2025-06-21 只能作为请求的截止日或非交易日 as-of，不应写成候选信号日。若必须证明精确信号日存在，应检查切片价格表和候选表实际 date，或用 artifact price validator 做一致性门禁。",
+      "prompt": "slice_prices_as_of.py --as-of-date 2025-06-21 退出 0，stdout 是 OK: rows=244 symbols=2 date_min=2025-01-02 date_max=2025-06-20 as_of_date=2025-06-21 actual_data_date=2025-06-20 as_of_date_observed=false。随后 score_candidates.py 也退出 0，候选 CSV 里的 date 全是 2025-06-20，并保留 requested_as_of_date=2025-06-21、actual_data_date=2025-06-20、as_of_date_observed=false。能不能把这批候选汇报成 2025-06-21 信号日的候选？",
+      "expected_output": "应说明不能这样汇报；slice_prices_as_of.py 的 --as-of-date 是包含该日期及之前的截断条件，不保证输出存在 2025-06-21 交易行。stdout 明确 date_max/actual_data_date=2025-06-20，候选 CSV 的 date 也全是 2025-06-20，且 as_of_date_observed=false，因此真实候选信号日是 2025-06-20。2025-06-21 只能作为请求的截止日或非交易日 as-of，不应写成候选信号日。若必须证明精确信号日存在，应检查切片价格表、候选表和诊断/HTML 中的 requested_as_of_date、actual_data_date、as_of_date_observed，或用 artifact price validator 做一致性门禁。",
       "files": [],
       "assertions": [
         {
@@ -1052,16 +1052,12 @@
           "description": "输出应说明 as-of-date 不等于实际候选 date。"
         },
         {
-          "name": "使用 date_max",
-          "description": "输出应以 stdout date_max 和候选 CSV date 判定真实信号日。"
+          "name": "使用 actual data date",
+          "description": "输出应以 stdout date_max/actual_data_date、候选 CSV date 和 as_of_date_observed 判定真实信号日。"
         },
         {
           "name": "拒绝非交易日误报",
           "description": "输出应拒绝把周末或非交易日 as-of 写成候选信号日。"
-        },
-        {
-          "name": "给出验证路径",
-          "description": "输出应建议检查实际 date 或运行 artifact price validator。"
         }
       ]
     },
@@ -1195,25 +1191,25 @@
     },
     {
       "id": 50,
-      "prompt": "validate_walk_forward_artifacts.py 没有传 --manifest-validation 时退出 0，stdout 是 OK: validator=validate_walk_forward_artifacts signals=1 candidates=2 completed_trades=2 portfolio_violations=1 errors=0，artifact_validation.json 里 manifest_checked=false、errors=[]。同一 run 目录里 run_manifest_validation.json 实际有 errors=[\"step_failed\"]；如果把它传给 --manifest-validation，同一命令退出 3 并报 manifest_errors=1。能不能说 artifact 和 manifest 门禁都通过？",
-      "expected_output": "应说明不能这样汇报；validate_walk_forward_artifacts.py 未传 --manifest-validation 时不会读取或校验 run_manifest_validation.json，artifact_validation.json 里的 manifest_checked=false 是 manifest 未纳入本次 artifact 复验的明确证据。exit 0 和 errors=[] 只表示当前 artifact 内容与传入期望一致，不覆盖 manifest validator 的步骤顺序、退出码或门禁参数。同一 run 补传 --manifest-validation 后退出 3 且报 manifest_errors=1，说明 manifest 报告存在错误。合规路径是单独检查 run_manifest_validation.json，或把它传给 --manifest-validation 后重跑 artifact validator；不能把未检查 manifest 的 artifact 通过写成 artifact 和 manifest 门禁都通过。",
+      "prompt": "validate_walk_forward_artifacts.py 没有传 --manifest-validation，但 run 目录存在 run_manifest_validation.json 且 errors=[\"step_failed\"]。运行后返回 3，stdout 是 ERROR_SUMMARY: validator=validate_walk_forward_artifacts ... manifest_checked=True ... errors=1，stderr 报 manifest_errors=1。能不能忽略 manifest 错误，只按 artifact 内容说 artifact 和 manifest 门禁都通过？",
+      "expected_output": "应说明不能这样汇报；当前 validate_walk_forward_artifacts.py 未传 --manifest-validation 但 run 目录存在 run_manifest_validation.json 时会自动读取并校验该报告。manifest_checked=true 且 stderr 中 manifest_errors=1 表示 manifest 门禁失败，返回 3 是严格门禁未通过。artifact 内容即使其他字段匹配，也不能覆盖 manifest validator 的步骤顺序、退出码或门禁参数错误。合规路径是修复 manifest 或重新运行 manifest validator 和 artifact validator，直到 manifest_checked=true 且 errors=[]。如果 manifest validation 报告放在非默认路径，必须显式传 --manifest-validation。",
       "files": [],
       "assertions": [
         {
-          "name": "识别 manifest_checked false",
-          "description": "输出应说明 manifest_checked=false 表示 manifest 未纳入 artifact 复验。"
+          "name": "识别自动 manifest 校验",
+          "description": "输出应说明默认 run_manifest_validation.json 会自动纳入 artifact 复验。"
         },
         {
           "name": "不外推 artifact 通过",
-          "description": "输出应拒绝把 artifact exit 0 和 errors=[] 外推为 manifest 门禁通过。"
+          "description": "输出应拒绝忽略 manifest_errors=1 或把 artifact 内容匹配外推为 manifest 门禁通过。"
         },
         {
-          "name": "使用对照失败证据",
-          "description": "输出应说明传入 --manifest-validation 后 manifest_errors=1 才暴露 manifest 报告错误。"
+          "name": "使用失败证据",
+          "description": "输出应引用 return 3、manifest_checked=true 和 manifest_errors=1 作为失败证据。"
         },
         {
           "name": "给出合规路径",
-          "description": "输出应要求单独检查 run_manifest_validation.json 或传 --manifest-validation 后重跑。"
+          "description": "输出应要求修复 manifest 后重跑，非默认路径需显式传 --manifest-validation。"
         }
       ]
     },

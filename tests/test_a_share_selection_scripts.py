@@ -433,6 +433,30 @@ class AShareSelectionScriptTests(unittest.TestCase):
         self.assertTrue(diagnostics["short_reason"].str.contains("综合评分不足").all())
         self.assertIn("effective_empty_result=true", stdout.getvalue())
 
+    def test_cli_preserves_as_of_metadata_in_candidates_and_diagnostics(self) -> None:
+        frame = build_frame(include_turn=True)
+        frame["requested_as_of_date"] = "2026-06-06"
+        frame["actual_data_date"] = pd.to_datetime(frame["date"]).max().date().isoformat()
+        frame["as_of_date_observed"] = False
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            output_path = Path(tmpdir) / "candidates.csv"
+            diagnostics_path = Path(tmpdir) / "diagnostics.csv"
+            frame.to_csv(input_path, index=False)
+            code, _stdout, stderr = run_score_cli(
+                input_path,
+                output_path,
+                extra_args=["--diagnostics-output", str(diagnostics_path)],
+            )
+            candidates = pd.read_csv(output_path, dtype={"symbol": str})
+            diagnostics = pd.read_csv(diagnostics_path, dtype={"symbol": str})
+
+        self.assertEqual(0, code, stderr)
+        self.assertEqual({"2026-06-06"}, set(candidates["requested_as_of_date"]))
+        self.assertEqual({False}, set(candidates["as_of_date_observed"]))
+        self.assertEqual({"2026-06-06"}, set(diagnostics["requested_as_of_date"]))
+        self.assertEqual({False}, set(diagnostics["as_of_date_observed"]))
+
     def test_cli_merges_spot_input_into_candidates_and_diagnostics(self) -> None:
         config = load_config("example_config.json")
         config["thresholds"] = permissive_thresholds(120)

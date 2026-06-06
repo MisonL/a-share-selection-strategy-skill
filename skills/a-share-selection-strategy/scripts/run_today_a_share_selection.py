@@ -117,9 +117,9 @@ def run_pipeline(context: RunContext) -> None:
     diagnostics = output / "diagnostics.csv"
     spot = run_spot_path(context.args)
     context.manifest["input_metadata"] = input_metadata_for_prices(context.args.prices_input)
-    validate_preflight_inputs(context.args, spot)
     clear_stale_run_outputs(context.args, output)
     context.manifest["run_outputs_initialized"] = True
+    validate_preflight_inputs(context.args, spot)
     prepare_inputs(context.args, output, prices, spot)
     if context.args.fetch_spot:
         run_step(context, Step("fetch_spot", fetch_spot_command(context.args, spot)))

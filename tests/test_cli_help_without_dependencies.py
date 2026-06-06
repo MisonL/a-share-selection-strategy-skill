@@ -202,7 +202,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--required-allocation-model",
                 "--manifest-validation",
                 "--allow-dropped-invalid-rows",
-                "not checked",
+                "checked automatically",
                 "capacity pass",
             },
             "score_candidates.py": {

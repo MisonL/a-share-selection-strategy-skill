@@ -71,6 +71,7 @@ def slice_prices(frame: pd.DataFrame, *, as_of_date: str) -> pd.DataFrame:
     if result.empty:
         raise ValueError(f"no rows on or before as-of-date {as_of_date}")
     result = result.sort_values(["symbol", "_parsed_date"]).drop(columns=["_parsed_date"])
+    annotate_as_of_metadata(result, as_of_date)
     return result.reset_index(drop=True)
 
 
@@ -87,6 +88,16 @@ def write_output(frame: pd.DataFrame, path: Path) -> None:
     frame.to_csv(path, index=False)
 
 
+def annotate_as_of_metadata(frame: pd.DataFrame, as_of_date: str) -> None:
+    dates = parse_dates(frame["date"])
+    cutoff = parse_cutoff(as_of_date).normalize()
+    actual_date = dates.max().date().isoformat()
+    observed = bool((dates.dt.normalize() == cutoff).any())
+    frame["requested_as_of_date"] = as_of_date
+    frame["actual_data_date"] = actual_date
+    frame["as_of_date_observed"] = observed
+
+
 def print_summary(frame: pd.DataFrame, as_of_date: str, output: str) -> None:
     ensure_runtime_dependencies()
     dates = parse_dates(frame["date"])
@@ -95,7 +106,8 @@ def print_summary(frame: pd.DataFrame, as_of_date: str, output: str) -> None:
     print(
         f"OK: rows={len(frame)} symbols={frame['symbol'].nunique()} "
         f"date_min={dates.min().date()} date_max={dates.max().date()} "
-        f"as_of_date={as_of_date} as_of_date_observed={str(observed).lower()} "
+        f"as_of_date={as_of_date} actual_data_date={dates.max().date()} "
+        f"as_of_date_observed={str(observed).lower()} "
         f"claim_boundary=as_of_cutoff_not_signal_day output={output}"
     )
 

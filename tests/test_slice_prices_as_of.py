@@ -77,10 +77,15 @@ class SlicePricesAsOfTests(unittest.TestCase):
                     ]
                 )
 
-        self.assertEqual(0, code, stderr.getvalue())
-        self.assertIn("as_of_date=2026-06-06", stdout.getvalue())
-        self.assertIn("as_of_date_observed=false", stdout.getvalue())
-        self.assertIn("claim_boundary=as_of_cutoff_not_signal_day", stdout.getvalue())
+            self.assertEqual(0, code, stderr.getvalue())
+            self.assertIn("as_of_date=2026-06-06", stdout.getvalue())
+            self.assertIn("as_of_date_observed=false", stdout.getvalue())
+            self.assertIn("claim_boundary=as_of_cutoff_not_signal_day", stdout.getvalue())
+            actual_date = pd.to_datetime(frame["date"]).max().date().isoformat()
+            sliced = pd.read_csv(output_path, dtype={"symbol": str})
+            self.assertEqual({"2026-06-06"}, set(sliced["requested_as_of_date"]))
+            self.assertEqual({actual_date}, set(sliced["actual_data_date"]))
+            self.assertEqual({False}, set(sliced["as_of_date_observed"]))
 
     def test_empty_slice_is_error_without_output(self) -> None:
         frame = build_frame(days=5)

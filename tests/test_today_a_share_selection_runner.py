@@ -485,7 +485,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(2, code)
         self.assertIn("history fetch options would be ignored", stderr)
 
-    def test_preflight_error_preserves_reused_output_files(self) -> None:
+    def test_preflight_error_clears_reused_output_files(self) -> None:
         frame = build_frame(include_turn=True, include_tradability=True)
         frame[["open", "high", "low", "close"]] = frame[
             ["open", "high", "low", "close"]
@@ -506,8 +506,6 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             self.assertTrue(old_candidates.exists())
             self.assertTrue(old_diagnostics.exists())
             self.assertTrue(old_prices.exists())
-            old_candidates_text = old_candidates.read_text(encoding="utf-8")
-            old_diagnostics_text = old_diagnostics.read_text(encoding="utf-8")
             old_spot_metadata = output / "spot_metadata.json"
             old_spot_metadata.write_text(
                 json.dumps(
@@ -546,10 +544,10 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
             self.assertEqual(2, code)
             self.assertIn("history fetch options would be ignored", stderr)
-            self.assertEqual(old_candidates_text, old_candidates.read_text(encoding="utf-8"))
-            self.assertEqual(old_diagnostics_text, old_diagnostics.read_text(encoding="utf-8"))
-            self.assertTrue(old_prices.exists())
-            self.assertTrue(old_spot_metadata.exists())
+            self.assertFalse(old_candidates.exists())
+            self.assertFalse(old_diagnostics.exists())
+            self.assertFalse(old_prices.exists())
+            self.assertFalse(old_spot_metadata.exists())
             self.assertEqual({}, summary["spot_metadata"])
             self.assertEqual(0, summary["spot_rows"])
             self.assertFalse(summary["candidates_output_written"])

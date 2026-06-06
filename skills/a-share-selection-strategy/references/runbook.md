@@ -428,7 +428,7 @@ python3 skills/a-share-selection-strategy/scripts/validate_walk_forward_artifact
 
 - `portfolio_violations>0` 不是组合容量门禁通过。
 - `--expect-portfolio-violations` 只用于复现已知违规，不用于证明门禁通过。
-- `manifest_checked=false` 时不能说 manifest 门禁已纳入 artifact 复验。
+- artifact validator 未传 `--manifest-validation` 但 run 目录存在 `run_manifest_validation.json` 时会自动校验该报告；`manifest_checked=false` 时不能说 manifest 门禁已纳入 artifact 复验。
 - `calendar_model=business_day_closed_interval` 不是交易所日历。
 - `tradestatus_holding_period_bars` 只覆盖价格表内已观测 bar，不补足缺失交易日、节假日或涨跌停规则。
 
@@ -447,6 +447,8 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/portfolio_overlap_report.py --backtests prediction_backtest.csv --daily-output prediction_daily_positions.csv --overlap-output prediction_overlap.csv --summary-output prediction_overlap_summary.json --max-gross-weight 1.0 --max-gross-notional 1000000 --max-cash-reserved 1000000 --require-capital-fields
 uv run --with pandas python skills/a-share-selection-strategy/scripts/summarize_walk_forward_run.py --run-dir RUN_DIR --output RUN_DIR/prediction_run_summary.json --expected-symbol-count N --required-tradability-model tradestatus_entry_exit_only --required-limit-rules-model not_modeled
 ```
+
+`slice_prices_as_of.py` 的输出 CSV 会保留 `requested_as_of_date`、`actual_data_date` 和 `as_of_date_observed`。如果请求日不是实际交易行，后续候选、诊断和 HTML 报告必须按 `actual_data_date` 或候选 `date` 解释真实信号日。
 
 `allocate_candidate_capital.py` 的 stdout 必须披露 `cash_budget`、`lot_size`、`capital_model` 和 `claim_boundary=local_sizing_not_broker_order`。这些字段只证明本地 sizing 计算可追溯，不能解释为真实成交、券商订单或真实现金容量证明。严格回测汇总应对 `portfolio_equity_curve.py` 显式使用 `--fail-on-incomplete`，否则默认只基于 complete trades 生成权益曲线。
 

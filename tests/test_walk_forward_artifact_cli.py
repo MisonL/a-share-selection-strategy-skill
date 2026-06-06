@@ -137,8 +137,31 @@ class WalkForwardArtifactCliTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertIn("summary_equity_final_mismatch", stderr)
 
+    def test_cli_auto_checks_existing_manifest_validation_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(Path(tmpdir))
+            manifest = read_json(root / "run_manifest_validation.json")
+            manifest["errors"] = ["step_failed"]
+            write_json(root / "run_manifest_validation.json", manifest)
 
-def call_cli(root: Path, output: Path, extra_args: list[str] | None = None) -> tuple[int, str, str]:
+            code, stdout, stderr = call_cli(
+                root,
+                root / "artifact_validation.json",
+                include_manifest_validation=False,
+            )
+
+        self.assertEqual(3, code)
+        self.assertIn("manifest_checked=True", stdout)
+        self.assertIn("manifest_errors=1", stderr)
+
+
+def call_cli(
+    root: Path,
+    output: Path,
+    extra_args: list[str] | None = None,
+    *,
+    include_manifest_validation: bool = True,
+) -> tuple[int, str, str]:
     args = [
         "--run-dir",
         str(root),
@@ -159,9 +182,9 @@ def call_cli(root: Path, output: Path, extra_args: list[str] | None = None) -> t
         TRADABILITY_MODEL_ENTRY_EXIT,
         "--required-limit-rules-model",
         LIMIT_RULES_MODEL_NOT_MODELED,
-        "--manifest-validation",
-        str(root / "run_manifest_validation.json"),
     ]
+    if include_manifest_validation:
+        args.extend(["--manifest-validation", str(root / "run_manifest_validation.json")])
     if extra_args:
         args.extend(extra_args)
     stdout = StringIO()

@@ -301,6 +301,57 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("Passed gates but capped by output limit", en_report)
         self.assertNotIn(">通过阈值但受输出数量限制<", en_report)
 
+    def test_report_displays_as_of_metadata_columns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            diagnostics = output / "diagnostics.csv"
+            candidates.write_text(
+                "\n".join(
+                    [
+                        (
+                            "rank,symbol,name,date,close,requested_as_of_date,"
+                            "actual_data_date,as_of_date_observed,total_score,key_reasons,risk_notes"
+                        ),
+                        "1,000001,AsOf Case,2026-06-05,7.1,2026-06-06,2026-06-05,False,0.8,,",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            diagnostics.write_text(
+                "\n".join(
+                    [
+                        (
+                            "symbol,name,close,requested_as_of_date,actual_data_date,"
+                            "as_of_date_observed,total_score,selection_status,short_reason"
+                        ),
+                        "000002,AsOf Diagnostic,7.2,2026-06-06,2026-06-05,False,0.7,未通过阈值,实际信号日不同",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            summary = minimal_summary(tmpdir, diagnostics)
+            summary.update(
+                {
+                    "candidate_rows": 1,
+                    "diagnostic_rows": 1,
+                    "candidates_output": str(candidates),
+                    "diagnostics_output": str(diagnostics),
+                    "candidates_output_written": True,
+                    "diagnostics_output_written": True,
+                }
+            )
+            report = render_report(summary, {"steps": []}, language="en")
+
+        self.assertIn("Requested as-of date", report)
+        self.assertIn("Actual data date", report)
+        self.assertIn("As-of date observed", report)
+        self.assertIn(">2026-06-06<", report)
+        self.assertIn(">2026-06-05<", report)
+        self.assertIn(">False<", report)
+
 
 if __name__ == "__main__":
     unittest.main()

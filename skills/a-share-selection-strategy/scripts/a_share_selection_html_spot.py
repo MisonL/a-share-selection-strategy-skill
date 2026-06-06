@@ -6,9 +6,19 @@ from typing import Any
 
 
 SPOT_METADATA_KEYS = (
+    "source",
+    "source_scope",
+    "snapshot_time",
+    "requested_pages",
+    "retry_attempts_per_page",
+    "successful_pages",
+    "pages_successful",
+    "failed_pages",
+    "pages_failed",
+    "raw_items",
+    "filtered_items",
     "partial_result",
     "coverage_claim",
-    "failed_pages",
     "allowed_failure_actions",
     "output_written",
     "metadata_output_written",

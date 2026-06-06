@@ -40,6 +40,8 @@ KEY_DISCLOSURE_COLUMNS = {
     "as_of_date_observed",
     "prediction_source",
     "prediction_input_source",
+    "prediction_model_quality_scope",
+    "volume_unit_verification",
     "source_type",
     "real_market_data",
     "cash_budget",

@@ -21,6 +21,7 @@ FEATURE_COLUMNS = [
     "signal",
 ]
 BASE_COLUMNS = ["symbol", "date", "open", "high", "low", "close", "volume"]
+PREDICTION_MODEL_QUALITY_SCOPE = "generation_audit_only"
 MODEL_PARAMS = {
     "n_estimators": 100,
     "num_leaves": 31,
@@ -376,7 +377,7 @@ def build_feature_frame(group: pd.DataFrame, horizon: int) -> pd.DataFrame:
     data = group.copy()
     data["turn_value"] = turnover_series(data)
     for column in ["close", "volume", "turn_value"]:
-        data[column] = data[column].replace(0, np.nan).ffill().bfill()
+        data[column] = data[column].replace(0, np.nan).ffill()
     close = data["close"].astype(float)
     volume = data["volume"].astype(float)
     macd, signal = calculate_macd(close, 12, 26, 9)
@@ -408,6 +409,7 @@ def with_prediction(group: pd.DataFrame, probability: float, horizon: int) -> pd
     output["prediction_horizon_days"] = int(horizon)
     output["prediction_model"] = "lightgbm"
     output["prediction_scope"] = "latest_probability_repeated_for_scoring"
+    output["prediction_model_quality_scope"] = PREDICTION_MODEL_QUALITY_SCOPE
     return output
 
 

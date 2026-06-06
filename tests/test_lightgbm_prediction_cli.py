@@ -74,6 +74,10 @@ class LightgbmPredictionCliTests(unittest.TestCase):
         self.assertTrue(result["prediction_score"].between(0, 1).all())
         self.assertEqual({5}, set(result["prediction_horizon_days"]))
         self.assertEqual({"lightgbm"}, set(result["prediction_model"]))
+        self.assertEqual(
+            {"generation_audit_only"},
+            set(result["prediction_model_quality_scope"]),
+        )
         self.assertGreater(RecordingClassifier.last_fit_rows, 0)
         self.assertLess(RecordingClassifier.last_fit_rows, len(frame))
         self.assertEqual({0, 1}, set(RecordingClassifier.last_labels))
@@ -253,6 +257,28 @@ class LightgbmPredictionCliTests(unittest.TestCase):
                 {"latest_probability_repeated_for_scoring"},
                 set(frame_out["prediction_scope"]),
             )
+            self.assertEqual(
+                {"generation_audit_only"},
+                set(frame_out["prediction_model_quality_scope"]),
+            )
+
+    def test_feature_builder_does_not_backfill_from_future_rows(self) -> None:
+        frame = build_frame(days=130, include_turn=True)
+        frame = frame[frame["symbol"].eq("000002")].copy().reset_index(drop=True)
+        frame.loc[0, ["close", "volume", "turn"]] = 0
+
+        features = generator.build_feature_frame(frame, horizon=5)
+
+        self.assertTrue(pd.isna(features.loc[0, "momentum_1m"]))
+        self.assertTrue(pd.isna(features.loc[0, "momentum_3m"]))
+        self.assertTrue(pd.isna(features.loc[0, "momentum_6m"]))
+        self.assertTrue(pd.isna(features.loc[0, "volatility"]))
+        self.assertTrue(pd.isna(features.loc[0, "vol_ratio"]))
+        self.assertTrue(pd.isna(features.loc[0, "target_return"]))
+        self.assertEqual(50, features.loc[0, "rsi"])
+        self.assertTrue(pd.isna(features.loc[0, "macd"]))
+        self.assertTrue(pd.isna(features.loc[0, "signal"]))
+        self.assertGreater(features.loc[21, "momentum_1m"], 0)
 
     def test_prediction_records_computed_holdout_auc_when_labels_vary(self) -> None:
         frame = oscillating_frame(days=180)

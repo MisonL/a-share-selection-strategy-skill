@@ -32,6 +32,8 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
         parts.append(f"input={summary['input']}")
     if summary.get("turnover_assumption"):
         parts.append(f"turnover_assumption={summary['turnover_assumption']}")
+    if summary.get("volume_unit_verification"):
+        parts.append(f"volume_unit_verification={summary['volume_unit_verification']}")
     if summary.get("spot_rows", 0):
         parts.append(f"spot_rows={summary['spot_rows']}")
         parts.append(f"spot_matched_symbols={summary['spot_matched_symbols']}")
@@ -66,6 +68,11 @@ def print_detail_lines(summary: dict[str, Any]) -> None:
             "prediction_model_executed_by_score_script=false "
             "lightgbm_not_executed_by_this_script=true"
         )
+    if summary.get("volume_unit_verification") == "not_verified_by_cli":
+        print(
+            "INFO: volume_unit_verification=not_verified_by_cli "
+            "volume_must_not_be_amount_or_mixed_units"
+        )
 
 
 def print_skipped_history_warning(short_symbols: list[str], min_history: int) -> None:
@@ -99,6 +106,7 @@ def prediction_disclosure_keys() -> list[str]:
         "prediction_input_source",
         "prediction_model_executed_by_score_script",
         "lightgbm_not_executed_by_this_script",
+        "volume_unit_verification",
     ]
 
 

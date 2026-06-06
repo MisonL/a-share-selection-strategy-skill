@@ -12,6 +12,7 @@
 | `effective_empty_result=true` | 0 候选结果 | 说明成功空结果原因，不证明策略有效 |
 | `prediction_source=external_unverified` | prediction-derived prediction 仅为外部输入 | 不能说预测源真实、训练质量或无泄漏已证明 |
 | `prediction_model_executed_by_score_script=false` | 评分脚本只消费预测列 | 不能说 score_candidates 训练或执行了预测模型 |
+| `volume_unit_verification=not_verified_by_cli` | CLI 未从纯数值验证成交量单位 | 不能写成已确认股、手、张或成交额未混用 |
 | `prediction_input_source=not_used` 或 `mode=generic` | 今日入口 generic 技术评分 | 不能写成 prediction-derived/LightGBM 结果 |
 | `prediction_model_executed_by_runner=false` | 今日入口或外部 prediction 评分 | 不能说 runner 训练或执行了预测模型 |
 | `requested_prediction_input_source=external_input` 且 `consumes_prediction_columns=false` | 请求了 prediction 口径但本次未实际消费预测列 | 不能说已经使用 prediction 列完成评分 |
@@ -457,10 +458,10 @@
 
 ```markdown
 ## 预测列口径需要先统一
-- 输入同时包含 `prediction_score` 和 `prediction` 时，当前评分优先消费 `prediction_score`。
-- 如果两列数值冲突，不能用较高的 `prediction` 解释 `min_prediction_score` 阈值应通过。
-- `validate_ohlcv.py --config` 通过只说明两列值域和必需字段有效，不证明两列口径一致。
-- 报告候选或 0 候选时必须披露实际参与评分的 `prediction_score`、`threshold_failures` 和 `prediction_source`。
+- 输入同时包含 `prediction_score` 和 `prediction` 且数值不一致时，prediction-derived profile 校验和评分都会失败。
+- 常见错误文本是 `prediction and prediction_score both exist but differ` 和 `unify upstream prediction columns before prediction-derived scoring`。
+- 不能用较高的一列解释 `min_prediction_score` 阈值应通过，也不能让评分脚本静默选择其中一列继续。
+- `output_written=false` 或 `code=bad_input` 表示输入门禁失败，不是成功 0 候选。
 - 合规路径是先统一预测列或审计上游字段映射，再重新运行 prediction-derived profile 校验和评分。
 ```
 
@@ -561,6 +562,7 @@
 - 证据路径：
 - HTML 报告：
 - 输入 metadata：
+- `volume_unit_verification`：
 - `prediction_source`：
 - `prediction_model_executed_by_score_script`：
 - `raw_symbols/predicted_symbols/skipped_symbols`：

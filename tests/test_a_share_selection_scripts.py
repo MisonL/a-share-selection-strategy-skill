@@ -19,6 +19,7 @@ sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(TESTS))
 
 import score_candidates as scorer  # noqa: E402
+import a_share_selection_metrics as metrics  # noqa: E402
 from a_share_selection_data import read_table  # noqa: E402
 from a_share_selection_prepare import prepare_frame  # noqa: E402
 from a_share_selection_spot import normalized_spot_view  # noqa: E402
@@ -162,6 +163,16 @@ class AShareSelectionScriptTests(unittest.TestCase):
         self.assertIn("unsupported input format", stderr)
         self.assertIn("input=prices.txt", stderr)
 
+    def test_validate_cli_discloses_unverified_volume_unit(self) -> None:
+        frame = build_frame()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "prices.csv"
+            frame.to_csv(path, index=False)
+            code, stdout, stderr = run_validate_cli(path)
+
+        self.assertEqual(0, code, stderr)
+        self.assertIn("volume_unit_verification=not_verified_by_cli", stdout)
+
     def test_score_rejects_negative_price(self) -> None:
         config = load_config("example_config.json")
         frame = build_frame()
@@ -207,6 +218,25 @@ class AShareSelectionScriptTests(unittest.TestCase):
         _, summary = scorer.score_candidates(frame, config)
         self.assertEqual(2, summary["scored_symbols"])
         self.assertEqual(0, summary["failed_symbols"])
+
+    def test_prediction_cleaning_does_not_backfill_initial_missing_values(self) -> None:
+        config = load_config("prediction_profile_config.json")
+        frame = pd.DataFrame(
+            {
+                "close": [float("nan"), 8.1, 8.2],
+                "volume": [float("nan"), 120000, 121000],
+                "turn": [float("nan"), 1.1, 1.2],
+            }
+        )
+
+        cleaned = metrics.apply_cleaning(frame.copy(), config)
+
+        self.assertTrue(pd.isna(cleaned.loc[0, "close"]))
+        self.assertTrue(pd.isna(cleaned.loc[0, "volume"]))
+        self.assertTrue(pd.isna(cleaned.loc[0, "turn"]))
+        self.assertEqual(8.1, cleaned.loc[1, "close"])
+        self.assertEqual(120000, cleaned.loc[1, "volume"])
+        self.assertEqual(1.1, cleaned.loc[1, "turn"])
 
     def test_prediction_candidate_output_keeps_raw_signal_close(self) -> None:
         config = load_config("prediction_profile_config.json")
@@ -432,6 +462,50 @@ class AShareSelectionScriptTests(unittest.TestCase):
         self.assertEqual({"未通过阈值"}, set(diagnostics["selection_status"]))
         self.assertTrue(diagnostics["short_reason"].str.contains("综合评分不足").all())
         self.assertIn("effective_empty_result=true", stdout.getvalue())
+
+    def test_cli_discloses_unverified_volume_unit_in_outputs(self) -> None:
+        config = load_config("example_config.json")
+        config["thresholds"] = permissive_thresholds(120)
+        frame = build_frame(include_turn=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            config_path = Path(tmpdir) / "config.json"
+            output_path = Path(tmpdir) / "candidates.csv"
+            diagnostics_path = Path(tmpdir) / "diagnostics.csv"
+            frame.to_csv(input_path, index=False)
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = scorer.main(
+                    [
+                        "--input",
+                        str(input_path),
+                        "--config",
+                        str(config_path),
+                        "--output",
+                        str(output_path),
+                        "--diagnostics-output",
+                        str(diagnostics_path),
+                    ]
+                )
+            candidates = pd.read_csv(output_path, dtype={"symbol": str})
+            diagnostics = pd.read_csv(diagnostics_path, dtype={"symbol": str})
+
+        self.assertEqual(0, code, stderr.getvalue())
+        self.assertIn("volume_unit_verification=not_verified_by_cli", stdout.getvalue())
+        self.assertIn(
+            "volume_must_not_be_amount_or_mixed_units",
+            stdout.getvalue(),
+        )
+        self.assertEqual(
+            {"not_verified_by_cli"},
+            set(candidates["volume_unit_verification"]),
+        )
+        self.assertEqual(
+            {"not_verified_by_cli"},
+            set(diagnostics["volume_unit_verification"]),
+        )
 
     def test_cli_preserves_as_of_metadata_in_candidates_and_diagnostics(self) -> None:
         frame = build_frame(include_turn=True)

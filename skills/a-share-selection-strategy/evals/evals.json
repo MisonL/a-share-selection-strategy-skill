@@ -1239,21 +1239,21 @@
     },
     {
       "id": 52,
-      "prompt": "一份 prediction-derived 输入同时有 prediction_score=0.59 和 prediction=0.95，validate_ohlcv.py --config skills/a-share-selection-strategy/scripts/prediction_profile_config.json 退出 0。score_candidates.py 退出 0，但 stdout 里 candidates=0 effective_empty_result=true threshold_failures=min_prediction_score:2，diagnostics.csv 里 prediction_score 是 0.59、failed_thresholds 是 min_prediction_score。能不能说既然 prediction=0.95 高于阈值，这两只股票本应通过，0 候选说明评分脚本异常？",
-      "expected_output": "应说明不能这样汇报；当前评分在 prediction_score 和 prediction 同时存在时优先消费 prediction_score，因此本例参与 min_prediction_score 阈值判断的是 0.59，不是 0.95。validate_ohlcv.py --config 退出 0 只说明 prediction-derived 必需字段和值域有效，不证明两列预测口径一致。candidates=0、effective_empty_result=true、threshold_failures=min_prediction_score:2 和 diagnostics.csv 中 prediction_score=0.59 说明当前阈值下所有已评分标的被预测分阈值过滤。报告时必须披露实际参与评分的 prediction_score、threshold_failures 和 prediction_source；若两列冲突，应先统一或审计预测列后重新校验和评分，不能用较高的 prediction 推断应通过阈值。",
+      "prompt": "一份 prediction-derived 输入同时有 prediction_score=0.59 和 prediction=0.95，validate_ohlcv.py --config skills/a-share-selection-strategy/scripts/prediction_profile_config.json 返回 prediction and prediction_score both exist but differ，score_candidates.py 返回 code=bad_input output_written=false。能不能说既然 prediction=0.95 高于阈值，这两只股票本应通过，0 候选说明评分脚本异常？",
+      "expected_output": "应说明不能这样汇报；prediction_score 和 prediction 同时存在且数值冲突时，prediction-derived 校验和评分都会失败。output_written=false 或 code=bad_input 表示输入门禁失败，不是成功 0 候选，也不能用较高的 prediction 推断应通过阈值。合规说法是先统一预测列或审计上游字段映射，再重新运行 prediction-derived profile 校验和评分；在门禁通过前不能输出候选、0 候选解释或策略异常结论。",
       "files": [],
       "assertions": [
         {
-          "name": "说明预测列优先级",
-          "description": "输出应说明同时存在两列时当前评分优先消费 prediction_score。"
+          "name": "说明预测列冲突失败",
+          "description": "输出应说明同时存在两列且数值冲突时校验和评分都会失败。"
         },
         {
-          "name": "不外推 validate 通过",
-          "description": "输出应说明 validate 通过不证明 prediction_score 与 prediction 口径一致。"
+          "name": "不把门禁失败写成 0 候选",
+          "description": "输出应说明 output_written=false 或 code=bad_input 是输入门禁失败，不是成功 0 候选。"
         },
         {
-          "name": "按实际评分列解释 0 候选",
-          "description": "输出应以 diagnostics 中的 prediction_score=0.59 和 threshold_failures 解释候选为空。"
+          "name": "拒绝用较高预测列推断通过",
+          "description": "输出应拒绝用较高的 prediction 推断阈值本应通过。"
         },
         {
           "name": "要求统一预测列",

@@ -142,7 +142,26 @@ def prediction_value_error(frame: pd.DataFrame) -> str:
                 f"{column} has {invalid_count} invalid values; "
                 "prediction values must be numbers between 0 and 1"
             )
+    conflict = prediction_column_conflict_error(frame)
+    if conflict:
+        return conflict
     return ""
+
+
+def prediction_column_conflict_error(frame: pd.DataFrame) -> str:
+    if not {"prediction", "prediction_score"}.issubset(frame.columns):
+        return ""
+    prediction = pd.to_numeric(frame["prediction"], errors="coerce")
+    prediction_score = pd.to_numeric(frame["prediction_score"], errors="coerce")
+    mismatch = (prediction - prediction_score).abs() > 1e-12
+    mismatch_count = int(mismatch.sum())
+    if not mismatch_count:
+        return ""
+    return (
+        "prediction and prediction_score both exist but differ; "
+        f"conflicting_rows={mismatch_count}; unify upstream prediction columns before "
+        "prediction-derived scoring"
+    )
 
 
 def format_value_counts(values: pd.Series) -> str:

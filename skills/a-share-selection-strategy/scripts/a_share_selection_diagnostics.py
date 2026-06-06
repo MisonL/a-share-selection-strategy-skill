@@ -45,8 +45,10 @@ DIAGNOSTIC_COLUMNS = [
     "prediction_model",
     "prediction_horizon_days",
     "prediction_scope",
+    "prediction_model_quality_scope",
     "prediction_model_executed_by_score_script",
     "lightgbm_not_executed_by_this_script",
+    "volume_unit_verification",
     "advice_boundary",
     "recommendation_boundary",
     "explosion_score",
@@ -225,12 +227,14 @@ def diagnostic_row(
         "prediction_model": row.get("prediction_model"),
         "prediction_horizon_days": row.get("prediction_horizon_days"),
         "prediction_scope": row.get("prediction_scope"),
+        "prediction_model_quality_scope": row.get("prediction_model_quality_scope"),
         "prediction_model_executed_by_score_script": row.get(
             "prediction_model_executed_by_score_script"
         ),
         "lightgbm_not_executed_by_this_script": row.get(
             "lightgbm_not_executed_by_this_script"
         ),
+        "volume_unit_verification": row.get("volume_unit_verification"),
         "advice_boundary": row.get("advice_boundary"),
         "recommendation_boundary": row.get("recommendation_boundary"),
         "explosion_score": row.get("explosion_score"),

@@ -47,9 +47,10 @@
 - `close` 必须存在、非空且大于 0。
 - 历史行数不足 120 时记录为 `insufficient_history_symbols`。
 - 对 `close`、`volume`、`turn` 或 `turnover` 使用中位数加减 3 倍标准差裁剪异常值。
-- 技术指标阶段不额外把 0 替换为缺失值；ML 特征阶段才将 `close`、`volume`、`turn` 中的 0 替换为缺失值，再前向和后向填充。
+- 技术指标阶段不额外把 0 替换为缺失值；ML 特征阶段才将 `close`、`volume`、`turn` 中的 0 替换为缺失值，再前向填充，不从未来补值。
 - 涉及除法的换手率、成交量和短线动量组件必须显式处理 0 或缺失分母。
 - 单股分析异常应记录为 `failed_stocks` 或等价失败计数，不得把失败股票伪装成成功候选。
+- `volume_unit_verification=not_verified_by_cli` 只说明 CLI 没有从纯数值验证成交量单位，不证明股、手、张或成交额口径已经统一。
 
 ## 技术指标口径
 

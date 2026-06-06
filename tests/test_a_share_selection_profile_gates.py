@@ -82,6 +82,41 @@ class AShareSelectionProfileGateTests(unittest.TestCase):
         self.assertIn("prediction or prediction_score", stderr.getvalue())
         self.assertIn("instead of substituting technical indicators", stderr.getvalue())
 
+    def test_validate_cli_with_prediction_config_rejects_conflicting_predictions(self) -> None:
+        frame = build_frame(include_prediction=True, include_turn=True)
+        frame["prediction"] = 0.61
+        frame["prediction_score"] = 0.72
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            frame.to_csv(input_path, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = validate_ohlcv.main(
+                    [
+                        "--input",
+                        str(input_path),
+                        "--config",
+                        str(SCRIPTS / "prediction_profile_config.json"),
+                    ]
+                )
+
+        self.assertEqual(1, code)
+        self.assertIn("prediction and prediction_score both exist but differ", stderr.getvalue())
+        self.assertIn("conflicting_rows=", stderr.getvalue())
+        self.assertIn("unify upstream prediction columns", stderr.getvalue())
+
+    def test_score_rejects_conflicting_prediction_columns(self) -> None:
+        config = load_config("prediction_profile_config.json")
+        frame = build_frame(include_prediction=True, include_turn=True)
+        frame["prediction"] = 0.61
+        frame["prediction_score"] = 0.72
+        with self.assertRaisesRegex(
+            ValueError,
+            "prediction and prediction_score both exist but differ",
+        ):
+            scorer.score_candidates(frame, config)
+
     def test_validate_cli_rejects_yfinance_market_label_as_ashare_proof(self) -> None:
         frame = build_frame(include_prediction=True, include_turn=True)
         frame["symbol"] = "AAPL"

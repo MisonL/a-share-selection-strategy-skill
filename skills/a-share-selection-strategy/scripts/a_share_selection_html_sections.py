@@ -52,6 +52,8 @@ DISPLAY_CANDIDATE_COLUMNS = (
     "spot_pct_chg",
     "prediction_source",
     "prediction_input_source",
+    "prediction_model_quality_scope",
+    "volume_unit_verification",
     "source_type",
     "real_market_data",
     "total_score",
@@ -77,6 +79,8 @@ DISPLAY_DIAGNOSTIC_COLUMNS = (
     "close",
     "prediction_source",
     "prediction_input_source",
+    "prediction_model_quality_scope",
+    "volume_unit_verification",
     "source_type",
     "real_market_data",
     "total_score",
@@ -264,7 +268,13 @@ def score_detail_fields(summary: dict[str, Any]) -> list[tuple[str, Any]]:
     if not isinstance(score, dict):
         return []
     fields = []
-    for key in ("failed_symbol_examples", "insufficient_history_symbol_examples"):
+    for key in (
+        "effective_empty_result",
+        "empty_result_reason",
+        "threshold_failures",
+        "failed_symbol_examples",
+        "insufficient_history_symbol_examples",
+    ):
         if key in score:
             fields.append((key, score.get(key)))
     return fields
@@ -372,6 +382,10 @@ def limited_table(
 def zero_candidates_message(summary: dict[str, Any], language: str) -> str:
     score = summary.get("score", {})
     if not isinstance(score, dict) or score.get("effective_empty_result") is not True:
+        return ""
+    if str(summary.get("status", "")) != "completed":
+        return ""
+    if summary.get("candidates_output_written") is not True:
         return ""
     reason = str(score.get("empty_result_reason", "unknown"))
     en = (

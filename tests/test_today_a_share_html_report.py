@@ -222,6 +222,30 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertNotIn("本次运行未写出相关行。", zh_report)
         self.assertIn("本次成功运行但没有候选", zh_report)
 
+    def test_failed_missing_candidate_output_does_not_claim_successful_empty_result(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "status": "failed",
+                    "candidate_rows": 0,
+                    "candidates_output": str(output / "candidates.csv"),
+                    "candidates_output_written": False,
+                    "score": {
+                        "effective_empty_result": True,
+                        "empty_result_reason": "threshold_filtered_all",
+                    },
+                }
+            )
+
+            en_report = render_report(summary, {"steps": []}, language="en")
+            zh_report = render_report(summary, {"steps": []}, language="zh")
+
+        self.assertNotIn("Completed run with zero candidates", en_report)
+        self.assertNotIn("本次成功运行但没有候选", zh_report)
+        self.assertIn("No rows written for this run.", en_report)
+
     def test_report_shows_history_selection_evidence_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)

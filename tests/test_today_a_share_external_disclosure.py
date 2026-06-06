@@ -25,6 +25,11 @@ class TodayAShareExternalDisclosureTests(unittest.TestCase):
             summary = minimal_summary(tmpdir, Path(tmpdir) / "diagnostics.csv")
             summary["spot_metadata"] = {
                 "source": "eastmoney",
+                "snapshot_time": "2026-06-06T09:31:00Z",
+                "requested_pages": 3,
+                "successful_pages": 2,
+                "raw_items": 160,
+                "filtered_items": 120,
                 "partial_result": True,
                 "coverage_claim": "partial_not_full_market",
                 "failed_pages": [{"page": 2, "error": "timeout"}],
@@ -39,6 +44,16 @@ class TodayAShareExternalDisclosureTests(unittest.TestCase):
         self.assertIn(">True<", report)
         self.assertIn("spot_metadata.coverage_claim", report)
         self.assertIn("partial_not_full_market", report)
+        self.assertIn("spot_metadata.snapshot_time", report)
+        self.assertIn("2026-06-06T09:31:00Z", report)
+        self.assertIn("spot_metadata.requested_pages", report)
+        self.assertIn(">3<", report)
+        self.assertIn("spot_metadata.successful_pages", report)
+        self.assertIn(">2<", report)
+        self.assertIn("spot_metadata.raw_items", report)
+        self.assertIn(">160<", report)
+        self.assertIn("spot_metadata.filtered_items", report)
+        self.assertIn(">120<", report)
         self.assertIn("spot_metadata.failed_pages", report)
         self.assertIn("timeout", report)
         self.assertIn("spot_metadata.allowed_failure_actions", report)
@@ -76,6 +91,31 @@ class TodayAShareExternalDisclosureTests(unittest.TestCase):
         self.assertIn("stock_zh_a_daily", report)
         self.assertIn("hist unavailable", report)
 
+    def test_summary_and_html_disclose_partial_history_empty_symbols(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            write_partial_history_metadata(output)
+            manifest = minimal_history_manifest(output, end_date="2026-06-06")
+            manifest["allow_partial_history"] = True
+
+            summary = helpers.summary_view(manifest, "completed")
+            report = render_report(summary, {"steps": []}, language="en")
+
+        history = summary["history_selection"]
+        self.assertTrue(history["history_partial_result"])
+        self.assertFalse(history["history_output_written"])
+        self.assertTrue(history["history_metadata_output_written"])
+        self.assertEqual(1, history["history_empty_symbol_count"])
+        self.assertEqual(["000001"], history["history_empty_symbols"])
+        self.assertIn("history_partial_result", report)
+        self.assertIn(">True<", report)
+        self.assertIn("history_output_written", report)
+        self.assertIn(">False<", report)
+        self.assertIn("history_empty_symbol_count", report)
+        self.assertIn(">1<", report)
+        self.assertIn("history_empty_symbols", report)
+        self.assertIn("000001", report)
+
 
 def write_history_metadata_with_fallback(output: Path) -> None:
     (output / "selected_symbols.json").write_text(
@@ -101,6 +141,37 @@ def write_history_metadata_with_fallback(output: Path) -> None:
                 "fallback_errors": [
                     {"symbol": "000001", "error": "hist unavailable"}
                 ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def write_partial_history_metadata(output: Path) -> None:
+    (output / "selected_symbols.json").write_text(
+        json.dumps({"source": "explicit_symbols", "symbols": ["000001"]}),
+        encoding="utf-8",
+    )
+    (output / "history_metadata.json").write_text(
+        json.dumps(
+            {
+                "source": "baostock",
+                "end_date": "2026-06-06",
+                "requested_symbols": ["000001"],
+                "symbols": [
+                    {
+                        "symbol": "000001",
+                        "rows": 0,
+                        "date_min": "",
+                        "date_max": "",
+                    }
+                ],
+                "failed_symbols": [],
+                "empty_symbols": ["000001"],
+                "fallback_errors": [],
+                "partial_result": True,
+                "output_written": False,
+                "metadata_output_written": True,
             }
         ),
         encoding="utf-8",

@@ -63,6 +63,8 @@ TEXT = {
     "as_of_date_observed": {"en": "As-of date observed", "zh": "as-of 日期是否有行情"},
     "prediction_source": {"en": "Prediction source", "zh": "预测来源"},
     "prediction_input_source": {"en": "Prediction input source", "zh": "预测输入来源"},
+    "prediction_model_quality_scope": {"en": "Prediction model quality scope", "zh": "预测模型质量边界"},
+    "volume_unit_verification": {"en": "Volume unit verification", "zh": "成交量单位校验"},
     "cash_budget": {"en": "Cash budget", "zh": "现金预算"},
     "lot_size": {"en": "Lot size", "zh": "每手股数"},
     "capital_model": {"en": "Capital model", "zh": "资金模型"},

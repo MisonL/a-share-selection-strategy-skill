@@ -50,6 +50,7 @@ def score_symbol(group: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any]:
         "prediction_model": latest.get("prediction_model", ""),
         "prediction_horizon_days": latest.get("prediction_horizon_days", ""),
         "prediction_scope": latest.get("prediction_scope", ""),
+        "prediction_model_quality_scope": latest.get("prediction_model_quality_scope", ""),
         "explosion_score": metrics["explosion_score"],
         "risk_score": metrics["risk_score"],
         "total_score": metrics["total_score"],
@@ -136,7 +137,7 @@ def apply_cleaning(data: pd.DataFrame, config: dict[str, Any]) -> pd.DataFrame:
         column for column in cleaning.get("fill_columns", []) if column in data
     ]
     if fill_columns:
-        data[fill_columns] = data[fill_columns].ffill().bfill()
+        data[fill_columns] = data[fill_columns].ffill()
     return data
 
 def resolve_prediction(data: pd.DataFrame, config: dict[str, Any]) -> float:

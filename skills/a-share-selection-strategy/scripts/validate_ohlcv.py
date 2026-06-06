@@ -12,6 +12,7 @@ from typing import Iterable
 REQUIRED_COLUMNS = ["symbol", "date", "open", "high", "low", "close", "volume"]
 PRICE_COLUMNS = ["open", "high", "low", "close"]
 MAX_ERROR_EXAMPLES = 5
+VOLUME_UNIT_VERIFICATION = "not_verified_by_cli"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -48,7 +49,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     symbols = frame["symbol"].nunique()
-    print(f"OK: validated {len(frame)} rows across {symbols} symbols")
+    print(
+        f"OK: validated {len(frame)} rows across {symbols} symbols "
+        f"volume_unit_verification={VOLUME_UNIT_VERIFICATION}"
+    )
     return 0
 
 

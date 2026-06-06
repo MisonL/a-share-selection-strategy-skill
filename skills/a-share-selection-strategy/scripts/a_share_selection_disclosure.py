@@ -7,6 +7,7 @@ from typing import Any
 
 ADVICE_BOUNDARY = "not_investment_advice_not_trade_instruction_not_real_fill_not_return_proof"
 RECOMMENDATION_BOUNDARY = "ranking_signal_not_buy_sell_instruction"
+VOLUME_UNIT_VERIFICATION = "not_verified_by_cli"
 
 
 def prediction_disclosure(config: dict[str, Any]) -> dict[str, Any]:
@@ -16,6 +17,7 @@ def prediction_disclosure(config: dict[str, Any]) -> dict[str, Any]:
         "prediction_input_source": "external_input" if prediction_mode else "not_used",
         "prediction_model_executed_by_score_script": False,
         "lightgbm_not_executed_by_this_script": True,
+        "volume_unit_verification": VOLUME_UNIT_VERIFICATION,
         "advice_boundary": ADVICE_BOUNDARY,
         "recommendation_boundary": RECOMMENDATION_BOUNDARY,
     }

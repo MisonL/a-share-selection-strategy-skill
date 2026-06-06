@@ -30,6 +30,7 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "advice_boundary": ADVICE_BOUNDARY,
         "recommendation_boundary": RECOMMENDATION_BOUNDARY,
         **row_count_fields(manifest, paths, score, history_selection, initialized),
+        **empty_result_fields(score),
         "score": score,
         **output_path_fields(paths, initialized),
         "boundary": helpers.boundary_for(manifest),
@@ -124,6 +125,13 @@ def row_count_fields(
     }
 
 
+def empty_result_fields(score: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "effective_empty_result": score.get("effective_empty_result", False),
+        "empty_result_reason": score.get("empty_result_reason", ""),
+    }
+
+
 def row_count(path: Path, initialized: bool) -> int:
     return helpers.tabular_row_count(path) if initialized else 0
 
@@ -153,6 +161,7 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
     metadata = read_json_if_exists(metadata_path)
     selected_symbols = selected_symbol_values(selected_data, manifest)
     failed_symbols = metadata_list(metadata, "failed_symbols")
+    empty_symbols = metadata_list(metadata, "empty_symbols")
     fallback_errors = metadata_list(metadata, "fallback_errors")
     date_range = history_date_range_view(metadata, manifest)
     return {
@@ -165,8 +174,15 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
             manifest.get("max_history_symbols", 0),
         ),
         "allow_partial_history": bool(manifest.get("allow_partial_history", False)),
+        "history_partial_result": bool(metadata.get("partial_result", False)),
+        "history_output_written": bool(metadata.get("output_written", True)),
+        "history_metadata_output_written": bool(
+            metadata.get("metadata_output_written", metadata_path.exists())
+        ),
         "history_metadata_failed_symbol_count": len(failed_symbols),
         "history_metadata_failed_symbols": failed_symbols,
+        "history_empty_symbol_count": len(empty_symbols),
+        "history_empty_symbols": empty_symbols,
         "history_metadata_fallback_error_count": len(fallback_errors),
         "history_metadata_fallback_errors": fallback_errors,
         "history_metadata_symbol_providers": symbol_providers(metadata),

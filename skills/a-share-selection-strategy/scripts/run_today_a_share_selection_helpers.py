@@ -64,6 +64,7 @@ def spot_metadata_view(manifest: dict[str, Any]) -> dict[str, Any]:
     keys = [
         "source",
         "source_scope",
+        "snapshot_time",
         "requested_pages",
         "retry_attempts_per_page",
         "successful_pages",
@@ -264,6 +265,8 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
         f"candidate_rows={view['candidate_rows']} "
         f"diagnostic_rows={view['diagnostic_rows']} "
         f"spot_matched_symbols={view['spot_matched_symbols']} "
+        f"effective_empty_result={str(view.get('effective_empty_result', False)).lower()} "
+        f"empty_result_reason={view.get('empty_result_reason', 'none')} "
         f"{disclosure} "
         f"{paths} html_report={html_report}{html_error}"
     )
@@ -300,6 +303,12 @@ def runner_disclosure_stdout(view: dict[str, Any]) -> str:
                 f"{metadata_stdout_value(history.get('requested_end_date'))}",
                 "history_actual_date_max="
                 f"{metadata_stdout_value(history.get('history_metadata_actual_date_max'))}",
+                "history_partial_result="
+                f"{metadata_stdout_value(history.get('history_partial_result'))}",
+                "history_output_written="
+                f"{metadata_stdout_value(history.get('history_output_written'))}",
+                "history_empty_symbol_count="
+                f"{metadata_stdout_value(history.get('history_empty_symbol_count'))}",
                 "history_symbols_reached_end_date_count="
                 f"{metadata_stdout_value(history.get('history_metadata_symbols_reached_end_date_count'))}",
                 "history_all_symbols_reached_end_date="

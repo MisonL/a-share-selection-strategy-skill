@@ -706,6 +706,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             metadata = {
                 "source": "eastmoney",
                 "source_scope": "a_share_spot_snapshot",
+                "snapshot_time": "2026-06-06T09:31:00Z",
                 "requested_pages": 2,
                 "retry_attempts_per_page": 1,
                 "successful_pages": 1,
@@ -745,6 +746,11 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertTrue(summary["spot_metadata_output_written"])
         self.assertTrue(summary["spot_output"].endswith("spot.csv"))
         self.assertFalse(summary["spot_output_written"])
+        self.assertEqual("2026-06-06T09:31:00Z", summary["spot_metadata"]["snapshot_time"])
+        self.assertEqual(2, summary["spot_metadata"]["requested_pages"])
+        self.assertEqual(1, summary["spot_metadata"]["successful_pages"])
+        self.assertEqual(100, summary["spot_metadata"]["raw_items"])
+        self.assertEqual(100, summary["spot_metadata"]["filtered_items"])
         self.assertEqual("partial_not_full_market", summary["spot_metadata"]["coverage_claim"])
         self.assertEqual(
             ["rerun_with_fail_on_partial"],
@@ -920,8 +926,15 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(0, summary["input_metadata"]["history_fallback_error_count"])
         self.assertFalse(summary["input_metadata"]["history_output_written"])
         self.assertTrue(summary["input_metadata"]["history_metadata_output_written"])
+        self.assertEqual(1, summary["history_selection"]["history_empty_symbol_count"])
+        self.assertEqual(["000001"], summary["history_selection"]["history_empty_symbols"])
+        self.assertTrue(summary["history_selection"]["history_partial_result"])
+        self.assertFalse(summary["history_selection"]["history_output_written"])
         self.assertIn("metadata_source=external_fetch", stdout.getvalue())
         self.assertIn("real_market_data=true", stdout.getvalue())
+        self.assertIn("history_partial_result=true", stdout.getvalue())
+        self.assertIn("history_output_written=false", stdout.getvalue())
+        self.assertIn("history_empty_symbol_count=1", stdout.getvalue())
         for row in candidate_rows + diagnostic_rows:
             self.assertEqual("external_fetch", row["source_type"])
             self.assertEqual("True", row["real_market_data"])

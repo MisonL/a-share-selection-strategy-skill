@@ -352,6 +352,118 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn(">2026-06-05<", report)
         self.assertIn(">False<", report)
 
+    def test_truncated_report_keeps_row_level_source_and_capital_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            diagnostics = output / "diagnostics.csv"
+            header = (
+                "rank,symbol,name,date,close,requested_as_of_date,actual_data_date,"
+                "as_of_date_observed,prediction_source,prediction_input_source,"
+                "source_type,real_market_data,total_score,cash_budget,lot_size,"
+                "capital_model,signal_close,cash_slot,quantity,cash_reserved,"
+                "notional,weight,unallocated,key_reasons,risk_notes"
+            )
+            rows = [header]
+            for index in range(1, 27):
+                rows.append(
+                    (
+                        f"{index},000{index:03d},Name {index},2026-06-05,7.1,"
+                        "2026-06-06,2026-06-05,False,external_unverified,"
+                        "external_input,unknown,unknown,0.8,10000,100,"
+                        "equal_cash_budget_lot_floor,7.1,5000,700,4970,"
+                        "4970,0.497,False,positive momentum,"
+                    )
+                )
+            candidates.write_text("\n".join(rows) + "\n", encoding="utf-8")
+            diagnostics.write_text(
+                "\n".join(
+                    [
+                        (
+                            "symbol,name,date,close,requested_as_of_date,actual_data_date,"
+                            "as_of_date_observed,prediction_source,prediction_input_source,"
+                            "source_type,real_market_data,total_score,selection_status,short_reason"
+                        ),
+                        (
+                            "000002,Diag,2026-06-05,7.2,2026-06-06,2026-06-05,"
+                            "False,external_unverified,external_input,unknown,unknown,"
+                            "0.6,未通过阈值,价格高于上限"
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            summary = minimal_summary(tmpdir, diagnostics)
+            summary.update(
+                {
+                    "candidate_rows": 26,
+                    "diagnostic_rows": 1,
+                    "candidates_output": str(candidates),
+                    "diagnostics_output": str(diagnostics),
+                    "candidates_output_written": True,
+                    "diagnostics_output_written": True,
+                }
+            )
+            report = render_report(summary, {"steps": []}, language="en")
+
+        self.assertIn("Prediction source", report)
+        self.assertIn("Prediction input source", report)
+        self.assertIn("Source type", report)
+        self.assertIn("Real market data", report)
+        self.assertIn("Cash budget", report)
+        self.assertIn("Capital model", report)
+        self.assertIn("external_unverified", report)
+        self.assertIn("external_input", report)
+        self.assertIn("equal_cash_budget_lot_floor", report)
+        self.assertIn("Showing the first 25 rows only", report)
+        self.assertNotIn("Name 26", report)
+
+    def test_missing_key_disclosure_fields_render_as_unknown(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            diagnostics = output / "diagnostics.csv"
+            candidates.write_text(
+                "\n".join(
+                    [
+                        "rank,symbol,name,date,close,total_score,key_reasons,risk_notes",
+                        "1,000001,Missing Fields,2026-06-05,7.1,0.7,positive momentum,",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            diagnostics.write_text(
+                "\n".join(
+                    [
+                        "symbol,name,close,total_score,selection_status,short_reason",
+                        "000002,Diag Missing,8.1,0.2,未通过阈值,",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            summary = minimal_summary(tmpdir, diagnostics)
+            summary.update(
+                {
+                    "candidate_rows": 1,
+                    "diagnostic_rows": 1,
+                    "candidates_output": str(candidates),
+                    "diagnostics_output": str(diagnostics),
+                    "candidates_output_written": True,
+                    "diagnostics_output_written": True,
+                }
+            )
+            en_report = render_report(summary, {"steps": []}, language="en")
+            zh_report = render_report(summary, {"steps": []}, language="zh")
+
+        self.assertIn(">Unknown<", en_report)
+        self.assertIn(">未知<", zh_report)
+        self.assertIn("missing field: requested_as_of_date", en_report)
+        self.assertIn("missing field: prediction_source", en_report)
+        self.assertIn("missing field: failure_reason", en_report)
+
 
 if __name__ == "__main__":
     unittest.main()

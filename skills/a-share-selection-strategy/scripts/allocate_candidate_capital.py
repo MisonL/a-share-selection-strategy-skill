@@ -68,6 +68,7 @@ def ensure_runtime_dependencies() -> None:
         {
             "pd": pandas_module,
             "CAPITAL_FIELDS": capital_module.CAPITAL_FIELDS,
+            "SIZING_FIELDS": capital_module.SIZING_FIELDS,
             "parse_dates": data_module.parse_dates,
             "read_table": data_module.read_table,
             "validate_frame": validator_module.validate_frame,
@@ -86,9 +87,9 @@ def allocate_capital(
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     ensure_runtime_dependencies()
     validate_inputs(prices, candidates, cash_budget, lot_size, close_tolerance)
-    reject_existing_capital_fields(candidates, overwrite_capital_fields)
+    reject_existing_sizing_fields(candidates, overwrite_capital_fields)
     quotes = signal_quotes(prices)
-    result = candidates.copy().reset_index(drop=True)
+    result = drop_existing_sizing_fields(candidates).reset_index(drop=True)
     result["symbol"] = result["symbol"].astype(str)
     result["_signal_date"] = parse_dates(result["date"])
     if result["_signal_date"].isna().any():
@@ -139,13 +140,21 @@ def validate_inputs(
         raise ValueError("candidates data is empty")
 
 
-def reject_existing_capital_fields(
+def reject_existing_sizing_fields(
     candidates: pd.DataFrame,
     overwrite_capital_fields: bool,
 ) -> None:
-    present = [field for field in CAPITAL_FIELDS if field in candidates]
+    present = [field for field in SIZING_FIELDS if field in candidates]
     if present and not overwrite_capital_fields:
-        raise ValueError(f"candidates already contain capital fields: {', '.join(present)}")
+        fields = ", ".join(present)
+        raise ValueError(f"candidates already contain sizing fields: {fields}")
+
+
+def drop_existing_sizing_fields(candidates: pd.DataFrame) -> pd.DataFrame:
+    present = [field for field in SIZING_FIELDS if field in candidates]
+    if not present:
+        return candidates.copy()
+    return candidates.drop(columns=present)
 
 
 def signal_quotes(prices: pd.DataFrame) -> pd.DataFrame:

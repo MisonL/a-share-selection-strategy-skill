@@ -17,6 +17,14 @@ NUMERIC_FORMATS = {
     "spot_price": (4, ""),
     "spot_pct_chg": (2, "%"),
     "total_score": (3, ""),
+    "cash_budget": (2, ""),
+    "lot_size": (0, ""),
+    "signal_close": (4, ""),
+    "cash_slot": (2, ""),
+    "quantity": (0, ""),
+    "cash_reserved": (2, ""),
+    "notional": (2, ""),
+    "weight": (6, ""),
 }
 LONG_TEXT_COLUMNS = {"key_reasons", "risk_notes", "short_reason", "failure_reason", "stderr"}
 LOCALIZED_COLUMNS = {
@@ -26,6 +34,27 @@ LOCALIZED_COLUMNS = {
     "failure_reason",
     "selection_status",
 }
+KEY_DISCLOSURE_COLUMNS = {
+    "requested_as_of_date",
+    "actual_data_date",
+    "as_of_date_observed",
+    "prediction_source",
+    "prediction_input_source",
+    "source_type",
+    "real_market_data",
+    "cash_budget",
+    "lot_size",
+    "capital_model",
+    "signal_close",
+    "cash_slot",
+    "quantity",
+    "cash_reserved",
+    "notional",
+    "weight",
+    "unallocated",
+    "failure_reason",
+}
+MISSING_FIELD_MARKER = "__missing_field__"
 REASON_TRANSLATIONS = {
     "prediction above threshold": {"en": "prediction above threshold", "zh": "预测高于阈值"},
     "positive momentum": {"en": "positive momentum", "zh": "动量为正"},
@@ -95,7 +124,9 @@ STATUS_TRANSLATIONS = {
 def table_cell(value: Any, column: str, language: str) -> str:
     css_class = ' class="text-cell"' if column in LONG_TEXT_COLUMNS else ""
     title = attr_text(cell_title(value, column, language))
-    if isinstance(value, dict) and {"display", "title"} <= value.keys():
+    if missing_field(value):
+        content = i18n("unknown_value", language)
+    elif isinstance(value, dict) and {"display", "title"} <= value.keys():
         content = esc(value.get("display", ""))
     elif column in NUMERIC_FORMATS:
         content = esc(format_numeric(value, *NUMERIC_FORMATS[column]))
@@ -211,6 +242,8 @@ def display_with_title(*, display: Any, title: Any) -> dict[str, str]:
 
 
 def cell_title(value: Any, column: str, language: str) -> str:
+    if missing_field(value):
+        return str(value.get("title", ""))
     if isinstance(value, dict) and {"display", "title"} <= value.keys():
         return str(value.get("title", ""))
     if column in NUMERIC_FORMATS:
@@ -229,6 +262,8 @@ def localized_cell_text(value: Any, language: str) -> str:
 
 
 def raw_text(value: Any) -> str:
+    if missing_field(value):
+        return ""
     if isinstance(value, dict) and {"display", "title"} <= value.keys():
         return str(value.get("display", ""))
     if isinstance(value, dict):
@@ -248,3 +283,11 @@ def esc(value: Any) -> str:
 
 def attr_text(value: Any) -> str:
     return esc(value).replace("\n", "&#10;").replace("\r", "")
+
+
+def missing_key_disclosure_value(column: str) -> dict[str, str]:
+    return {MISSING_FIELD_MARKER: column, "title": f"missing field: {column}"}
+
+
+def missing_field(value: Any) -> bool:
+    return isinstance(value, dict) and value.get(MISSING_FIELD_MARKER) is not None

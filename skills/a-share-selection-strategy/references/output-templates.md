@@ -312,11 +312,11 @@
 - 不能把 `quality_errors=[]`、summary 通过或 artifact validator 通过写成“源数据没有异常”。
 ```
 
-### 资金字段覆盖
+### Sizing/资金字段覆盖
 
 ```markdown
-## 不能静默覆盖候选资金字段
-- 候选表已有 `weight`、`notional`、`quantity` 或 `cash_reserved` 时，默认不能直接覆盖。
+## 不能静默覆盖候选 sizing/资金字段
+- 候选表已有 `cash_budget`、`lot_size`、`capital_model`、`signal_close`、`cash_slot`、`quantity`、`cash_reserved`、`notional`、`weight` 或 `unallocated` 时，默认不能直接覆盖。
 - 默认失败里的 `output_written=false` 是有效门禁证据，不能说已经生成 sized candidates。
 - 只有用户明确确认要用本仓库 sizing 模型重算时，才显式传 `--overwrite-capital-fields`。
 - 重算后必须披露 `capital_model`、`cash_budget` 和 `lot_size`；这仍不是券商订单、真实成交或真实现金容量证明。

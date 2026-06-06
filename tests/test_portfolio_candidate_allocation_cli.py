@@ -137,6 +137,37 @@ class PortfolioCandidateAllocationCliTests(unittest.TestCase):
         self.assertIn("expected-signal-date", stderr.getvalue())
         self.assertFalse(selected_exists)
 
+    def test_cli_rejects_raw_candidates_with_sizing_fields_without_outputs(self) -> None:
+        prices = build_frame(days=40)
+        date = signal_date(prices, 20)
+        frame = candidates(prices, date, ["000002"]).assign(
+            cash_budget=[1.0],
+            lot_size=[1],
+            capital_model=["stale_model"],
+            signal_close=[7.0],
+            cash_slot=[1.0],
+            unallocated=[True],
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            paths = write_inputs(root, prices, frame)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = cli.main(cli_args(root, paths, max_open_positions=1))
+            output_paths = [
+                root / "candidates.csv",
+                root / "sized.csv",
+                root / "skipped.csv",
+                root / "allocation_summary.json",
+            ]
+
+        self.assertEqual(2, code)
+        self.assertEqual("", stdout.getvalue())
+        self.assertIn("already contain sizing fields", stderr.getvalue())
+        self.assertIn("capital_model", stderr.getvalue())
+        self.assertTrue(all(not path.exists() for path in output_paths))
+
 
 def allocate(
     prices: pd.DataFrame,

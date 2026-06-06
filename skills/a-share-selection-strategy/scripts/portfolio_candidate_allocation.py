@@ -7,15 +7,13 @@ from typing import Any
 
 import pandas as pd
 
+from a_share_selection_capital import SIZING_FIELDS
 from a_share_selection_data import parse_dates
 from validate_ohlcv import validate_frame
 
 
 CAPITAL_MODEL = "portfolio_cash_lot_floor"
-CAPITAL_COLUMNS = [
-    "cash_budget", "lot_size", "capital_model", "signal_close", "cash_slot",
-    "quantity", "cash_reserved", "notional", "weight", "unallocated",
-]
+CAPITAL_COLUMNS = SIZING_FIELDS
 
 
 def allocate_portfolio(
@@ -104,6 +102,7 @@ def prepare_candidates(frames: list[pd.DataFrame], expected_signal_dates: list[s
         missing = [column for column in ["symbol", "date"] if column not in frame]
         if missing:
             raise ValueError(f"candidates missing required columns: {', '.join(missing)}")
+        reject_existing_sizing_fields(frame)
         current = frame.copy().reset_index(drop=True)
         current["symbol"] = current["symbol"].astype(str)
         current["_source_index"] = source_index
@@ -120,6 +119,12 @@ def prepare_candidates(frames: list[pd.DataFrame], expected_signal_dates: list[s
         raise ValueError("candidates contain duplicate symbol/date rows")
     sort_columns = [name for name in ["_signal_date", "rank", "_source_index", "_row_order"] if name in raw]
     return raw.sort_values(sort_columns).reset_index(drop=True)
+
+
+def reject_existing_sizing_fields(frame: pd.DataFrame) -> None:
+    present = [field for field in SIZING_FIELDS if field in frame]
+    if present:
+        raise ValueError(f"candidates already contain sizing fields: {', '.join(present)}")
 
 
 def validate_source_signal_date(

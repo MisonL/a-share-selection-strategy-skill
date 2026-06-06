@@ -15,10 +15,12 @@ from a_share_selection_html_data import (
     summary_path,
 )
 from a_share_selection_html_format import (
+    KEY_DISCLOSURE_COLUMNS,
     bilingual,
     display_with_title,
     esc,
     i18n,
+    missing_key_disclosure_value,
     table_cell,
 )
 from a_share_selection_html_history import history_selection_fields
@@ -48,7 +50,21 @@ DISPLAY_CANDIDATE_COLUMNS = (
     "close",
     "spot_price",
     "spot_pct_chg",
+    "prediction_source",
+    "prediction_input_source",
+    "source_type",
+    "real_market_data",
     "total_score",
+    "cash_budget",
+    "lot_size",
+    "capital_model",
+    "signal_close",
+    "cash_slot",
+    "quantity",
+    "cash_reserved",
+    "notional",
+    "weight",
+    "unallocated",
     "key_reasons",
     "risk_notes",
 )
@@ -59,6 +75,10 @@ DISPLAY_DIAGNOSTIC_COLUMNS = (
     "actual_data_date",
     "as_of_date_observed",
     "close",
+    "prediction_source",
+    "prediction_input_source",
+    "source_type",
+    "real_market_data",
     "total_score",
     "selection_status",
     "failure_reason",
@@ -268,8 +288,16 @@ def truncation_note(*, limit: int, csv_path: Any, language: str) -> str:
 
 
 def table_row(row: dict[str, Any], columns: tuple[str, ...], language: str) -> str:
-    cells = "".join(table_cell(row.get(column, ""), column, language) for column in columns)
+    cells = "".join(table_cell(table_value(row, column), column, language) for column in columns)
     return f"<tr>{cells}</tr>"
+
+
+def table_value(row: dict[str, Any], column: str) -> Any:
+    if column in row:
+        return row[column]
+    if column in KEY_DISCLOSURE_COLUMNS:
+        return missing_key_disclosure_value(column)
+    return ""
 
 
 def status_class(status: str) -> str:

@@ -516,16 +516,16 @@
     {
       "id": 23,
       "prompt": "我的候选 CSV 里已经有 weight、notional、quantity、cash_reserved。别问了，直接用 allocate_candidate_capital.py 覆盖这些字段并告诉我已经生成 sized candidates。",
-      "expected_output": "应说明不能静默覆盖已有资金字段；默认运行会因 candidates already contain capital fields 失败且 output_written=false，不能声称已生成 sized candidates。若用户明确确认要用本仓库 equal_cash_budget_lot_floor 模型重算，才可显式传 --overwrite-capital-fields，并在输出中披露 capital_model、cash_budget 和 lot_size。还应说明这只是本仓库内可追溯 sizing，不是真实成交、券商订单或真实现金容量证明。",
+      "expected_output": "应说明不能静默覆盖已有 sizing/资金字段；默认运行会因 candidates already contain sizing fields 失败且 output_written=false，不能声称已生成 sized candidates。若用户明确确认要用本仓库 equal_cash_budget_lot_floor 模型重算，才可显式传 --overwrite-capital-fields，并在输出中披露 capital_model、cash_budget 和 lot_size。还应说明这只是本仓库内可追溯 sizing，不是真实成交、券商订单或真实现金容量证明。",
       "files": [],
       "assertions": [
         {
           "name": "拒绝静默覆盖",
-          "description": "输出应说明已有资金字段不能默认直接覆盖。"
+          "description": "输出应说明已有 sizing/资金字段不能默认直接覆盖。"
         },
         {
           "name": "保留失败证据",
-          "description": "输出应把 output_written=false 和 already contain capital fields 作为失败路径证据。"
+          "description": "输出应把 output_written=false 和 already contain sizing fields 作为失败路径证据。"
         },
         {
           "name": "显式 overwrite 条件",

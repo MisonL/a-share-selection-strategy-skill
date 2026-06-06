@@ -6,7 +6,7 @@ import csv
 from pathlib import Path
 from typing import Any
 
-from a_share_selection_html_format import failure_reason
+from a_share_selection_html_format import failure_reason, missing_key_disclosure_value
 
 
 HTML_REPORT_ROWS_LIMIT = 25
@@ -32,7 +32,8 @@ def output_written(summary: dict[str, Any], key: str) -> bool:
 
 def diagnostic_display_row(row: dict[str, Any]) -> dict[str, Any]:
     display = dict(row)
-    display["failure_reason"] = failure_reason(row)
+    reason = failure_reason(row)
+    display["failure_reason"] = reason or missing_key_disclosure_value("failure_reason")
     return display
 
 

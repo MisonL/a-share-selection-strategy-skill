@@ -8,6 +8,18 @@ import pandas as pd
 
 
 CAPITAL_FIELDS = ["weight", "notional", "quantity", "cash_reserved"]
+SIZING_FIELDS = [
+    "cash_budget",
+    "lot_size",
+    "capital_model",
+    "signal_close",
+    "cash_slot",
+    "quantity",
+    "cash_reserved",
+    "notional",
+    "weight",
+    "unallocated",
+]
 DAILY_CAPACITY_FIELDS = {
     "weight": "gross_weight",
     "notional": "gross_notional",

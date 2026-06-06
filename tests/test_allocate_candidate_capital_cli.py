@@ -130,7 +130,7 @@ class AllocateCandidateCapitalCliTests(unittest.TestCase):
         candidate = prices[prices["symbol"] == "000002"].iloc[[20]][["symbol", "date"]]
         candidate = candidate.assign(weight=[0.2])
 
-        with self.assertRaisesRegex(ValueError, "already contain capital fields"):
+        with self.assertRaisesRegex(ValueError, "already contain sizing fields"):
             allocator.allocate_capital(prices, candidate, cash_budget=10000)
 
         result, _ = allocator.allocate_capital(
@@ -140,6 +140,54 @@ class AllocateCandidateCapitalCliTests(unittest.TestCase):
             overwrite_capital_fields=True,
         )
         self.assertIn("capital_model", result)
+
+    def test_existing_sizing_fields_require_explicit_overwrite(self) -> None:
+        prices = build_frame(days=130)
+        source = prices[prices["symbol"] == "000002"].iloc[[20]]
+        close = float(source["close"].iloc[0])
+        candidate = source[["symbol", "date", "close"]].assign(
+            cash_budget=[1.0],
+            lot_size=[1],
+            capital_model=["stale_model"],
+            signal_close=[close],
+            cash_slot=[1.0],
+            unallocated=[True],
+        )
+
+        with self.assertRaisesRegex(ValueError, "already contain sizing fields"):
+            allocator.allocate_capital(prices, candidate, cash_budget=10000)
+
+    def test_overwrite_sizing_fields_drops_stale_values_before_merge(self) -> None:
+        prices = build_frame(days=130)
+        source = prices[prices["symbol"] == "000002"].iloc[[20]]
+        close = float(source["close"].iloc[0])
+        candidate = source[["symbol", "date", "close"]].assign(
+            cash_budget=[1.0],
+            lot_size=[1],
+            capital_model=["stale_model"],
+            signal_close=[close],
+            cash_slot=[1.0],
+            quantity=[1],
+            cash_reserved=[1.0],
+            notional=[1.0],
+            weight=[0.01],
+            unallocated=[True],
+        )
+
+        result, summary = allocator.allocate_capital(
+            prices,
+            candidate,
+            cash_budget=10000,
+            lot_size=100,
+            overwrite_capital_fields=True,
+        )
+
+        self.assertEqual("equal_cash_budget_lot_floor", result["capital_model"].iloc[0])
+        self.assertEqual(10000.0, float(result["cash_budget"].iloc[0]))
+        self.assertEqual(100, int(result["lot_size"].iloc[0]))
+        self.assertEqual(close, float(result["signal_close"].iloc[0]))
+        self.assertNotEqual(1, int(result["quantity"].iloc[0]))
+        self.assertEqual("equal_cash_budget_lot_floor", summary["capital_model"])
 
     def test_candidate_close_must_match_signal_close(self) -> None:
         prices = build_frame(days=130)

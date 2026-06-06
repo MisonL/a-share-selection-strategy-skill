@@ -79,6 +79,47 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
         self.assertTrue(all(item["planned_only"] for item in data["steps"]))
         self.assertTrue(all(item["returncode"] is None for item in data["steps"]))
 
+    def test_cli_offline_plan_writes_run_scoped_max_candidates_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            code = runner.main(
+                [
+                    "--symbols",
+                    "000001,600000",
+                    "--start-date",
+                    "2024-01-01",
+                    "--end-date",
+                    "2026-05-29",
+                    "--signal-dates",
+                    "2026-05-12",
+                    "--output-dir",
+                    str(output),
+                    "--cash-budget",
+                    "1000000",
+                    "--max-open-positions",
+                    "10",
+                    "--max-gross-weight",
+                    "1.0",
+                    "--max-gross-notional",
+                    "1000000",
+                    "--max-cash-reserved",
+                    "1000000",
+                    "--max-candidates",
+                    "2",
+                    "--offline-plan",
+                ]
+            )
+            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            config_path = output / "prediction_profile_config.json"
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            commands = {item["step"]: item["command"] for item in manifest["steps"]}
+
+        self.assertEqual(0, code)
+        self.assertEqual(str(config_path), manifest["config_path"])
+        self.assertEqual(2, config["output"]["max_candidates"])
+        self.assertIn(str(config_path), commands["2026-05-12:validate"])
+        self.assertIn(str(config_path), commands["2026-05-12:score"])
+
     def test_offline_plan_records_all_steps_and_keeps_overlap_violation(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             args = args_for(Path(tmpdir), signal_dates=["2026-05-12", "2026-05-20"])

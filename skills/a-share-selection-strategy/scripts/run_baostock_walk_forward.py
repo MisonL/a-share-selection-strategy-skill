@@ -166,7 +166,7 @@ def write_offline_plan(
     output = Path(args.output_dir)
     output.mkdir(parents=True, exist_ok=True)
     manifest.update(offline_plan_fields())
-    config_path = planned_config_path(args, output)
+    config_path = prepare_config(args, output)
     manifest["config_path"] = str(config_path)
     prices = output / "prices.csv"
     backtests = []
@@ -203,11 +203,6 @@ def offline_plan_fields() -> dict[str, Any]:
         "backtest_executed": False,
         "claim_boundary": "offline_plan_manifest_only_not_real_market_prediction_or_backtest",
     }
-
-def planned_config_path(args: argparse.Namespace, output: Path) -> Path:
-    if args.max_candidates is None:
-        return CONFIG_PATH
-    return output / "prediction_profile_config.json"
 
 def plan_signal(
     manifest: dict[str, Any],

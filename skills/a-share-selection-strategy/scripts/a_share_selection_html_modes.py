@@ -5,6 +5,38 @@ from __future__ import annotations
 from typing import Any
 
 from a_share_selection_html_format import bilingual, i18n
+from run_today_a_share_selection_input_metadata import is_synthetic_demo
+
+
+def is_demo_summary(summary: dict[str, Any]) -> bool:
+    metadata = summary.get("input_metadata", {})
+    return isinstance(metadata, dict) and is_synthetic_demo(metadata)
+
+
+def report_title_key(summary: dict[str, Any]) -> str:
+    return "demo_report_title" if is_demo_summary(summary) else "report_title"
+
+
+def report_heading_key(summary: dict[str, Any], status: str) -> str:
+    if not is_demo_summary(summary):
+        return f"{status}_report"
+    return f"{status}_demo_report"
+
+
+def report_status_key(summary: dict[str, Any], status: str) -> str:
+    if status not in {"completed", "failed"}:
+        return "unknown_demo_report" if is_demo_summary(summary) else "status_unknown"
+    if is_demo_summary(summary):
+        return f"{status}_demo_report"
+    return f"status_{status}"
+
+
+def candidate_count_key(summary: dict[str, Any]) -> str:
+    return "demo_candidates_count" if is_demo_summary(summary) else "candidates_count"
+
+
+def candidate_section_key(summary: dict[str, Any]) -> str:
+    return "demo_candidates" if is_demo_summary(summary) else "candidates"
 
 
 def scoring_method_key(summary: dict[str, Any]) -> str:

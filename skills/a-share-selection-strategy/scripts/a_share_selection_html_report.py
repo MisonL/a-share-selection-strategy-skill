@@ -28,10 +28,14 @@ from a_share_selection_html_sections import (
     limited_table,
     metric_grid,
     section,
-    status_label_key,
     steps_table,
 )
-from a_share_selection_html_modes import scoring_method_key
+from a_share_selection_html_modes import (
+    candidate_section_key,
+    report_status_key,
+    report_title_key,
+    scoring_method_key,
+)
 
 
 def write_html_report(
@@ -97,7 +101,7 @@ def report_sections(
         section(i18n("run_summary", language), metric_grid(summary, language)),
         section(i18n("mode_boundary", language), boundary_panel(summary, language)),
         section(
-            i18n("candidates", language),
+            i18n(candidate_section_key(summary), language),
             limited_table(
                 candidates,
                 DISPLAY_CANDIDATE_COLUMNS,
@@ -148,7 +152,7 @@ def title_tag(summary: dict[str, Any], language: str) -> str:
 
 def report_title(summary: dict[str, Any], language: str) -> str:
     status = summary.get("status", "unknown")
-    title = localized_text("report_title", language)
-    status_text = localized_text(status_label_key(str(status)), language)
+    title = localized_text(report_title_key(summary), language)
+    status_text = localized_text(report_status_key(summary, str(status)), language)
     mode = localized_text(scoring_method_key(summary), language)
     return f"{title} - {status_text} - {mode}"

@@ -24,10 +24,13 @@ from a_share_selection_html_format import (
 from a_share_selection_html_history import history_selection_fields
 from a_share_selection_html_modes import (
     boundary_summary,
+    candidate_count_key,
     limit_key,
     mode_unresolved,
     mode_reason,
     prediction_status_key,
+    report_heading_key,
+    report_status_key,
     scoring_method_key,
 )
 from run_today_a_share_selection_input_metadata import is_synthetic_demo
@@ -57,18 +60,18 @@ DISPLAY_DIAGNOSTIC_COLUMNS = (
 
 def hero(summary: dict[str, Any], language: str) -> str:
     status = str(summary.get("status", "unknown"))
-    heading_key = f"{status}_report"
+    heading_key = report_heading_key(summary, status)
     return (
         '<section class="hero"><div class="hero-main">'
         f'<p class="eyebrow">{i18n("brand", language)}</p>'
         f"<h1>{i18n(heading_key, language, 'unknown_report')}</h1>"
         f"<p>{i18n('scoring_method', language)}: "
         f"<strong>{i18n(scoring_method_key(summary), language)}</strong>. "
-        f"{i18n('candidates_count', language)}: "
+        f"{i18n(candidate_count_key(summary), language)}: "
         f"<strong>{esc(summary.get('candidate_rows', 0))}</strong>.</p></div>"
         '<div class="hero-actions">'
         f'<span class="status {esc(status_class(status))}">'
-        f"{i18n(status_label_key(status), language)}</span>"
+        f"{i18n(report_status_key(summary, status), language)}</span>"
         '<div class="language-toggle" aria-label="Language">'
         '<button type="button" data-set-lang="zh">中文</button>'
         '<button type="button" data-set-lang="en">EN</button>'
@@ -263,10 +266,6 @@ def table_row(row: dict[str, Any], columns: tuple[str, ...], language: str) -> s
 
 def status_class(status: str) -> str:
     return "ok" if status == "completed" else "failed"
-
-
-def status_label_key(status: str) -> str:
-    return f"status_{status}" if status in {"completed", "failed"} else "status_unknown"
 
 
 def data_scope_value(summary: dict[str, Any], language: str) -> str:

@@ -944,6 +944,52 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             self.assertEqual("False", row["history_output_written"])
             self.assertEqual("True", row["history_metadata_output_written"])
 
+    def test_history_fallback_marks_partial_in_summary_stdout_and_csvs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "akshare",
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args,
+                manifest,
+                output / "run_manifest.json",
+                history_fallback_executor,
+            )
+
+            runner.run_pipeline(context)
+            summary = summary_view(manifest, "completed")
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                runner.helpers.print_summary(manifest, output)
+            candidate_rows = csv_rows(output / "candidates.csv")
+            diagnostic_rows = csv_rows(output / "diagnostics.csv")
+
+        self.assertTrue(summary["input_metadata"]["history_partial_result"])
+        self.assertEqual(1, summary["input_metadata"]["history_fallback_error_count"])
+        self.assertTrue(summary["history_selection"]["history_partial_result"])
+        self.assertEqual(
+            1,
+            summary["history_selection"]["history_metadata_fallback_error_count"],
+        )
+        self.assertIn("history_partial_result=true", stdout.getvalue())
+        self.assertIn("history_fallback_error_count=1", stdout.getvalue())
+        for row in candidate_rows + diagnostic_rows:
+            self.assertEqual("True", row["history_partial_result"])
+            self.assertEqual("1", row["history_fallback_error_count"])
+
     def test_runner_can_derive_history_symbols_from_spot_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -1481,6 +1527,59 @@ def history_metadata_executor(command: list[str]) -> subprocess.CompletedProcess
                             "rows": 0,
                             "date_min": "",
                             "date_max": "",
+                        }
+                    ],
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    if script == "score_candidates.py":
+        Path(command[command.index("--output") + 1]).write_text(
+            "symbol,total_score\n000001,0.8\n",
+            encoding="utf-8",
+        )
+        Path(command[command.index("--diagnostics-output") + 1]).write_text(
+            "symbol,selection_status\n000001,selected\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            "OK: raw_symbols=1 input_symbols=1 candidates=1 effective_empty_result=false\n",
+            "",
+        )
+    return subprocess.CompletedProcess(command, 0, "", "")
+
+
+def history_fallback_executor(command: list[str]) -> subprocess.CompletedProcess[str]:
+    script = Path(command[1]).name
+    if script.startswith("fetch_") and "a_share" in script:
+        Path(command[command.index("--output") + 1]).write_text(
+            "symbol,date,close\n000001,2026-01-01,8.0\n",
+            encoding="utf-8",
+        )
+        Path(command[command.index("--metadata-output") + 1]).write_text(
+            json.dumps(
+                {
+                    "source": "akshare",
+                    "requested_symbols": ["000001"],
+                    "rows": 1,
+                    "symbol_count": 1,
+                    "failed_symbols": [],
+                    "empty_symbols": [],
+                    "fallback_errors": [
+                        {"symbol": "000001", "error": "stock_zh_a_hist failed"}
+                    ],
+                    "output_written": True,
+                    "metadata_output_written": True,
+                    "symbols": [
+                        {
+                            "symbol": "000001",
+                            "provider": "stock_zh_a_daily",
+                            "rows": 1,
+                            "date_min": "2026-01-01",
+                            "date_max": "2026-01-01",
                         }
                     ],
                 }

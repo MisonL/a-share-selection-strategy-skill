@@ -8,6 +8,7 @@ from datetime import date, datetime
 from typing import Any
 
 import run_today_a_share_selection_helpers as helpers
+from run_today_a_share_selection_input_metadata import history_partial_result
 from a_share_selection_disclosure import (
     ADVICE_BOUNDARY,
     RECOMMENDATION_BOUNDARY,
@@ -174,7 +175,7 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
             manifest.get("max_history_symbols", 0),
         ),
         "allow_partial_history": bool(manifest.get("allow_partial_history", False)),
-        "history_partial_result": bool(metadata.get("partial_result", False)),
+        "history_partial_result": history_partial_result(metadata),
         "history_output_written": bool(metadata.get("output_written", True)),
         "history_metadata_output_written": bool(
             metadata.get("metadata_output_written", metadata_path.exists())

@@ -82,11 +82,14 @@ class TodayAShareExternalDisclosureTests(unittest.TestCase):
             report = render_report(summary, {"steps": []}, language="en")
 
         history = summary["history_selection"]
+        self.assertTrue(history["history_partial_result"])
         self.assertEqual(1, history["history_metadata_fallback_error_count"])
         self.assertEqual(
             [{"symbol": "000001", "provider": "stock_zh_a_daily"}],
             history["history_metadata_symbol_providers"],
         )
+        self.assertIn("history_partial_result", report)
+        self.assertIn(">True<", report)
         self.assertIn("history_metadata_fallback_error_count", report)
         self.assertIn("stock_zh_a_daily", report)
         self.assertIn("hist unavailable", report)

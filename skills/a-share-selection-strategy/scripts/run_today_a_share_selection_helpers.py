@@ -309,6 +309,10 @@ def runner_disclosure_stdout(view: dict[str, Any]) -> str:
                 f"{metadata_stdout_value(history.get('history_output_written'))}",
                 "history_empty_symbol_count="
                 f"{metadata_stdout_value(history.get('history_empty_symbol_count'))}",
+                "history_failed_symbol_count="
+                f"{metadata_stdout_value(history.get('history_metadata_failed_symbol_count'))}",
+                "history_fallback_error_count="
+                f"{metadata_stdout_value(history.get('history_metadata_fallback_error_count'))}",
                 "history_symbols_reached_end_date_count="
                 f"{metadata_stdout_value(history.get('history_metadata_symbols_reached_end_date_count'))}",
                 "history_all_symbols_reached_end_date="

@@ -43,7 +43,7 @@ def history_metadata_for_output(output_dir: Path) -> dict[str, Any]:
         "source": source,
         "history_provider": source,
         "real_market_data": True,
-        "history_partial_result": bool(data.get("partial_result", False)),
+        "history_partial_result": history_partial_result(data),
         "history_failed_symbol_count": len(list_value(data, "failed_symbols")),
         "history_empty_symbol_count": len(list_value(data, "empty_symbols")),
         "history_fallback_error_count": len(list_value(data, "fallback_errors")),
@@ -55,6 +55,23 @@ def history_metadata_for_output(output_dir: Path) -> dict[str, Any]:
 def list_value(data: dict[str, Any], key: str) -> list[Any]:
     value = data.get(key, [])
     return value if isinstance(value, list) else []
+
+
+def history_partial_result(data: dict[str, Any]) -> bool:
+    if data.get("partial_result") is True:
+        return True
+    if data.get("output_written") is False:
+        return True
+    if list_value(data, "failed_symbols"):
+        return True
+    if list_value(data, "empty_symbols"):
+        return True
+    if list_value(data, "fallback_errors"):
+        return True
+    requested = list_value(data, "requested_symbols")
+    if requested and data.get("symbol_count") is not None:
+        return int(data["symbol_count"]) != len(requested)
+    return False
 
 
 def is_synthetic_demo(metadata: dict[str, Any]) -> bool:

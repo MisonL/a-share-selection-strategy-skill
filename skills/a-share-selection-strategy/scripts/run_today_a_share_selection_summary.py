@@ -76,9 +76,35 @@ def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "missing_prediction_requirement": manifest.get("missing_prediction_requirement", ""),
         "steps": len(manifest["steps"]),
         "failed_steps": [step["step"] for step in failed],
+        "failed_step_details": [failed_step_detail(step) for step in failed],
         "run_error_type": manifest.get("run_error_type", ""),
         "run_error": manifest.get("run_error", ""),
     }
+
+
+def failed_step_detail(step: dict[str, Any]) -> dict[str, Any]:
+    stderr = str(step.get("stderr", "") or "")
+    stdout = str(step.get("stdout", "") or "")
+    return {
+        "step": step.get("step", ""),
+        "returncode": step.get("returncode"),
+        "allowed_returncodes": step.get("allowed_returncodes", []),
+        "stderr_first_line": first_nonempty_line(stderr),
+        "stdout_first_line": first_nonempty_line(stdout),
+        "stderr_line_count": nonempty_line_count(stderr),
+    }
+
+
+def first_nonempty_line(text: str) -> str:
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped:
+            return stripped
+    return ""
+
+
+def nonempty_line_count(text: str) -> int:
+    return sum(1 for line in text.splitlines() if line.strip())
 
 
 def prediction_fields(manifest: dict[str, Any], score: dict[str, Any]) -> dict[str, Any]:

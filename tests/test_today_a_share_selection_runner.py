@@ -174,6 +174,12 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("prediction-derived profile requires prediction", stderr)
         self.assertEqual(["validate"], [step["step"] for step in manifest["steps"]])
         self.assertEqual(["validate"], summary["failed_steps"])
+        self.assertEqual("validate", summary["failed_step_details"][0]["step"])
+        self.assertEqual(1, summary["failed_step_details"][0]["returncode"])
+        self.assertIn(
+            "prediction-derived profile requires prediction",
+            summary["failed_step_details"][0]["stderr_first_line"],
+        )
         self.assertEqual("failed", summary["status"])
         self.assertTrue(manifest["prediction_mode"])
         self.assertFalse(manifest["consumes_prediction_columns"])
@@ -230,6 +236,12 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("step=validate", stderr)
         self.assertEqual("failed", summary["status"])
         self.assertEqual(["validate"], summary["failed_steps"])
+        self.assertEqual("validate", summary["failed_step_details"][0]["step"])
+        self.assertEqual(1, summary["failed_step_details"][0]["returncode"])
+        self.assertIn(
+            "configured min_turn threshold requires turn or turnover column",
+            summary["failed_step_details"][0]["stderr_first_line"],
+        )
         self.assertTrue(summary["html_report_written"])
         self.assertIn("Generic scoring not completed", report)
         self.assertIn("validation or scoring did not complete", report)

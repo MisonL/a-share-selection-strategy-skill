@@ -9,8 +9,11 @@ from typing import Any
 
 PROVENANCE_COLUMNS = (
     "source_type",
+    "source",
     "source_scope",
     "real_market_data",
+    "market_label_only",
+    "source_claim_boundary",
     "mode_decision",
     "consumes_prediction_columns",
     "prediction_model_executed_by_runner",
@@ -23,6 +26,7 @@ PROVENANCE_COLUMNS = (
     "history_output_written",
     "history_metadata_output_written",
 )
+OPTIONAL_METADATA_COLUMNS = ("source", "market_label_only", "source_claim_boundary")
 
 
 def annotate_run_csv_outputs(
@@ -39,7 +43,7 @@ def provenance_fields(manifest: dict[str, Any]) -> dict[str, Any]:
     metadata = manifest.get("input_metadata", {})
     if not isinstance(metadata, dict):
         metadata = {}
-    return {
+    fields = {
         "source_type": metadata.get("source_type", "unknown"),
         "source_scope": manifest.get("source_scope", "unknown"),
         "real_market_data": metadata.get("real_market_data", "unknown"),
@@ -60,6 +64,10 @@ def provenance_fields(manifest: dict[str, Any]) -> dict[str, Any]:
             "",
         ),
     }
+    for column in OPTIONAL_METADATA_COLUMNS:
+        if column in metadata:
+            fields[column] = metadata[column]
+    return fields
 
 
 def annotate_csv(path: Path, fields: dict[str, Any]) -> None:

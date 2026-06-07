@@ -127,6 +127,72 @@ class TodayAShareDemoProvenanceTests(unittest.TestCase):
         self.assertEqual("synthetic_demo", diagnostics[0]["source_type"])
         self.assertEqual("False", diagnostics[0]["real_market_data"])
 
+    def test_runner_preserves_yfinance_market_label_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            demo = root / "demo"
+            output = root / "run"
+            create_demo_data.main(["--output", str(demo), "--days", "160"])
+            (demo / "metadata.json").write_text(
+                json.dumps(
+                    {
+                        "source": "yfinance",
+                        "requested_symbols": ["AAPL", "MSFT"],
+                        "start_date": "2025-01-01",
+                        "end_date": "2026-01-01",
+                        "market": "A-share",
+                        "market_label_only": True,
+                        "source_claim_boundary": (
+                            "market_label_not_source_exchange_or_calendar_proof"
+                        ),
+                        "adjustment": "auto_adjust_false_close",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            code, stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(demo / "prices.csv"),
+                    "--output-dir",
+                    str(output),
+                    "--mode",
+                    "auto",
+                    "--html-report-language",
+                    "en",
+                ]
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            report = (output / "report.html").read_text(encoding="utf-8")
+            candidates = csv_rows(output / "candidates.csv")
+            diagnostics = csv_rows(output / "diagnostics.csv")
+
+        self.assertEqual(0, code, stderr)
+        metadata = summary["input_metadata"]
+        self.assertEqual("yfinance", metadata["source"])
+        self.assertEqual("A-share", metadata["market"])
+        self.assertTrue(metadata["market_label_only"])
+        self.assertEqual(
+            "market_label_not_source_exchange_or_calendar_proof",
+            metadata["source_claim_boundary"],
+        )
+        self.assertIn(
+            "source_claim_boundary=market_label_not_source_exchange_or_calendar_proof",
+            stdout,
+        )
+        self.assertIn("market_label_only=true", stdout)
+        self.assertIn("source_claim_boundary", report)
+        self.assertIn("market_label_not_source_exchange_or_calendar_proof", report)
+        for row in candidates + diagnostics:
+            self.assertEqual("yfinance", row["source"])
+            self.assertEqual("A-share", row["market"])
+            self.assertEqual("True", row["market_label_only"])
+            self.assertEqual(
+                "market_label_not_source_exchange_or_calendar_proof",
+                row["source_claim_boundary"],
+            )
+
     def test_preflight_failure_keeps_synthetic_demo_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

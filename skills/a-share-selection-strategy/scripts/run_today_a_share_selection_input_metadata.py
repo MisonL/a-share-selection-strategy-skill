@@ -9,9 +9,14 @@ from typing import Any
 
 METADATA_KEYS = (
     "source_type",
+    "source",
     "scenario",
     "days",
     "prices",
+    "market",
+    "market_label_only",
+    "source_claim_boundary",
+    "adjustment",
     "synthetic_prediction_input",
     "synthetic_prediction_proves_real_model",
     "real_market_data",

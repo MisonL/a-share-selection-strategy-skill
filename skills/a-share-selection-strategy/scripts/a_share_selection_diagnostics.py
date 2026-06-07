@@ -14,6 +14,7 @@ from a_share_selection_diagnostic_labels import (
 )
 from a_share_selection_disclosure import prediction_disclosure
 from a_share_selection_metrics import is_prediction_mode
+from a_share_selection_provenance import PROVENANCE_COLUMNS
 
 
 DIAGNOSTIC_COLUMNS = [
@@ -51,6 +52,7 @@ DIAGNOSTIC_COLUMNS = [
     "volume_unit_verification",
     "advice_boundary",
     "recommendation_boundary",
+    *PROVENANCE_COLUMNS,
     "explosion_score",
     "risk_score",
     "total_score",
@@ -237,6 +239,7 @@ def diagnostic_row(
         "volume_unit_verification": row.get("volume_unit_verification"),
         "advice_boundary": row.get("advice_boundary"),
         "recommendation_boundary": row.get("recommendation_boundary"),
+        **{column: row.get(column) for column in PROVENANCE_COLUMNS},
         "explosion_score": row.get("explosion_score"),
         "risk_score": row.get("risk_score"),
         "total_score": row.get("total_score"),

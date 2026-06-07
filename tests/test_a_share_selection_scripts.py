@@ -507,6 +507,62 @@ class AShareSelectionScriptTests(unittest.TestCase):
             set(diagnostics["volume_unit_verification"]),
         )
 
+    def test_cli_preserves_direct_input_provenance_in_outputs(self) -> None:
+        config = load_config("example_config.json")
+        config["thresholds"] = permissive_thresholds(120)
+        frame = build_frame(include_turn=True)
+        frame["source_type"] = "synthetic_gate_only"
+        frame["source_scope"] = "unit_test_direct_score"
+        frame["real_market_data"] = False
+        frame["metadata_source"] = "synthetic_gate_metadata"
+        frame["source_claim_boundary"] = "synthetic_gate_only_not_real_market"
+        frame["data_source_note"] = "not_real_market_data"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            config_path = Path(tmpdir) / "config.json"
+            output_path = Path(tmpdir) / "candidates.csv"
+            diagnostics_path = Path(tmpdir) / "diagnostics.csv"
+            frame.to_csv(input_path, index=False)
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = scorer.main(
+                    [
+                        "--input",
+                        str(input_path),
+                        "--config",
+                        str(config_path),
+                        "--output",
+                        str(output_path),
+                        "--diagnostics-output",
+                        str(diagnostics_path),
+                    ]
+                )
+            candidates = pd.read_csv(output_path, dtype={"symbol": str})
+            diagnostics = pd.read_csv(diagnostics_path, dtype={"symbol": str})
+
+        self.assertEqual(0, code, stderr.getvalue())
+        self.assertIn("source_type=synthetic_gate_only", stdout.getvalue())
+        self.assertIn("real_market_data=false", stdout.getvalue())
+        self.assertIn(
+            "source_claim_boundary=synthetic_gate_only_not_real_market",
+            stdout.getvalue(),
+        )
+        for output in (candidates, diagnostics):
+            self.assertEqual({"synthetic_gate_only"}, set(output["source_type"]))
+            self.assertEqual({"unit_test_direct_score"}, set(output["source_scope"]))
+            self.assertEqual({False}, set(output["real_market_data"]))
+            self.assertEqual(
+                {"synthetic_gate_metadata"},
+                set(output["metadata_source"]),
+            )
+            self.assertEqual(
+                {"synthetic_gate_only_not_real_market"},
+                set(output["source_claim_boundary"]),
+            )
+            self.assertEqual({"not_real_market_data"}, set(output["data_source_note"]))
+
     def test_cli_preserves_as_of_metadata_in_candidates_and_diagnostics(self) -> None:
         frame = build_frame(include_turn=True)
         frame["requested_as_of_date"] = "2026-06-06"

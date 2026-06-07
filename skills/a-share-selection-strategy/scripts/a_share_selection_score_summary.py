@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 from typing import Any
 
+from a_share_selection_provenance import PROVENANCE_COLUMNS
+
 
 def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> None:
     parts = [
@@ -22,6 +24,9 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
         f"candidates={summary['candidates']}",
     ]
     for key in prediction_disclosure_keys():
+        if key in summary:
+            parts.append(f"{key}={format_value(summary[key])}")
+    for key in PROVENANCE_COLUMNS:
         if key in summary:
             parts.append(f"{key}={format_value(summary[key])}")
     if summary.get("effective_empty_result") is not None:

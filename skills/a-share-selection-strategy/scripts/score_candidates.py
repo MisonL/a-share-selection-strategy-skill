@@ -9,6 +9,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from a_share_selection_provenance import (
+    PROVENANCE_COLUMNS,
+    add_provenance_to_frame,
+    aggregate_input_provenance,
+)
+
 
 OUTPUT_COLUMNS = [
     "rank", "symbol", "name", "market", "date", "close", "volume", "turn", "amount",
@@ -25,6 +31,7 @@ OUTPUT_COLUMNS = [
     "explosion_score", "risk_score", "total_score", "ma15",
     "low_ma15_flag", "explosion_focus_flag", "low_price_explosion_flag",
     "signal_tier", "recommendation", "advice_boundary", "recommendation_boundary",
+    *PROVENANCE_COLUMNS,
     "key_reasons", "risk_notes", "data_window",
 ]
 
@@ -209,6 +216,7 @@ def score_candidates(
     validate_prediction_values(input_frame, config)
     scored_rows, failed_symbols, short_symbols = score_groups(input_frame, config)
     scored = pd.DataFrame(scored_rows)
+    provenance = aggregate_input_provenance(input_frame)
     summary = build_summary(
         raw=frame,
         prepared=prepared,
@@ -219,6 +227,7 @@ def score_candidates(
         config=config,
         universe_summary=universe_summary,
     )
+    summary.update(provenance)
     summary.update(spot_summary)
     if short_symbols:
         min_history = int(config["thresholds"].get("min_history_rows", 120))
@@ -226,6 +235,7 @@ def score_candidates(
     if scored.empty:
         return empty_result(summary)
     scored = add_prediction_disclosure_fields(scored, config)
+    scored = add_provenance_to_frame(scored, provenance)
     scored = merge_latest_gate_fields(scored, input_frame)
     scored = merge_latest_spot_fields(scored, spot_view)
     thresholded = apply_thresholds(scored, config["thresholds"])

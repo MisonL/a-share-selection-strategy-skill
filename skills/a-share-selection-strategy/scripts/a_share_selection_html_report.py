@@ -101,7 +101,10 @@ def report_sections(
     diagnostics, diagnostics_truncated = diagnostic_rows(summary)
     return [
         section(i18n("run_summary", language), metric_grid(summary, language)),
-        section(i18n("mode_boundary", language), boundary_panel(summary, language)),
+        section(
+            i18n("mode_boundary", language),
+            boundary_panel(summary, language, candidates),
+        ),
         section(
             i18n(candidate_section_key(summary), language),
             limited_table(

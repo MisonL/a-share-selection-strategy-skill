@@ -75,6 +75,7 @@ TEXT = {
     "notional": {"en": "Notional", "zh": "名义金额"},
     "weight": {"en": "Weight", "zh": "权重"},
     "unallocated": {"en": "Unallocated", "zh": "未分配"},
+    "sizing_claim_boundary": {"en": "Sizing claim boundary", "zh": "资金分配声明边界"},
     "unknown_value": {"en": "Unknown", "zh": "未知"},
     "machine_boundary": {"en": "Machine boundary", "zh": "机器边界"},
     "scoring_method": {"en": "Scoring Method", "zh": "评分方式"},

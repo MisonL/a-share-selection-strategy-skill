@@ -317,6 +317,101 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("insufficient_history_symbol_examples", report)
         self.assertIn("300001", report)
 
+    def test_report_discloses_advice_boundary_before_technical_details(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            summary = minimal_summary(tmpdir, Path(tmpdir) / "diagnostics.csv")
+            summary["advice_boundary"] = (
+                "not_investment_advice_not_trade_instruction_not_real_fill_not_return_proof"
+            )
+            en_report = render_report(summary, {"steps": []}, language="en")
+            zh_report = render_report(summary, {"steps": []}, language="zh")
+
+        en_visible = visible_before_technical_details(en_report)
+        zh_visible = visible_before_technical_details(zh_report)
+        self.assertIn("Not investment advice", en_visible)
+        self.assertIn("not a trade instruction", en_visible)
+        self.assertIn("not proof of real fills or returns", en_visible)
+        self.assertIn("不是投资建议", zh_visible)
+        self.assertIn("不是交易指令", zh_visible)
+        self.assertIn("不是真实成交或收益证明", zh_visible)
+
+    def test_report_discloses_unknown_local_input_before_technical_details(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            summary = minimal_summary(tmpdir, Path(tmpdir) / "diagnostics.csv")
+            summary["input_metadata"] = {
+                "source_type": "unknown",
+                "real_market_data": "unknown",
+            }
+            en_report = render_report(summary, {"steps": []}, language="en")
+            zh_report = render_report(summary, {"steps": []}, language="zh")
+
+        en_visible = visible_before_technical_details(en_report)
+        zh_visible = visible_before_technical_details(zh_report)
+        self.assertIn("Real market data is unknown", en_visible)
+        self.assertIn("local file is not proof of real A-share market data", en_visible)
+        self.assertIn("真实行情未知", zh_visible)
+        self.assertIn("本地文件不能证明是真实 A 股行情", zh_visible)
+
+    def test_report_discloses_market_label_only_before_technical_details(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            summary = minimal_summary(tmpdir, Path(tmpdir) / "diagnostics.csv")
+            summary["input_metadata"] = {
+                "source": "yfinance",
+                "market": "A-share",
+                "market_label_only": True,
+                "source_claim_boundary": (
+                    "market_label_not_source_exchange_or_calendar_proof"
+                ),
+                "real_market_data": "unknown",
+            }
+            en_report = render_report(summary, {"steps": []}, language="en")
+            zh_report = render_report(summary, {"steps": []}, language="zh")
+
+        en_visible = visible_before_technical_details(en_report)
+        zh_visible = visible_before_technical_details(zh_report)
+        self.assertIn("market is a label only", en_visible)
+        self.assertIn("not exchange or calendar proof", en_visible)
+        self.assertIn("market 只是输出标签", zh_visible)
+        self.assertIn("不是交易所或交易日历证明", zh_visible)
+
+    def test_sized_candidates_disclose_local_sizing_boundary_in_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            candidates.write_text(
+                "\n".join(
+                    [
+                        (
+                            "rank,symbol,name,date,close,total_score,cash_budget,"
+                            "lot_size,capital_model,quantity,cash_reserved,notional,"
+                            "weight,unallocated,sizing_claim_boundary,key_reasons,risk_notes"
+                        ),
+                        (
+                            "1,000001,Sized,2026-06-05,7.1,0.8,10000,100,"
+                            "equal_cash_budget_lot_floor,700,4970,4970,0.497,"
+                            "False,local_sizing_not_broker_order,positive momentum,"
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "candidate_rows": 1,
+                    "candidates_output": str(candidates),
+                    "candidates_output_written": True,
+                }
+            )
+            report = render_report(summary, {"steps": []}, language="en")
+
+        visible = visible_before_technical_details(report)
+        self.assertIn("Local sizing only", visible)
+        self.assertIn("not a broker order", visible)
+        self.assertIn("Sizing claim boundary", report)
+        self.assertIn("local_sizing_not_broker_order", report)
+
     def test_non_finite_numeric_values_render_as_placeholder(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             candidates = Path(tmpdir) / "candidates.csv"
@@ -554,6 +649,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("missing field: requested_as_of_date", en_report)
         self.assertIn("missing field: prediction_source", en_report)
         self.assertIn("missing field: failure_reason", en_report)
+
+
+def visible_before_technical_details(report: str) -> str:
+    return report.split('<details class="technical-details">', 1)[0]
 
 
 if __name__ == "__main__":

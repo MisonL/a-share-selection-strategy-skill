@@ -67,6 +67,7 @@ DISPLAY_CANDIDATE_COLUMNS = (
     "notional",
     "weight",
     "unallocated",
+    "sizing_claim_boundary",
     "key_reasons",
     "risk_notes",
 )
@@ -127,12 +128,16 @@ def metric_grid(summary: dict[str, Any], language: str) -> str:
     return f'<div class="metrics">{cards}</div>'
 
 
-def boundary_panel(summary: dict[str, Any], language: str) -> str:
+def boundary_panel(
+    summary: dict[str, Any],
+    language: str,
+    candidate_rows: list[dict[str, Any]] | None = None,
+) -> str:
     return (
         f'<p class="explain-lead">{boundary_summary(summary, language)}</p>'
         f'<div class="note-grid">{boundary_cards(summary, language)}</div>'
         f'<div class="limit-panel">{limit_panel(summary, language)}</div>'
-        f"{disclosure_alerts(summary, language)}"
+        f"{disclosure_alerts(summary, language, candidate_rows or [])}"
         f"{technical_details(summary, language)}"
     )
 
@@ -156,12 +161,74 @@ def limit_panel(summary: dict[str, Any], language: str) -> str:
     return f'<strong>{i18n("limits", language)}</strong><p>{i18n(key, language)}</p>'
 
 
-def disclosure_alerts(summary: dict[str, Any], language: str) -> str:
-    alerts = spot_alerts(summary, language) + history_alerts(summary, language)
+def disclosure_alerts(
+    summary: dict[str, Any],
+    language: str,
+    candidate_rows: list[dict[str, Any]] | None = None,
+) -> str:
+    alerts = (
+        advice_alerts(summary, language)
+        + input_metadata_alerts(summary, language)
+        + sizing_alerts(candidate_rows or [], language)
+        + spot_alerts(summary, language)
+        + history_alerts(summary, language)
+    )
     if not alerts:
         return ""
     items = "".join(f"<li>{alert}</li>" for alert in alerts)
     return f'<ul class="disclosure-alerts">{items}</ul>'
+
+
+def advice_alerts(summary: dict[str, Any], language: str) -> list[str]:
+    boundary = str(summary.get("advice_boundary", ""))
+    if boundary != "not_investment_advice_not_trade_instruction_not_real_fill_not_return_proof":
+        return []
+    en = (
+        "Not investment advice; not a trade instruction; "
+        "not proof of real fills or returns."
+    )
+    zh = "不是投资建议；不是交易指令；不是真实成交或收益证明。"
+    return [bilingual(en, zh, language)]
+
+
+def input_metadata_alerts(summary: dict[str, Any], language: str) -> list[str]:
+    metadata = summary.get("input_metadata", {})
+    if not isinstance(metadata, dict) or is_synthetic_demo(metadata):
+        return []
+    alerts = []
+    if local_real_market_unknown(summary, metadata):
+        en = "Real market data is unknown; the local file is not proof of real A-share market data."
+        zh = "真实行情未知；本地文件不能证明是真实 A 股行情。"
+        alerts.append(bilingual(en, zh, language))
+    if market_label_only(metadata):
+        en = "The market is a label only; not exchange or calendar proof."
+        zh = "market 只是输出标签；不是交易所或交易日历证明。"
+        alerts.append(bilingual(en, zh, language))
+    return alerts
+
+
+def local_real_market_unknown(summary: dict[str, Any], metadata: dict[str, Any]) -> bool:
+    if str(summary.get("source_scope", "")) != "local_prices_input":
+        return False
+    value = metadata.get("real_market_data", "unknown")
+    return str(value).strip().lower() in {"", "none", "unknown"}
+
+
+def market_label_only(metadata: dict[str, Any]) -> bool:
+    boundary = str(metadata.get("source_claim_boundary", ""))
+    if boundary == "market_label_not_source_exchange_or_calendar_proof":
+        return True
+    value = metadata.get("market_label_only", False)
+    return value is True or str(value).strip().lower() == "true"
+
+
+def sizing_alerts(rows: list[dict[str, Any]], language: str) -> list[str]:
+    for row in rows:
+        if str(row.get("sizing_claim_boundary", "")) == "local_sizing_not_broker_order":
+            en = "Local sizing only; not a broker order, real fill, or cash capacity proof."
+            zh = "仅本地资金分配；不是券商订单、真实成交或现金容量证明。"
+            return [bilingual(en, zh, language)]
+    return []
 
 
 def spot_alerts(summary: dict[str, Any], language: str) -> list[str]:

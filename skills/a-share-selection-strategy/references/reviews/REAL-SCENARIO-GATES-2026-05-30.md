@@ -318,6 +318,7 @@
 - P1: 继续扩大 A 股真实 prediction-derived 门禁。当前已有两个既有 40-symbol 池、一组沪市 40-symbol 月末窗口、一组深市主板 40-symbol 零交集月末窗口、一组创业板 40-symbol 零交集月末窗口、一组科创板 40-symbol 零交集月末窗口、一组沪市 603 号段 late-window 窗口和一组沪市 601 号段月末窗口复验，并已在七个 40-symbol 池/窗口上复验 `portfolio_cash_lot_floor` 组合级 sizing/cut；下一轮 P1 应优先推进更真实的订单容量/涨跌停规则门禁，或继续扩大到更多独立池和更长窗口。
 - P2: 真实涨跌停规则门禁。P2a 已确认当前 baostock 日 K 无直接 `up_limit/down_limit/limit_status/is_trading/suspended` 字段；未取得可靠直接字段或另起明确规则建模任务前，不得把 `preclose/pctChg/isST` 粗推写成已建模。
 - P3: 外部源稳定性观察。akshare `stock_zh_a_hist`、yfinance/Yahoo 和 baostock 长期稳定性只能按固定脚本持续复验，不优先于 P1 的 A 股真实策略门禁。
+- 2026-06-08 已按上述方向推进一次 current gates closeout，详见 `skills/a-share-selection-strategy/references/reviews/CURRENT-GATES-CLOSEOUT-2026-06-08.md`。P1 固定 40-symbol 组合容量 artifact validator 通过；P2 核心控制字段探针通过但直接涨跌停字段和交易状态候选字段仍不可用，完整控制字段探针因 `volume,amount` provider error 返回 3；P3 三轮外部源观察返回 3，`passed_runs=3/9`，akshare 和 yfinance 均未通过，baostock 3/3 通过。该 closeout 把可执行项推进到证据边界，但不能把真实涨跌停规则、长期稳定性、全市场收益或真实券商成交写成已证明。
 
 ## 真实使用反馈验收锚点 / 2026-06-01
 

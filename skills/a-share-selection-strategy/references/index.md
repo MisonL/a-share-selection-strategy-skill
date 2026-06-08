@@ -58,6 +58,7 @@
 | 文件 | 用途 |
 | --- | --- |
 | [reviews/REAL-SCENARIO-GATES-2026-05-30.md](reviews/REAL-SCENARIO-GATES-2026-05-30.md) | 真实场景总门禁和边界总览 |
+| [reviews/P1-PORTFOLIO-CAPACITY-2026-06-08.md](reviews/P1-PORTFOLIO-CAPACITY-2026-06-08.md) | 2026-06-08 独立 40-symbol 组合容量复验 |
 | [reviews/P2A-BAOSTOCK-LIMIT-FIELDS-2026-05-30.md](reviews/P2A-BAOSTOCK-LIMIT-FIELDS-2026-05-30.md) | baostock 涨跌停字段探针证据 |
 | [reviews/P1-PORTFOLIO-CAPACITY-SZ-MAINBOARD-2026-06-01.md](reviews/P1-PORTFOLIO-CAPACITY-SZ-MAINBOARD-2026-06-01.md) | 深市主板组合容量复验 |
 | [reviews/P1-PORTFOLIO-CAPACITY-SSE603-LATEWINDOW-2026-06-01.md](reviews/P1-PORTFOLIO-CAPACITY-SSE603-LATEWINDOW-2026-06-01.md) | 沪市 603 late-window 复验 |

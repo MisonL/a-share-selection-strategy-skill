@@ -325,6 +325,7 @@ def report_view(
         capacity_gate_status = "expected_violation_not_pass"
     else:
         capacity_gate_status = "failed_not_pass"
+    verdict = artifact_verdict(errors, capacity_gate_status)
     return {
         "schema_version": 1,
         "validator": validator,
@@ -338,10 +339,21 @@ def report_view(
         "expected_portfolio_violations": expected_portfolio_violations,
         "capacity_gate_pass": capacity_gate_pass,
         "capacity_gate_status": capacity_gate_status,
+        "verdict": verdict,
         "claim_boundary": "artifact_validation_not_external_gate",
         "manifest_checked": manifest_checked,
         "errors": errors,
     }
+
+
+def artifact_verdict(errors: list[str], capacity_gate_status: str) -> str:
+    if errors:
+        return "artifact_validation_failed"
+    if capacity_gate_status == "expected_violation_not_pass":
+        return "known_portfolio_violation_reproduced_not_capacity_pass"
+    if capacity_gate_status == "failed_not_pass":
+        return "capacity_gate_failed"
+    return "artifacts_pass_enabled_gates_not_external_proof"
 
 
 def required_column_errors(rows: list[dict[str, str]], columns: tuple[str, ...], label: str) -> list[str]:

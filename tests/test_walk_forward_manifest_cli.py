@@ -39,6 +39,7 @@ class WalkForwardManifestCliTests(unittest.TestCase):
         self.assertIn("capacity_gate_pass=not_checked", stdout)
         self.assertIn("portfolio_violations=not_checked", stdout)
         self.assertIn("model_gates_checked=manifest_command_only", stdout)
+        self.assertIn("verdict=manifest_only_artifacts_not_checked", stdout)
         self.assertEqual("", stderr)
         self.assertEqual([], report["errors"])
         self.assertEqual(10, report["steps_checked"])
@@ -46,6 +47,7 @@ class WalkForwardManifestCliTests(unittest.TestCase):
         self.assertEqual("not_checked", report["capacity_gate_pass"])
         self.assertEqual("not_checked", report["portfolio_violations"])
         self.assertEqual("manifest_command_only", report["model_gates_checked"])
+        self.assertEqual("manifest_only_artifacts_not_checked", report["verdict"])
 
     def test_cli_rejects_unexpected_step_nonzero(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -56,6 +58,7 @@ class WalkForwardManifestCliTests(unittest.TestCase):
 
         self.assertEqual(3, code)
         self.assertIn("ERROR_SUMMARY:", stdout)
+        self.assertIn("verdict=manifest_validation_failed", stdout)
         self.assertIn("2026-05-12:score_returncode=3", stderr)
         self.assertIn("2026-05-12:score_unexpected_nonzero=3", stderr)
 

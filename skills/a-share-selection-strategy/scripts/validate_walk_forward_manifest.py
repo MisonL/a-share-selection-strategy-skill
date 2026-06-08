@@ -81,6 +81,7 @@ def build_report(manifest: dict[str, Any], args: argparse.Namespace) -> dict[str
             "capacity_gate_status": "manifest_only_not_artifact_validation",
             "portfolio_violations": "not_checked",
             "model_gates_checked": "manifest_command_only",
+            "verdict": manifest_verdict(errors),
             "errors": errors,
         }
     allocation_model = str(manifest.get("allocation_model", "equal_cash_budget_lot_floor"))
@@ -98,8 +99,15 @@ def build_report(manifest: dict[str, Any], args: argparse.Namespace) -> dict[str
         "capacity_gate_status": "manifest_only_not_artifact_validation",
         "portfolio_violations": "not_checked",
         "model_gates_checked": "manifest_command_only",
+        "verdict": manifest_verdict(errors),
         "errors": errors,
     }
+
+
+def manifest_verdict(errors: list[str]) -> str:
+    if errors:
+        return "manifest_validation_failed"
+    return "manifest_only_artifacts_not_checked"
 
 
 def offline_plan_errors(
@@ -347,6 +355,7 @@ def print_summary(report: dict[str, Any], output: Path | None, prefix: str = "OK
         f"capacity_gate_pass={report['capacity_gate_pass']} "
         f"portfolio_violations={report['portfolio_violations']} "
         f"model_gates_checked={report['model_gates_checked']} "
+        f"verdict={report['verdict']} "
         f"claim_boundary=manifest_only_not_artifact_validation{target}"
     )
 

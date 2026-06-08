@@ -74,7 +74,8 @@ def print_summary(report: dict[str, object], output: Path, prefix: str = "OK") -
         f"expected_portfolio_violations={report['expected_portfolio_violations']} "
         f"capacity_gate_pass={report['capacity_gate_pass']} "
         f"capacity_gate_status={report['capacity_gate_status']} "
-        f"errors={len(report['errors'])} claim_boundary=artifact_validation_not_external_gate "
+        f"errors={len(report['errors'])} verdict={report['verdict']} "
+        f"claim_boundary=artifact_validation_not_external_gate "
         f"output={output}"
     )
 

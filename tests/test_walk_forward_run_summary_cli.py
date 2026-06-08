@@ -59,6 +59,7 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
         self.assertIn("capacity_gate_status=expected_violation_not_pass", stdout)
         self.assertIn("expected_portfolio_violations=True", stdout)
         self.assertIn("model_gates_checked=True", stdout)
+        self.assertIn("verdict=known_portfolio_violation_reproduced_not_capacity_pass", stdout)
         self.assertIn("claim_boundary=summary_not_external_gate", stdout)
         self.assertEqual("", stderr)
         self.assertEqual([], data["quality_errors"])
@@ -68,6 +69,10 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
         self.assertEqual("expected_violation_not_pass", data["capacity_gate_status"])
         self.assertTrue(data["expected_portfolio_violations"])
         self.assertEqual("summary_not_external_gate", data["claim_boundary"])
+        self.assertEqual(
+            "known_portfolio_violation_reproduced_not_capacity_pass",
+            data["verdict"],
+        )
         self.assertTrue(data["required_tradability_model_checked"])
         self.assertTrue(data["required_limit_rules_model_checked"])
         self.assertTrue(data["model_gates_checked"])
@@ -83,9 +88,39 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
         self.assertEqual(0, code)
         self.assertEqual("", stderr)
         self.assertIn("model_gates_checked=False", stdout)
+        self.assertIn("verdict=enabled_gates_passed_model_gates_unchecked", stdout)
         self.assertFalse(data["required_tradability_model_checked"])
         self.assertFalse(data["required_limit_rules_model_checked"])
         self.assertFalse(data["model_gates_checked"])
+        self.assertEqual("enabled_gates_passed_model_gates_unchecked", data["verdict"])
+
+    def test_cli_reports_clear_pass_verdict_when_enabled_gates_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(Path(tmpdir), portfolio_violates=False)
+            output = Path(tmpdir) / "summary.json"
+
+            code, stdout, stderr = call_cli(
+                root,
+                output,
+                [
+                    "--expected-symbol-count",
+                    "2",
+                    "--required-tradability-model",
+                    TRADABILITY_MODEL_ENTRY_EXIT,
+                    "--required-limit-rules-model",
+                    LIMIT_RULES_MODEL_NOT_MODELED,
+                    "--max-open-positions",
+                    "5",
+                    "--max-gross-weight",
+                    "2.0",
+                ],
+            )
+
+            data = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(0, code)
+        self.assertEqual("", stderr)
+        self.assertIn("verdict=enabled_gates_passed_not_external_proof", stdout)
+        self.assertEqual("enabled_gates_passed_not_external_proof", data["verdict"])
 
     def test_cli_fails_when_prediction_skipped(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -97,8 +132,10 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
             data = json.loads(output.read_text(encoding="utf-8"))
         self.assertEqual(3, code)
         self.assertIn("ERROR_SUMMARY:", stdout)
+        self.assertIn("verdict=strict_gate_failed", stdout)
         self.assertIn("2026-05-12_skipped_symbols=1", stderr)
         self.assertIn("2026-05-12_skipped_symbols=1", data["quality_errors"])
+        self.assertEqual("strict_gate_failed", data["verdict"])
 
     def test_cli_rejects_backtest_rows_missing_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

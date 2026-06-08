@@ -112,7 +112,20 @@ def build_run_summary(run_dir: Path, options: argparse.Namespace) -> dict[str, A
         "claim_boundary": "summary_not_external_gate",
     }
     summary["quality_errors"] = quality_errors(summary, metadata, options)
+    summary["verdict"] = summary_verdict(summary)
     return summary
+
+
+def summary_verdict(summary: dict[str, Any]) -> str:
+    if summary["quality_errors"]:
+        return "strict_gate_failed"
+    if summary["capacity_gate_status"] == "expected_violation_not_pass":
+        return "known_portfolio_violation_reproduced_not_capacity_pass"
+    if summary["capacity_gate_status"] == "failed_not_pass":
+        return "capacity_gate_failed"
+    if not summary["model_gates_checked"]:
+        return "enabled_gates_passed_model_gates_unchecked"
+    return "enabled_gates_passed_not_external_proof"
 
 
 def capacity_gate_status(
@@ -354,6 +367,7 @@ def print_summary(summary: dict[str, Any], output: Path, prefix: str = "OK") -> 
         f"capacity_gate_status={summary['capacity_gate_status']} "
         f"model_gates_checked={summary['model_gates_checked']} "
         f"quality_errors={len(summary['quality_errors'])} "
+        f"verdict={summary['verdict']} "
         f"claim_boundary=summary_not_external_gate output={output}"
     )
 

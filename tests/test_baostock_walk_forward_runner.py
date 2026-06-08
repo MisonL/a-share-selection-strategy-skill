@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import redirect_stdout
+from io import StringIO
 import json
 import subprocess
 import tempfile
@@ -24,34 +26,45 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
     def test_cli_offline_plan_writes_manifest_without_executing_steps(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
-            code = runner.main(
-                [
-                    "--symbols",
-                    "000001,600000",
-                    "--start-date",
-                    "2024-01-01",
-                    "--end-date",
-                    "2026-05-29",
-                    "--signal-dates",
-                    "2026-05-12",
-                    "--output-dir",
-                    str(output),
-                    "--cash-budget",
-                    "1000000",
-                    "--max-open-positions",
-                    "10",
-                    "--max-gross-weight",
-                    "1.0",
-                    "--max-gross-notional",
-                    "1000000",
-                    "--max-cash-reserved",
-                    "1000000",
-                    "--offline-plan",
-                ]
-            )
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                code = runner.main(
+                    [
+                        "--symbols",
+                        "000001,600000",
+                        "--start-date",
+                        "2024-01-01",
+                        "--end-date",
+                        "2026-05-29",
+                        "--signal-dates",
+                        "2026-05-12",
+                        "--output-dir",
+                        str(output),
+                        "--cash-budget",
+                        "1000000",
+                        "--max-open-positions",
+                        "10",
+                        "--max-gross-weight",
+                        "1.0",
+                        "--max-gross-notional",
+                        "1000000",
+                        "--max-cash-reserved",
+                        "1000000",
+                        "--offline-plan",
+                    ]
+                )
             data = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
 
         self.assertEqual(0, code)
+        first_line = stdout.getvalue().splitlines()[0]
+        self.assertTrue(first_line.startswith("PLAN: "), first_line)
+        self.assertIn("execution_mode=offline_plan", first_line)
+        self.assertIn("commands_executed=false", first_line)
+        self.assertIn("verdict=offline_plan_not_executed", first_line)
+        self.assertIn(
+            "claim_boundary=offline_plan_manifest_only_not_real_market_prediction_or_backtest",
+            first_line,
+        )
         self.assertEqual("offline_plan", data["execution_mode"])
         self.assertFalse(data["commands_executed"])
         self.assertFalse(data["real_market_data_executed"])

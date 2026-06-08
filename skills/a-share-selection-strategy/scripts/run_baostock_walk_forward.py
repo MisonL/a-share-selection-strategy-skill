@@ -374,11 +374,27 @@ def write_json(data: dict[str, Any], path: Path) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
 
 def print_summary(manifest: dict[str, Any], manifest_path: Path) -> None:
+    if manifest.get("execution_mode") == "offline_plan":
+        print_offline_plan_summary(manifest, manifest_path)
+        return
     print(
         f"OK: runner=run_baostock_walk_forward symbols={len(manifest['symbols'])} "
         f"signals={len(manifest['signal_dates'])} steps={len(manifest['steps'])} "
         f"limit_rules_model={manifest['limit_rules_model']} manifest={manifest_path}"
     )
+
+
+def print_offline_plan_summary(manifest: dict[str, Any], manifest_path: Path) -> None:
+    print(
+        f"PLAN: runner=run_baostock_walk_forward symbols={len(manifest['symbols'])} "
+        f"signals={len(manifest['signal_dates'])} steps={len(manifest['steps'])} "
+        f"execution_mode={manifest.get('execution_mode', 'unknown')} "
+        f"commands_executed={str(manifest.get('commands_executed', 'unknown')).lower()} "
+        "verdict=offline_plan_not_executed "
+        f"claim_boundary={manifest.get('claim_boundary', 'unknown')} "
+        f"limit_rules_model={manifest['limit_rules_model']} manifest={manifest_path}"
+    )
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

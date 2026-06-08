@@ -38,6 +38,8 @@ h2{margin-bottom:18px;font-size:20px;line-height:1.25}
 .executive-summary strong{display:block;margin-top:8px;color:var(--ink);font-size:22px;line-height:1.25}
 .executive-summary ul{margin:8px 0 0;padding-left:18px;color:var(--text)}
 .executive-summary li+li{margin-top:5px}
+.summary-source-boundary{grid-column:1/-1;border-left:5px solid var(--warm)!important;background:#fff8ed!important}
+.summary-source-boundary strong{font-size:18px}.summary-source-boundary small{display:block;margin-top:6px;color:#6c3d00;font-weight:800}
 .summary-highlight{background:var(--ink)!important;color:#fff!important}
 .summary-highlight strong{color:#fff}.summary-highlight small{display:block;margin-top:5px;color:#cbd5e1}
 .metrics,.note-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}

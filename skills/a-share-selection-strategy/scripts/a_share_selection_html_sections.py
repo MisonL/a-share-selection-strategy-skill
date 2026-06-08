@@ -137,8 +137,10 @@ def executive_summary(
     lead = summary_lead(count, status, language)
     bullets = summary_bullets(summary, language)
     bullet_html = "".join(f"<li>{item}</li>" for item in bullets)
+    source_boundary = summary_source_boundary(summary, language)
     return (
         '<section class="executive-summary">'
+        f"{source_boundary}"
         f'<div><span>{bilingual("At a glance", "一眼结论", language)}</span>'
         f"<strong>{lead}</strong></div>"
         f'<div><span>{bilingual("How to read it", "怎么理解", language)}</span>'
@@ -187,6 +189,23 @@ def summary_bullets(summary: dict[str, Any], language: str) -> list[str]:
             )
         )
     return items
+
+
+def summary_source_boundary(summary: dict[str, Any], language: str) -> str:
+    metadata = summary.get("input_metadata", {})
+    if not isinstance(metadata, dict) or not is_synthetic_demo(metadata):
+        return ""
+    value = metadata.get("real_market_data", "unknown")
+    real_market_data = str(value).strip().lower()
+    en_tail = "Not today's real market data or full-market scan."
+    zh_tail = "不是今日真实行情或全市场扫描。"
+    return (
+        '<div class="summary-source-boundary">'
+        f'<span>{bilingual("Data source boundary", "数据来源边界", language)}</span>'
+        f"<strong>{data_scope_value(summary, language)}</strong>"
+        f"<small>real_market_data={esc(real_market_data)}; "
+        f"{bilingual(en_tail, zh_tail, language)}</small></div>"
+    )
 
 
 def top_candidate_hint(rows: list[dict[str, Any]], language: str) -> str:

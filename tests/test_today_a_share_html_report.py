@@ -440,6 +440,35 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             report.index('<details class="technical-details">'),
         )
 
+    def test_synthetic_demo_boundary_appears_before_top_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            write_consumer_candidate_rows(candidates)
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "candidate_rows": 2,
+                    "candidates_output": str(candidates),
+                    "candidates_output_written": True,
+                    "input_metadata": {
+                        "source_type": "synthetic_demo",
+                        "scenario": "low-price-ultra-short",
+                        "real_market_data": False,
+                    },
+                }
+            )
+            report = render_report(summary, {"steps": []}, language="zh")
+
+        visible = visible_before_technical_details(report)
+        self.assertIn("数据来源边界", visible)
+        self.assertIn("合成 demo 数据（low-price-ultra-short）；不是真实行情。", visible)
+        self.assertIn("real_market_data=false", visible)
+        self.assertLess(
+            report.index("数据来源边界"),
+            report.index("首位候选"),
+        )
+
     def test_report_renders_candidate_cards_before_full_table(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)

@@ -412,6 +412,77 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("Sizing claim boundary", report)
         self.assertIn("local_sizing_not_broker_order", report)
 
+    def test_report_opens_with_plain_language_summary_before_details(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            write_consumer_candidate_rows(candidates)
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "candidate_rows": 2,
+                    "candidates_output": str(candidates),
+                    "candidates_output_written": True,
+                    "advice_boundary": (
+                        "not_investment_advice_not_trade_instruction_not_real_fill_not_return_proof"
+                    ),
+                }
+            )
+            report = render_report(summary, {"steps": []}, language="zh")
+
+        self.assertIn('class="executive-summary"', report)
+        self.assertIn("一眼结论", report)
+        self.assertIn("找到 2 条候选", report)
+        self.assertIn("不是买卖指令", report)
+        self.assertLess(report.index('class="executive-summary"'), report.index('class="table-wrap"'))
+        self.assertLess(
+            report.index('class="executive-summary"'),
+            report.index('<details class="technical-details">'),
+        )
+
+    def test_report_renders_candidate_cards_before_full_table(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            write_consumer_candidate_rows(candidates)
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "candidate_rows": 2,
+                    "candidates_output": str(candidates),
+                    "candidates_output_written": True,
+                }
+            )
+            report = render_report(summary, {"steps": []}, language="en")
+
+        self.assertIn('class="candidate-cards"', report)
+        self.assertEqual(2, report.count('class="candidate-card"'))
+        self.assertIn("Why it passed", report)
+        self.assertIn("Risk notes", report)
+        self.assertIn("Cash reserved", report)
+        self.assertIn("Not a broker order", report)
+        self.assertLess(report.index('class="candidate-cards"'), report.index('class="table-wrap"'))
+
+    def test_report_uses_productized_visual_shell(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            write_consumer_candidate_rows(candidates)
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "candidate_rows": 2,
+                    "candidates_output": str(candidates),
+                    "candidates_output_written": True,
+                }
+            )
+            report = render_report(summary, {"steps": []}, language="en")
+
+        self.assertIn('class="hero executive-hero"', report)
+        self.assertIn('class="signal-bars"', report)
+        self.assertIn(".executive-summary", report)
+        self.assertIn(".candidate-card", report)
+
     def test_non_finite_numeric_values_render_as_placeholder(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             candidates = Path(tmpdir) / "candidates.csv"
@@ -653,6 +724,32 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
 
 def visible_before_technical_details(report: str) -> str:
     return report.split('<details class="technical-details">', 1)[0]
+
+
+def write_consumer_candidate_rows(path: Path) -> None:
+    path.write_text(
+        "\n".join(
+            [
+                (
+                    "rank,symbol,name,date,close,total_score,cash_budget,lot_size,"
+                    "quantity,cash_reserved,notional,weight,unallocated,"
+                    "sizing_claim_boundary,key_reasons,risk_notes"
+                ),
+                (
+                    "1,000001,Alpha Tech,2026-06-05,10.0,0.82,10000,100,"
+                    "400,4000,4000,0.4,False,local_sizing_not_broker_order,"
+                    "positive momentum; short-term activity,high volatility"
+                ),
+                (
+                    "2,600000,Beta Bank,2026-06-05,20.0,0.71,10000,100,"
+                    "200,4000,4000,0.4,False,local_sizing_not_broker_order,"
+                    "acceptable volatility; rsi in range,no major configured risk flag"
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 if __name__ == "__main__":

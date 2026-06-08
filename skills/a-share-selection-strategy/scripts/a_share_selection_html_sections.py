@@ -19,8 +19,11 @@ from a_share_selection_html_format import (
     bilingual,
     display_with_title,
     esc,
+    format_numeric,
     i18n,
+    localized_phrase_html,
     missing_key_disclosure_value,
+    raw_text,
     table_cell,
 )
 from a_share_selection_html_history import history_selection_fields
@@ -94,13 +97,14 @@ def hero(summary: dict[str, Any], language: str) -> str:
     status = str(summary.get("status", "unknown"))
     heading_key = report_heading_key(summary, status)
     return (
-        '<section class="hero"><div class="hero-main">'
+        '<section class="hero executive-hero"><div class="hero-main">'
         f'<p class="eyebrow">{i18n("brand", language)}</p>'
         f"<h1>{i18n(heading_key, language, 'unknown_report')}</h1>"
         f"<p>{i18n('scoring_method', language)}: "
         f"<strong>{i18n(scoring_method_key(summary), language)}</strong>. "
         f"{i18n(candidate_count_key(summary), language)}: "
-        f"<strong>{esc(summary.get('candidate_rows', 0))}</strong>.</p></div>"
+        f"<strong>{esc(summary.get('candidate_rows', 0))}</strong>.</p>"
+        f"{signal_bars(summary)}</div>"
         '<div class="hero-actions">'
         f'<span class="status {esc(status_class(status))}">'
         f"{i18n(report_status_key(summary, status), language)}</span>"
@@ -108,6 +112,94 @@ def hero(summary: dict[str, Any], language: str) -> str:
         '<button type="button" data-set-lang="zh">中文</button>'
         '<button type="button" data-set-lang="en">EN</button>'
         "</div></div></section>"
+    )
+
+
+def signal_bars(summary: dict[str, Any]) -> str:
+    try:
+        count = int(summary.get("candidate_rows", 0))
+    except (TypeError, ValueError):
+        count = 0
+    active = min(max(count, 0), 5)
+    bars = "".join(
+        f'<span class="{"active" if index < active else ""}"></span>' for index in range(5)
+    )
+    return f'<div class="signal-bars" aria-hidden="true">{bars}</div>'
+
+
+def executive_summary(
+    summary: dict[str, Any],
+    language: str,
+    candidate_rows: list[dict[str, Any]],
+) -> str:
+    count = int(summary.get("candidate_rows", 0) or 0)
+    status = str(summary.get("status", "unknown"))
+    lead = summary_lead(count, status, language)
+    bullets = summary_bullets(summary, language)
+    bullet_html = "".join(f"<li>{item}</li>" for item in bullets)
+    return (
+        '<section class="executive-summary">'
+        f'<div><span>{bilingual("At a glance", "一眼结论", language)}</span>'
+        f"<strong>{lead}</strong></div>"
+        f'<div><span>{bilingual("How to read it", "怎么理解", language)}</span>'
+        f"<ul>{bullet_html}</ul></div>"
+        f"{top_candidate_hint(candidate_rows, language)}</section>"
+    )
+
+
+def summary_lead(count: int, status: str, language: str) -> str:
+    if status != "completed":
+        return bilingual(
+            "This run did not finish candidate screening.",
+            "本次没有完成候选筛选。",
+            language,
+        )
+    if count == 0:
+        return bilingual(
+            "No candidate passed the configured gates.",
+            "没有候选通过当前配置门禁。",
+            language,
+        )
+    en = f"Found {count} candidate rows from the configured gates."
+    zh = f"找到 {count} 条候选。"
+    return bilingual(en, zh, language)
+
+
+def summary_bullets(summary: dict[str, Any], language: str) -> list[str]:
+    items = [
+        bilingual(
+            "This is a screening report, not a buy or sell instruction.",
+            "这是筛选报告，不是买卖指令。",
+            language,
+        ),
+        bilingual(
+            "Read scores as gate results, not as return forecasts.",
+            "分数代表门禁结果，不代表收益预测。",
+            language,
+        ),
+    ]
+    if str(summary.get("source_scope", "")) == "local_prices_input":
+        items.append(
+            bilingual(
+                "The result depends on the local data file you provided.",
+                "结果取决于你提供的本地数据文件。",
+                language,
+            )
+        )
+    return items
+
+
+def top_candidate_hint(rows: list[dict[str, Any]], language: str) -> str:
+    if not rows:
+        return ""
+    first = rows[0]
+    name = raw_text(first.get("name")) or raw_text(first.get("symbol")) or "-"
+    score = format_numeric(first.get("total_score", ""), 3, "")
+    label = bilingual("Top row", "首位候选", language)
+    score_label = bilingual("score", "分数", language)
+    return (
+        f'<div class="summary-highlight"><span>{label}</span>'
+        f"<strong>{esc(name)}</strong><small>{score_label} {esc(score or '-')}</small></div>"
     )
 
 
@@ -128,6 +220,14 @@ def metric_grid(summary: dict[str, Any], language: str) -> str:
     return f'<div class="metrics">{cards}</div>'
 
 
+def report_overview(
+    summary: dict[str, Any],
+    language: str,
+    candidate_rows: list[dict[str, Any]],
+) -> str:
+    return executive_summary(summary, language, candidate_rows) + metric_grid(summary, language)
+
+
 def boundary_panel(
     summary: dict[str, Any],
     language: str,
@@ -140,6 +240,75 @@ def boundary_panel(
         f"{disclosure_alerts(summary, language, candidate_rows or [])}"
         f"{technical_details(summary, language)}"
     )
+
+
+def candidate_cards(rows: list[dict[str, Any]], language: str) -> str:
+    if not rows:
+        return ""
+    cards = "".join(candidate_card(row, language) for row in rows)
+    return f'<div class="candidate-cards">{cards}</div>'
+
+
+def candidate_card(row: dict[str, Any], language: str) -> str:
+    symbol = raw_text(row.get("symbol")) or "-"
+    name = raw_text(row.get("name")) or symbol
+    rank = raw_text(row.get("rank")) or "-"
+    score = format_numeric(row.get("total_score", ""), 3, "")
+    close = format_numeric(row.get("close", ""), 4, "")
+    quantity = format_numeric(row.get("quantity", ""), 0, "")
+    cash_reserved = format_numeric(row.get("cash_reserved", ""), 2, "")
+    reasons = localized_phrase_html(raw_text(row.get("key_reasons")), language)
+    risks = localized_phrase_html(raw_text(row.get("risk_notes")), language)
+    return (
+        '<article class="candidate-card">'
+        f'<div class="candidate-rank">#{esc(rank)}</div>'
+        f'<div class="candidate-main"><strong>{esc(name)}</strong><span>{esc(symbol)}</span></div>'
+        f'<div class="candidate-score"><span>{bilingual("Score", "评分", language)}</span>'
+        f"<strong>{esc(score or '-')}</strong></div>"
+        '<div class="candidate-facts">'
+        f"<span>{bilingual('Close', '收盘价', language)} <strong>{esc(close or '-')}</strong></span>"
+        f"<span>{bilingual('Quantity', '数量', language)} <strong>{esc(quantity or '-')}</strong></span>"
+        f"<span>{bilingual('Cash reserved', '预留现金', language)} "
+        f"<strong>{esc(cash_reserved or '-')}</strong></span></div>"
+        '<div class="candidate-copy">'
+        f"<p><b>{bilingual('Why it passed', '为什么入选', language)}</b>{reasons}</p>"
+        f"<p><b>{bilingual('Risk notes', '风险提示', language)}</b>{risks}</p>"
+        f"<small>{bilingual('Not a broker order', '不是券商订单', language)}</small>"
+        "</div></article>"
+    )
+
+
+def candidates_panel(
+    rows: list[dict[str, Any]],
+    columns: tuple[str, ...],
+    language: str,
+    *,
+    truncated: bool,
+    limit: int,
+    csv_path: Any,
+    empty_key: str = "empty",
+    empty_html: str = "",
+) -> str:
+    cards = candidate_cards(rows, language)
+    table_html = limited_table(
+        rows,
+        columns,
+        language,
+        truncated=truncated,
+        limit=limit,
+        csv_path=csv_path,
+        empty_key=empty_key,
+        empty_html=empty_html,
+    )
+    if not cards:
+        return table_html
+    title = bilingual("Full detail table", "完整明细表", language)
+    hint = bilingual(
+        "Cards are for quick reading. The table keeps every auditable field.",
+        "卡片方便快速阅读，表格保留可审计字段。",
+        language,
+    )
+    return f"{cards}<div class=\"detail-table-heading\"><strong>{title}</strong><p>{hint}</p></div>{table_html}"
 
 
 def boundary_cards(summary: dict[str, Any], language: str) -> str:

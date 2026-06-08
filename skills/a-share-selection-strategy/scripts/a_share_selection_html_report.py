@@ -22,12 +22,13 @@ from a_share_selection_html_sections import (
     DISPLAY_CANDIDATE_COLUMNS,
     DISPLAY_DIAGNOSTIC_COLUMNS,
     boundary_panel,
+    candidates_panel,
     collapsible_details,
     evidence_list,
     empty_key_for,
     hero,
     limited_table,
-    metric_grid,
+    report_overview,
     section,
     steps_table,
     zero_candidates_message,
@@ -100,14 +101,14 @@ def report_sections(
     candidates, candidates_truncated = candidate_rows(summary)
     diagnostics, diagnostics_truncated = diagnostic_rows(summary)
     return [
-        section(i18n("run_summary", language), metric_grid(summary, language)),
+        section(i18n("run_summary", language), report_overview(summary, language, candidates)),
         section(
             i18n("mode_boundary", language),
             boundary_panel(summary, language, candidates),
         ),
         section(
             i18n(candidate_section_key(summary), language),
-            limited_table(
+            candidates_panel(
                 candidates,
                 DISPLAY_CANDIDATE_COLUMNS,
                 language,

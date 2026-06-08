@@ -6,8 +6,12 @@ import csv
 from pathlib import Path
 from typing import Any
 
+from a_share_selection_provenance import (
+    PROVENANCE_COLUMNS as INPUT_PROVENANCE_COLUMNS,
+    missing_value,
+)
 
-PROVENANCE_COLUMNS = (
+RUN_PROVENANCE_COLUMNS = (
     "source_type",
     "source",
     "source_scope",
@@ -74,13 +78,27 @@ def annotate_csv(path: Path, fields: dict[str, Any]) -> None:
     if not path.is_file() or path.suffix.lower() != ".csv":
         return
     rows, fieldnames = read_csv(path)
-    columns = [*fieldnames, *(column for column in PROVENANCE_COLUMNS if column not in fieldnames)]
+    columns = [
+        *fieldnames,
+        *(column for column in RUN_PROVENANCE_COLUMNS if column not in fieldnames),
+    ]
     for row in rows:
-        row.update(fields)
+        merge_provenance_fields(row, fields)
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns)
         writer.writeheader()
         writer.writerows(rows)
+
+
+def merge_provenance_fields(row: dict[str, Any], fields: dict[str, Any]) -> None:
+    for column, value in fields.items():
+        if preserves_input_provenance(row, column):
+            continue
+        row[column] = value
+
+
+def preserves_input_provenance(row: dict[str, Any], column: str) -> bool:
+    return column in INPUT_PROVENANCE_COLUMNS and not missing_value(row.get(column))
 
 
 def read_csv(path: Path) -> tuple[list[dict[str, str]], list[str]]:

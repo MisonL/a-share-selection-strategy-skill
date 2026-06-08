@@ -249,6 +249,8 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
     html_report = html_report_stdout_value(manifest, output)
     html_error = html_report_error_stdout(manifest)
     disclosure = runner_disclosure_stdout(view)
+    runner_metadata = runner_metadata_stdout(metadata)
+    input_csv = input_csv_provenance_stdout(view.get("input_csv_provenance", {}))
     print(
         "OK: runner=run_today_a_share_selection "
         f"mode={manifest['mode']} steps={len(manifest['steps'])} "
@@ -265,6 +267,8 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
         f"market_label_only={metadata_stdout_value(metadata.get('market_label_only'))} "
         "source_claim_boundary="
         f"{metadata_stdout_value(metadata.get('source_claim_boundary'))} "
+        f"{runner_metadata} "
+        f"{input_csv} "
         f"prices_rows={view['prices_rows']} "
         f"candidate_rows={view['candidate_rows']} "
         f"diagnostic_rows={view['diagnostic_rows']} "
@@ -274,6 +278,27 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
         f"{disclosure} "
         f"{paths} html_report={html_report}{html_error}"
     )
+
+
+def runner_metadata_stdout(metadata: dict[str, Any]) -> str:
+    parts = [
+        f"runner_metadata_source={metadata_stdout_value(metadata.get('source_type'))}",
+        f"runner_real_market_data={metadata_stdout_value(metadata.get('real_market_data'))}",
+        f"runner_source_scope={metadata_stdout_value(metadata.get('source_scope'))}",
+    ]
+    return " ".join(parts)
+
+
+def input_csv_provenance_stdout(value: Any) -> str:
+    provenance = value if isinstance(value, dict) else {}
+    parts = [
+        f"input_csv_source_type={metadata_stdout_value(provenance.get('source_type'))}",
+        f"input_csv_real_market_data={metadata_stdout_value(provenance.get('real_market_data'))}",
+        f"input_csv_source_scope={metadata_stdout_value(provenance.get('source_scope'))}",
+        "input_csv_source_claim_boundary="
+        f"{metadata_stdout_value(provenance.get('source_claim_boundary'))}",
+    ]
+    return " ".join(parts)
 
 
 def metadata_stdout_value(value: Any) -> str:

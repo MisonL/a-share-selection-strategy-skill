@@ -8,6 +8,9 @@ from datetime import date, datetime
 from typing import Any
 
 import run_today_a_share_selection_helpers as helpers
+from a_share_selection_provenance import (
+    PROVENANCE_COLUMNS as INPUT_CSV_PROVENANCE_COLUMNS,
+)
 from run_today_a_share_selection_input_metadata import history_partial_result
 from a_share_selection_disclosure import (
     ADVICE_BOUNDARY,
@@ -28,6 +31,7 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "source_type": input_metadata.get("source_type", "unknown"),
         "real_market_data": input_metadata.get("real_market_data", "unknown"),
         "input_metadata": input_metadata,
+        "input_csv_provenance": input_csv_provenance(score),
         "advice_boundary": ADVICE_BOUNDARY,
         "recommendation_boundary": RECOMMENDATION_BOUNDARY,
         **row_count_fields(manifest, paths, score, history_selection, initialized),
@@ -54,6 +58,14 @@ def summary_paths(manifest: dict[str, Any]) -> dict[str, Path]:
 def normalized_input_metadata(manifest: dict[str, Any]) -> dict[str, Any]:
     metadata = manifest.get("input_metadata", {})
     return metadata if isinstance(metadata, dict) else {}
+
+
+def input_csv_provenance(score: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: score[key]
+        for key in INPUT_CSV_PROVENANCE_COLUMNS
+        if key in score
+    }
 
 
 def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:

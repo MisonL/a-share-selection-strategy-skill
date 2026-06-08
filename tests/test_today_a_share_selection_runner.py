@@ -26,7 +26,7 @@ from run_today_a_share_selection_helpers import (  # noqa: E402
     tabular_row_count,
 )
 from run_today_a_share_selection_outputs import clear_stale_run_outputs  # noqa: E402
-from helpers import build_frame  # noqa: E402
+from helpers import build_frame, load_config  # noqa: E402
 
 
 class TodayAShareSelectionRunnerTests(unittest.TestCase):
@@ -956,6 +956,67 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             self.assertEqual("False", row["history_output_written"])
             self.assertEqual("True", row["history_metadata_output_written"])
 
+    def test_embedded_csv_provenance_survives_runner_without_metadata_file(self) -> None:
+        config = load_config("prediction_profile_config.json")
+        config["thresholds"] = {
+            "min_total_score": -10.0,
+            "min_prediction_score": 0.0,
+            "min_momentum_score": -10.0,
+            "min_rsi": 0.0,
+            "max_rsi": 100.0,
+            "max_volatility": 10.0,
+            "min_volume": 0.0,
+            "min_close": 0.0,
+            "min_history_rows": 120,
+        }
+        frame = build_frame(
+            include_turn=True,
+            include_prediction=True,
+            include_tradability=True,
+        )
+        embedded_provenance = embedded_csv_provenance()
+        for column, value in embedded_provenance.items():
+            frame[column] = value
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            output = root / "run"
+            config_path = root / "config.json"
+            frame.to_csv(prices, index=False)
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+
+            code, stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--output-dir",
+                    str(output),
+                    "--mode",
+                    "prediction",
+                    "--config",
+                    str(config_path),
+                    "--no-html-report",
+                ]
+            )
+
+            self.assertEqual(0, code, stderr)
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            candidate_rows = csv_rows(output / "candidates.csv")
+            diagnostic_rows = csv_rows(output / "diagnostics.csv")
+
+        self.assertEqual("unknown", summary["source_type"])
+        self.assertEqual("csv_embedded_probe", summary["score"]["source_type"])
+        self.assertEqual(False, summary["score"]["real_market_data"])
+        self.assertEqual(embedded_provenance, summary["input_csv_provenance"])
+        self.assertIn("runner_metadata_source=unknown", stdout)
+        self.assertIn("input_csv_source_type=csv_embedded_probe", stdout)
+        self.assertIn("input_csv_real_market_data=false", stdout)
+        assert_rows_keep_embedded_provenance(
+            self,
+            candidate_rows + diagnostic_rows,
+            embedded_provenance,
+        )
+
     def test_history_fallback_marks_partial_in_summary_stdout_and_csvs(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
@@ -1504,6 +1565,31 @@ def parsed_args(args: list[str]) -> object:
     namespace.default_generic_config = runner.DEFAULT_GENERIC_CONFIG
     namespace.default_prediction_config = runner.DEFAULT_PREDICTION_CONFIG
     return namespace
+
+
+def embedded_csv_provenance() -> dict[str, object]:
+    return {
+        "source_type": "csv_embedded_probe",
+        "source_scope": "csv_internal_prediction_rows",
+        "real_market_data": False,
+        "metadata_source": "csv_embedded_metadata_columns",
+        "source_claim_boundary": "csv_internal_fields_not_real_market_gate",
+        "data_source_note": "csv_provenance_should_survive_runner",
+    }
+
+
+def assert_rows_keep_embedded_provenance(
+    test: unittest.TestCase,
+    rows: list[dict[str, str]],
+    expected: dict[str, object],
+) -> None:
+    for row in rows:
+        test.assertEqual(expected["source_type"], row["source_type"])
+        test.assertEqual(expected["source_scope"], row["source_scope"])
+        test.assertEqual("False", row["real_market_data"])
+        test.assertEqual(expected["metadata_source"], row["metadata_source"])
+        test.assertEqual(expected["source_claim_boundary"], row["source_claim_boundary"])
+        test.assertEqual(expected["data_source_note"], row["data_source_note"])
 
 
 def ok_executor(command: list[str]) -> subprocess.CompletedProcess[str]:

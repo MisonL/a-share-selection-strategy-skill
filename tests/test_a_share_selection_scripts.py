@@ -20,7 +20,7 @@ sys.path.insert(0, str(TESTS))
 
 import score_candidates as scorer  # noqa: E402
 import a_share_selection_metrics as metrics  # noqa: E402
-from a_share_selection_data import read_table  # noqa: E402
+from a_share_selection_data import ACCEPTED_DATE_FORMATS, read_table  # noqa: E402
 from a_share_selection_prepare import prepare_frame  # noqa: E402
 from a_share_selection_spot import normalized_spot_view  # noqa: E402
 from a_share_selection_universe import apply_universe_filter  # noqa: E402
@@ -138,6 +138,9 @@ class AShareSelectionScriptTests(unittest.TestCase):
         candidates, summary = scorer.score_candidates(frame, config)
         self.assertEqual(2, summary["scored_symbols"])
         self.assertTrue(candidates["data_window"].str.startswith("2025-").all())
+
+    def test_parse_dates_exposes_accepted_formats(self) -> None:
+        self.assertEqual(("%Y%m%d", "%Y-%m-%d"), ACCEPTED_DATE_FORMATS)
 
     def test_slash_dates_are_rejected_instead_of_silently_parsed(self) -> None:
         frame = build_frame()

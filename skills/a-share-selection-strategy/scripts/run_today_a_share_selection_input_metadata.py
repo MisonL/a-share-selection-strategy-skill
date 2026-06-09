@@ -100,8 +100,23 @@ def history_partial_result(data: dict[str, Any]) -> bool:
     return False
 
 
+def history_selection_partial_result(selection: dict[str, Any]) -> bool:
+    if selection.get("history_partial_result") is True:
+        return True
+    if selection.get("history_output_written") is False:
+        return True
+    count_keys = (
+        "history_metadata_failed_symbol_count",
+        "history_empty_symbol_count",
+        "history_metadata_fallback_error_count",
+    )
+    return any((integer_value(selection.get(key)) or 0) > 0 for key in count_keys)
+
+
 def local_input_partial_result(data: dict[str, Any]) -> bool:
     if data.get("partial_result") is True:
+        return True
+    if data.get("input_partial_result") is True:
         return True
     if data.get("output_written") is False:
         return True
@@ -109,10 +124,26 @@ def local_input_partial_result(data: dict[str, Any]) -> bool:
         return True
     if list_value(data, "empty_symbols"):
         return True
-    requested = list_value(data, "requested_symbols")
-    if requested and data.get("symbol_count") is not None:
-        return int(data["symbol_count"]) != len(requested)
+    requested = requested_symbol_count(data)
+    symbol_count = integer_value(data.get("symbol_count"))
+    if requested is not None and symbol_count is not None:
+        return symbol_count != requested
     return False
+
+
+def requested_symbol_count(data: dict[str, Any]) -> int | None:
+    explicit_count = integer_value(data.get("input_requested_symbol_count"))
+    if explicit_count is not None:
+        return explicit_count
+    requested = list_value(data, "requested_symbols")
+    return len(requested) if requested else None
+
+
+def integer_value(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def is_synthetic_demo(metadata: dict[str, Any]) -> bool:

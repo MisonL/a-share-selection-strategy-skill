@@ -138,13 +138,7 @@ class TodayAShareExternalDisclosureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             summary = minimal_summary(tmpdir, Path(tmpdir) / "diagnostics.csv")
             summary["input_metadata"] = {
-                "source_type": "external_fetch",
-                "source": "yfinance",
-                "market": "A-share",
-                "market_label_only": True,
-                "source_claim_boundary": (
-                    "market_label_not_source_exchange_or_calendar_proof"
-                ),
+                **base_input_metadata(),
                 "requested_symbols": ["AAPL", "MSFT"],
                 "symbol_count": 1,
                 "failed_symbols": [{"symbol": "MSFT", "error": "timeout"}],
@@ -163,6 +157,51 @@ class TodayAShareExternalDisclosureTests(unittest.TestCase):
         self.assertIn("symbol_count=1/2", visible)
         self.assertIn("input_metadata.failed_symbols", technical)
         self.assertIn("timeout", technical)
+
+    def test_html_infers_local_input_partial_from_symbol_count_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            summary = minimal_summary(tmpdir, Path(tmpdir) / "diagnostics.csv")
+            summary["input_metadata"] = {
+                **base_input_metadata(),
+                "requested_symbols": ["AAPL", "MSFT", "TSLA"],
+                "symbol_count": 1,
+                "failed_symbols": [],
+                "empty_symbols": [],
+                "output_written": True,
+                "metadata_output_written": True,
+            }
+
+            report = render_report(summary, {"steps": []}, language="en")
+
+        visible = visible_before_technical_details(report)
+        technical = report.split('<details class="technical-details">', 1)[1]
+        self.assertIn("Partial local input metadata", visible)
+        self.assertIn("symbol_count=1/3", visible)
+        self.assertIn("input_metadata.requested_symbols", technical)
+        self.assertIn("input_metadata.symbol_count", technical)
+
+    def test_html_infers_local_input_partial_from_failed_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            summary = minimal_summary(tmpdir, Path(tmpdir) / "diagnostics.csv")
+            summary["input_metadata"] = {
+                **base_input_metadata(),
+                "requested_symbols": ["AAPL", "MSFT"],
+                "symbol_count": 1,
+                "failed_symbols": [{"symbol": "MSFT", "error": "timeout"}],
+                "empty_symbols": [],
+                "output_written": False,
+                "metadata_output_written": True,
+            }
+
+            report = render_report(summary, {"steps": []}, language="en")
+
+        visible = visible_before_technical_details(report)
+        technical = report.split('<details class="technical-details">', 1)[1]
+        self.assertIn("Partial local input metadata", visible)
+        self.assertIn("failed_symbols=1", visible)
+        self.assertIn("output_written=false", visible)
+        self.assertIn("input_metadata.output_written", technical)
+        self.assertIn(">False<", technical)
 
 
 def write_history_metadata_with_fallback(output: Path) -> None:
@@ -194,6 +233,16 @@ def write_history_metadata_with_fallback(output: Path) -> None:
         ),
         encoding="utf-8",
     )
+
+
+def base_input_metadata() -> dict[str, object]:
+    return {
+        "source_type": "external_fetch",
+        "source": "yfinance",
+        "market": "A-share",
+        "market_label_only": True,
+        "source_claim_boundary": "market_label_not_source_exchange_or_calendar_proof",
+    }
 
 
 def write_partial_history_metadata(output: Path) -> None:

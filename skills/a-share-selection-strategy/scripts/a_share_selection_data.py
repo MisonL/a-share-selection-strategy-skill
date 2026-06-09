@@ -7,6 +7,11 @@ from pathlib import Path
 import pandas as pd
 
 
+COMPACT_DATE_FORMAT = "%Y%m%d"
+ISO_DATE_FORMAT = "%Y-%m-%d"
+ACCEPTED_DATE_FORMATS = (COMPACT_DATE_FORMAT, ISO_DATE_FORMAT)
+
+
 def read_table(path: Path) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"input file not found: {path}")
@@ -27,6 +32,8 @@ def ensure_symbol_text(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def parse_dates(series: pd.Series) -> pd.Series:
+    """Parse dates in ACCEPTED_DATE_FORMATS; unsupported formats become NaT."""
+
     text = series.astype(str).str.strip()
     numeric_yyyymmdd = text.str.fullmatch(r"\d{8}")
     iso_yyyy_mm_dd = text.str.fullmatch(r"\d{4}-\d{2}-\d{2}")
@@ -34,13 +41,13 @@ def parse_dates(series: pd.Series) -> pd.Series:
     if numeric_yyyymmdd.any():
         parsed.loc[numeric_yyyymmdd] = pd.to_datetime(
             text[numeric_yyyymmdd],
-            format="%Y%m%d",
+            format=COMPACT_DATE_FORMAT,
             errors="coerce",
         )
     if iso_yyyy_mm_dd.any():
         parsed.loc[iso_yyyy_mm_dd] = pd.to_datetime(
             text[iso_yyyy_mm_dd],
-            format="%Y-%m-%d",
+            format=ISO_DATE_FORMAT,
             errors="coerce",
         )
     return parsed

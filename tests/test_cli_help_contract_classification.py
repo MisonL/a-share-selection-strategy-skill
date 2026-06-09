@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import redirect_stderr
+from io import StringIO
 import subprocess
 import sys
 import unittest
@@ -10,6 +12,9 @@ from shutil import which
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = ROOT / "skills" / "a-share-selection-strategy"
 SCRIPTS = SKILL_ROOT / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+from a_share_selection_cli_guard import fail_not_cli  # noqa: E402
 
 CLI_HELP_ENTRIES = [
     "allocate_candidate_capital.py",
@@ -122,7 +127,18 @@ class CliHelpContractClassificationTests(unittest.TestCase):
                         ),
                     )
 
+    def test_cli_guard_reports_standard_not_cli_error(self) -> None:
+        stderr = StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as raised:
+            fail_not_cli("helper_module.py")
+
+        self.assertEqual(2, raised.exception.code)
+        self.assertIn("helper_module.py is not a CLI entry", stderr.getvalue())
+        self.assertIn("use one of:", stderr.getvalue())
+
     def test_helper_modules_fail_fast_when_executed_with_dependencies(self) -> None:
+        if which("uv") is None:
+            self.skipTest("uv is required for dependency-isolated helper direct execution")
         for script_name in HELP_CONTRACT_EXCLUDED_HELPERS:
             script = SCRIPTS / script_name
             with self.subTest(script=script.name):
@@ -142,18 +158,18 @@ class CliHelpContractClassificationTests(unittest.TestCase):
 
 def helper_direct_exec_command(script: Path) -> list[str]:
     uv = which("uv")
-    if uv:
-        return [
-            str(uv),
-            "run",
-            "--with",
-            "pandas",
-            "--with",
-            "numpy",
-            "--with",
-            "pyarrow",
-            "python",
-            str(script),
-            "--help",
-        ]
-    return [sys.executable, str(script), "--help"]
+    if uv is None:
+        raise RuntimeError("uv is required for dependency-isolated helper direct execution")
+    return [
+        str(uv),
+        "run",
+        "--with",
+        "pandas",
+        "--with",
+        "numpy",
+        "--with",
+        "pyarrow",
+        "python",
+        str(script),
+        "--help",
+    ]

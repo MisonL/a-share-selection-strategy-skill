@@ -39,7 +39,11 @@ from a_share_selection_html_modes import (
     scoring_method_key,
 )
 from a_share_selection_html_spot import spot_metadata_fields
-from run_today_a_share_selection_input_metadata import is_synthetic_demo
+from run_today_a_share_selection_input_metadata import (
+    history_selection_partial_result,
+    is_synthetic_demo,
+    local_input_partial_result,
+)
 
 
 DISPLAY_CANDIDATE_COLUMNS = (
@@ -439,19 +443,7 @@ def input_partial_alerts(summary: dict[str, Any], language: str) -> list[str]:
 
 
 def local_input_partial(metadata: dict[str, Any]) -> bool:
-    if metadata.get("input_partial_result") is True:
-        return True
-    if metadata.get("output_written") is False:
-        return True
-    if list_count(metadata.get("failed_symbols")):
-        return True
-    if list_count(metadata.get("empty_symbols")):
-        return True
-    requested = metadata.get("input_requested_symbol_count")
-    if requested is None:
-        requested = list_count(metadata.get("requested_symbols"))
-    symbol_count = metadata.get("symbol_count")
-    return requested not in (None, 0) and symbol_count is not None and symbol_count != requested
+    return local_input_partial_result(metadata)
 
 
 def input_csv_provenance_alerts(summary: dict[str, Any], language: str) -> list[str]:
@@ -548,16 +540,7 @@ def history_alerts(summary: dict[str, Any], language: str) -> list[str]:
 
 
 def history_partial(selection: dict[str, Any]) -> bool:
-    if selection.get("history_partial_result") is True:
-        return True
-    if selection.get("history_output_written") is False:
-        return True
-    count_keys = (
-        "history_metadata_failed_symbol_count",
-        "history_empty_symbol_count",
-        "history_metadata_fallback_error_count",
-    )
-    return any(int(selection.get(key, 0) or 0) > 0 for key in count_keys)
+    return history_selection_partial_result(selection)
 
 
 def list_count(value: Any) -> int:

@@ -492,6 +492,7 @@ def technical_details(summary: dict[str, Any], language: str) -> str:
         ("advice_boundary", summary.get("advice_boundary", "")),
         ("recommendation_boundary", summary.get("recommendation_boundary", "")),
     ]
+    fields.extend(input_csv_provenance_fields(summary))
     fields.extend(spot_metadata_fields(summary))
     fields.extend(history_selection_fields(summary, language))
     fields.extend(score_detail_fields(summary))
@@ -503,6 +504,19 @@ def technical_details(summary: dict[str, Any], language: str) -> str:
         f'<dl class="facts">{rows}</dl>'
         f"{machine_boundary(summary, language)}</details>"
     )
+
+
+def input_csv_provenance_fields(summary: dict[str, Any]) -> list[tuple[str, Any]]:
+    provenance = summary.get("input_csv_provenance", {})
+    if not isinstance(provenance, dict) or not provenance:
+        return []
+    keys = (
+        "source_type",
+        "source_scope",
+        "real_market_data",
+        "source_claim_boundary",
+    )
+    return [(f"input_csv_{key}", provenance.get(key, "")) for key in keys]
 
 
 def machine_boundary(summary: dict[str, Any], language: str) -> str:

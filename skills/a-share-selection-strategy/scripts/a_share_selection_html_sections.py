@@ -480,6 +480,7 @@ def technical_details(summary: dict[str, Any], language: str) -> str:
             summary.get("requested_prediction_input_source"),
         ),
         (i18n("prediction_model_executed_by_runner", language), summary.get("prediction_model_executed_by_runner")),
+        ("prediction_claim_boundary", summary.get("prediction_claim_boundary", "")),
         (i18n("source_scope", language), summary.get("source_scope")),
         (i18n("source_type", language), metadata.get("source_type", "unknown")),
         ("source", metadata.get("source", "")),

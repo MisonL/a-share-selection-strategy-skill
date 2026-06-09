@@ -356,8 +356,16 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             )
 
             manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            report = (output / "report.html").read_text(encoding="utf-8")
 
         self.assertEqual(0, code, stderr)
+        self.assertIn("prediction_input_source=external_input", stdout)
+        self.assertIn(
+            "prediction_claim_boundary="
+            "external_input_columns_consumed_runner_does_not_execute_prediction_model",
+            stdout,
+        )
         self.assertIn("lightgbm_not_used=false", stdout)
         self.assertIn("lightgbm_output_source=external_input", stdout)
         self.assertIn("lightgbm_executed_by_runner=false", stdout)
@@ -371,6 +379,15 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertFalse(manifest["prediction_model_executed_by_runner"])
         self.assertEqual("external_input", manifest["lightgbm_output_source"])
         self.assertEqual("external_input", manifest["requested_lightgbm_output_source"])
+        self.assertEqual(
+            "external_input_columns_consumed_runner_does_not_execute_prediction_model",
+            summary["prediction_claim_boundary"],
+        )
+        self.assertIn("prediction_claim_boundary", report)
+        self.assertIn(
+            "external_input_columns_consumed_runner_does_not_execute_prediction_model",
+            report,
+        )
 
     def test_no_html_report_removes_stale_report_in_reused_output_dir(self) -> None:
         frame = build_frame(include_turn=True, include_tradability=True)

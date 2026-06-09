@@ -55,6 +55,17 @@ def prediction_columns_consumed(
     return str(summary.get("prediction_input_source", "")) == "external_input"
 
 
+def prediction_claim_boundary(
+    manifest: dict[str, Any],
+    score: dict[str, Any] | None = None,
+) -> str:
+    if not manifest.get("prediction_mode"):
+        return "not_prediction_derived"
+    if prediction_columns_consumed(manifest, score):
+        return "external_input_columns_consumed_runner_does_not_execute_prediction_model"
+    return "prediction_columns_not_consumed_scoring_not_completed"
+
+
 def spot_metadata_view(manifest: dict[str, Any]) -> dict[str, Any]:
     output_dir = Path(manifest["output_dir"])
     metadata_path = output_dir / "spot_metadata.json"
@@ -258,6 +269,7 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
         f"consumes_prediction_columns={str(manifest.get('consumes_prediction_columns', False)).lower()} "
         f"prediction_input_source={prediction_input_source(manifest)} "
         f"prediction_model_executed_by_runner={str(prediction_model_executed_by_runner(manifest)).lower()} "
+        f"prediction_claim_boundary={view['prediction_claim_boundary']} "
         f"lightgbm_not_used={str(manifest['lightgbm_not_used']).lower()} "
         f"lightgbm_output_source={manifest.get('lightgbm_output_source', 'unknown')} "
         "lightgbm_executed_by_runner=false "

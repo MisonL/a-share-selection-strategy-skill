@@ -131,6 +131,7 @@ def prediction_fields(manifest: dict[str, Any], score: dict[str, Any]) -> dict[s
         "prediction_model_executed_by_runner": (
             helpers.prediction_model_executed_by_runner(manifest)
         ),
+        "prediction_claim_boundary": helpers.prediction_claim_boundary(manifest, score),
         "lightgbm_not_used": manifest["lightgbm_not_used"],
         "lightgbm_output_source": manifest.get("lightgbm_output_source", "unknown"),
         "requested_lightgbm_output_source": manifest.get(

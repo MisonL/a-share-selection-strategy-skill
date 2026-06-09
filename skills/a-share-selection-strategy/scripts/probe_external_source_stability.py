@@ -15,6 +15,7 @@ from typing import Any
 
 SCRIPTS = Path(__file__).resolve().parent
 Executor = Callable[[list[str], float | None], subprocess.CompletedProcess[str]]
+SHORT_WINDOW_CLAIM_BOUNDARY = "current_window_parameters_network_only"
 
 
 @dataclass(frozen=True)
@@ -298,6 +299,7 @@ def build_summary(manifest: dict[str, Any]) -> dict[str, Any]:
         },
         "all_sources_all_iterations_passed": bool(results) and all(item["passed"] for item in results),
         "long_term_stability_claim": "not_proven",
+        "short_window_claim_boundary": SHORT_WINDOW_CLAIM_BOUNDARY,
         "interpretation": "Repeated success only describes this run window, parameters, and network environment.",
     }
 
@@ -328,6 +330,7 @@ def initial_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "probe_type": "external_source_stability",
         "iterations": int(args.iterations),
         "long_term_stability_claim": "not_proven",
+        "short_window_claim_boundary": SHORT_WINDOW_CLAIM_BOUNDARY,
         "results": [],
         "summary": {},
     }
@@ -344,7 +347,8 @@ def print_summary(manifest: dict[str, Any], prefix: str = "OK") -> None:
         f"{prefix}: probe_type=external_source_stability iterations={summary.get('iterations', 0)} "
         f"total_runs={summary.get('total_runs', 0)} passed_runs={summary.get('passed_runs', 0)} "
         f"all_sources_all_iterations_passed={summary.get('all_sources_all_iterations_passed', False)} "
-        "long_term_stability_claim=not_proven"
+        "long_term_stability_claim=not_proven "
+        f"short_window_claim_boundary={summary.get('short_window_claim_boundary', SHORT_WINDOW_CLAIM_BOUNDARY)}"
     )
 
 

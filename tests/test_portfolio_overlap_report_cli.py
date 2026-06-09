@@ -161,10 +161,53 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
         self.assertEqual(0, code)
         self.assertTrue(data["weight_capacity_verifiable"])
         self.assertTrue(data["cash_capacity_verifiable"])
+        self.assertEqual(
+            "local_capacity_gate_not_broker_or_external_cash_capacity_proof",
+            data["claim_boundary"],
+        )
         self.assertEqual([], data["capital_fields_missing"])
         self.assertEqual(0.9, round(float(data["max_gross_weight"]), 6))
         self.assertEqual(["2026-05-13", "2026-05-14"], data["max_gross_weight_dates"])
         self.assertEqual([0.4, 0.9, 0.9], daily_frame["gross_weight"].round(6).tolist())
+
+    def test_cli_discloses_local_capacity_gate_boundary(self) -> None:
+        frame = pd.DataFrame(
+            [
+                capitalized_trade("000001", "2026-05-12", "2026-05-12", "2026-05-14", 0.4),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            backtest = Path(tmpdir) / "backtest.csv"
+            daily = Path(tmpdir) / "daily.csv"
+            overlaps = Path(tmpdir) / "overlaps.csv"
+            summary = Path(tmpdir) / "summary.json"
+            frame.to_csv(backtest, index=False)
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = overlap_report.main(
+                    [
+                        "--backtests",
+                        str(backtest),
+                        "--daily-output",
+                        str(daily),
+                        "--overlap-output",
+                        str(overlaps),
+                        "--summary-output",
+                        str(summary),
+                    ]
+                )
+            data = json.loads(summary.read_text(encoding="utf-8"))
+
+        self.assertEqual(0, code, stderr.getvalue())
+        self.assertIn(
+            "claim_boundary=local_capacity_gate_not_broker_or_external_cash_capacity_proof",
+            stdout.getvalue(),
+        )
+        self.assertEqual(
+            "local_capacity_gate_not_broker_or_external_cash_capacity_proof",
+            data["claim_boundary"],
+        )
 
     def test_cli_fails_when_gross_weight_exceeds_limit(self) -> None:
         frame = pd.DataFrame(

@@ -13,6 +13,7 @@ from a_share_selection_calendar_contract import CALENDAR_MODEL
 
 
 REQUIRED_COLUMNS = ["symbol", "signal_date", "entry_date", "exit_date", "missing_data", "status"]
+CLAIM_BOUNDARY = "local_capacity_gate_not_broker_or_external_cash_capacity_proof"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -246,6 +247,7 @@ def build_summary(
         "capital_fields_missing": missing,
         "weight_capacity_verifiable": "weight" in present,
         "cash_capacity_verifiable": not missing,
+        "claim_boundary": CLAIM_BOUNDARY,
     }
 
 def empty_overlaps() -> pd.DataFrame:
@@ -312,6 +314,7 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
         f"weight_capacity_verifiable={summary['weight_capacity_verifiable']} "
         f"cash_capacity_verifiable={summary['cash_capacity_verifiable']} "
         f"calendar_model={summary['calendar_model']} "
+        f"claim_boundary={summary['claim_boundary']} "
         f"output={output}"
     )
 

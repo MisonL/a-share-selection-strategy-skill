@@ -32,3 +32,8 @@ def portfolio_allocate_command(args: Any, output: Path, signals: list[Any]) -> l
 def script_command(script: str, *parts: object) -> list[str]:
     scripts = Path(__file__).resolve().parent
     return [sys.executable, str(scripts / script), *[str(part) for part in parts]]
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

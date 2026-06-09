@@ -117,3 +117,8 @@ def capacity_gate(
     maximum = summary[summary_field] or 0.0
     if maximum > limit:
         violations.append(f"{summary_field}={maximum} limit={limit}")
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

@@ -108,6 +108,14 @@ class PortfolioCandidateAllocationCliTests(unittest.TestCase):
         self.assertEqual(1, len(sized))
         self.assertEqual(["max_open_positions"], skipped["skip_reason"].tolist())
         self.assertEqual(2, summary["raw_candidates"])
+        self.assertEqual(
+            "local_portfolio_allocation_not_broker_or_external_cash_capacity_proof",
+            summary["claim_boundary"],
+        )
+        self.assertIn(
+            "claim_boundary=local_portfolio_allocation_not_broker_or_external_cash_capacity_proof",
+            stdout.getvalue(),
+        )
 
     def test_cli_expected_signal_dates_returns_error_without_outputs(self) -> None:
         prices = build_frame(days=40)

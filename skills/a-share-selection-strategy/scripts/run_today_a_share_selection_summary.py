@@ -204,7 +204,7 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
     empty_symbols = metadata_list(metadata, "empty_symbols")
     fallback_errors = metadata_list(metadata, "fallback_errors")
     date_range = history_date_range_view(metadata, manifest)
-    return {
+    view = {
         "source": selected_data.get("source", ""),
         "raw_spot_rows": selected_data.get("raw_spot_rows"),
         "filtered_spot_rows": selected_data.get("filtered_spot_rows"),
@@ -232,6 +232,11 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
         "history_metadata_output": str(metadata_path),
         "history_metadata_output_written": metadata_path.exists(),
     }
+    if "adjust" in metadata:
+        view["history_adjust"] = metadata["adjust"]
+    if "adjustflag" in metadata:
+        view["history_adjustflag"] = str(metadata["adjustflag"])
+    return view
 
 
 def history_selection_available(
@@ -343,3 +348,8 @@ def history_symbol_count(manifest: dict[str, Any], history_selection: dict[str, 
         return int(history_selection["selected_symbol_count"])
     symbols = manifest.get("history_symbols", [])
     return len(symbols) if isinstance(symbols, list) else 0
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

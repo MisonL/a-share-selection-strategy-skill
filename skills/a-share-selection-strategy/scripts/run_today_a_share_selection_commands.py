@@ -157,3 +157,8 @@ def selected_config(args: Any) -> Path:
         return Path(args.config)
     mode = getattr(args, "resolved_mode", args.mode)
     return args.default_prediction_config if mode == "prediction" else args.default_generic_config
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

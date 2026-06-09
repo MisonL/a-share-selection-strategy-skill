@@ -117,15 +117,25 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
                 )
 
             data = json.loads(summary.read_text(encoding="utf-8"))
-            self.assertEqual(3, code)
-            self.assertTrue(daily.exists())
-            self.assertTrue(overlaps.exists())
-            self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
-            self.assertIn("capital_fields_missing=weight,notional,quantity,cash_reserved", stdout.getvalue())
-            self.assertIn("max_open_positions=4 limit=3", stderr.getvalue())
-            self.assertIn("same_symbol_overlap_rows=", stderr.getvalue())
-            self.assertEqual(4, data["max_open_positions"])
-            self.assertEqual(2, data["same_symbol_overlap_rows"])
+            daily_exists = daily.exists()
+            overlaps_exists = overlaps.exists()
+        self.assertEqual(3, code)
+        self.assertTrue(daily_exists)
+        self.assertTrue(overlaps_exists)
+        self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
+        self.assertIn("capital_fields_missing=weight,notional,quantity,cash_reserved", stdout.getvalue())
+        self.assertIn("capacity_gate_pass=False", stdout.getvalue())
+        self.assertIn("capacity_gate_status=failed_not_pass", stdout.getvalue())
+        self.assertIn("max_open_positions=4 limit=3", stderr.getvalue())
+        self.assertIn("same_symbol_overlap_rows=", stderr.getvalue())
+        self.assertEqual(4, data["max_open_positions"])
+        self.assertEqual(2, data["same_symbol_overlap_rows"])
+        self.assertFalse(data["capacity_gate_pass"])
+        self.assertEqual("failed_not_pass", data["capacity_gate_status"])
+        self.assertIn("max_open_positions=4 limit=3", data["violations"])
+        self.assertIn("same_symbol_overlap_rows=2", data["violations"])
+        self.assertEqual(3, data["gate_limits"]["max_open_positions"])
+        self.assertTrue(data["gate_limits"]["fail_on_symbol_overlap"])
 
     def test_cli_accepts_capital_fields_and_gross_weight_under_limit(self) -> None:
         frame = pd.DataFrame(
@@ -161,6 +171,11 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
         self.assertEqual(0, code)
         self.assertTrue(data["weight_capacity_verifiable"])
         self.assertTrue(data["cash_capacity_verifiable"])
+        self.assertTrue(data["capacity_gate_pass"])
+        self.assertEqual("pass", data["capacity_gate_status"])
+        self.assertEqual([], data["violations"])
+        self.assertTrue(data["require_capital_fields"])
+        self.assertEqual(1.0, data["gate_limits"]["max_gross_weight"])
         self.assertEqual(
             "local_capacity_gate_not_broker_or_external_cash_capacity_proof",
             data["claim_boundary"],
@@ -240,13 +255,18 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
                     ]
                 )
             output_exists = daily.exists()
+            data = json.loads(summary.read_text(encoding="utf-8"))
 
         self.assertEqual(3, code)
         self.assertTrue(output_exists)
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn("capital_fields_missing=none", stdout.getvalue())
         self.assertIn("weight_capacity_verifiable=True", stdout.getvalue())
+        self.assertIn("capacity_gate_pass=False", stdout.getvalue())
         self.assertIn("max_gross_weight=1.15 limit=1.0", stderr.getvalue())
+        self.assertFalse(data["capacity_gate_pass"])
+        self.assertEqual("failed_not_pass", data["capacity_gate_status"])
+        self.assertEqual(["max_gross_weight=1.15 limit=1.0"], data["violations"])
 
     def test_cli_max_gross_weight_requires_weight_column(self) -> None:
         frame = pd.DataFrame([trade("000001", "2026-05-12", "2026-05-12", "2026-05-14")])

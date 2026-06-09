@@ -139,6 +139,16 @@ class AShareSelectionScriptTests(unittest.TestCase):
         self.assertEqual(2, summary["scored_symbols"])
         self.assertTrue(candidates["data_window"].str.startswith("2025-").all())
 
+    def test_slash_dates_are_rejected_instead_of_silently_parsed(self) -> None:
+        frame = build_frame()
+        frame.loc[0, "date"] = "05/20/2026"
+
+        errors = validate_ohlcv.validate_frame(frame, min_history_rows=120)
+        joined = "; ".join(errors)
+
+        self.assertIn("column date has 1 invalid values", joined)
+        self.assertIn("date=05/20/2026", joined)
+
     def test_empty_input_is_error(self) -> None:
         config = load_config("example_config.json")
         empty = pd.DataFrame(columns=validate_ohlcv.REQUIRED_COLUMNS)

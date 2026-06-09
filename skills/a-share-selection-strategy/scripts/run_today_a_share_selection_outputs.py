@@ -137,3 +137,8 @@ STALE_RUN_OUTPUTS = (
     "candidates.csv", "diagnostics.csv", "history_metadata.json",
     "selected_symbols.json", "spot_metadata.json",
 )
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

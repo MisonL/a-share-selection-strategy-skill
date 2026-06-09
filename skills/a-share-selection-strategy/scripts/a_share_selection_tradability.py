@@ -96,3 +96,8 @@ def tradability_failure_reason(
 
 def is_tradable_status(value: object) -> bool:
     return str(value).strip() == "1"
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

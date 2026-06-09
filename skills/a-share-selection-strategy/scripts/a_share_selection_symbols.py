@@ -41,3 +41,8 @@ def baostock_code(symbol: str) -> str:
     if symbol.startswith(("6", "9")):
         return f"sh.{symbol}"
     return f"sz.{symbol}"
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

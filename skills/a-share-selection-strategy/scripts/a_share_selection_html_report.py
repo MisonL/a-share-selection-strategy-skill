@@ -165,3 +165,8 @@ def report_title(summary: dict[str, Any], language: str) -> str:
     status_text = localized_text(report_status_key(summary, str(status)), language)
     mode = localized_text(scoring_method_key(summary), language)
     return f"{title} - {status_text} - {mode}"
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

@@ -43,3 +43,8 @@ def short_reason(selected: bool, failed_thresholds: list[str]) -> str:
     if len(failed_thresholds) == 1:
         return first
     return f"{first}等{len(failed_thresholds)}项未通过"
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

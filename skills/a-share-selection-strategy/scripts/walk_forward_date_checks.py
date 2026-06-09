@@ -38,3 +38,8 @@ def parsed_calendar_date(value: str | None) -> Any:
 
     parsed = parse_dates(pd.Series([str(value)])).iloc[0]
     return None if pd.isna(parsed) else parsed
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

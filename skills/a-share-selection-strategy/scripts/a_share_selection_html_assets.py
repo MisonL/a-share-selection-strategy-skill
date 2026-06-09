@@ -86,3 +86,8 @@ code{white-space:normal;overflow-wrap:anywhere}
 JS = """
 (() => {document.querySelectorAll('details.technical-details').forEach(el=>{el.open=false;});const storageKey='aShareSelectionReportLang';const root=document.documentElement;const mode=root.dataset.langMode||'auto';const generated=root.dataset.lang||'en';const saved=localStorage.getItem(storageKey);const initial=mode==='auto'?(saved||generated):mode;function setLang(lang){root.dataset.lang=lang;root.lang=lang==='zh'?'zh-CN':'en';document.querySelectorAll('[data-i18n-en]').forEach(el=>{el.textContent=el.dataset[lang==='zh'?'i18nZh':'i18nEn'];});const title=document.querySelector('title[data-i18n-title-en]');if(title){title.textContent=title.dataset[lang==='zh'?'i18nTitleZh':'i18nTitleEn'];}document.querySelectorAll('[data-set-lang]').forEach(btn=>btn.classList.toggle('active',btn.dataset.setLang===lang));localStorage.setItem(storageKey,lang);}document.querySelectorAll('[data-set-lang]').forEach(btn=>btn.addEventListener('click',()=>setLang(btn.dataset.setLang)));setLang(initial);})();
 """
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

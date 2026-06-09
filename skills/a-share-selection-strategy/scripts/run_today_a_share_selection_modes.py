@@ -105,3 +105,8 @@ def missing_prediction_column_groups(columns: set[str]) -> list[str]:
         "turnover": {"turn", "turnover"},
     }
     return [name for name, choices in required.items() if not columns & choices]
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

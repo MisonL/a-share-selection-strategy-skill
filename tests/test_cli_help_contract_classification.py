@@ -4,6 +4,7 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from shutil import which
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,6 +50,7 @@ HELP_CONTRACT_EXCLUDED_HELPERS = [
     "a_share_selection_calendar_contract.py",
     "a_share_selection_candidate_fields.py",
     "a_share_selection_capital.py",
+    "a_share_selection_cli_guard.py",
     "a_share_selection_config.py",
     "a_share_selection_disclosure.py",
     "a_share_selection_diagnostic_labels.py",
@@ -110,10 +112,43 @@ class CliHelpContractClassificationTests(unittest.TestCase):
                 if script_name not in HELPER_ARGPARSE_MODULES:
                     self.assertNotIn("argparse", source)
                 self.assertNotIn("def main(", source)
-                self.assertNotIn('__name__ == "__main__"', source)
                 self.assertNotIn("usage:", result.stdout)
                 if result.returncode != 0:
                     self.assertRegex(
                         result.stderr,
-                        "ModuleNotFoundError|pandas|numpy|a_share_selection_data",
+                        (
+                            "ModuleNotFoundError|pandas|numpy|a_share_selection_data|"
+                            "not a CLI entry"
+                        ),
                     )
+
+    def test_helper_modules_fail_fast_when_executed_with_dependencies(self) -> None:
+        uv = which("uv")
+        self.assertIsNotNone(uv, "uv is required for helper misuse contract test")
+        for script_name in HELP_CONTRACT_EXCLUDED_HELPERS:
+            script = SCRIPTS / script_name
+            with self.subTest(script=script.name):
+                result = subprocess.run(
+                    [
+                        str(uv),
+                        "run",
+                        "--with",
+                        "pandas",
+                        "--with",
+                        "numpy",
+                        "--with",
+                        "pyarrow",
+                        "python",
+                        str(script),
+                        "--help",
+                    ],
+                    cwd=ROOT,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                self.assertEqual(2, result.returncode)
+                self.assertEqual("", result.stdout)
+                self.assertIn("not a CLI entry", result.stderr)
+                self.assertIn("use one of:", result.stderr)

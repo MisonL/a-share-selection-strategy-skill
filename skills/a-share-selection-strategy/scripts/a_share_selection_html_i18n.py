@@ -328,3 +328,8 @@ def text_pair(key: str, fallback: str | None = None) -> dict[str, str]:
     if not names:
         return {"en": key, "zh": key}
     return {"en": names.get("en", key), "zh": names.get("zh", key)}
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

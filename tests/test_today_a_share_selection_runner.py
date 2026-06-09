@@ -951,6 +951,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertTrue(summary["real_market_data"])
         self.assertEqual("baostock", summary["input_metadata"]["source"])
         self.assertEqual("baostock", summary["input_metadata"]["history_provider"])
+        self.assertEqual("3", summary["input_metadata"]["history_adjustflag"])
         self.assertEqual(1, summary["input_metadata"]["history_failed_symbol_count"])
         self.assertEqual(0, summary["input_metadata"]["history_fallback_error_count"])
         self.assertFalse(summary["input_metadata"]["history_output_written"])
@@ -959,11 +960,13 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(["000001"], summary["history_selection"]["history_empty_symbols"])
         self.assertTrue(summary["history_selection"]["history_partial_result"])
         self.assertFalse(summary["history_selection"]["history_output_written"])
+        self.assertEqual("3", summary["history_selection"]["history_adjustflag"])
         self.assertIn("metadata_source=external_fetch", stdout.getvalue())
         self.assertIn("real_market_data=true", stdout.getvalue())
         self.assertIn("history_partial_result=true", stdout.getvalue())
         self.assertIn("history_output_written=false", stdout.getvalue())
         self.assertIn("history_empty_symbol_count=1", stdout.getvalue())
+        self.assertIn("history_adjustflag=3", stdout.getvalue())
         for row in candidate_rows + diagnostic_rows:
             self.assertEqual("external_fetch", row["source_type"])
             self.assertEqual("True", row["real_market_data"])
@@ -972,6 +975,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             self.assertEqual("0", row["history_fallback_error_count"])
             self.assertEqual("False", row["history_output_written"])
             self.assertEqual("True", row["history_metadata_output_written"])
+            self.assertEqual("3", row["history_adjustflag"])
 
     def test_embedded_csv_provenance_survives_runner_without_metadata_file(self) -> None:
         config = load_config("prediction_profile_config.json")
@@ -1034,6 +1038,68 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             embedded_provenance,
         )
 
+    def test_local_prices_metadata_preserves_partial_fetch_scope(self) -> None:
+        frame = build_frame(days=130, include_tradability=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "prices.csv"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+            (root / "metadata.json").write_text(
+                json.dumps(
+                    {
+                        "source_type": "external_fetch",
+                        "source": "yfinance",
+                        "market": "A-share",
+                        "market_label_only": True,
+                        "source_claim_boundary": (
+                            "market_label_not_source_exchange_or_calendar_proof"
+                        ),
+                        "adjustment": "auto_adjust_false_close",
+                        "requested_symbols": ["AAPL", "MSFT"],
+                        "symbol_count": 1,
+                        "rows": int(len(frame)),
+                        "failed_symbols": [{"symbol": "MSFT", "error": "timeout"}],
+                        "empty_symbols": [],
+                        "output_written": True,
+                        "metadata_output_written": True,
+                        "real_market_data": "unknown",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            code, stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--output-dir",
+                    str(output),
+                    "--mode",
+                    "generic",
+                    "--no-html-report",
+                ]
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(0, code, stderr)
+        metadata = summary["input_metadata"]
+        self.assertEqual("yfinance", metadata["source"])
+        self.assertTrue(metadata["input_partial_result"])
+        self.assertEqual(["AAPL", "MSFT"], metadata["requested_symbols"])
+        self.assertEqual(1, metadata["symbol_count"])
+        self.assertEqual(1, metadata["input_failed_symbol_count"])
+        self.assertEqual(0, metadata["input_empty_symbol_count"])
+        self.assertEqual("auto_adjust_false_close", metadata["adjustment"])
+        self.assertIn("input_partial_result=true", stdout)
+        self.assertIn("input_failed_symbol_count=1", stdout)
+        self.assertIn("input_symbol_count=1/2", stdout)
+        self.assertIn("input_requested_symbols=AAPL,MSFT", stdout)
+        self.assertIn("input_failed_symbols=MSFT:timeout", stdout)
+        self.assertIn("input_empty_symbols=none", stdout)
+        self.assertIn("input_output_written=true", stdout)
+        self.assertIn("input_metadata_output_written=true", stdout)
+
     def test_history_fallback_marks_partial_in_summary_stdout_and_csvs(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
@@ -1068,17 +1134,21 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             diagnostic_rows = csv_rows(output / "diagnostics.csv")
 
         self.assertTrue(summary["input_metadata"]["history_partial_result"])
+        self.assertEqual("hfq", summary["input_metadata"]["history_adjust"])
         self.assertEqual(1, summary["input_metadata"]["history_fallback_error_count"])
         self.assertTrue(summary["history_selection"]["history_partial_result"])
+        self.assertEqual("hfq", summary["history_selection"]["history_adjust"])
         self.assertEqual(
             1,
             summary["history_selection"]["history_metadata_fallback_error_count"],
         )
         self.assertIn("history_partial_result=true", stdout.getvalue())
         self.assertIn("history_fallback_error_count=1", stdout.getvalue())
+        self.assertIn("history_adjust=hfq", stdout.getvalue())
         for row in candidate_rows + diagnostic_rows:
             self.assertEqual("True", row["history_partial_result"])
             self.assertEqual("1", row["history_fallback_error_count"])
+            self.assertEqual("hfq", row["history_adjust"])
 
     def test_runner_can_derive_history_symbols_from_spot_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1627,6 +1697,7 @@ def history_metadata_executor(command: list[str]) -> subprocess.CompletedProcess
             json.dumps(
                 {
                     "source": "baostock",
+                    "adjustflag": "3",
                     "requested_symbols": ["000001"],
                     "rows": 0,
                     "symbol_count": 0,
@@ -1678,6 +1749,7 @@ def history_fallback_executor(command: list[str]) -> subprocess.CompletedProcess
             json.dumps(
                 {
                     "source": "akshare",
+                    "adjust": "hfq",
                     "requested_symbols": ["000001"],
                     "rows": 1,
                     "symbol_count": 1,

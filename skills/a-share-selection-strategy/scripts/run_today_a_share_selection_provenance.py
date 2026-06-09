@@ -27,6 +27,8 @@ RUN_PROVENANCE_COLUMNS = (
     "history_failed_symbol_count",
     "history_empty_symbol_count",
     "history_fallback_error_count",
+    "history_adjust",
+    "history_adjustflag",
     "history_output_written",
     "history_metadata_output_written",
 )
@@ -62,6 +64,8 @@ def provenance_fields(manifest: dict[str, Any]) -> dict[str, Any]:
         "history_failed_symbol_count": metadata.get("history_failed_symbol_count", ""),
         "history_empty_symbol_count": metadata.get("history_empty_symbol_count", ""),
         "history_fallback_error_count": metadata.get("history_fallback_error_count", ""),
+        "history_adjust": metadata.get("history_adjust", ""),
+        "history_adjustflag": metadata.get("history_adjustflag", ""),
         "history_output_written": metadata.get("history_output_written", ""),
         "history_metadata_output_written": metadata.get(
             "history_metadata_output_written",
@@ -105,3 +109,8 @@ def read_csv(path: Path) -> tuple[list[dict[str, str]], list[str]]:
     with path.open(encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
         return list(reader), list(reader.fieldnames or [])
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

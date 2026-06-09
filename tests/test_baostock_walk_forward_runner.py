@@ -225,6 +225,35 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
         self.assertIn("--require-capital-fields", commands["portfolio_overlap"])
         self.assertIn("--fail-on-symbol-overlap", commands["portfolio_overlap"])
 
+    def test_run_promotes_summary_verdict_to_manifest_and_stdout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = args_for(output, signal_dates=["2026-05-12"])
+            executor = FakeExecutor({})
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args=args,
+                manifest=manifest,
+                manifest_path=output / "run_manifest.json",
+                executor=executor,
+            )
+            stdout = StringIO()
+
+            runner.run_pipeline(context)
+            with redirect_stdout(stdout):
+                runner.print_summary(manifest, context.manifest_path)
+            data = json.loads(context.manifest_path.read_text(encoding="utf-8"))
+
+        line = stdout.getvalue()
+        self.assertEqual("enabled_gates_passed_not_external_proof", data["verdict"])
+        self.assertTrue(data["capacity_gate_pass"])
+        self.assertEqual("pass", data["capacity_gate_status"])
+        self.assertEqual("summary_not_external_gate", data["claim_boundary"])
+        self.assertIn("verdict=enabled_gates_passed_not_external_proof", line)
+        self.assertIn("capacity_gate_pass=True", line)
+        self.assertIn("capacity_gate_status=pass", line)
+        self.assertIn("claim_boundary=summary_not_external_gate", line)
+
     def test_can_request_holding_period_tradability_model(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             args = args_for(
@@ -330,6 +359,8 @@ class FakeExecutor:
         self.calls.append(command)
         step = infer_step(command)
         code = self.returncodes.get(step, 0)
+        if step == "summary" and code == 0:
+            write_fake_run_summary(command)
         return subprocess.CompletedProcess(command, code, stdout=f"{step} stdout", stderr=f"{step} stderr")
 
 
@@ -365,6 +396,21 @@ def signal_from_command(command: list[str]) -> str:
         if path.name.startswith("2026-"):
             return path.name
     raise AssertionError(f"cannot infer signal from command: {command}")
+
+
+def write_fake_run_summary(command: list[str]) -> None:
+    output = Path(command[command.index("--output") + 1])
+    output.write_text(
+        json.dumps(
+            {
+                "capacity_gate_pass": True,
+                "capacity_gate_status": "pass",
+                "verdict": "enabled_gates_passed_not_external_proof",
+                "claim_boundary": "summary_not_external_gate",
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 def args_for(

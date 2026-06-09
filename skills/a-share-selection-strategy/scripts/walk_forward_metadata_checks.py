@@ -82,3 +82,8 @@ def raw_invalid_rows(metadata: dict[str, Any]) -> int:
         int(metadata.get(key, 0))
         for key in ["raw_non_trading_rows", "raw_tradestatus_missing_rows"]
     )
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

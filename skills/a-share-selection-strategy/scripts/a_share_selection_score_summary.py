@@ -119,3 +119,8 @@ def format_value(value: Any) -> str:
     if isinstance(value, bool):
         return str(value).lower()
     return str(value)
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

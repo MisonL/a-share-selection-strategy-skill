@@ -98,7 +98,8 @@ def print_summary(summary: dict[str, Any], output: str) -> None:
         f"OK: allocation_model={summary['allocation_model']} "
         f"raw_candidates={summary['raw_candidates']} "
         f"allocated_candidates={summary['allocated_candidates']} "
-        f"skipped_candidates={summary['skipped_candidates']} output={output}"
+        f"skipped_candidates={summary['skipped_candidates']} "
+        f"claim_boundary={summary['claim_boundary']} output={output}"
     )
 
 

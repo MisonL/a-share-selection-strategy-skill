@@ -192,3 +192,8 @@ def missing_reason_counts(result: pd.DataFrame) -> str:
         return ""
     counts = missing["missing_reason"].value_counts().sort_index()
     return ",".join(f"{reason}:{count}" for reason, count in counts.items())
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

@@ -357,6 +357,8 @@ def disclosure_alerts(
     alerts = (
         advice_alerts(summary, language)
         + input_metadata_alerts(summary, language)
+        + input_partial_alerts(summary, language)
+        + input_csv_provenance_alerts(summary, language)
         + sizing_alerts(candidate_rows or [], language)
         + spot_alerts(summary, language)
         + history_alerts(summary, language)
@@ -410,6 +412,67 @@ def market_label_only(metadata: dict[str, Any]) -> bool:
     return value is True or str(value).strip().lower() == "true"
 
 
+def input_partial_alerts(summary: dict[str, Any], language: str) -> list[str]:
+    metadata = summary.get("input_metadata", {})
+    if not isinstance(metadata, dict) or not local_input_partial(metadata):
+        return []
+    failed = list_count(metadata.get("failed_symbols"))
+    empty = list_count(metadata.get("empty_symbols"))
+    symbol_count = metadata.get("symbol_count", "unknown")
+    requested = metadata.get("input_requested_symbol_count")
+    if requested is None:
+        requested = list_count(metadata.get("requested_symbols")) or "unknown"
+    output_written = metadata_bool_text(metadata.get("output_written"))
+    en = (
+        "Partial local input metadata; "
+        f"failed_symbols={failed} empty_symbols={empty} "
+        f"symbol_count={symbol_count}/{requested} "
+        f"output_written={output_written}."
+    )
+    zh = (
+        "本地输入 metadata 为部分结果；"
+        f"failed_symbols={failed} empty_symbols={empty} "
+        f"symbol_count={symbol_count}/{requested} "
+        f"output_written={output_written}。"
+    )
+    return [bilingual(en, zh, language)]
+
+
+def local_input_partial(metadata: dict[str, Any]) -> bool:
+    if metadata.get("input_partial_result") is True:
+        return True
+    if metadata.get("output_written") is False:
+        return True
+    if list_count(metadata.get("failed_symbols")):
+        return True
+    if list_count(metadata.get("empty_symbols")):
+        return True
+    requested = metadata.get("input_requested_symbol_count")
+    if requested is None:
+        requested = list_count(metadata.get("requested_symbols"))
+    symbol_count = metadata.get("symbol_count")
+    return requested not in (None, 0) and symbol_count is not None and symbol_count != requested
+
+
+def input_csv_provenance_alerts(summary: dict[str, Any], language: str) -> list[str]:
+    provenance = summary.get("input_csv_provenance", {})
+    if not isinstance(provenance, dict) or not provenance:
+        return []
+    real_market_data = str(provenance.get("real_market_data", "unknown")).strip().lower()
+    boundary = str(provenance.get("source_claim_boundary", "")).strip()
+    if real_market_data != "false" and not boundary:
+        return []
+    en = (
+        f"CSV embedded provenance says real_market_data={real_market_data}; "
+        f"source_claim_boundary={boundary or 'unknown'}."
+    )
+    zh = (
+        f"CSV 内嵌 provenance 声明 real_market_data={real_market_data}；"
+        f"source_claim_boundary={boundary or 'unknown'}。"
+    )
+    return [bilingual(en, zh, language)]
+
+
 def sizing_alerts(rows: list[dict[str, Any]], language: str) -> list[str]:
     for row in rows:
         if str(row.get("sizing_claim_boundary", "")) == "local_sizing_not_broker_order":
@@ -439,6 +502,25 @@ def history_alerts(summary: dict[str, Any], language: str) -> list[str]:
     selection = summary.get("history_selection", {})
     if not isinstance(selection, dict):
         return []
+    alerts = []
+    if history_partial(selection):
+        failed = selection.get("history_metadata_failed_symbol_count", 0)
+        empty = selection.get("history_empty_symbol_count", 0)
+        fallback = selection.get("history_metadata_fallback_error_count", 0)
+        output_written = metadata_bool_text(selection.get("history_output_written"))
+        en = (
+            "Partial history fetch; "
+            f"failed_symbols={failed} empty_symbols={empty} "
+            f"fallback_errors={fallback} output_written={output_written}; "
+            "cannot be described as complete history."
+        )
+        zh = (
+            "历史抓取为部分结果；"
+            f"failed_symbols={failed} empty_symbols={empty} "
+            f"fallback_errors={fallback} output_written={output_written}；"
+            "不能描述为完整历史行情。"
+        )
+        alerts.append(bilingual(en, zh, language))
     requested = str(selection.get("requested_end_date", ""))
     actual = str(selection.get("history_metadata_actual_date_max", ""))
     all_reached = selection.get("history_metadata_all_symbols_reached_end_date")
@@ -446,11 +528,11 @@ def history_alerts(summary: dict[str, Any], language: str) -> list[str]:
     selected_count = selection.get("selected_symbol_count")
     has_rows = selection.get("history_metadata_end_date_has_rows")
     if not requested or not actual:
-        return []
+        return alerts
     if all_reached is True:
-        return []
+        return alerts
     if all_reached is not False and has_rows is not False:
-        return []
+        return alerts
     reached = reached_count if isinstance(reached_count, int) else "unknown"
     total = selected_count if isinstance(selected_count, int) else "unknown"
     en = (
@@ -461,7 +543,33 @@ def history_alerts(summary: dict[str, Any], language: str) -> list[str]:
         f"请求截止日 {requested}，历史实际最新日期 {actual}；"
         f"{reached}/{total} 个标的到达请求截止日。"
     )
-    return [bilingual(en, zh, language)]
+    alerts.append(bilingual(en, zh, language))
+    return alerts
+
+
+def history_partial(selection: dict[str, Any]) -> bool:
+    if selection.get("history_partial_result") is True:
+        return True
+    if selection.get("history_output_written") is False:
+        return True
+    count_keys = (
+        "history_metadata_failed_symbol_count",
+        "history_empty_symbol_count",
+        "history_metadata_fallback_error_count",
+    )
+    return any(int(selection.get(key, 0) or 0) > 0 for key in count_keys)
+
+
+def list_count(value: Any) -> int:
+    return len(value) if isinstance(value, list) else 0
+
+
+def metadata_bool_text(value: Any) -> str:
+    if isinstance(value, bool):
+        return str(value).lower()
+    if value is None:
+        return "unknown"
+    return str(value).strip().lower()
 
 
 def technical_details(summary: dict[str, Any], language: str) -> str:
@@ -480,6 +588,7 @@ def technical_details(summary: dict[str, Any], language: str) -> str:
             summary.get("requested_prediction_input_source"),
         ),
         (i18n("prediction_model_executed_by_runner", language), summary.get("prediction_model_executed_by_runner")),
+        ("prediction_claim_boundary", summary.get("prediction_claim_boundary", "")),
         (i18n("source_scope", language), summary.get("source_scope")),
         (i18n("source_type", language), metadata.get("source_type", "unknown")),
         ("source", metadata.get("source", "")),
@@ -492,6 +601,8 @@ def technical_details(summary: dict[str, Any], language: str) -> str:
         ("advice_boundary", summary.get("advice_boundary", "")),
         ("recommendation_boundary", summary.get("recommendation_boundary", "")),
     ]
+    fields.extend(input_csv_provenance_fields(summary))
+    fields.extend(input_metadata_detail_fields(metadata))
     fields.extend(spot_metadata_fields(summary))
     fields.extend(history_selection_fields(summary, language))
     fields.extend(score_detail_fields(summary))
@@ -503,6 +614,40 @@ def technical_details(summary: dict[str, Any], language: str) -> str:
         f'<dl class="facts">{rows}</dl>'
         f"{machine_boundary(summary, language)}</details>"
     )
+
+
+def input_csv_provenance_fields(summary: dict[str, Any]) -> list[tuple[str, Any]]:
+    provenance = summary.get("input_csv_provenance", {})
+    if not isinstance(provenance, dict) or not provenance:
+        return []
+    keys = (
+        "source_type",
+        "source_scope",
+        "real_market_data",
+        "source_claim_boundary",
+    )
+    return [(f"input_csv_{key}", provenance.get(key, "")) for key in keys]
+
+
+def input_metadata_detail_fields(metadata: dict[str, Any]) -> list[tuple[str, Any]]:
+    keys = (
+        "requested_symbols",
+        "symbol_count",
+        "rows",
+        "failed_symbols",
+        "empty_symbols",
+        "input_partial_result",
+        "input_failed_symbol_count",
+        "input_empty_symbol_count",
+        "input_requested_symbol_count",
+        "output_written",
+        "metadata_output_written",
+    )
+    return [
+        (f"input_metadata.{key}", metadata.get(key, ""))
+        for key in keys
+        if key in metadata
+    ]
 
 
 def machine_boundary(summary: dict[str, Any], language: str) -> str:
@@ -702,3 +847,8 @@ def data_scope_value(summary: dict[str, Any], language: str) -> str:
     en = f"Recorded source scope: {source_scope or 'unknown'}"
     zh = f"已记录数据来源范围：{source_scope or 'unknown'}"
     return bilingual(en, zh, language)
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

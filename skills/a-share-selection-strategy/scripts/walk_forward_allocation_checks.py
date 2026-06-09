@@ -77,3 +77,8 @@ def capacity_value(source: dict[str, Any], field: str, label: str) -> tuple[floa
     if number < 0:
         return None, f"allocation_overlap_{label}_{field}_negative"
     return number, None
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

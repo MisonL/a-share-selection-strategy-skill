@@ -231,3 +231,8 @@ def missing_prediction_groups(summary: dict[str, Any]) -> list[str]:
         return []
     group_text = reason.split(prefix, 1)[1].split(";", 1)[0]
     return [group.strip() for group in group_text.split(",") if group.strip()]
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

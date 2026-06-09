@@ -374,6 +374,34 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("market 只是输出标签", zh_visible)
         self.assertIn("不是交易所或交易日历证明", zh_visible)
 
+    def test_report_discloses_input_csv_provenance_in_visible_and_technical_details(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            summary = minimal_summary(tmpdir, Path(tmpdir) / "diagnostics.csv")
+            summary["input_metadata"] = {
+                "source_type": "unknown",
+                "real_market_data": "unknown",
+            }
+            summary["input_csv_provenance"] = {
+                "source_type": "csv_embedded_probe",
+                "source_scope": "local_prices_input",
+                "real_market_data": False,
+                "source_claim_boundary": "csv_internal_fields_not_real_market_gate",
+            }
+            report = render_report(summary, {"steps": []}, language="en")
+
+        visible = visible_before_technical_details(report)
+        technical = report.split('<details class="technical-details">', 1)[1]
+        self.assertIn("CSV embedded provenance says real_market_data=false", visible)
+        self.assertIn("csv_internal_fields_not_real_market_gate", visible)
+        self.assertIn("input_csv_source_type", technical)
+        self.assertIn("csv_embedded_probe", technical)
+        self.assertIn("input_csv_source_scope", technical)
+        self.assertIn("local_prices_input", technical)
+        self.assertIn("input_csv_real_market_data", technical)
+        self.assertIn("False", technical)
+        self.assertIn("input_csv_source_claim_boundary", technical)
+        self.assertIn("csv_internal_fields_not_real_market_gate", technical)
+
     def test_sized_candidates_disclose_local_sizing_boundary_in_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)

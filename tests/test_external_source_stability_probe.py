@@ -36,6 +36,10 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
         self.assertEqual(3, summary["passed_runs"])
         self.assertEqual(True, summary["all_sources_all_iterations_passed"])
         self.assertEqual("not_proven", summary["long_term_stability_claim"])
+        self.assertEqual(
+            "current_window_parameters_network_only",
+            summary["short_window_claim_boundary"],
+        )
         self.assertEqual({}, summary["sources"]["akshare"]["observation_failed_checks"])
         self.assertEqual([], probe.strict_errors(manifest))
 
@@ -57,6 +61,10 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
 
         self.assertIn("all_sources_all_iterations_passed=True", stdout.getvalue())
         self.assertIn("long_term_stability_claim=not_proven", stdout.getvalue())
+        self.assertIn(
+            "short_window_claim_boundary=current_window_parameters_network_only",
+            stdout.getvalue(),
+        )
 
     def test_akshare_fallback_is_observation_not_hard_failure(self) -> None:
         metadata = akshare_metadata(fallback=True)
@@ -115,6 +123,10 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertEqual(False, summary["summary"]["sources"]["yfinance"]["all_passed"])
         self.assertEqual("not_proven", summary["summary"]["long_term_stability_claim"])
+        self.assertEqual(
+            "current_window_parameters_network_only",
+            summary["summary"]["short_window_claim_boundary"],
+        )
 
     def test_probe_records_command_timeout_as_failed_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

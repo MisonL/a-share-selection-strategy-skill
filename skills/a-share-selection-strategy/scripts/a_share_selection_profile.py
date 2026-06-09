@@ -167,3 +167,8 @@ def prediction_column_conflict_error(frame: pd.DataFrame) -> str:
 def format_value_counts(values: pd.Series) -> str:
     counts = values.value_counts(dropna=False).head(10)
     return ",".join(f"{value}:{count}" for value, count in counts.items())
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

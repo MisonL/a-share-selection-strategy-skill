@@ -8,6 +8,14 @@ import pandas as pd
 
 
 CAPITAL_FIELDS = ["weight", "notional", "quantity", "cash_reserved"]
+BACKTEST_CAPITAL_FIELDS = [
+    "capital_model",
+    "sizing_claim_boundary",
+    "weight",
+    "notional",
+    "quantity",
+    "cash_reserved",
+]
 SIZING_FIELDS = [
     "cash_budget",
     "lot_size",
@@ -37,7 +45,7 @@ def add_candidate_capital_fields(
     result: pd.DataFrame,
     candidates: pd.DataFrame,
 ) -> pd.DataFrame:
-    present = [field for field in CAPITAL_FIELDS if field in candidates]
+    present = [field for field in BACKTEST_CAPITAL_FIELDS if field in candidates]
     if not present:
         return result
     if len(result) != len(candidates):
@@ -109,3 +117,8 @@ def capacity_gate(
     maximum = summary[summary_field] or 0.0
     if maximum > limit:
         violations.append(f"{summary_field}={maximum} limit={limit}")
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

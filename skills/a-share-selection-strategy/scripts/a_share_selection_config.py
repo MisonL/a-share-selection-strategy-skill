@@ -110,3 +110,8 @@ def require_one_of(section: dict[str, Any], keys: list[str], name: str) -> None:
 def reject_key(section: dict[str, Any], key: str, name: str) -> None:
     if key in section:
         raise ValueError(f"config {name} must not include {key}")
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

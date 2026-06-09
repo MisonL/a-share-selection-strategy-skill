@@ -304,3 +304,8 @@ def empty_result_reason(summary: dict[str, Any], candidates: int) -> str:
     if summary.get("threshold_failed_symbols", 0) == summary.get("scored_symbols", 0):
         return "threshold_filtered_all"
     return "none"
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

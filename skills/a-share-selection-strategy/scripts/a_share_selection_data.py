@@ -29,6 +29,7 @@ def ensure_symbol_text(frame: pd.DataFrame) -> pd.DataFrame:
 def parse_dates(series: pd.Series) -> pd.Series:
     text = series.astype(str).str.strip()
     numeric_yyyymmdd = text.str.fullmatch(r"\d{8}")
+    iso_yyyy_mm_dd = text.str.fullmatch(r"\d{4}-\d{2}-\d{2}")
     parsed = pd.Series(pd.NaT, index=series.index, dtype="datetime64[ns]")
     if numeric_yyyymmdd.any():
         parsed.loc[numeric_yyyymmdd] = pd.to_datetime(
@@ -36,7 +37,15 @@ def parse_dates(series: pd.Series) -> pd.Series:
             format="%Y%m%d",
             errors="coerce",
         )
-    other = ~numeric_yyyymmdd
-    if other.any():
-        parsed.loc[other] = pd.to_datetime(text[other], errors="coerce")
+    if iso_yyyy_mm_dd.any():
+        parsed.loc[iso_yyyy_mm_dd] = pd.to_datetime(
+            text[iso_yyyy_mm_dd],
+            format="%Y-%m-%d",
+            errors="coerce",
+        )
     return parsed
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

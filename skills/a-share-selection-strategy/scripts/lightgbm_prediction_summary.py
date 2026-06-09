@@ -119,3 +119,8 @@ def write_json_summary(summary: dict[str, Any], path: Path) -> None:
         json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True),
         encoding="utf-8",
     )
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

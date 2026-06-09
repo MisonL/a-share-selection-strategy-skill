@@ -53,3 +53,8 @@ def build_risk_notes(metrics: dict[str, float], volume: float) -> str:
     if volume <= 0:
         notes.append("missing tradable volume")
     return "; ".join(notes) if notes else "no major configured risk flag"
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

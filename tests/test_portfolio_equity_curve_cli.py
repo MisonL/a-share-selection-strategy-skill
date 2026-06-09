@@ -111,9 +111,14 @@ class PortfolioEquityCurveCliTests(unittest.TestCase):
                     ]
                 )
             output_exists = output.exists()
+            curve = pd.read_csv(output)
 
         self.assertEqual(0, code, stderr.getvalue())
         self.assertTrue(output_exists)
+        self.assertEqual(
+            ["local_complete_trades_baseline_not_return_promise"],
+            curve["claim_boundary"].tolist(),
+        )
         self.assertIn(
             "claim_boundary=local_complete_trades_baseline_not_return_promise",
             stdout.getvalue(),

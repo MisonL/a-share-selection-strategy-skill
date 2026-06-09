@@ -8,6 +8,9 @@ from datetime import date, datetime
 from typing import Any
 
 import run_today_a_share_selection_helpers as helpers
+from a_share_selection_provenance import (
+    PROVENANCE_COLUMNS as INPUT_CSV_PROVENANCE_COLUMNS,
+)
 from run_today_a_share_selection_input_metadata import history_partial_result
 from a_share_selection_disclosure import (
     ADVICE_BOUNDARY,
@@ -28,6 +31,7 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "source_type": input_metadata.get("source_type", "unknown"),
         "real_market_data": input_metadata.get("real_market_data", "unknown"),
         "input_metadata": input_metadata,
+        "input_csv_provenance": input_csv_provenance(score),
         "advice_boundary": ADVICE_BOUNDARY,
         "recommendation_boundary": RECOMMENDATION_BOUNDARY,
         **row_count_fields(manifest, paths, score, history_selection, initialized),
@@ -54,6 +58,14 @@ def summary_paths(manifest: dict[str, Any]) -> dict[str, Path]:
 def normalized_input_metadata(manifest: dict[str, Any]) -> dict[str, Any]:
     metadata = manifest.get("input_metadata", {})
     return metadata if isinstance(metadata, dict) else {}
+
+
+def input_csv_provenance(score: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: score[key]
+        for key in INPUT_CSV_PROVENANCE_COLUMNS
+        if key in score
+    }
 
 
 def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:
@@ -119,6 +131,7 @@ def prediction_fields(manifest: dict[str, Any], score: dict[str, Any]) -> dict[s
         "prediction_model_executed_by_runner": (
             helpers.prediction_model_executed_by_runner(manifest)
         ),
+        "prediction_claim_boundary": helpers.prediction_claim_boundary(manifest, score),
         "lightgbm_not_used": manifest["lightgbm_not_used"],
         "lightgbm_output_source": manifest.get("lightgbm_output_source", "unknown"),
         "requested_lightgbm_output_source": manifest.get(
@@ -191,7 +204,7 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
     empty_symbols = metadata_list(metadata, "empty_symbols")
     fallback_errors = metadata_list(metadata, "fallback_errors")
     date_range = history_date_range_view(metadata, manifest)
-    return {
+    view = {
         "source": selected_data.get("source", ""),
         "raw_spot_rows": selected_data.get("raw_spot_rows"),
         "filtered_spot_rows": selected_data.get("filtered_spot_rows"),
@@ -219,6 +232,11 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
         "history_metadata_output": str(metadata_path),
         "history_metadata_output_written": metadata_path.exists(),
     }
+    if "adjust" in metadata:
+        view["history_adjust"] = metadata["adjust"]
+    if "adjustflag" in metadata:
+        view["history_adjustflag"] = str(metadata["adjustflag"])
+    return view
 
 
 def history_selection_available(
@@ -330,3 +348,8 @@ def history_symbol_count(manifest: dict[str, Any], history_selection: dict[str, 
         return int(history_selection["selected_symbol_count"])
     symbols = manifest.get("history_symbols", [])
     return len(symbols) if isinstance(symbols, list) else 0
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

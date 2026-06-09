@@ -92,3 +92,8 @@ def raw_close_errors(
         elif abs(float(value) - raw_close) > PRICE_TOLERANCE:
             errors.append(f"{signal_date}_{label}_{field}_raw_mismatch={key[0]}")
     return errors
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

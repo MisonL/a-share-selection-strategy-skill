@@ -16,6 +16,7 @@ sys.path.insert(0, str(TESTS))
 import run_today_a_share_selection_helpers as helpers  # noqa: E402
 from a_share_selection_html_report import render_report  # noqa: E402
 from html_report_helpers import minimal_summary  # noqa: E402
+from test_today_a_share_html_report import visible_before_technical_details  # noqa: E402
 from test_today_a_share_history_end_date import minimal_history_manifest  # noqa: E402
 
 
@@ -84,6 +85,7 @@ class TodayAShareExternalDisclosureTests(unittest.TestCase):
         history = summary["history_selection"]
         self.assertTrue(history["history_partial_result"])
         self.assertEqual(1, history["history_metadata_fallback_error_count"])
+        self.assertEqual("hfq", history["history_adjust"])
         self.assertEqual(
             [{"symbol": "000001", "provider": "stock_zh_a_daily"}],
             history["history_metadata_symbol_providers"],
@@ -93,6 +95,12 @@ class TodayAShareExternalDisclosureTests(unittest.TestCase):
         self.assertIn("history_metadata_fallback_error_count", report)
         self.assertIn("stock_zh_a_daily", report)
         self.assertIn("hist unavailable", report)
+        self.assertIn("history_adjust", report)
+        self.assertIn("hfq", report)
+        visible = visible_before_technical_details(report)
+        self.assertIn("Partial history fetch", visible)
+        self.assertIn("fallback_errors=1", visible)
+        self.assertIn("cannot be described as complete history", visible)
 
     def test_summary_and_html_disclose_partial_history_empty_symbols(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -108,6 +116,7 @@ class TodayAShareExternalDisclosureTests(unittest.TestCase):
         self.assertTrue(history["history_partial_result"])
         self.assertFalse(history["history_output_written"])
         self.assertTrue(history["history_metadata_output_written"])
+        self.assertEqual("3", history["history_adjustflag"])
         self.assertEqual(1, history["history_empty_symbol_count"])
         self.assertEqual(["000001"], history["history_empty_symbols"])
         self.assertIn("history_partial_result", report)
@@ -118,6 +127,42 @@ class TodayAShareExternalDisclosureTests(unittest.TestCase):
         self.assertIn(">1<", report)
         self.assertIn("history_empty_symbols", report)
         self.assertIn("000001", report)
+        self.assertIn("history_adjustflag", report)
+        self.assertIn(">3<", report)
+        visible = visible_before_technical_details(report)
+        self.assertIn("Partial history fetch", visible)
+        self.assertIn("empty_symbols=1", visible)
+        self.assertIn("output_written=false", visible)
+
+    def test_html_discloses_local_input_partial_metadata_before_details(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            summary = minimal_summary(tmpdir, Path(tmpdir) / "diagnostics.csv")
+            summary["input_metadata"] = {
+                "source_type": "external_fetch",
+                "source": "yfinance",
+                "market": "A-share",
+                "market_label_only": True,
+                "source_claim_boundary": (
+                    "market_label_not_source_exchange_or_calendar_proof"
+                ),
+                "requested_symbols": ["AAPL", "MSFT"],
+                "symbol_count": 1,
+                "failed_symbols": [{"symbol": "MSFT", "error": "timeout"}],
+                "empty_symbols": [],
+                "input_partial_result": True,
+                "output_written": True,
+                "metadata_output_written": True,
+            }
+
+            report = render_report(summary, {"steps": []}, language="en")
+
+        visible = visible_before_technical_details(report)
+        technical = report.split('<details class="technical-details">', 1)[1]
+        self.assertIn("Partial local input metadata", visible)
+        self.assertIn("failed_symbols=1", visible)
+        self.assertIn("symbol_count=1/2", visible)
+        self.assertIn("input_metadata.failed_symbols", technical)
+        self.assertIn("timeout", technical)
 
 
 def write_history_metadata_with_fallback(output: Path) -> None:
@@ -129,6 +174,7 @@ def write_history_metadata_with_fallback(output: Path) -> None:
         json.dumps(
             {
                 "source": "akshare",
+                "adjust": "hfq",
                 "end_date": "2026-06-06",
                 "symbols": [
                     {
@@ -159,6 +205,7 @@ def write_partial_history_metadata(output: Path) -> None:
         json.dumps(
             {
                 "source": "baostock",
+                "adjustflag": "3",
                 "end_date": "2026-06-06",
                 "requested_symbols": ["000001"],
                 "symbols": [

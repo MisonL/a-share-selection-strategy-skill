@@ -81,3 +81,8 @@ def first_existing_required(frame: pd.DataFrame, columns: list[str], label: str)
     raise ValueError(
         f"spot input requires {label} column; accepted aliases: {','.join(columns)}"
     )
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

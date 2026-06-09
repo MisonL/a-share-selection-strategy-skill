@@ -65,6 +65,8 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
                 {
                     "symbol": "000002",
                     "date": prices[prices["symbol"] == "000002"].iloc[20]["date"],
+                    "capital_model": "equal_cash_budget_lot_floor",
+                    "sizing_claim_boundary": "local_sizing_not_broker_order",
                     "weight": 0.25,
                     "notional": 25000.0,
                     "quantity": 1000,
@@ -73,6 +75,8 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
                 {
                     "symbol": "000002",
                     "date": "2025-12-31",
+                    "capital_model": "equal_cash_budget_lot_floor",
+                    "sizing_claim_boundary": "local_sizing_not_broker_order",
                     "weight": 0.4,
                     "notional": 40000.0,
                     "quantity": 1500,
@@ -103,6 +107,8 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         self.assertEqual(0, code)
         self.assertEqual(["complete", "incomplete"], result["status"].tolist())
         self.assertEqual(["none", "missing_entry_price"], result["missing_reason"].tolist())
+        self.assertEqual(["equal_cash_budget_lot_floor"] * 2, result["capital_model"].tolist())
+        self.assertEqual(["local_sizing_not_broker_order"] * 2, result["sizing_claim_boundary"].tolist())
         self.assertEqual([0.25, 0.4], result["weight"].tolist())
         self.assertEqual([25000.0, 40000.0], result["notional"].tolist())
         self.assertEqual([1000, 1500], result["quantity"].tolist())

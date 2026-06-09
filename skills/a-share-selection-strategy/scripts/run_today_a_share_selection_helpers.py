@@ -55,6 +55,17 @@ def prediction_columns_consumed(
     return str(summary.get("prediction_input_source", "")) == "external_input"
 
 
+def prediction_claim_boundary(
+    manifest: dict[str, Any],
+    score: dict[str, Any] | None = None,
+) -> str:
+    if not manifest.get("prediction_mode"):
+        return "not_prediction_derived"
+    if prediction_columns_consumed(manifest, score):
+        return "external_input_columns_consumed_runner_does_not_execute_prediction_model"
+    return "prediction_columns_not_consumed_scoring_not_completed"
+
+
 def spot_metadata_view(manifest: dict[str, Any]) -> dict[str, Any]:
     output_dir = Path(manifest["output_dir"])
     metadata_path = output_dir / "spot_metadata.json"
@@ -249,6 +260,8 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
     html_report = html_report_stdout_value(manifest, output)
     html_error = html_report_error_stdout(manifest)
     disclosure = runner_disclosure_stdout(view)
+    runner_metadata = runner_metadata_stdout(metadata)
+    input_csv = input_csv_provenance_stdout(view.get("input_csv_provenance", {}))
     print(
         "OK: runner=run_today_a_share_selection "
         f"mode={manifest['mode']} steps={len(manifest['steps'])} "
@@ -256,6 +269,7 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
         f"consumes_prediction_columns={str(manifest.get('consumes_prediction_columns', False)).lower()} "
         f"prediction_input_source={prediction_input_source(manifest)} "
         f"prediction_model_executed_by_runner={str(prediction_model_executed_by_runner(manifest)).lower()} "
+        f"prediction_claim_boundary={view['prediction_claim_boundary']} "
         f"lightgbm_not_used={str(manifest['lightgbm_not_used']).lower()} "
         f"lightgbm_output_source={manifest.get('lightgbm_output_source', 'unknown')} "
         "lightgbm_executed_by_runner=false "
@@ -265,6 +279,8 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
         f"market_label_only={metadata_stdout_value(metadata.get('market_label_only'))} "
         "source_claim_boundary="
         f"{metadata_stdout_value(metadata.get('source_claim_boundary'))} "
+        f"{runner_metadata} "
+        f"{input_csv} "
         f"prices_rows={view['prices_rows']} "
         f"candidate_rows={view['candidate_rows']} "
         f"diagnostic_rows={view['diagnostic_rows']} "
@@ -276,11 +292,84 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
     )
 
 
+def runner_metadata_stdout(metadata: dict[str, Any]) -> str:
+    parts = [
+        f"runner_metadata_source={metadata_stdout_value(metadata.get('source_type'))}",
+        f"runner_real_market_data={metadata_stdout_value(metadata.get('real_market_data'))}",
+        f"runner_source_scope={metadata_stdout_value(metadata.get('source_scope'))}",
+        f"input_partial_result={metadata_stdout_value(metadata.get('input_partial_result'))}",
+        "input_failed_symbol_count="
+        f"{metadata_stdout_value(metadata.get('input_failed_symbol_count'))}",
+        "input_empty_symbol_count="
+        f"{metadata_stdout_value(metadata.get('input_empty_symbol_count'))}",
+        f"input_symbol_count={input_symbol_count_stdout(metadata)}",
+        f"input_requested_symbols={metadata_list_stdout(metadata.get('requested_symbols'))}",
+        f"input_failed_symbols={metadata_list_stdout(metadata.get('failed_symbols'))}",
+        f"input_empty_symbols={metadata_list_stdout(metadata.get('empty_symbols'))}",
+        f"input_output_written={metadata_stdout_value(metadata.get('output_written'))}",
+        "input_metadata_output_written="
+        f"{metadata_stdout_value(metadata.get('metadata_output_written'))}",
+    ]
+    return " ".join(parts)
+
+
+def input_csv_provenance_stdout(value: Any) -> str:
+    provenance = value if isinstance(value, dict) else {}
+    parts = [
+        f"input_csv_source_type={metadata_stdout_value(provenance.get('source_type'))}",
+        f"input_csv_real_market_data={metadata_stdout_value(provenance.get('real_market_data'))}",
+        f"input_csv_source_scope={metadata_stdout_value(provenance.get('source_scope'))}",
+        "input_csv_source_claim_boundary="
+        f"{metadata_stdout_value(provenance.get('source_claim_boundary'))}",
+    ]
+    return " ".join(parts)
+
+
 def metadata_stdout_value(value: Any) -> str:
     if isinstance(value, bool):
         return str(value).lower()
     text = str(value).strip() if value is not None else ""
     return text or "unknown"
+
+
+def input_symbol_count_stdout(metadata: dict[str, Any]) -> str:
+    symbol_count = metadata.get("symbol_count")
+    requested = metadata.get("input_requested_symbol_count")
+    if requested is None and isinstance(metadata.get("requested_symbols"), list):
+        requested = len(metadata["requested_symbols"])
+    if symbol_count is None:
+        return "unknown"
+    if requested is None:
+        return str(symbol_count)
+    return f"{symbol_count}/{requested}"
+
+
+def metadata_list_stdout(value: Any) -> str:
+    if not isinstance(value, list):
+        return "unknown"
+    tokens = [metadata_item_stdout(item) for item in value]
+    tokens = [token for token in tokens if token]
+    return ",".join(tokens) if tokens else "none"
+
+
+def metadata_item_stdout(item: Any) -> str:
+    if isinstance(item, dict):
+        symbol = stdout_token(item.get("symbol"))
+        error = stdout_token(item.get("error"))
+        if symbol != "unknown" and error != "unknown":
+            return f"{symbol}:{error}"
+        if symbol != "unknown":
+            return symbol
+    return stdout_token(item)
+
+
+def stdout_token(value: Any) -> str:
+    text = str(value).strip() if value is not None else ""
+    if not text:
+        return "unknown"
+    for source, target in ((" ", "_"), ("\t", "_"), ("\n", "_"), (",", "_"), (";", "_")):
+        text = text.replace(source, target)
+    return text
 
 
 def runner_disclosure_stdout(view: dict[str, Any]) -> str:
@@ -317,6 +406,8 @@ def runner_disclosure_stdout(view: dict[str, Any]) -> str:
                 f"{metadata_stdout_value(history.get('history_metadata_failed_symbol_count'))}",
                 "history_fallback_error_count="
                 f"{metadata_stdout_value(history.get('history_metadata_fallback_error_count'))}",
+                f"history_adjust={metadata_stdout_value(history.get('history_adjust'))}",
+                f"history_adjustflag={metadata_stdout_value(history.get('history_adjustflag'))}",
                 "history_symbols_reached_end_date_count="
                 f"{metadata_stdout_value(history.get('history_metadata_symbols_reached_end_date_count'))}",
                 "history_all_symbols_reached_end_date="
@@ -334,3 +425,8 @@ def spot_failed_pages(spot_metadata: dict[str, Any]) -> int | None:
         return len(failed)
     pages_failed = spot_metadata.get("pages_failed")
     return int(pages_failed) if isinstance(pages_failed, int) else None
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

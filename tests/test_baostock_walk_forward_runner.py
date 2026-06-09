@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import redirect_stdout
+from io import StringIO
 import json
 import subprocess
 import tempfile
@@ -24,34 +26,45 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
     def test_cli_offline_plan_writes_manifest_without_executing_steps(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
-            code = runner.main(
-                [
-                    "--symbols",
-                    "000001,600000",
-                    "--start-date",
-                    "2024-01-01",
-                    "--end-date",
-                    "2026-05-29",
-                    "--signal-dates",
-                    "2026-05-12",
-                    "--output-dir",
-                    str(output),
-                    "--cash-budget",
-                    "1000000",
-                    "--max-open-positions",
-                    "10",
-                    "--max-gross-weight",
-                    "1.0",
-                    "--max-gross-notional",
-                    "1000000",
-                    "--max-cash-reserved",
-                    "1000000",
-                    "--offline-plan",
-                ]
-            )
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                code = runner.main(
+                    [
+                        "--symbols",
+                        "000001,600000",
+                        "--start-date",
+                        "2024-01-01",
+                        "--end-date",
+                        "2026-05-29",
+                        "--signal-dates",
+                        "2026-05-12",
+                        "--output-dir",
+                        str(output),
+                        "--cash-budget",
+                        "1000000",
+                        "--max-open-positions",
+                        "10",
+                        "--max-gross-weight",
+                        "1.0",
+                        "--max-gross-notional",
+                        "1000000",
+                        "--max-cash-reserved",
+                        "1000000",
+                        "--offline-plan",
+                    ]
+                )
             data = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
 
         self.assertEqual(0, code)
+        first_line = stdout.getvalue().splitlines()[0]
+        self.assertTrue(first_line.startswith("PLAN: "), first_line)
+        self.assertIn("execution_mode=offline_plan", first_line)
+        self.assertIn("commands_executed=false", first_line)
+        self.assertIn("verdict=offline_plan_not_executed", first_line)
+        self.assertIn(
+            "claim_boundary=offline_plan_manifest_only_not_real_market_prediction_or_backtest",
+            first_line,
+        )
         self.assertEqual("offline_plan", data["execution_mode"])
         self.assertFalse(data["commands_executed"])
         self.assertFalse(data["real_market_data_executed"])
@@ -212,6 +225,35 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
         self.assertIn("--require-capital-fields", commands["portfolio_overlap"])
         self.assertIn("--fail-on-symbol-overlap", commands["portfolio_overlap"])
 
+    def test_run_promotes_summary_verdict_to_manifest_and_stdout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = args_for(output, signal_dates=["2026-05-12"])
+            executor = FakeExecutor({})
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args=args,
+                manifest=manifest,
+                manifest_path=output / "run_manifest.json",
+                executor=executor,
+            )
+            stdout = StringIO()
+
+            runner.run_pipeline(context)
+            with redirect_stdout(stdout):
+                runner.print_summary(manifest, context.manifest_path)
+            data = json.loads(context.manifest_path.read_text(encoding="utf-8"))
+
+        line = stdout.getvalue()
+        self.assertEqual("enabled_gates_passed_not_external_proof", data["verdict"])
+        self.assertTrue(data["capacity_gate_pass"])
+        self.assertEqual("pass", data["capacity_gate_status"])
+        self.assertEqual("summary_not_external_gate", data["claim_boundary"])
+        self.assertIn("verdict=enabled_gates_passed_not_external_proof", line)
+        self.assertIn("capacity_gate_pass=True", line)
+        self.assertIn("capacity_gate_status=pass", line)
+        self.assertIn("claim_boundary=summary_not_external_gate", line)
+
     def test_can_request_holding_period_tradability_model(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             args = args_for(
@@ -317,6 +359,8 @@ class FakeExecutor:
         self.calls.append(command)
         step = infer_step(command)
         code = self.returncodes.get(step, 0)
+        if step == "summary" and code == 0:
+            write_fake_run_summary(command)
         return subprocess.CompletedProcess(command, code, stdout=f"{step} stdout", stderr=f"{step} stderr")
 
 
@@ -352,6 +396,21 @@ def signal_from_command(command: list[str]) -> str:
         if path.name.startswith("2026-"):
             return path.name
     raise AssertionError(f"cannot infer signal from command: {command}")
+
+
+def write_fake_run_summary(command: list[str]) -> None:
+    output = Path(command[command.index("--output") + 1])
+    output.write_text(
+        json.dumps(
+            {
+                "capacity_gate_pass": True,
+                "capacity_gate_status": "pass",
+                "verdict": "enabled_gates_passed_not_external_proof",
+                "claim_boundary": "summary_not_external_gate",
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 def args_for(

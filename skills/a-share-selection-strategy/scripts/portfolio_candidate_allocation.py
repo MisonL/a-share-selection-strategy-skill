@@ -8,12 +8,14 @@ from typing import Any
 import pandas as pd
 
 from a_share_selection_capital import SIZING_FIELDS
+from a_share_selection_calendar_contract import CALENDAR_MODEL
 from a_share_selection_data import parse_dates
 from validate_ohlcv import validate_frame
 
 
 CAPITAL_MODEL = "portfolio_cash_lot_floor"
 CAPITAL_COLUMNS = SIZING_FIELDS
+CLAIM_BOUNDARY = "local_portfolio_allocation_not_broker_or_external_cash_capacity_proof"
 
 
 def allocate_portfolio(
@@ -252,6 +254,8 @@ def build_summary(raw: pd.DataFrame, selected: list[pd.DataFrame], skipped_rows:
     summary = {
         "schema_version": 1,
         "allocation_model": CAPITAL_MODEL,
+        "calendar_model": CALENDAR_MODEL,
+        "claim_boundary": CLAIM_BOUNDARY,
         "raw_candidates": int(len(raw)),
         "allocated_candidates": int(sum(len(frame) for frame in selected)),
         "skipped_candidates": int(len(skipped_rows)),
@@ -308,3 +312,8 @@ def empty_day() -> dict[str, Any]:
 
 def skip(reason: str) -> dict[str, Any]:
     return {"skip_reason": reason, "active_dates": [], "capital": {}}
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

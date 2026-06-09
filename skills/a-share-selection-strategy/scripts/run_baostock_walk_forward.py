@@ -157,6 +157,7 @@ def run_pipeline(context: RunContext) -> None:
     overlap_allowed = (0, 3) if args.expect_portfolio_violations else (0,)
     run_step(context, Step("portfolio_overlap", overlap_command(args, output, backtests), overlap_allowed))
     run_step(context, Step("summary", summary_command(args, output)))
+    promote_run_summary(context, output / "prediction_run_summary.json")
 
 def write_offline_plan(
     args: argparse.Namespace,
@@ -273,6 +274,24 @@ def step_record(step: Step, result: subprocess.CompletedProcess[str]) -> dict[st
         "stderr": result.stderr,
     }
 
+
+def promote_run_summary(context: RunContext, summary_path: Path) -> None:
+    if not summary_path.is_file():
+        return
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    if not isinstance(summary, dict):
+        return
+    keys = (
+        "verdict",
+        "claim_boundary",
+        "capacity_gate_pass",
+        "capacity_gate_status",
+    )
+    for key in keys:
+        if key in summary:
+            context.manifest[key] = summary[key]
+    write_json(context.manifest, context.manifest_path)
+
 def signal_paths(signal_dir: Path) -> dict[str, Path]:
     return {
         "sliced": signal_dir / "prices_signal_window.csv",
@@ -374,11 +393,31 @@ def write_json(data: dict[str, Any], path: Path) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
 
 def print_summary(manifest: dict[str, Any], manifest_path: Path) -> None:
+    if manifest.get("execution_mode") == "offline_plan":
+        print_offline_plan_summary(manifest, manifest_path)
+        return
     print(
         f"OK: runner=run_baostock_walk_forward symbols={len(manifest['symbols'])} "
         f"signals={len(manifest['signal_dates'])} steps={len(manifest['steps'])} "
+        f"verdict={manifest.get('verdict', 'unknown')} "
+        f"capacity_gate_pass={manifest.get('capacity_gate_pass', 'unknown')} "
+        f"capacity_gate_status={manifest.get('capacity_gate_status', 'unknown')} "
+        f"claim_boundary={manifest.get('claim_boundary', 'unknown')} "
         f"limit_rules_model={manifest['limit_rules_model']} manifest={manifest_path}"
     )
+
+
+def print_offline_plan_summary(manifest: dict[str, Any], manifest_path: Path) -> None:
+    print(
+        f"PLAN: runner=run_baostock_walk_forward symbols={len(manifest['symbols'])} "
+        f"signals={len(manifest['signal_dates'])} steps={len(manifest['steps'])} "
+        f"execution_mode={manifest.get('execution_mode', 'unknown')} "
+        f"commands_executed={str(manifest.get('commands_executed', 'unknown')).lower()} "
+        "verdict=offline_plan_not_executed "
+        f"claim_boundary={manifest.get('claim_boundary', 'unknown')} "
+        f"limit_rules_model={manifest['limit_rules_model']} manifest={manifest_path}"
+    )
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

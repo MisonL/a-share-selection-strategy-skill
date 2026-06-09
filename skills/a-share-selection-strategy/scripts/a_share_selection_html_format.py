@@ -293,3 +293,8 @@ def missing_key_disclosure_value(column: str) -> dict[str, str]:
 
 def missing_field(value: Any) -> bool:
     return isinstance(value, dict) and value.get(MISSING_FIELD_MARKER) is not None
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

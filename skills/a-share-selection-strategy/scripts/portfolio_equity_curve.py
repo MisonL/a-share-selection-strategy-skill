@@ -12,6 +12,7 @@ from typing import Any
 REQUIRED_COLUMNS = ["signal_date", "return", "missing_data", "status"]
 MIN_DRAWDOWN_FLOOR = -1.0
 MAX_DRAWDOWN_FLOOR = 0.0
+CLAIM_BOUNDARY = "local_complete_trades_baseline_not_return_promise"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -161,6 +162,7 @@ def period_row(frame: pd.DataFrame) -> dict[str, Any]:
         "mean_return": float(complete["return"].mean()),
         "incomplete_trades": incomplete,
         "weighting": "equal_weight_completed_trades",
+        "claim_boundary": CLAIM_BOUNDARY,
     }
 
 
@@ -237,12 +239,12 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
         f"max_drawdown_trough_date={summary['max_drawdown_trough_date']} "
         "complete_trades_only=true "
         "final_equity_excludes_incomplete=true "
-        "claim_boundary=local_complete_trades_baseline_not_return_promise "
+        f"claim_boundary={CLAIM_BOUNDARY} "
         f"output={output}"
     )
     print(
         "INFO: portfolio_model=equal_weight_completed_trades "
-        "claim_boundary=local_complete_trades_baseline_not_return_promise"
+        f"claim_boundary={CLAIM_BOUNDARY}"
     )
 
 

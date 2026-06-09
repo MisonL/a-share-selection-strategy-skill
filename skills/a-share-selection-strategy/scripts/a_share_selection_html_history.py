@@ -22,6 +22,8 @@ def history_selection_fields(
         (i18n("allow_partial_history", language), selection.get("allow_partial_history", "")),
         ("history_partial_result", selection.get("history_partial_result", "")),
         ("history_output_written", selection.get("history_output_written", "")),
+        ("history_adjust", selection.get("history_adjust", "")),
+        ("history_adjustflag", selection.get("history_adjustflag", "")),
         (
             i18n("history_failed_symbols", language),
             selection.get("history_metadata_failed_symbol_count", ""),
@@ -58,3 +60,8 @@ def history_selection_fields(
             selection.get("history_metadata_symbol_providers", ""),
         ),
     ]
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

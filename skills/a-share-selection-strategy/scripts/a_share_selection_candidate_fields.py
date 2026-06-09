@@ -51,3 +51,8 @@ def one_word_bar(row: pd.Series) -> bool:
     if any(pd.isna(value) for value in values):
         return False
     return max(values) == min(values)
+
+if __name__ == "__main__":
+    from a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)

@@ -281,7 +281,9 @@ def print_summary(
         f"symbol_count={metadata['symbol_count']} "
         f"failed_symbols={len(metadata['failed_symbols'])} "
         f"empty_symbols={len(metadata['empty_symbols'])} "
-        f"market_label_only=true output={output}"
+        "market_label_only=true "
+        f"source_claim_boundary={metadata.get('source_claim_boundary', 'unknown')} "
+        f"output={output}"
     )
 
 

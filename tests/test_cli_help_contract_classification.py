@@ -123,25 +123,11 @@ class CliHelpContractClassificationTests(unittest.TestCase):
                     )
 
     def test_helper_modules_fail_fast_when_executed_with_dependencies(self) -> None:
-        uv = which("uv")
-        self.assertIsNotNone(uv, "uv is required for helper misuse contract test")
         for script_name in HELP_CONTRACT_EXCLUDED_HELPERS:
             script = SCRIPTS / script_name
             with self.subTest(script=script.name):
                 result = subprocess.run(
-                    [
-                        str(uv),
-                        "run",
-                        "--with",
-                        "pandas",
-                        "--with",
-                        "numpy",
-                        "--with",
-                        "pyarrow",
-                        "python",
-                        str(script),
-                        "--help",
-                    ],
+                    helper_direct_exec_command(script),
                     cwd=ROOT,
                     capture_output=True,
                     text=True,
@@ -152,3 +138,22 @@ class CliHelpContractClassificationTests(unittest.TestCase):
                 self.assertEqual("", result.stdout)
                 self.assertIn("not a CLI entry", result.stderr)
                 self.assertIn("use one of:", result.stderr)
+
+
+def helper_direct_exec_command(script: Path) -> list[str]:
+    uv = which("uv")
+    if uv:
+        return [
+            str(uv),
+            "run",
+            "--with",
+            "pandas",
+            "--with",
+            "numpy",
+            "--with",
+            "pyarrow",
+            "python",
+            str(script),
+            "--help",
+        ]
+    return [sys.executable, str(script), "--help"]

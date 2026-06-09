@@ -172,6 +172,7 @@ class AShareSelectionScriptTests(unittest.TestCase):
 
         self.assertEqual(0, code, stderr)
         self.assertIn("volume_unit_verification=not_verified_by_cli", stdout)
+        self.assertIn("volume_must_not_be_amount_or_mixed_units", stdout)
 
     def test_score_rejects_negative_price(self) -> None:
         config = load_config("example_config.json")

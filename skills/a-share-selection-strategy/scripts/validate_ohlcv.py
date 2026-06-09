@@ -51,7 +51,8 @@ def main(argv: list[str] | None = None) -> int:
     symbols = frame["symbol"].nunique()
     print(
         f"OK: validated {len(frame)} rows across {symbols} symbols "
-        f"volume_unit_verification={VOLUME_UNIT_VERIFICATION}"
+        f"volume_unit_verification={VOLUME_UNIT_VERIFICATION} "
+        "volume_must_not_be_amount_or_mixed_units"
     )
     return 0
 

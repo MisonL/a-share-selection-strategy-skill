@@ -357,6 +357,7 @@ def disclosure_alerts(
     alerts = (
         advice_alerts(summary, language)
         + input_metadata_alerts(summary, language)
+        + input_csv_provenance_alerts(summary, language)
         + sizing_alerts(candidate_rows or [], language)
         + spot_alerts(summary, language)
         + history_alerts(summary, language)
@@ -408,6 +409,25 @@ def market_label_only(metadata: dict[str, Any]) -> bool:
         return True
     value = metadata.get("market_label_only", False)
     return value is True or str(value).strip().lower() == "true"
+
+
+def input_csv_provenance_alerts(summary: dict[str, Any], language: str) -> list[str]:
+    provenance = summary.get("input_csv_provenance", {})
+    if not isinstance(provenance, dict) or not provenance:
+        return []
+    real_market_data = str(provenance.get("real_market_data", "unknown")).strip().lower()
+    boundary = str(provenance.get("source_claim_boundary", "")).strip()
+    if real_market_data != "false" and not boundary:
+        return []
+    en = (
+        f"CSV embedded provenance says real_market_data={real_market_data}; "
+        f"source_claim_boundary={boundary or 'unknown'}."
+    )
+    zh = (
+        f"CSV 内嵌 provenance 声明 real_market_data={real_market_data}；"
+        f"source_claim_boundary={boundary or 'unknown'}。"
+    )
+    return [bilingual(en, zh, language)]
 
 
 def sizing_alerts(rows: list[dict[str, Any]], language: str) -> list[str]:

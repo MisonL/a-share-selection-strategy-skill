@@ -17,18 +17,28 @@ def read_table(path: Path) -> pd.DataFrame:
         raise FileNotFoundError(f"input file not found: {path}")
     suffix = path.suffix.lower()
     if suffix == ".csv":
-        return pd.read_csv(path, dtype={"symbol": str})
+        return pd.read_csv(path, dtype={"symbol": str, "name": str})
     if suffix in {".parquet", ".pq"}:
-        return ensure_symbol_text(pd.read_parquet(path))
+        return ensure_text_columns(pd.read_parquet(path))
     raise ValueError("unsupported input format; use .csv, .parquet, or .pq")
 
 
-def ensure_symbol_text(frame: pd.DataFrame) -> pd.DataFrame:
-    if "symbol" not in frame.columns:
+def ensure_text_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    text_columns = [column for column in ("symbol", "name") if column in frame.columns]
+    if not text_columns:
         return frame
     result = frame.copy()
-    result["symbol"] = result["symbol"].astype(str).str.strip()
+    if "symbol" in text_columns:
+        result["symbol"] = result["symbol"].astype(str).str.strip()
+    if "name" in text_columns:
+        result["name"] = result["name"].map(text_value)
     return result
+
+
+def text_value(value: object) -> object:
+    if pd.isna(value):
+        return value
+    return str(value)
 
 
 def parse_dates(series: pd.Series) -> pd.Series:

@@ -6,11 +6,17 @@ from typing import Any
 
 
 MISSING_TEXT_MARKERS = {"", "nan", "none", "null", "<na>"}
+SH_SZ_EXCHANGES = ("sh", "sz")
+A_SHARE_EXCHANGES = ("sh", "sz", "bj")
 
 
-def parse_six_digit_symbols(text: str) -> list[str]:
+def parse_six_digit_symbols(
+    text: str,
+    *,
+    allowed_exchanges: tuple[str, ...] = SH_SZ_EXCHANGES,
+) -> list[str]:
     symbols = [
-        normalize_prefixed_symbol(item.strip())
+        normalize_prefixed_symbol(item.strip(), allowed_exchanges=allowed_exchanges)
         for item in text.split(",")
         if item.strip()
     ]
@@ -22,19 +28,36 @@ def parse_six_digit_symbols(text: str) -> list[str]:
     return symbols
 
 
-def normalize_prefixed_symbol(value: Any) -> str:
+def parse_a_share_symbols(text: str) -> list[str]:
+    return parse_six_digit_symbols(text, allowed_exchanges=A_SHARE_EXCHANGES)
+
+
+def normalize_prefixed_symbol(
+    value: Any,
+    *,
+    allowed_exchanges: tuple[str, ...] = SH_SZ_EXCHANGES,
+) -> str:
     text = str(value).strip()
     if text.lower() in MISSING_TEXT_MARKERS:
         return ""
-    if text.lower().startswith(("sh.", "sz.")):
+    prefixes = tuple(f"{exchange}." for exchange in allowed_exchanges)
+    suffixes = tuple(f".{exchange}" for exchange in allowed_exchanges)
+    if text.lower().startswith(prefixes):
         text = text.split(".", 1)[1]
-    if text.lower().endswith((".sh", ".sz")):
+    if text.lower().endswith(suffixes):
         text = text.rsplit(".", 1)[0]
     return text
 
 
-def normalize_symbol_values(values: Any) -> list[str]:
-    return [normalize_prefixed_symbol(value) for value in values]
+def normalize_symbol_values(
+    values: Any,
+    *,
+    allowed_exchanges: tuple[str, ...] = SH_SZ_EXCHANGES,
+) -> list[str]:
+    return [
+        normalize_prefixed_symbol(value, allowed_exchanges=allowed_exchanges)
+        for value in values
+    ]
 
 
 def baostock_code(symbol: str) -> str:

@@ -48,8 +48,9 @@ def main(argv: list[str] | None = None) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Probe external source stability through fetch CLIs. Repeated success only covers this "
-            "run window and keeps long_term_stability_claim=not_proven."
+            "Probe akshare, yfinance, baostock, and zzshare source stability through fetch CLIs. "
+            "Repeated success only covers this run window and keeps "
+            "long_term_stability_claim=not_proven."
         )
     )
     parser.add_argument("--output-dir", required=True)
@@ -72,6 +73,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--baostock-start-date", default="2024-01-01")
     parser.add_argument("--baostock-end-date", default="2026-05-29")
     parser.add_argument("--baostock-adjust", default="3")
+    parser.add_argument("--zzshare-symbols", default="000001,600000")
+    parser.add_argument("--zzshare-start-date", default="2024-01-01")
+    parser.add_argument("--zzshare-end-date", default="2026-05-29")
+    parser.add_argument("--zzshare-timeout-seconds", type=float, default=10.0)
+    parser.add_argument(
+        "--zzshare-request-interval-seconds",
+        type=non_negative_float,
+        default=2.1,
+    )
+    parser.add_argument("--zzshare-limit", type=positive_int, default=1000)
+    parser.add_argument("--zzshare-max-pages", type=positive_int, default=10)
     return parser
 
 
@@ -79,6 +91,13 @@ def positive_int(value: str) -> int:
     parsed = int(value)
     if parsed <= 0:
         raise argparse.ArgumentTypeError("value must be positive")
+    return parsed
+
+
+def non_negative_float(value: str) -> float:
+    parsed = float(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("value must be non-negative")
     return parsed
 
 
@@ -140,7 +159,12 @@ def decode_timeout_output(value: str | bytes | None) -> str:
 
 
 def source_specs(args: argparse.Namespace, iteration_dir: Path) -> list[SourceSpec]:
-    return [akshare_spec(args, iteration_dir), yfinance_spec(args, iteration_dir), baostock_spec(args, iteration_dir)]
+    return [
+        akshare_spec(args, iteration_dir),
+        yfinance_spec(args, iteration_dir),
+        baostock_spec(args, iteration_dir),
+        zzshare_spec(args, iteration_dir),
+    ]
 
 
 def akshare_spec(args: argparse.Namespace, iteration_dir: Path) -> SourceSpec:
@@ -197,6 +221,29 @@ def baostock_spec(args: argparse.Namespace, iteration_dir: Path) -> SourceSpec:
             "--output", output,
             "--metadata-output", metadata,
             "--adjust", args.baostock_adjust,
+            "--fail-on-fetch-error",
+        ),
+    )
+
+
+def zzshare_spec(args: argparse.Namespace, iteration_dir: Path) -> SourceSpec:
+    output = iteration_dir / "zzshare" / "prices.csv"
+    metadata = iteration_dir / "zzshare" / "metadata.json"
+    return SourceSpec(
+        name="zzshare",
+        output_path=output,
+        metadata_path=metadata,
+        command=script_command(
+            "fetch_zzshare_a_share.py",
+            "--symbols", args.zzshare_symbols,
+            "--start-date", args.zzshare_start_date,
+            "--end-date", args.zzshare_end_date,
+            "--output", output,
+            "--metadata-output", metadata,
+            "--timeout-seconds", args.zzshare_timeout_seconds,
+            "--request-interval-seconds", args.zzshare_request_interval_seconds,
+            "--limit", args.zzshare_limit,
+            "--max-pages", args.zzshare_max_pages,
             "--fail-on-fetch-error",
         ),
     )
@@ -260,6 +307,16 @@ def source_checks(source: str, metadata: dict[str, Any], command: list[str] | No
             check("non_trading_rows_zero", int(metadata.get("non_trading_rows", 0)) == 0),
             check("tradestatus_missing_rows_zero", int(metadata.get("tradestatus_missing_rows", 0)) == 0),
             check("adjustflag_matches_request", str(metadata.get("adjustflag", "")) == requested_value(command, "--adjust")),
+        ]
+    if source == "zzshare":
+        return common + [
+            check("invalid_rows_accounted", int(metadata.get("invalid_rows", 0)) == int(metadata.get("dropped_invalid_rows", 0))),
+            check("non_trading_rows_zero", int(metadata.get("non_trading_rows", 0)) == 0),
+            check("tradestatus_missing_rows_zero", int(metadata.get("tradestatus_missing_rows", 0)) == 0),
+            check("possibly_truncated_symbols_empty", not metadata.get("possibly_truncated_symbols")),
+            check("fields_all", str(metadata.get("fields", "")) == "all"),
+            check("limit_matches_request", str(metadata.get("limit", "")) == requested_value(command, "--limit")),
+            check("max_pages_matches_request", str(metadata.get("max_pages", "")) == requested_value(command, "--max-pages")),
         ]
     return common
 

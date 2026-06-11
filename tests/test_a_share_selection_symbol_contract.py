@@ -17,10 +17,39 @@ sys.path.insert(0, str(TESTS))
 
 import score_candidates as scorer  # noqa: E402
 import validate_ohlcv  # noqa: E402
+from a_share_selection_symbols import (  # noqa: E402
+    A_SHARE_EXCHANGES,
+    normalize_symbol_values,
+    parse_a_share_symbols,
+    parse_six_digit_symbols,
+)
 from helpers import build_frame  # noqa: E402
 
 
 class AShareSelectionSymbolContractTests(unittest.TestCase):
+    def test_parse_six_digit_symbols_accepts_sh_sz_prefixes_and_suffixes(self) -> None:
+        self.assertEqual(
+            ["000001", "600000"],
+            parse_six_digit_symbols("sz.000001,600000.SH"),
+        )
+
+    def test_parse_six_digit_symbols_rejects_bj_for_sh_sz_sources(self) -> None:
+        with self.assertRaisesRegex(ValueError, "bj.430047"):
+            parse_six_digit_symbols("bj.430047")
+
+    def test_parse_a_share_symbols_accepts_bj_prefixes_and_suffixes(self) -> None:
+        self.assertEqual(
+            ["000001", "600000", "430047", "835185"],
+            parse_a_share_symbols("sz.000001,600000.SH,bj.430047,835185.BJ"),
+        )
+
+    def test_normalize_symbol_values_only_strips_bj_when_explicitly_allowed(self) -> None:
+        self.assertEqual(["bj.430047"], normalize_symbol_values(["bj.430047"]))
+        self.assertEqual(
+            ["430047"],
+            normalize_symbol_values(["bj.430047"], allowed_exchanges=A_SHARE_EXCHANGES),
+        )
+
     def test_validate_rejects_float_numeric_damaged_symbol(self) -> None:
         frame = build_frame()
         frame["symbol"] = "1.0"

@@ -174,6 +174,19 @@ class AShareSelectionParquetCliTests(unittest.TestCase):
 
         self.assertEqual("12345", loaded["symbol"].iloc[0])
 
+    def test_read_table_keeps_parquet_name_column_as_text(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "numeric-name.parquet"
+            pd.DataFrame([{"symbol": "000001", "name": 123}]).to_parquet(
+                path,
+                index=False,
+            )
+
+            loaded = read_table(path)
+
+        self.assertEqual("123", loaded["name"].iloc[0])
+        self.assertIsInstance(loaded["name"].iloc[0], str)
+
     def test_validate_rejects_float_numeric_damaged_parquet_symbol(self) -> None:
         frame = build_frame()
         frame["symbol"] = 1.0

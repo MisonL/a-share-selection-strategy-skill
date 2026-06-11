@@ -25,6 +25,7 @@ CLI_HELP_ENTRIES = [
     "fetch_baostock_a_share.py",
     "fetch_eastmoney_a_share_spot.py",
     "fetch_yfinance_ohlcv.py",
+    "fetch_zzshare_a_share.py",
     "generate_lightgbm_predictions.py",
     "portfolio_equity_curve.py",
     "portfolio_overlap_report.py",
@@ -51,6 +52,7 @@ HELP_CONTRACT_EXCLUDED_HELPERS = [
     "run_today_a_share_selection_parser.py",
     "run_today_a_share_selection_provenance.py",
     "run_today_a_share_selection_summary.py",
+    "run_today_a_share_selection_validation.py",
     "a_share_selection_backtest_rows.py",
     "a_share_selection_calendar_contract.py",
     "a_share_selection_candidate_fields.py",
@@ -87,6 +89,8 @@ HELP_CONTRACT_EXCLUDED_HELPERS = [
     "walk_forward_date_checks.py",
     "walk_forward_portfolio_commands.py",
     "walk_forward_price_checks.py",
+    "zzshare_a_share_data.py",
+    "zzshare_a_share_quality.py",
 ]
 HELPER_ARGPARSE_MODULES = {
     "run_today_a_share_selection_parser.py",

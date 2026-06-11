@@ -74,6 +74,17 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             "validate_ohlcv.py": {"--input", "--config", "--min-history-rows"},
             "fetch_baostock_a_share.py": FETCH_CORE_OPTIONS | {"--drop-invalid-rows"},
             "fetch_akshare_a_share.py": FETCH_CORE_OPTIONS | {"--drop-invalid-rows"},
+            "fetch_zzshare_a_share.py": FETCH_CORE_OPTIONS
+            | {
+                "--http-url",
+                "--timeout-seconds",
+                "--request-interval-seconds",
+                "--fields",
+                "--adjust",
+                "--limit",
+                "--max-pages",
+                "--drop-invalid-rows",
+            },
             "fetch_eastmoney_a_share_spot.py": {
                 "--output",
                 "--metadata-output",
@@ -90,6 +101,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--akshare-symbols",
                 "--yfinance-symbols",
                 "--baostock-symbols",
+                "--zzshare-symbols",
                 "long_term_stability_claim=not_proven",
             },
             "run_today_a_share_selection.py": {
@@ -103,6 +115,11 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--end-date",
                 "--derive-symbols-from-spot",
                 "--max-history-symbols",
+                "--history-http-url",
+                "--history-timeout-seconds",
+                "--history-request-interval-seconds",
+                "--history-limit",
+                "--history-max-pages",
                 "--allow-partial-history",
                 "--fail-on-empty-result",
                 "--fail-on-skipped",
@@ -253,6 +270,9 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "partial_result=true",
                 "--allow-partial-history",
                 "metadata must be checked",
+                "only used with --history-source zzshare",
+                "ZZSHARE_TOKEN",
+                "does not prove unlimited free quota",
             ],
             "fetch_eastmoney_a_share_spot.py": [
                 "local CSV and metadata",
@@ -269,10 +289,21 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "Fallback providers and partial symbols",
                 "failed, empty, invalid, or fallback-affected rows",
             ],
+            "fetch_zzshare_a_share.py": [
+                "local CSV and metadata",
+                "ZZSHARE_TOKEN environment variable",
+                "possibly_truncated_symbols",
+                "do not prove unlimited free quota or long-term stability",
+            ],
             "fetch_yfinance_ohlcv.py": [
                 "local CSV and metadata JSON",
                 "output label only",
                 "calendar proof",
+            ],
+            "probe_external_source_stability.py": [
+                "akshare, yfinance, baostock, and zzshare",
+                "long_term_stability_claim=not_proven",
+                "--zzshare-symbols",
             ],
         }
         for script_name, expected_texts in cases.items():
@@ -351,6 +382,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
         score_script = SKILL_ROOT / "scripts/score_candidates.py"
         fetch_baostock_script = SKILL_ROOT / "scripts/fetch_baostock_a_share.py"
         fetch_akshare_script = SKILL_ROOT / "scripts/fetch_akshare_a_share.py"
+        fetch_zzshare_script = SKILL_ROOT / "scripts/fetch_zzshare_a_share.py"
         fetch_yfinance_script = SKILL_ROOT / "scripts/fetch_yfinance_ohlcv.py"
         lightgbm_script = SKILL_ROOT / "scripts/generate_lightgbm_predictions.py"
         slice_script = SKILL_ROOT / "scripts/slice_prices_as_of.py"
@@ -367,6 +399,8 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             baostock_metadata = Path(tmpdir) / "baostock-metadata.json"
             akshare_output = Path(tmpdir) / "akshare.csv"
             akshare_metadata = Path(tmpdir) / "akshare-metadata.json"
+            zzshare_output = Path(tmpdir) / "zzshare.csv"
+            zzshare_metadata = Path(tmpdir) / "zzshare-metadata.json"
             yfinance_output = Path(tmpdir) / "yfinance.csv"
             yfinance_metadata = Path(tmpdir) / "yfinance-metadata.json"
             lightgbm_output = Path(tmpdir) / "predictions.csv"
@@ -423,6 +457,19 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                     str(akshare_output),
                     "--metadata-output",
                     str(akshare_metadata),
+                ],
+                [
+                    str(fetch_zzshare_script),
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2026-05-20",
+                    "--end-date",
+                    "2026-05-20",
+                    "--output",
+                    str(zzshare_output),
+                    "--metadata-output",
+                    str(zzshare_metadata),
                 ],
                 [
                     str(fetch_yfinance_script),
@@ -545,6 +592,8 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             self.assertFalse(baostock_metadata.exists())
             self.assertFalse(akshare_output.exists())
             self.assertFalse(akshare_metadata.exists())
+            self.assertFalse(zzshare_output.exists())
+            self.assertFalse(zzshare_metadata.exists())
             self.assertFalse(yfinance_output.exists())
             self.assertFalse(yfinance_metadata.exists())
             self.assertFalse(lightgbm_output.exists())

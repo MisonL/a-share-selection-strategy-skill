@@ -28,6 +28,10 @@ class FetchBaostockAShareTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "six digits"):
             fetcher.parse_symbols("1")
 
+    def test_parse_symbols_rejects_bj_prefix_instead_of_routing_to_sz(self) -> None:
+        with self.assertRaisesRegex(ValueError, "bj.430047"):
+            fetcher.parse_symbols("bj.430047")
+
     def test_collect_rows_maps_ohlcv_and_amount(self) -> None:
         result = FakeResult(
             [

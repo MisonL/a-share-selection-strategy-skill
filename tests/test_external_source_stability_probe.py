@@ -32,8 +32,8 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
             )
 
         summary = manifest["summary"]
-        self.assertEqual(3, summary["total_runs"])
-        self.assertEqual(3, summary["passed_runs"])
+        self.assertEqual(4, summary["total_runs"])
+        self.assertEqual(4, summary["passed_runs"])
         self.assertEqual(True, summary["all_sources_all_iterations_passed"])
         self.assertEqual("not_proven", summary["long_term_stability_claim"])
         self.assertEqual(
@@ -99,6 +99,36 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
         adjust_check = [item for item in checks if item["name"] == "adjustflag_matches_request"][0]
 
         self.assertEqual(False, adjust_check["passed"])
+
+    def test_zzshare_limit_and_truncation_checks_are_required(self) -> None:
+        command = [
+            "python",
+            "fetch_zzshare_a_share.py",
+            "--limit",
+            "500",
+            "--max-pages",
+            "3",
+        ]
+        metadata = valid_metadata("zzshare")
+        metadata["limit"] = 500
+        metadata["max_pages"] = 3
+
+        checks = probe.source_checks("zzshare", metadata, command)
+        by_name = {item["name"]: item for item in checks}
+
+        self.assertEqual(True, by_name["limit_matches_request"]["passed"])
+        self.assertEqual(True, by_name["max_pages_matches_request"]["passed"])
+        self.assertEqual(True, by_name["possibly_truncated_symbols_empty"]["passed"])
+
+        metadata["possibly_truncated_symbols"] = ["000001"]
+        failed_checks = probe.source_checks("zzshare", metadata, command)
+        by_name = {item["name"]: item for item in failed_checks}
+
+        self.assertEqual(False, by_name["possibly_truncated_symbols_empty"]["passed"])
+        self.assertIn(
+            by_name["possibly_truncated_symbols_empty"],
+            probe.required_checks(failed_checks),
+        )
 
     def test_cli_returns_strict_error_when_required_source_fails(self) -> None:
         original_run = probe.run_command
@@ -193,6 +223,8 @@ def source_from_command(command: list[str]) -> str:
         return "yfinance"
     if script == "fetch_baostock_a_share.py":
         return "baostock"
+    if script == "fetch_zzshare_a_share.py":
+        return "zzshare"
     raise AssertionError(f"unknown command: {command}")
 
 
@@ -232,6 +264,28 @@ def valid_metadata(source: str) -> dict[str, object]:
             "non_trading_rows": 0,
             "tradestatus_missing_rows": 0,
             "adjustflag": "3",
+        }
+    if source == "zzshare":
+        return {
+            "source": "zzshare",
+            "requested_symbols": ["000001", "600000"],
+            "rows": 4,
+            "symbol_count": 2,
+            "failed_symbols": [],
+            "empty_symbols": [],
+            "invalid_rows": 0,
+            "dropped_invalid_rows": 0,
+            "non_trading_rows": 0,
+            "tradestatus_missing_rows": 0,
+            "possibly_truncated_symbols": [],
+            "fields": "all",
+            "limit": 1000,
+            "max_pages": 10,
+            "token_configured": False,
+            "symbols": [
+                {"symbol": "000001", "rows": 2, "date_max": "2026-05-29"},
+                {"symbol": "600000", "rows": 2, "date_max": "2026-05-29"},
+            ],
         }
     raise AssertionError(source)
 

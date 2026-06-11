@@ -34,6 +34,7 @@ python3 -m venv /tmp/a-share-selection-skill-venv
 | LightGBM prediction 生成器 | `requirements-ml.txt` |
 | A 股 baostock 取数 | `baostock` |
 | A 股 akshare 取数 | `akshare` |
+| A 股 zzshare 取数 | `zzshare` |
 | 海外 OHLCV 取数 | `yfinance` |
 
 完全离线环境必须提前准备解释器、wheelhouse 或包缓存。依赖失败时应显式报告，不能改用 mock 数据或跳过依赖。
@@ -93,7 +94,7 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 
 检查：
 
-- `summary.json`: `requested_mode`、`mode`、`mode_decision`、`mode_decision_reason`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`consumes_prediction_columns`、`prediction_input_source`、`requested_prediction_input_source`、`prediction_model_executed_by_runner`、`candidate_rows`、`diagnostic_rows`、`spot_matched_symbols`、`input_metadata`、`html_report_language`、`html_report_initial_language`、`html_report_error_type`、`candidates_output_written`、`diagnostics_output_written`。
+- `summary.json`: `requested_mode`、`mode`、`mode_decision`、`mode_decision_reason`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`consumes_prediction_columns`、`prediction_input_source`、`requested_prediction_input_source`、`prediction_model_executed_by_runner`、`source`、`source_scope`、`candidate_rows`、`diagnostic_rows`、`spot_matched_symbols`、`input_metadata`、`html_report_language`、`html_report_initial_language`、`html_report_error_type`、`candidates_output_written`、`diagnostics_output_written`。
 - `run_manifest.json`: `html_report_enabled=false` 表示 `--no-html-report` 主动关闭 HTML；此时 `summary.html_report_written=false` 且 `html_report_error_type=""` 不是报告生成失败。
 - `report.html`: 浏览器可读汇总，展示候选、诊断、步骤和证据路径；默认 `--html-report-language auto` 跟随运行环境，也可传 `zh` 或 `en` 并在浏览器内切换；只从已写出的 JSON/CSV 派生，不能替代退出码或机器字段。
 - `candidates.csv`: 候选字段、spot 展示字段，以及 prediction 披露字段。
@@ -275,6 +276,29 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 
 akshare A 股入口会先尝试中文列接口，失败或空结果时记录 `fallback_errors` 并转用 `stock_zh_a_daily`。fallback 成功不等于主接口稳定可用。akshare 输出不生成真实 `prediction/prediction_score`。
 
+### zzshare A 股日线
+
+```bash
+uv run --with pandas --with numpy --with zzshare python skills/a-share-selection-strategy/scripts/fetch_zzshare_a_share.py \
+  --symbols 000001,600000 \
+  --start-date 2025-09-01 \
+  --end-date 2026-05-29 \
+  --output /tmp/a-share-selection-zzshare/prices.csv \
+  --metadata-output /tmp/a-share-selection-zzshare/metadata.json \
+  --fail-on-fetch-error
+uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/validate_ohlcv.py \
+  --input /tmp/a-share-selection-zzshare/prices.csv
+uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/score_candidates.py \
+  --input /tmp/a-share-selection-zzshare/prices.csv \
+  --config skills/a-share-selection-strategy/scripts/example_config.json \
+  --output /tmp/a-share-selection-zzshare/candidates.csv \
+  --diagnostics-output /tmp/a-share-selection-zzshare/score_diagnostics.csv
+```
+
+zzshare 入口默认使用 `daily(fields=all)`，并把 `source_scope=zzshare_history_fetch`、`token_configured`、`request_interval_seconds`、`limit`、`max_pages`、`possibly_truncated_symbols`、`source_claim_boundary` 写入 metadata。无 token 可用不等于无限频率或长期稳定；基础门禁会强制检查 `invalid_rows == dropped_invalid_rows`、`non_trading_rows == 0`、`tradestatus_missing_rows == 0`；加 `--fail-on-fetch-error` 后还会检查 `failed_symbols == []`、`empty_symbols == []`、`possibly_truncated_symbols == []`、`symbol_count == requested_symbols` 和实际 `date_min/date_max`。
+
+`run_today_a_share_selection.py --history-source zzshare` 会透传 `--history-http-url`、`--history-timeout-seconds`、`--history-request-interval-seconds`、`--history-limit` 和 `--history-max-pages` 到 zzshare fetcher，并固定使用 `fields=all`。zzshare token 只能通过 `ZZSHARE_TOKEN` 环境变量提供；不要把 token 放进 runner CLI 参数，因为 runner 会把 step command 写入 `run_manifest.json`。
+
 ### yfinance 通用 OHLCV
 
 ```bash
@@ -339,14 +363,15 @@ uv run --with pandas --with numpy --with baostock python skills/a-share-selectio
 
 ```bash
 RUN_DIR=/tmp/a-share-selection-p3-external-$(date -u +%Y%m%dT%H%M%SZ)
-uv run --with pandas --with numpy --with akshare --with yfinance --with baostock \
+uv run --with pandas --with numpy --with akshare --with yfinance --with baostock --with zzshare \
   python skills/a-share-selection-strategy/scripts/probe_external_source_stability.py \
     --output-dir "$RUN_DIR/runs" \
     --summary-output "$RUN_DIR/summary.json" \
     --iterations 3 \
     --akshare-symbols 000001,600000 \
     --yfinance-symbols AAPL,MSFT \
-    --baostock-symbols 000001,600000
+    --baostock-symbols 000001,600000 \
+    --zzshare-symbols 000001,600000
 ```
 
 读取 `summary.json` 时必须检查 `summary.sources.*.all_passed`、逐次 `metadata`、`checks` 和 `long_term_stability_claim=not_proven`。连续复验通过只说明当前窗口、参数和网络环境下通过，不能写成公网数据源长期稳定。

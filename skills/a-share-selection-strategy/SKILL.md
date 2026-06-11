@@ -91,7 +91,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 | 机器学习 | `scikit-learn` | 标准化、基线模型、时间序列验证 | 需要 ML 打分时再引入。 |
 | 梯度提升模型 | `lightgbm`, `xgboost` | 上涨概率或排序模型 | 可选；缺失时报告真实环境问题，不要静默替换。 |
 | 回测 | `vectorbt`, `backtesting.py` | 策略回放、交易成本和滑点模拟 | 可选；没有真实回测时不要声称收益已验证。 |
-| A 股数据 | `akshare`, `baostock`, `tushare` | 行情、财务、板块和资金流 | 可选；注意 token、额度、字段口径和复权规则。 |
+| A 股数据 | `akshare`, `baostock`, `zzshare`, `tushare` | 行情、财务、板块和资金流 | 可选；注意 token、额度、字段口径、分页、限流和复权规则。 |
 | 海外数据 | `yfinance`, `pandas-datareader` | 美股、ETF、指数历史数据 | 可选；注意延迟、复权和交易日历差异。 |
 
 当用户明确要求联网取数时，Agent 必须把联网结果转换成可复现的本地行情文件后再评分：
@@ -109,6 +109,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 | akshare A 股中文列 | `日期 -> date`、`股票代码 -> symbol`、`开盘/最高/最低/收盘 -> open/high/low/close`、`成交量 -> volume`、`成交额 -> amount`、`换手率 -> turn` |
 | akshare `stock_zh_a_daily` | `date -> date`、`open/high/low/close` 同名映射、`volume -> volume`、`amount -> amount`、`turnover -> turn` |
 | baostock | `code -> symbol`，去掉 `sz.` 或 `sh.`；补 `market=A-share`；其余 OHLCV 字段同名映射 |
+| zzshare `daily(fields=all)` | `ts_code -> symbol`，去掉 `.SZ`、`.SH` 或 `.BJ`；`trade_date -> date`、`volume/vol -> volume`、`turnover/amount -> amount`、`turnover_rate -> turn`、`is_paused -> tradestatus`、`is_st -> isST` |
 | tushare | `ts_code -> symbol`，去掉 `.SZ` 或 `.SH`；`trade_date -> date`、`vol -> volume`、`turnover_rate -> turn` |
 | yfinance | `Date/Symbol/Open/High/Low/Close/Volume` 映射为小写标准字段 |
 
@@ -138,8 +139,9 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 - `slice_prices_as_of.py`：按信号日截断本地行情，防止用未来行情生成候选。`--as-of-date` 是包含该日及之前的截止日期，不保证输出存在该日期；切片输出会写入 `requested_as_of_date`、`actual_data_date`、`as_of_date_observed`，下游候选、诊断和 HTML 报告也会保留这些字段。候选信号日应以切片后的真实 `date_max`、`actual_data_date` 或候选 CSV 的 `date` 为准。
 - `fetch_baostock_a_share.py`：可选 baostock A 股日线取数脚本，输出本地行情 CSV 和 metadata JSON，包含 `tradestatus/preclose/pctChg/isST` 门禁字段。
 - `fetch_akshare_a_share.py`：可选 akshare A 股日线取数脚本，先尝试中文列接口，失败时记录 fallback 并转用 `stock_zh_a_daily`。
+- `fetch_zzshare_a_share.py`：可选 zzshare A 股日线取数脚本，默认 `fields=all`，输出本地行情 CSV 和 metadata JSON，记录 `token_configured`、`request_interval_seconds`、分页上限、`possibly_truncated_symbols`、`source_claim_boundary` 和 `tradestatus/isST` 映射；大部分接口可无 token 使用，但免费额度、限流和长期稳定性仍需门禁复验。
 - `fetch_yfinance_ohlcv.py`：可选 yfinance 日线取数脚本，输出本地通用 OHLCV CSV 和 metadata JSON；用 `--timeout-seconds` 显式限制每票拉取超时。非严格模式可能写出部分 symbol，门禁必须检查 `symbol_count == len(requested_symbols)`、`failed_symbols == []`、`empty_symbols == []`，或使用 `--fail-on-fetch-error`。fetch metadata 的 `end_date` 是请求截止日；实际最后交易日必须看每个 symbol 的 `date_max`。`--market` 只是写入输出标签，metadata 中 `market_label_only=true` 和 `source_claim_boundary=market_label_not_source_exchange_or_calendar_proof` 不证明 yfinance 数据源、交易所或交易日历变成对应市场。
-- `probe_external_source_stability.py`：P3 外部源稳定性观察总控脚本，重复调用 akshare、yfinance 和 baostock 取数入口并写出 summary JSON。`all_sources_all_iterations_passed=true` 只说明当前窗口、参数和网络环境下连续复验通过；`long_term_stability_claim` 必须保持 `not_proven`。
+- `probe_external_source_stability.py`：P3 外部源稳定性观察总控脚本，重复调用 akshare、yfinance、baostock 和 zzshare 取数入口并写出 summary JSON。`all_sources_all_iterations_passed=true` 只说明当前窗口、参数和网络环境下连续复验通过；`long_term_stability_claim` 必须保持 `not_proven`。
 - `a_share_selection_*.py`、`lightgbm_prediction_summary.py`：评分脚本使用的配置、数据读取、指标、输出、profile、股票池、可交易性元数据和诊断辅助函数；它们不是用户 CLI 入口，`python3 -S <helper>.py --help` 的顶层 pandas/numpy import 失败不属于 `--help` 入口缺口。`python3 -S --help` 依赖轻量化门禁只适用于带 `argparse`/`main()`/`__main__` 的脚本入口。
 
 使用方式：
@@ -201,7 +203,7 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 
 ## 今日选股入口
 
-当用户要求“今日选股”“10 元以内超短爆发”时，优先使用 `run_today_a_share_selection.py --mode auto`。如果本地行情文件缺少 prediction-derived 必需列，auto 会显式选择 generic 低价超短剖面，并在 manifest 记录 `requested_mode`、实际 `mode`、`mode_decision` 和 `mode_decision_reason`；这不是静默降级。若输入同时包含 `market`、`prediction` 或 `prediction_score`、以及 `turn` 或 `turnover` 三组字段，auto 会走 prediction-derived 外部 prediction 评分，但 `consumes_prediction_columns=true`、`prediction_input_source=external_input`、`prediction_model_executed_by_runner=false` 仍表示本 runner 只消费输入预测列，没有训练或执行预测模型；如果校验在评分前失败，summary 中 `consumes_prediction_columns=false` 表示本次没有实际消费预测列。`lightgbm_output_source` 和 `lightgbm_executed_by_runner` 是旧产物兼容字段；新报告优先引用中性字段。该入口可合并本地或东方财富实时快照作为展示字段，也可显式调用仓库内 baostock/akshare 历史取数脚本；历史抓取本身不会生成 prediction，若要 prediction-derived 口径必须显式提供外部预测列或使用 `--mode prediction` 暴露缺口，不证明实时全市场扫描完成。
+当用户要求“今日选股”“10 元以内超短爆发”时，优先使用 `run_today_a_share_selection.py --mode auto`。如果本地行情文件缺少 prediction-derived 必需列，auto 会显式选择 generic 低价超短剖面，并在 manifest 记录 `requested_mode`、实际 `mode`、`mode_decision` 和 `mode_decision_reason`；这不是静默降级。若输入同时包含 `market`、`prediction` 或 `prediction_score`、以及 `turn` 或 `turnover` 三组字段，auto 会走 prediction-derived 外部 prediction 评分，但 `consumes_prediction_columns=true`、`prediction_input_source=external_input`、`prediction_model_executed_by_runner=false` 仍表示本 runner 只消费输入预测列，没有训练或执行预测模型；如果校验在评分前失败，summary 中 `consumes_prediction_columns=false` 表示本次没有实际消费预测列。`lightgbm_output_source` 和 `lightgbm_executed_by_runner` 是旧产物兼容字段；新报告优先引用中性字段。该入口可合并本地或东方财富实时快照作为展示字段，也可显式调用仓库内 baostock/akshare/zzshare 历史取数脚本；历史抓取本身不会生成 prediction。zzshare token 只能来自 `ZZSHARE_TOKEN` 环境变量；无 token 成功不证明无限免费额度或长期稳定性。若要 prediction-derived 口径必须显式提供外部预测列或使用 `--mode prediction` 暴露缺口，不证明实时全市场扫描完成。
 
 | mode | 触发条件 | 必须披露 |
 | --- | --- | --- |
@@ -258,7 +260,7 @@ uv run --with pandas --with numpy --with baostock python skills/a-share-selectio
 | 文件 | 检查字段 |
 | --- | --- |
 | `run_manifest.json` | 每一步命令、退出码、stdout/stderr、允许退出码 |
-| `summary.json` | `requested_mode`、`mode`、`mode_decision`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`prediction_mode`、`consumes_prediction_columns`、`prediction_input_source`、`prediction_model_executed_by_runner`、`source_scope`、`prices_rows`、`candidate_rows`、`diagnostic_rows`、`spot_rows`、`spot_matched_symbols`、`html_report_language`、`html_report_initial_language`、`html_report_error_type`、`*_output_written`、失败步骤 |
+| `summary.json` | `requested_mode`、`mode`、`mode_decision`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`prediction_mode`、`consumes_prediction_columns`、`prediction_input_source`、`prediction_model_executed_by_runner`、`source`、`source_scope`、`prices_rows`、`candidate_rows`、`diagnostic_rows`、`spot_rows`、`spot_matched_symbols`、`html_report_language`、`html_report_initial_language`、`html_report_error_type`、`*_output_written`、失败步骤 |
 | `candidates.csv` | 候选字段、spot 展示字段、prediction 披露字段；prediction-derived 时检查 `prediction_source`、`prediction_input_source`、`prediction_model_executed_by_score_script` |
 | `diagnostics.csv` | 机器字段 `failed_thresholds`，展示字段 `failed_thresholds_zh`、`selection_status`、`short_reason`，以及与候选一致的 prediction 披露字段 |
 | `report.html` | 候选、诊断、步骤和证据路径的人类可读汇总；支持中英文切换，只读已有 JSON/CSV |

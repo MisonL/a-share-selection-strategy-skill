@@ -177,12 +177,14 @@
 
 ```markdown
 ## 外部源稳定性仍未证明
-- `probe_external_source_stability.py` 的 `all_sources_all_iterations_passed=true` 只说明当前窗口、当前参数和当前网络环境下连续复验通过。
-- 必须披露 `long_term_stability_claim=not_proven`，不能写成 akshare、Yahoo/yfinance 或 baostock 长期稳定。
+- `probe_external_source_stability.py` 的 `all_sources_all_iterations_passed=true` 只说明 akshare、Yahoo/yfinance、baostock 和 zzshare 在当前窗口、当前参数和当前网络环境下连续复验通过。
+- 必须披露 `long_term_stability_claim=not_proven`，不能写成 akshare、Yahoo/yfinance、baostock 或 zzshare 长期稳定。
 - akshare 的 `hist_provider_clean=false` 是主接口异常观察项；即使总控脚本退出 0，也只能写“fallback provider 成功”，不能写 `stock_zh_a_hist` 稳定。
 - 报告时必须列出各源 metadata 的逐标的 `date_max`；yfinance 的实际最后交易日仍以每个 symbol 的 `date_max` 为准，可能早于请求 `end_date`。
 - `timeout_seconds` 只记录本次等待上限，不证明公网稳定。
 - baostock fetch 通过仍只覆盖本次 symbols、日期范围、`adjustflag` 和 metadata 门禁；不证明涨跌停规则、券商成交或长期服务稳定。
+- zzshare fetch 通过仍只覆盖本次 symbols、日期范围、`fields`、`limit/max_pages`、token/限流配置和 metadata 门禁；无 token 成功不证明无限免费额度或长期服务稳定。
+- 通过 runner 使用 zzshare 时，报告必须披露 `history_request_interval_seconds`、`history_limit`、`history_max_pages` 和 `history_token_configured`；token 只能来自 `ZZSHARE_TOKEN` 环境变量，不能写入 runner 命令或报告正文。
 ```
 
 ### 前导零损坏

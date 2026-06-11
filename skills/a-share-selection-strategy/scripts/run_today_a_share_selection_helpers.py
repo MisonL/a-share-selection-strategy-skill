@@ -297,11 +297,27 @@ def runner_metadata_stdout(metadata: dict[str, Any]) -> str:
         f"runner_metadata_source={metadata_stdout_value(metadata.get('source_type'))}",
         f"runner_real_market_data={metadata_stdout_value(metadata.get('real_market_data'))}",
         f"runner_source_scope={metadata_stdout_value(metadata.get('source_scope'))}",
+    ]
+    if not history_metadata_stdout_available(metadata):
+        parts.extend(input_metadata_stdout(metadata))
+    return " ".join(parts)
+
+
+def history_metadata_stdout_available(metadata: dict[str, Any]) -> bool:
+    return any(str(key).startswith("history_") for key in metadata)
+
+
+def input_metadata_stdout(metadata: dict[str, Any]) -> list[str]:
+    return [
+        f"input_token_configured={metadata_stdout_value(metadata.get('token_configured'))}",
         f"input_partial_result={metadata_stdout_value(metadata.get('input_partial_result'))}",
         "input_failed_symbol_count="
         f"{metadata_stdout_value(metadata.get('input_failed_symbol_count'))}",
         "input_empty_symbol_count="
         f"{metadata_stdout_value(metadata.get('input_empty_symbol_count'))}",
+        "input_possibly_truncated_symbol_count="
+        f"{metadata_stdout_value(metadata.get('input_possibly_truncated_symbol_count'))}",
+        *quality_counter_stdout("input", metadata),
         f"input_symbol_count={input_symbol_count_stdout(metadata)}",
         f"input_requested_symbols={metadata_list_stdout(metadata.get('requested_symbols'))}",
         f"input_failed_symbols={metadata_list_stdout(metadata.get('failed_symbols'))}",
@@ -310,7 +326,21 @@ def runner_metadata_stdout(metadata: dict[str, Any]) -> str:
         "input_metadata_output_written="
         f"{metadata_stdout_value(metadata.get('metadata_output_written'))}",
     ]
-    return " ".join(parts)
+
+
+def quality_counter_stdout(prefix: str, metadata: dict[str, Any]) -> list[str]:
+    return [
+        f"{prefix}_invalid_rows={metadata_stdout_value(metadata.get(f'{prefix}_invalid_rows'))}",
+        (
+            f"{prefix}_dropped_invalid_rows="
+            f"{metadata_stdout_value(metadata.get(f'{prefix}_dropped_invalid_rows'))}"
+        ),
+        f"{prefix}_non_trading_rows={metadata_stdout_value(metadata.get(f'{prefix}_non_trading_rows'))}",
+        (
+            f"{prefix}_tradestatus_missing_rows="
+            f"{metadata_stdout_value(metadata.get(f'{prefix}_tradestatus_missing_rows'))}"
+        ),
+    ]
 
 
 def input_csv_provenance_stdout(value: Any) -> str:
@@ -400,8 +430,18 @@ def runner_disclosure_stdout(view: dict[str, Any]) -> str:
                 f"{metadata_stdout_value(history.get('history_partial_result'))}",
                 "history_output_written="
                 f"{metadata_stdout_value(history.get('history_output_written'))}",
+                "history_token_configured="
+                f"{metadata_stdout_value(history.get('history_token_configured'))}",
+                f"history_fields={metadata_stdout_value(history.get('history_fields'))}",
+                "history_request_interval_seconds="
+                f"{metadata_stdout_value(history.get('history_request_interval_seconds'))}",
+                f"history_limit={metadata_stdout_value(history.get('history_limit'))}",
+                f"history_max_pages={metadata_stdout_value(history.get('history_max_pages'))}",
                 "history_empty_symbol_count="
                 f"{metadata_stdout_value(history.get('history_empty_symbol_count'))}",
+                "history_possibly_truncated_symbol_count="
+                f"{metadata_stdout_value(history.get('history_possibly_truncated_symbol_count'))}",
+                *quality_counter_stdout("history", history),
                 "history_failed_symbol_count="
                 f"{metadata_stdout_value(history.get('history_metadata_failed_symbol_count'))}",
                 "history_fallback_error_count="

@@ -575,6 +575,169 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(2, code)
         self.assertIn("history fetch options would be ignored", stderr)
 
+    def test_prices_input_rejects_zero_valued_ignored_history_options(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--output-dir",
+                    str(output),
+                    "--history-request-interval-seconds",
+                    "0",
+                ]
+            )
+
+        self.assertEqual(2, code)
+        self.assertIn("history fetch options would be ignored", stderr)
+        self.assertIn("--history-request-interval-seconds", stderr)
+
+    def test_prices_input_rejects_invalid_ignored_history_limit_by_scope(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--output-dir",
+                    str(output),
+                    "--history-limit",
+                    "abc",
+                ]
+            )
+
+        self.assertEqual(2, code)
+        self.assertIn("history fetch options would be ignored", stderr)
+        self.assertIn("--history-limit", stderr)
+        self.assertNotIn("history-limit must be an integer", stderr)
+
+    def test_runner_accepts_zzshare_history_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "zzshare",
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--history-http-url",
+                    "https://example.test",
+                    "--history-timeout-seconds",
+                    "8",
+                    "--history-request-interval-seconds",
+                    "0",
+                    "--history-limit",
+                    "321",
+                    "--history-max-pages",
+                    "4",
+                    "--no-html-report",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args,
+                manifest,
+                output / "run_manifest.json",
+                history_metadata_executor,
+            )
+
+            runner.run_pipeline(context)
+
+        fetch_step = manifest["steps"][0]
+        self.assertEqual("fetch_history", fetch_step["step"])
+        self.assertIn("fetch_zzshare_a_share.py", fetch_step["command"][1])
+        self.assertIn("--fields", fetch_step["command"])
+        self.assertEqual("https://example.test", manifest["history_http_url"])
+        self.assertEqual(8.0, manifest["history_timeout_seconds"])
+        self.assertEqual(0.0, manifest["history_request_interval_seconds"])
+        self.assertEqual(321, manifest["history_limit"])
+        self.assertEqual(4, manifest["history_max_pages"])
+        self.assertIn("--http-url", fetch_step["command"])
+        self.assertIn("https://example.test", fetch_step["command"])
+        self.assertIn("--timeout-seconds", fetch_step["command"])
+        self.assertIn("8.0", fetch_step["command"])
+        self.assertIn("--request-interval-seconds", fetch_step["command"])
+        self.assertIn("0.0", fetch_step["command"])
+        self.assertIn("--limit", fetch_step["command"])
+        self.assertIn("321", fetch_step["command"])
+        self.assertIn("--max-pages", fetch_step["command"])
+        self.assertIn("4", fetch_step["command"])
+        self.assertEqual("zzshare", manifest["history_source"])
+        self.assertEqual("zzshare_history_fetch", manifest["source_scope"])
+
+    def test_runner_rejects_zzshare_only_options_for_other_history_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    tmpdir,
+                    "--history-source",
+                    "baostock",
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--history-limit",
+                    "10",
+                    "--no-html-report",
+                ]
+            )
+
+        self.assertEqual(2, code)
+        self.assertIn(
+            "zzshare-specific history options require --history-source zzshare",
+            stderr,
+        )
+
+    def test_runner_rejects_invalid_zzshare_only_option_for_other_source_by_scope(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    tmpdir,
+                    "--history-source",
+                    "baostock",
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--history-limit",
+                    "abc",
+                    "--no-html-report",
+                ]
+            )
+
+        self.assertEqual(2, code)
+        self.assertIn(
+            "zzshare-specific history options require --history-source zzshare",
+            stderr,
+        )
+        self.assertIn("--history-limit", stderr)
+        self.assertNotIn("history-limit must be an integer", stderr)
+
     def test_preflight_error_clears_reused_output_files(self) -> None:
         frame = build_frame(include_turn=True, include_tradability=True)
         frame[["open", "high", "low", "close"]] = frame[
@@ -647,6 +810,74 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             self.assertNotIn("Zero Prefix", report)
             self.assertNotIn("eastmoney", report)
             self.assertNotIn("disconnect", report)
+
+    def test_invalid_zzshare_history_limit_clears_reused_output_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "run"
+            output.mkdir()
+            old_candidates = output / "candidates.csv"
+            old_diagnostics = output / "diagnostics.csv"
+            old_prices = output / "prices.csv"
+            old_metadata = output / "history_metadata.json"
+            for path in [old_candidates, old_diagnostics, old_prices, old_metadata]:
+                path.write_text("stale\n", encoding="utf-8")
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "zzshare",
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--history-limit",
+                    "0",
+                    "--no-html-report",
+                ]
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(2, code)
+        self.assertIn("history-limit must be positive", stderr)
+        self.assertFalse(old_candidates.exists())
+        self.assertFalse(old_diagnostics.exists())
+        self.assertFalse(old_prices.exists())
+        self.assertFalse(old_metadata.exists())
+        self.assertFalse(summary["candidates_output_written"])
+        self.assertFalse(summary["diagnostics_output_written"])
+
+    def test_invalid_zzshare_history_timeout_nan_clears_reused_output_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "run"
+            output.mkdir()
+            old_candidates = output / "candidates.csv"
+            old_candidates.write_text("stale\n", encoding="utf-8")
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "zzshare",
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--history-timeout-seconds",
+                    "nan",
+                    "--no-html-report",
+                ]
+            )
+
+        self.assertEqual(2, code)
+        self.assertIn("history-timeout-seconds must be finite", stderr)
+        self.assertFalse(old_candidates.exists())
 
     def test_runner_rejects_local_and_fetched_spot_inputs_together(self) -> None:
         frame = build_frame(include_turn=True, include_tradability=True)
@@ -950,6 +1181,11 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual("external_fetch", summary["source_type"])
         self.assertTrue(summary["real_market_data"])
         self.assertEqual("baostock", summary["input_metadata"]["source"])
+        self.assertEqual(
+            "baostock_history_fetch",
+            summary["input_metadata"]["source_scope"],
+        )
+        self.assertIn("runner_source_scope=baostock_history_fetch", stdout.getvalue())
         self.assertEqual("baostock", summary["input_metadata"]["history_provider"])
         self.assertEqual("3", summary["input_metadata"]["history_adjustflag"])
         self.assertEqual(1, summary["input_metadata"]["history_failed_symbol_count"])
@@ -972,10 +1208,89 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             self.assertEqual("True", row["real_market_data"])
             self.assertEqual("baostock", row["history_provider"])
             self.assertEqual("1", row["history_failed_symbol_count"])
+            self.assertEqual("0", row["history_possibly_truncated_symbol_count"])
+            self.assertEqual("0", row["history_invalid_rows"])
             self.assertEqual("0", row["history_fallback_error_count"])
             self.assertEqual("False", row["history_output_written"])
             self.assertEqual("True", row["history_metadata_output_written"])
             self.assertEqual("3", row["history_adjustflag"])
+
+    def test_zzshare_history_quality_metadata_propagates_to_runner_surfaces(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "zzshare",
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--no-html-report",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args,
+                manifest,
+                output / "run_manifest.json",
+                zzshare_quality_executor,
+            )
+
+            runner.run_pipeline(context)
+            summary = summary_view(manifest, "completed")
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                runner.helpers.print_summary(manifest, output)
+            candidate_rows = csv_rows(output / "candidates.csv")
+            diagnostic_rows = csv_rows(output / "diagnostics.csv")
+
+        metadata = summary["input_metadata"]
+        history = summary["history_selection"]
+        self.assertEqual("zzshare", summary["source"])
+        self.assertEqual("zzshare", metadata["source"])
+        self.assertFalse(metadata["history_token_configured"])
+        self.assertEqual("all", metadata["history_fields"])
+        self.assertEqual(0.0, metadata["history_request_interval_seconds"])
+        self.assertEqual(1, metadata["history_limit"])
+        self.assertEqual(2, metadata["history_max_pages"])
+        self.assertEqual(2, metadata["history_invalid_rows"])
+        self.assertEqual(1, metadata["history_dropped_invalid_rows"])
+        self.assertEqual(3, metadata["history_non_trading_rows"])
+        self.assertEqual(4, metadata["history_tradestatus_missing_rows"])
+        self.assertEqual(1, metadata["history_possibly_truncated_symbol_count"])
+        self.assertFalse(history["history_token_configured"])
+        self.assertEqual("all", history["history_fields"])
+        self.assertEqual(0.0, history["history_request_interval_seconds"])
+        self.assertEqual(1, history["history_limit"])
+        self.assertEqual(2, history["history_max_pages"])
+        self.assertEqual(2, history["history_invalid_rows"])
+        self.assertEqual(1, history["history_dropped_invalid_rows"])
+        self.assertIn("history_token_configured=false", stdout.getvalue())
+        self.assertIn("history_fields=all", stdout.getvalue())
+        self.assertIn("history_request_interval_seconds=0.0", stdout.getvalue())
+        self.assertIn("history_limit=1", stdout.getvalue())
+        self.assertIn("history_max_pages=2", stdout.getvalue())
+        self.assertIn("history_invalid_rows=2", stdout.getvalue())
+        self.assertIn("history_dropped_invalid_rows=1", stdout.getvalue())
+        self.assertNotIn("input_token_configured=unknown", stdout.getvalue())
+        self.assertNotIn("input_partial_result=unknown", stdout.getvalue())
+        for row in candidate_rows + diagnostic_rows:
+            self.assertEqual("zzshare", row["history_provider"])
+            self.assertEqual("False", row["history_token_configured"])
+            self.assertEqual("all", row["history_fields"])
+            self.assertEqual("0.0", row["history_request_interval_seconds"])
+            self.assertEqual("1", row["history_limit"])
+            self.assertEqual("2", row["history_max_pages"])
+            self.assertEqual("1", row["history_possibly_truncated_symbol_count"])
+            self.assertEqual("2", row["history_invalid_rows"])
+            self.assertEqual("1", row["history_dropped_invalid_rows"])
+            self.assertEqual("3", row["history_non_trading_rows"])
+            self.assertEqual("4", row["history_tradestatus_missing_rows"])
 
     def test_embedded_csv_provenance_survives_runner_without_metadata_file(self) -> None:
         config = load_config("prediction_profile_config.json")
@@ -1050,6 +1365,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                     {
                         "source_type": "external_fetch",
                         "source": "yfinance",
+                        "source_scope": "yfinance_history_fetch",
                         "market": "A-share",
                         "market_label_only": True,
                         "source_claim_boundary": (
@@ -1061,6 +1377,10 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                         "rows": int(len(frame)),
                         "failed_symbols": [{"symbol": "MSFT", "error": "timeout"}],
                         "empty_symbols": [],
+                        "possibly_truncated_symbols": ["AAPL"],
+                        "token_configured": False,
+                        "invalid_rows": 2,
+                        "dropped_invalid_rows": 1,
                         "output_written": True,
                         "metadata_output_written": True,
                         "real_market_data": "unknown",
@@ -1081,24 +1401,43 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            candidate_rows = csv_rows(output / "candidates.csv")
+            diagnostic_rows = csv_rows(output / "diagnostics.csv")
 
         self.assertEqual(0, code, stderr)
         metadata = summary["input_metadata"]
         self.assertEqual("yfinance", metadata["source"])
+        self.assertEqual("yfinance_history_fetch", metadata["source_scope"])
+        self.assertFalse(metadata["token_configured"])
         self.assertTrue(metadata["input_partial_result"])
         self.assertEqual(["AAPL", "MSFT"], metadata["requested_symbols"])
         self.assertEqual(1, metadata["symbol_count"])
         self.assertEqual(1, metadata["input_failed_symbol_count"])
         self.assertEqual(0, metadata["input_empty_symbol_count"])
+        self.assertEqual(1, metadata["input_possibly_truncated_symbol_count"])
+        self.assertEqual(2, metadata["input_invalid_rows"])
+        self.assertEqual(1, metadata["input_dropped_invalid_rows"])
         self.assertEqual("auto_adjust_false_close", metadata["adjustment"])
         self.assertIn("input_partial_result=true", stdout)
+        self.assertIn("runner_source_scope=yfinance_history_fetch", stdout)
+        self.assertIn("input_token_configured=false", stdout)
         self.assertIn("input_failed_symbol_count=1", stdout)
+        self.assertIn("input_possibly_truncated_symbol_count=1", stdout)
+        self.assertIn("input_invalid_rows=2", stdout)
+        self.assertIn("input_dropped_invalid_rows=1", stdout)
         self.assertIn("input_symbol_count=1/2", stdout)
         self.assertIn("input_requested_symbols=AAPL,MSFT", stdout)
         self.assertIn("input_failed_symbols=MSFT:timeout", stdout)
         self.assertIn("input_empty_symbols=none", stdout)
         self.assertIn("input_output_written=true", stdout)
         self.assertIn("input_metadata_output_written=true", stdout)
+        for row in candidate_rows + diagnostic_rows:
+            self.assertEqual("yfinance_history_fetch", row["source_scope"])
+            self.assertEqual("False", row["input_token_configured"])
+            self.assertEqual("True", row["input_partial_result"])
+            self.assertEqual("1", row["input_possibly_truncated_symbol_count"])
+            self.assertEqual("2", row["input_invalid_rows"])
+            self.assertEqual("1", row["input_dropped_invalid_rows"])
 
     def test_history_fallback_marks_partial_in_summary_stdout_and_csvs(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1320,7 +1659,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                     "--history-source",
                     "baostock",
                     "--symbols",
-                    "sz.000001,sh.600000",
+                    "sz.000001,000001.SZ,sh.600000,600000.SH",
                     "--start-date",
                     "2025-01-01",
                     "--end-date",
@@ -1335,6 +1674,100 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
         self.assertEqual(["000001", "600000"], manifest["history_symbols"])
         self.assertEqual(["000001", "600000"], selected["symbols"])
+
+    def test_runner_rejects_bj_explicit_history_symbols_for_baostock(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "baostock",
+                    "--symbols",
+                    "bj.430047",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+
+            with self.assertRaisesRegex(ValueError, "bj.430047"):
+                runner.run_pipeline(context)
+
+    def test_runner_does_not_route_bj_spot_symbols_to_baostock_history(self) -> None:
+        config = load_config("ultra_short_low_price_config.json")
+        config["thresholds"]["min_amount"] = 0
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output = root / "run"
+            output.mkdir()
+            spot = root / "spot.csv"
+            config_path = root / "config.json"
+            with spot.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["code", "price", "amount"])
+                writer.writeheader()
+                writer.writerows(
+                    [
+                        {"code": "bj.430047", "price": 7.7, "amount": 500000000},
+                        {"code": "sz.000001", "price": 7.8, "amount": 400000000},
+                    ]
+                )
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "baostock",
+                    "--derive-symbols-from-spot",
+                    "--spot-input",
+                    str(spot),
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--no-html-report",
+                ]
+            )
+
+            symbols = runner.history_symbols(args, spot, output, config_path)
+
+        self.assertEqual(["000001"], symbols)
+
+    def test_runner_accepts_bj_explicit_history_symbols_for_zzshare(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "zzshare",
+                    "--symbols",
+                    "bj.430047,835185.BJ",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--history-request-interval-seconds",
+                    "0",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+
+            runner.run_pipeline(context)
+            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            fetch_history = next(step for step in manifest["steps"] if step["step"] == "fetch_history")
+
+        self.assertEqual(["430047", "835185"], manifest["history_symbols"])
+        self.assertEqual(["430047", "835185"], selected["symbols"])
+        self.assertIn("--symbols", fetch_history["command"])
+        self.assertIn("430047,835185", fetch_history["command"])
 
     def test_runner_rejects_short_explicit_history_symbols(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1713,6 +2146,77 @@ def history_metadata_executor(command: list[str]) -> subprocess.CompletedProcess
                             "rows": 0,
                             "date_min": "",
                             "date_max": "",
+                        }
+                    ],
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    if script == "score_candidates.py":
+        Path(command[command.index("--output") + 1]).write_text(
+            "symbol,total_score\n000001,0.8\n",
+            encoding="utf-8",
+        )
+        Path(command[command.index("--diagnostics-output") + 1]).write_text(
+            "symbol,selection_status\n000001,selected\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            "OK: raw_symbols=1 input_symbols=1 candidates=1 effective_empty_result=false\n",
+            "",
+        )
+    return subprocess.CompletedProcess(command, 0, "", "")
+
+
+def zzshare_quality_executor(command: list[str]) -> subprocess.CompletedProcess[str]:
+    script = Path(command[1]).name
+    if script.startswith("fetch_") and "a_share" in script:
+        Path(command[command.index("--output") + 1]).write_text(
+            "symbol,date,close\n000001,2026-01-01,8.0\n",
+            encoding="utf-8",
+        )
+        Path(command[command.index("--metadata-output") + 1]).write_text(
+            json.dumps(
+                {
+                    "source": "zzshare",
+                    "source_scope": "zzshare_history_fetch",
+                    "source_claim_boundary": (
+                        "zzshare_external_api_not_broker_order_or_long_term_stability_proof"
+                    ),
+                    "data_source_note": (
+                        "zzshare SDK endpoint; quota and stability require external verification"
+                    ),
+                    "fields": "all",
+                    "request_interval_seconds": 0.0,
+                    "limit": 1,
+                    "max_pages": 2,
+                    "token_configured": False,
+                    "requested_symbols": ["000001"],
+                    "rows": 1,
+                    "symbol_count": 1,
+                    "failed_symbols": [],
+                    "empty_symbols": [],
+                    "possibly_truncated_symbols": ["000001"],
+                    "invalid_rows": 2,
+                    "invalid_symbols": ["000001"],
+                    "invalid_row_examples": [],
+                    "dropped_invalid_rows": 1,
+                    "non_trading_rows": 3,
+                    "non_trading_symbols": ["000001"],
+                    "non_trading_row_examples": [],
+                    "tradestatus_missing_rows": 4,
+                    "output_written": True,
+                    "metadata_output_written": True,
+                    "symbols": [
+                        {
+                            "symbol": "000001",
+                            "rows": 1,
+                            "date_min": "2026-01-01",
+                            "date_max": "2026-01-01",
+                            "possibly_truncated": True,
                         }
                     ],
                 }

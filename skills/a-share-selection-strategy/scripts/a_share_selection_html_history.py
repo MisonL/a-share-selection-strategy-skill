@@ -22,6 +22,14 @@ def history_selection_fields(
         (i18n("allow_partial_history", language), selection.get("allow_partial_history", "")),
         ("history_partial_result", selection.get("history_partial_result", "")),
         ("history_output_written", selection.get("history_output_written", "")),
+        ("history_token_configured", selection.get("history_token_configured", "")),
+        ("history_fields", selection.get("history_fields", "")),
+        (
+            "history_request_interval_seconds",
+            selection.get("history_request_interval_seconds", ""),
+        ),
+        ("history_limit", selection.get("history_limit", "")),
+        ("history_max_pages", selection.get("history_max_pages", "")),
         ("history_adjust", selection.get("history_adjust", "")),
         ("history_adjustflag", selection.get("history_adjustflag", "")),
         (
@@ -30,6 +38,21 @@ def history_selection_fields(
         ),
         ("history_empty_symbol_count", selection.get("history_empty_symbol_count", "")),
         ("history_empty_symbols", selection.get("history_empty_symbols", "")),
+        (
+            "history_possibly_truncated_symbol_count",
+            selection.get("history_possibly_truncated_symbol_count", ""),
+        ),
+        (
+            "history_possibly_truncated_symbols",
+            selection.get("history_possibly_truncated_symbols", ""),
+        ),
+        ("history_invalid_rows", selection.get("history_invalid_rows", "")),
+        ("history_dropped_invalid_rows", selection.get("history_dropped_invalid_rows", "")),
+        ("history_non_trading_rows", selection.get("history_non_trading_rows", "")),
+        (
+            "history_tradestatus_missing_rows",
+            selection.get("history_tradestatus_missing_rows", ""),
+        ),
         (i18n("history_requested_end_date", language), selection.get("requested_end_date", "")),
         (
             i18n("history_actual_date_max", language),

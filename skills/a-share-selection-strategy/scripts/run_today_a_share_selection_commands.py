@@ -74,8 +74,10 @@ def fetch_history_command(
     prices: Path,
     symbols: list[str],
 ) -> list[str]:
-    if args.history_source not in {"akshare", "baostock"}:
-        raise ValueError("history-source must be akshare or baostock when prices-input is omitted")
+    if args.history_source not in {"akshare", "baostock", "zzshare"}:
+        raise ValueError(
+            "history-source must be akshare, baostock, or zzshare when prices-input is omitted"
+        )
     command = [
         sys.executable,
         str(SCRIPTS / f"fetch_{args.history_source}_a_share.py"),
@@ -90,13 +92,32 @@ def fetch_history_command(
         "--metadata-output",
         str(Path(args.output_dir) / "history_metadata.json"),
     ]
-    if args.history_adjust is not None:
+    if args.history_source == "zzshare":
+        if args.history_adjust is not None:
+            command.extend(["--adjust", str(args.history_adjust)])
+        command.extend(["--fields", "all"])
+        append_optional_arg(command, "--http-url", args.history_http_url)
+        append_optional_arg(command, "--timeout-seconds", args.history_timeout_seconds)
+        append_optional_arg(
+            command,
+            "--request-interval-seconds",
+            args.history_request_interval_seconds,
+        )
+        append_optional_arg(command, "--limit", args.history_limit)
+        append_optional_arg(command, "--max-pages", args.history_max_pages)
+    elif args.history_adjust is not None:
         command.extend(["--adjust", str(args.history_adjust)])
     if not args.allow_partial_history:
         command.append("--fail-on-fetch-error")
     if args.drop_invalid_history_rows:
         command.append("--drop-invalid-rows")
     return command
+
+
+def append_optional_arg(command: list[str], flag: str, value: Any) -> None:
+    if value is None or value == "":
+        return
+    command.extend([flag, str(value)])
 
 
 def run_config_path(args: Any) -> Path:
@@ -121,6 +142,13 @@ def initial_manifest(args: Any) -> dict[str, Any]:
         "derive_symbols_from_spot": bool(args.derive_symbols_from_spot),
         "max_history_symbols": int(args.max_history_symbols),
         "history_adjust": args.history_adjust or "",
+        "history_http_url": args.history_http_url or "",
+        "history_timeout_seconds": manifest_optional(args.history_timeout_seconds),
+        "history_request_interval_seconds": manifest_optional(
+            args.history_request_interval_seconds,
+        ),
+        "history_limit": manifest_optional(args.history_limit),
+        "history_max_pages": manifest_optional(args.history_max_pages),
         "start_date": args.start_date or "",
         "end_date": args.end_date or "",
         "allow_partial_history": bool(args.allow_partial_history),
@@ -157,6 +185,10 @@ def selected_config(args: Any) -> Path:
         return Path(args.config)
     mode = getattr(args, "resolved_mode", args.mode)
     return args.default_prediction_config if mode == "prediction" else args.default_generic_config
+
+
+def manifest_optional(value: Any) -> Any:
+    return "" if value is None else value
 
 if __name__ == "__main__":
     from a_share_selection_cli_guard import fail_not_cli

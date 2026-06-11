@@ -27,9 +27,11 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
     return {
         **run_identity(manifest, status),
         **prediction_fields(manifest, score),
+        "source": summary_source(input_metadata, manifest),
         "source_scope": manifest["source_scope"],
         "source_type": input_metadata.get("source_type", "unknown"),
         "real_market_data": input_metadata.get("real_market_data", "unknown"),
+        "source_claim_boundary": input_metadata.get("source_claim_boundary", ""),
         "input_metadata": input_metadata,
         "input_csv_provenance": input_csv_provenance(score),
         "advice_boundary": ADVICE_BOUNDARY,
@@ -58,6 +60,16 @@ def summary_paths(manifest: dict[str, Any]) -> dict[str, Path]:
 def normalized_input_metadata(manifest: dict[str, Any]) -> dict[str, Any]:
     metadata = manifest.get("input_metadata", {})
     return metadata if isinstance(metadata, dict) else {}
+
+
+def summary_source(input_metadata: dict[str, Any], manifest: dict[str, Any]) -> str:
+    source = input_metadata.get("source")
+    if source:
+        return str(source)
+    history_source = manifest.get("history_source")
+    if history_source:
+        return str(history_source)
+    return "unknown"
 
 
 def input_csv_provenance(score: dict[str, Any]) -> dict[str, Any]:
@@ -202,6 +214,7 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
     selected_symbols = selected_symbol_values(selected_data, manifest)
     failed_symbols = metadata_list(metadata, "failed_symbols")
     empty_symbols = metadata_list(metadata, "empty_symbols")
+    truncated_symbols = metadata_list(metadata, "possibly_truncated_symbols")
     fallback_errors = metadata_list(metadata, "fallback_errors")
     date_range = history_date_range_view(metadata, manifest)
     view = {
@@ -223,6 +236,14 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
         "history_metadata_failed_symbols": failed_symbols,
         "history_empty_symbol_count": len(empty_symbols),
         "history_empty_symbols": empty_symbols,
+        "history_possibly_truncated_symbol_count": len(truncated_symbols),
+        "history_possibly_truncated_symbols": truncated_symbols,
+        "history_invalid_rows": int(metadata.get("invalid_rows", 0) or 0),
+        "history_dropped_invalid_rows": int(metadata.get("dropped_invalid_rows", 0) or 0),
+        "history_non_trading_rows": int(metadata.get("non_trading_rows", 0) or 0),
+        "history_tradestatus_missing_rows": int(
+            metadata.get("tradestatus_missing_rows", 0) or 0
+        ),
         "history_metadata_fallback_error_count": len(fallback_errors),
         "history_metadata_fallback_errors": fallback_errors,
         "history_metadata_symbol_providers": symbol_providers(metadata),
@@ -236,6 +257,16 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
         view["history_adjust"] = metadata["adjust"]
     if "adjustflag" in metadata:
         view["history_adjustflag"] = str(metadata["adjustflag"])
+    if "token_configured" in metadata:
+        view["history_token_configured"] = bool(metadata["token_configured"])
+    for source_key, view_key in (
+        ("fields", "history_fields"),
+        ("request_interval_seconds", "history_request_interval_seconds"),
+        ("limit", "history_limit"),
+        ("max_pages", "history_max_pages"),
+    ):
+        if source_key in metadata:
+            view[view_key] = metadata[source_key]
     return view
 
 

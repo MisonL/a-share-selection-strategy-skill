@@ -661,6 +661,7 @@ class AShareSelectionScriptTests(unittest.TestCase):
             [
                 {"code": "sz.000002", "price": 8.88, "amount": 250000000},
                 {"code": "600001.SH", "price": 9.99, "amount": 260000000},
+                {"code": "bj.430047", "price": 7.77, "amount": 270000000},
             ]
         )
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -693,6 +694,8 @@ class AShareSelectionScriptTests(unittest.TestCase):
         self.assertIn("spot_matched_symbols=2", stdout.getvalue())
         selected = candidates[candidates["symbol"].astype(str).eq("2")].iloc[0]
         self.assertEqual(8.88, selected["spot_price"])
+        view = normalized_spot_view(spot)
+        self.assertEqual(["000002", "600001", "430047"], view["symbol"].tolist())
 
     def test_spot_merge_matches_numeric_scored_symbol_to_text_spot(self) -> None:
         config = load_config("example_config.json")

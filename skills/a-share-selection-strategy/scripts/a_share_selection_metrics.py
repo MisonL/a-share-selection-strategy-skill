@@ -31,7 +31,7 @@ def score_symbol(group: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any]:
     signal_tier = recommendation_for(metrics["total_score"], config)
     return {
         "symbol": str(latest["symbol"]),
-        "name": str(latest.get("name", latest["symbol"])),
+        "name": display_name(latest, str(latest["symbol"])),
         "market": str(latest.get("market", "")),
         "date": iso_date(latest["date"]),
         "close": float(latest["close"]),
@@ -64,6 +64,13 @@ def score_symbol(group: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any]:
         "risk_notes": build_risk_notes(metrics, float(cleaned_latest["volume"])),
         "data_window": f"{group['date'].iloc[0].date()} to {group['date'].iloc[-1].date()}",
     }
+
+
+def display_name(row: pd.Series, symbol: str) -> str:
+    value = row.get("name", "")
+    if pd.isna(value) or not str(value).strip():
+        return symbol
+    return str(value)
 
 
 def compute_metrics(

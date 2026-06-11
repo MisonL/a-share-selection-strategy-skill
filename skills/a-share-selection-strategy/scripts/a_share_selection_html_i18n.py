@@ -177,8 +177,8 @@ TEXT = {
         "zh": "本地文件加外部快照或取数",
     },
     "generic_boundary_summary": {
-        "en": "The run filtered local A-share price data with deterministic short-term technical gates and ranked the rows that passed.",
-        "zh": "本次使用确定性的短线技术门禁筛选本地 A 股行情，并对通过门禁的行排序。",
+        "en": "The run filtered available A-share price data with deterministic short-term technical gates and ranked the rows that passed.",
+        "zh": "本次使用确定性的短线技术门禁筛选可用的 A 股行情，并对通过门禁的行排序。",
     },
     "generic_not_scored_boundary_summary": {
         "en": "Generic mode was selected, but the failed run did not complete scoring, filtering, or ranking.",

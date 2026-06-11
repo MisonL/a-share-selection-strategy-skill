@@ -34,6 +34,10 @@ from run_today_a_share_selection_modes import ModeResolution, resolve_mode
 from run_today_a_share_selection_outputs import clear_stale_run_outputs, finalize_outputs
 from run_today_a_share_selection_parser import build_parser
 from run_today_a_share_selection_provenance import annotate_run_csv_outputs
+from run_today_a_share_selection_validation import (
+    normalize_zzshare_history_options,
+    sync_validated_history_options,
+)
 
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -126,6 +130,7 @@ def run_pipeline(context: RunContext) -> None:
     context.manifest["input_metadata"] = input_metadata_for_prices(context.args.prices_input)
     context.manifest["run_outputs_initialized"] = True
     validate_preflight_inputs(context.args, spot)
+    sync_validated_history_options(context.manifest, context.args)
     prepare_inputs(context.args, output, prices, spot)
     if context.args.fetch_spot:
         run_step(context, Step("fetch_spot", fetch_spot_command(context.args, spot)))
@@ -161,6 +166,8 @@ def prepare_inputs(
 
 def validate_preflight_inputs(args: argparse.Namespace, spot: Path | None) -> None:
     validate_history_inputs(args, spot)
+    if not args.prices_input and args.history_source == "zzshare":
+        normalize_zzshare_history_options(args)
     if args.prices_input and not Path(args.prices_input).exists():
         raise FileNotFoundError(f"prices input not found: {Path(args.prices_input)}")
     if args.spot_input and not Path(args.spot_input).exists():

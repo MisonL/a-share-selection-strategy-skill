@@ -72,6 +72,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("Why this mode", report)
         self.assertIn("What this report can and cannot prove", report)
         self.assertIn("Input has no prediction column, so auto mode used technical gates.", report)
+        self.assertIn("filtered available A-share price data", report)
         self.assertIn("It cannot prove model prediction quality, live full-market coverage, future returns, or real tradability.", report)
         self.assertIn("el.open=false", report)
         self.assertIn("const initial=mode==='auto'?(saved||generated):mode", report)

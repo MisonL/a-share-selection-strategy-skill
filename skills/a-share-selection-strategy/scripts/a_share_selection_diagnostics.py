@@ -202,7 +202,7 @@ def diagnostic_row(
     passed = not failed_thresholds
     return {
         "symbol": symbol,
-        "name": row.get("name", symbol),
+        "name": display_name(row, symbol),
         "market": row.get("market", ""),
         "date": row.get("date", ""),
         "close": row.get("close"),
@@ -250,6 +250,13 @@ def diagnostic_row(
         "selection_status": selection_status(selected, passed),
         "short_reason": short_reason(selected, failed_thresholds),
     }
+
+
+def display_name(row: pd.Series, symbol: str) -> str:
+    value = row.get("name", "")
+    if pd.isna(value) or not str(value).strip():
+        return symbol
+    return str(value)
 
 
 def symbol_selected(row: pd.Series, selected_symbols: set[str]) -> bool:

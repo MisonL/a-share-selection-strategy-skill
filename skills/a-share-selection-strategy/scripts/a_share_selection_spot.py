@@ -6,7 +6,7 @@ from typing import Any
 
 import pandas as pd
 
-from a_share_selection_symbols import normalize_symbol_values
+from a_share_selection_symbols import A_SHARE_EXCHANGES, normalize_symbol_values
 
 
 SYMBOL_COLUMN_ALIASES = ["symbol", "code", "code_id", "stock_code", "ticker", "Ticker"]
@@ -42,7 +42,14 @@ def spot_summary(rows: int, matched: int) -> dict[str, Any]:
 def normalized_spot_view(spot: pd.DataFrame) -> pd.DataFrame:
     source_frame = spot.reset_index(drop=True)
     symbol_values = first_existing_required(source_frame, SYMBOL_COLUMN_ALIASES, "symbol")
-    result = pd.DataFrame({"symbol": normalize_symbol_values(symbol_values)})
+    result = pd.DataFrame(
+        {
+            "symbol": normalize_symbol_values(
+                symbol_values,
+                allowed_exchanges=A_SHARE_EXCHANGES,
+            )
+        }
+    )
     for source, target in spot_column_map().items():
         if source in source_frame.columns and target not in result.columns:
             result[target] = source_frame[source]

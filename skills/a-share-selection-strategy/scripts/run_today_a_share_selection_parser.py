@@ -27,7 +27,9 @@ def parser_description() -> str:
         "candidates.csv, diagnostics.csv, and CSV intermediate files; strict "
         "all-Parquet output is not supported by this CLI. "
         "Without --prices-input, explicit history fetch options are required; "
-        "landed files and metadata still require validation before any candidate claim."
+        "landed files and metadata still require validation before any candidate claim. "
+        "For zzshare history, token is read only from ZZSHARE_TOKEN; no-token success "
+        "does not prove unlimited free quota or long-term stability."
     )
 
 
@@ -63,7 +65,7 @@ def add_spot_options(parser: argparse.ArgumentParser) -> None:
 
 
 def add_history_options(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--history-source", choices=["akshare", "baostock"])
+    parser.add_argument("--history-source", choices=["akshare", "baostock", "zzshare"])
     parser.add_argument("--symbols", help="Comma-separated six-digit symbols for history fetch.")
     parser.add_argument("--start-date", help="History start date.")
     parser.add_argument("--end-date", help="History end date.")
@@ -78,6 +80,38 @@ def add_history_options(parser: argparse.ArgumentParser) -> None:
         default=DEFAULT_HISTORY_SYMBOL_LIMIT,
     )
     parser.add_argument("--history-adjust", help="Forwarded adjust value for history fetch.")
+    parser.add_argument(
+        "--history-http-url",
+        help=(
+            "Forwarded zzshare API base URL; only used with --history-source zzshare. "
+            "Omitted uses the fetcher default."
+        ),
+    )
+    parser.add_argument(
+        "--history-timeout-seconds",
+        help=(
+            "Forwarded per-request zzshare timeout; only used with "
+            "--history-source zzshare."
+        ),
+    )
+    parser.add_argument(
+        "--history-request-interval-seconds",
+        help=(
+            "Forwarded zzshare sleep interval between per-symbol requests; only used "
+            "with --history-source zzshare."
+        ),
+    )
+    parser.add_argument(
+        "--history-limit",
+        help="Forwarded zzshare per-page limit; only used with --history-source zzshare.",
+    )
+    parser.add_argument(
+        "--history-max-pages",
+        help=(
+            "Forwarded zzshare maximum pages per symbol; only used with "
+            "--history-source zzshare."
+        ),
+    )
     parser.add_argument(
         "--allow-partial-history",
         action="store_true",

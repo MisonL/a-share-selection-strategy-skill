@@ -422,6 +422,14 @@ def input_partial_alerts(summary: dict[str, Any], language: str) -> list[str]:
         return []
     failed = list_count(metadata.get("failed_symbols"))
     empty = list_count(metadata.get("empty_symbols"))
+    truncated = list_count(metadata.get("possibly_truncated_symbols"))
+    invalid = metadata.get("input_invalid_rows", metadata.get("invalid_rows", 0))
+    dropped = metadata.get("input_dropped_invalid_rows", metadata.get("dropped_invalid_rows", 0))
+    non_trading = metadata.get("input_non_trading_rows", metadata.get("non_trading_rows", 0))
+    missing_status = metadata.get(
+        "input_tradestatus_missing_rows",
+        metadata.get("tradestatus_missing_rows", 0),
+    )
     symbol_count = metadata.get("symbol_count", "unknown")
     requested = metadata.get("input_requested_symbol_count")
     if requested is None:
@@ -430,12 +438,18 @@ def input_partial_alerts(summary: dict[str, Any], language: str) -> list[str]:
     en = (
         "Partial local input metadata; "
         f"failed_symbols={failed} empty_symbols={empty} "
+        f"possibly_truncated_symbols={truncated} "
+        f"invalid_rows={invalid} dropped_invalid_rows={dropped} "
+        f"non_trading_rows={non_trading} tradestatus_missing_rows={missing_status} "
         f"symbol_count={symbol_count}/{requested} "
         f"output_written={output_written}."
     )
     zh = (
         "本地输入 metadata 为部分结果；"
         f"failed_symbols={failed} empty_symbols={empty} "
+        f"possibly_truncated_symbols={truncated} "
+        f"invalid_rows={invalid} dropped_invalid_rows={dropped} "
+        f"non_trading_rows={non_trading} tradestatus_missing_rows={missing_status} "
         f"symbol_count={symbol_count}/{requested} "
         f"output_written={output_written}。"
     )
@@ -498,17 +512,24 @@ def history_alerts(summary: dict[str, Any], language: str) -> list[str]:
     if history_partial(selection):
         failed = selection.get("history_metadata_failed_symbol_count", 0)
         empty = selection.get("history_empty_symbol_count", 0)
+        truncated = selection.get("history_possibly_truncated_symbol_count", 0)
+        invalid = selection.get("history_invalid_rows", 0)
+        dropped = selection.get("history_dropped_invalid_rows", 0)
         fallback = selection.get("history_metadata_fallback_error_count", 0)
         output_written = metadata_bool_text(selection.get("history_output_written"))
         en = (
             "Partial history fetch; "
             f"failed_symbols={failed} empty_symbols={empty} "
+            f"possibly_truncated_symbols={truncated} "
+            f"invalid_rows={invalid} dropped_invalid_rows={dropped} "
             f"fallback_errors={fallback} output_written={output_written}; "
             "cannot be described as complete history."
         )
         zh = (
             "历史抓取为部分结果；"
             f"failed_symbols={failed} empty_symbols={empty} "
+            f"possibly_truncated_symbols={truncated} "
+            f"invalid_rows={invalid} dropped_invalid_rows={dropped} "
             f"fallback_errors={fallback} output_written={output_written}；"
             "不能描述为完整历史行情。"
         )
@@ -614,14 +635,39 @@ def input_csv_provenance_fields(summary: dict[str, Any]) -> list[tuple[str, Any]
 
 def input_metadata_detail_fields(metadata: dict[str, Any]) -> list[tuple[str, Any]]:
     keys = (
+        "source_scope",
+        "token_configured",
+        "history_token_configured",
+        "history_fields",
+        "history_request_interval_seconds",
+        "history_limit",
+        "history_max_pages",
+        "fields",
+        "request_interval_seconds",
+        "limit",
+        "max_pages",
         "requested_symbols",
         "symbol_count",
         "rows",
         "failed_symbols",
         "empty_symbols",
+        "possibly_truncated_symbols",
+        "invalid_rows",
+        "invalid_symbols",
+        "invalid_row_examples",
+        "dropped_invalid_rows",
+        "non_trading_rows",
+        "non_trading_symbols",
+        "non_trading_row_examples",
+        "tradestatus_missing_rows",
         "input_partial_result",
         "input_failed_symbol_count",
         "input_empty_symbol_count",
+        "input_possibly_truncated_symbol_count",
+        "input_invalid_rows",
+        "input_dropped_invalid_rows",
+        "input_non_trading_rows",
+        "input_tradestatus_missing_rows",
         "input_requested_symbol_count",
         "output_written",
         "metadata_output_written",

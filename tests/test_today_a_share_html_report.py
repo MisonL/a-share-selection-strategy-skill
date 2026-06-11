@@ -466,12 +466,22 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("脚本已完成校验、评分和排序", report)
         self.assertIn("候选只是通过当前配置", report)
         self.assertIn("哪些内容可以相信", report)
-        self.assertIn("先看候选卡片理解原因", report)
+        self.assertIn("先看候选卡片。只有需要复核字段时，再展开完整明细表。", report)
         self.assertIn("一眼结论", report)
         self.assertIn("找到 2 条候选", report)
         self.assertIn("不是买卖指令", report)
+        self.assertIn('<details class="report-details review-metrics">', report)
+        self.assertIn('<details class="report-details candidate-detail-table">', report)
+        self.assertIn('<details class="report-details diagnostics-detail">', report)
+        self.assertIn("展开复核运行数字", report)
+        self.assertIn("展开完整候选明细表", report)
+        self.assertIn("展开诊断明细", report)
         self.assertLess(report.index('class="reader-guide"'), report.index('class="table-wrap"'))
         self.assertLess(report.index('class="executive-summary"'), report.index('class="table-wrap"'))
+        self.assertLess(
+            report.index('class="candidate-cards"'),
+            report.index('<details class="report-details candidate-detail-table">'),
+        )
         self.assertLess(
             report.index('class="executive-summary"'),
             report.index('<details class="technical-details">'),
@@ -501,8 +511,11 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
 
         self.assertIn("筛选完成，但没有候选", report)
         self.assertIn("没有标的满足当前配置门禁", report)
-        self.assertIn("先看诊断明细", report)
-        self.assertIn("判断是门槛过严还是数据不足", report)
+        self.assertIn("需要排查原因时，展开诊断明细", report)
+        self.assertIn("看哪些门禁拦下了标的", report)
+        self.assertIn("本次运行已完成，但没有标的通过当前配置门禁", report)
+        self.assertIn('<details class="report-details zero-candidate-review">', report)
+        self.assertIn('<details class="report-details diagnostics-detail">', report)
 
     def test_failed_report_warns_not_to_use_stale_candidate_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -536,7 +549,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("运行失败，未完成候选筛选", report)
         self.assertIn("脚本没有完成到有效候选输出", report)
         self.assertIn("不要使用旧候选表当本次结果", report)
-        self.assertIn("先展开执行步骤", report)
+        self.assertIn("需要排错时，先展开执行步骤", report)
 
     def test_synthetic_demo_boundary_appears_before_top_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -589,6 +602,47 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("Cash reserved", report)
         self.assertIn("Not a broker order", report)
         self.assertLess(report.index('class="candidate-cards"'), report.index('class="table-wrap"'))
+
+    def test_auditable_tables_and_paths_are_folded_for_beginner_view(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            diagnostics = output / "diagnostics.csv"
+            write_consumer_candidate_rows(candidates)
+            diagnostics.write_text(
+                "\n".join(
+                    [
+                        "symbol,name,close,total_score,selection_status,short_reason",
+                        "000003,Gamma,8.1,0.2,未通过阈值,价格高于上限",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            summary = minimal_summary(tmpdir, diagnostics)
+            summary.update(
+                {
+                    "candidate_rows": 2,
+                    "diagnostic_rows": 1,
+                    "candidates_output": str(candidates),
+                    "diagnostics_output": str(diagnostics),
+                    "candidates_output_written": True,
+                    "diagnostics_output_written": True,
+                }
+            )
+            report = render_report(summary, {"steps": []}, language="zh")
+
+        candidate_detail = details_block(report, "candidate-detail-table")
+        diagnostics_detail = details_block(report, "diagnostics-detail")
+        evidence_detail = details_block(report, "evidence-detail")
+        self.assertIn('class="candidate-cards"', report)
+        self.assertIn('class="table-wrap"', candidate_detail)
+        self.assertIn("完整明细表", candidate_detail)
+        self.assertIn('class="table-wrap"', diagnostics_detail)
+        self.assertIn("Gamma", diagnostics_detail)
+        self.assertIn(">./summary.json</code>", evidence_detail)
+        self.assertLess(report.index("为什么入选"), report.index(candidate_detail))
+        self.assertLess(report.index("诊断明细保留每个标的的门禁结果"), report.index(diagnostics_detail))
 
     def test_report_uses_productized_visual_shell(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -851,6 +905,11 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
 
 def visible_before_technical_details(report: str) -> str:
     return report.split('<details class="technical-details">', 1)[0]
+
+
+def details_block(report: str, class_name: str) -> str:
+    marker = f'<details class="report-details {class_name}">'
+    return marker + report.split(marker, 1)[1].split("</details>", 1)[0] + "</details>"
 
 
 def write_consumer_candidate_rows(path: Path) -> None:

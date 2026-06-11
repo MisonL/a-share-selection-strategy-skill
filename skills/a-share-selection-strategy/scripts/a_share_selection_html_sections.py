@@ -329,19 +329,19 @@ def next_read_story(summary: dict[str, Any], language: str) -> str:
     count = candidate_count(summary)
     if status != "completed":
         return bilingual(
-            "Open pipeline steps first, then check evidence paths.",
-            "先展开执行步骤，再看证据路径。",
+            "If you need to debug it, open pipeline steps first, then evidence paths.",
+            "需要排错时，先展开执行步骤，再看证据路径。",
             language,
         )
     if count == 0:
         return bilingual(
-            "Start with diagnostics to tell whether gates were too strict or data was insufficient.",
-            "先看诊断明细，判断是门槛过严还是数据不足。",
+            "If you need the reason, open diagnostics to see which gates blocked the rows.",
+            "需要排查原因时，展开诊断明细看哪些门禁拦下了标的。",
             language,
         )
     return bilingual(
-        "Start with candidate cards for reasons, then use the table for auditable fields.",
-        "先看候选卡片理解原因，再用表格核对审计字段。",
+        "Start with candidate cards. Open the detail table only when you need audit fields.",
+        "先看候选卡片。只有需要复核字段时，再展开完整明细表。",
         language,
     )
 
@@ -354,7 +354,21 @@ def report_overview(
     return (
         reader_guide(summary, language)
         + executive_summary(summary, language, candidate_rows)
-        + metric_grid(summary, language)
+        + review_numbers_panel(summary, language)
+    )
+
+
+def review_numbers_panel(summary: dict[str, Any], language: str) -> str:
+    label = bilingual("Show review numbers", "展开复核运行数字", language)
+    hint = bilingual(
+        "These counts help audit the run. They are not the main reading path.",
+        "这些数字用于复核运行，不是普通阅读的主线。",
+        language,
+    )
+    return collapsible_details(
+        label,
+        f'<p class="review-note">{hint}</p>{metric_grid(summary, language)}',
+        "review-metrics",
     )
 
 
@@ -364,11 +378,40 @@ def boundary_panel(
     candidate_rows: list[dict[str, Any]] | None = None,
 ) -> str:
     return (
-        f'<p class="explain-lead">{boundary_summary(summary, language)}</p>'
-        f'<div class="note-grid">{boundary_cards(summary, language)}</div>'
-        f'<div class="limit-panel">{limit_panel(summary, language)}</div>'
+        f'<div class="plain-boundary">{plain_boundary_cards(summary, language)}</div>'
         f"{disclosure_alerts(summary, language, candidate_rows or [])}"
+        f"{review_scoring_panel(summary, language)}"
         f"{technical_details(summary, language)}"
+    )
+
+
+def plain_boundary_cards(summary: dict[str, Any], language: str) -> str:
+    rows = [
+        (
+            bilingual("What was screened", "这次筛了什么", language),
+            boundary_summary(summary, language),
+        ),
+        (
+            bilingual("Why this path", "为什么这样跑", language),
+            mode_reason(summary, language),
+        ),
+        (
+            bilingual("What not to infer", "不能当成什么", language),
+            i18n(limit_key(summary), language),
+        ),
+    ]
+    return "".join(
+        f"<div><span>{label}</span><p>{body}</p></div>" for label, body in rows
+    )
+
+
+def review_scoring_panel(summary: dict[str, Any], language: str) -> str:
+    label = bilingual("Show scoring fields for review", "展开评分复核字段", language)
+    return collapsible_details(
+        label,
+        f'<div class="note-grid">{boundary_cards(summary, language)}</div>'
+        f'<div class="limit-panel">{limit_panel(summary, language)}</div>',
+        "scoring-review",
     )
 
 
@@ -438,7 +481,12 @@ def candidates_panel(
         "卡片方便快速阅读，表格保留可审计字段。",
         language,
     )
-    return f"{cards}<div class=\"detail-table-heading\"><strong>{title}</strong><p>{hint}</p></div>{table_html}"
+    detail = (
+        f'<div class="detail-table-heading"><strong>{title}</strong>'
+        f"<p>{hint}</p></div>{table_html}"
+    )
+    label = bilingual("Show full candidate detail table", "展开完整候选明细表", language)
+    return f"{cards}{collapsible_details(label, detail, 'candidate-detail-table')}"
 
 
 def boundary_cards(summary: dict[str, Any], language: str) -> str:
@@ -843,8 +891,58 @@ def steps_table(steps: list[dict[str, Any]], language: str) -> str:
     )
 
 
-def collapsible_details(label: str, content: str) -> str:
-    return f'<details class="report-details"><summary>{label}</summary>{content}</details>'
+def diagnostics_panel(
+    summary: dict[str, Any],
+    rows: list[dict[str, Any]],
+    columns: tuple[str, ...],
+    language: str,
+    *,
+    truncated: bool,
+    limit: int,
+    csv_path: Any,
+) -> str:
+    table_html = limited_table(
+        rows,
+        columns,
+        language,
+        truncated=truncated,
+        limit=limit,
+        csv_path=csv_path,
+        empty_key=empty_key_for(summary),
+    )
+    label = bilingual("Show diagnostics detail", "展开诊断明细", language)
+    return (
+        f'<p class="diagnostic-intro">{diagnostic_intro(summary, language)}</p>'
+        f"{collapsible_details(label, table_html, 'diagnostics-detail')}"
+    )
+
+
+def diagnostic_intro(summary: dict[str, Any], language: str) -> str:
+    status = str(summary.get("status", "unknown"))
+    if status != "completed":
+        return bilingual(
+            "Diagnostics are for debugging failed runs and may be empty when scoring did not finish.",
+            "诊断明细用于排查失败运行；如果评分没有完成，这里可能没有内容。",
+            language,
+        )
+    if candidate_count(summary) == 0:
+        return bilingual(
+            "No candidate passed. Open diagnostics only if you want to inspect which gates blocked each row.",
+            "没有候选通过。只有想排查每个标的被哪些门禁拦下时，再展开诊断明细。",
+            language,
+        )
+    return bilingual(
+        "Diagnostics keep per-symbol gate results for review. Candidate cards above are the normal reading path.",
+        "诊断明细保留每个标的的门禁结果，供复核使用；普通阅读先看上面的候选卡片。",
+        language,
+    )
+
+
+def collapsible_details(label: str, content: str, extra_class: str = "") -> str:
+    class_name = "report-details"
+    if extra_class:
+        class_name = f"{class_name} {extra_class}"
+    return f'<details class="{class_name}"><summary>{label}</summary>{content}</details>'
 
 
 def evidence_list(summary: dict[str, Any], language: str) -> str:
@@ -930,12 +1028,21 @@ def zero_candidates_message(summary: dict[str, Any], language: str) -> str:
     if summary.get("candidates_output_written") is not True:
         return ""
     reason = str(score.get("empty_result_reason", "unknown"))
-    en = (
-        "Completed run with zero candidates; effective_empty_result=true "
-        f"empty_result_reason={reason}."
+    visible = bilingual(
+        "The run completed, but no row passed the configured gates.",
+        "本次运行已完成，但没有标的通过当前配置门禁。",
+        language,
     )
-    zh = f"本次成功运行但没有候选；effective_empty_result=true empty_result_reason={reason}。"
-    return f'<p class="empty">{bilingual(en, zh, language)}</p>'
+    review = bilingual(
+        "Completed run with zero candidates; "
+        f"effective_empty_result=true empty_result_reason={reason}.",
+        f"本次成功运行但没有候选；effective_empty_result=true empty_result_reason={reason}。",
+        language,
+    )
+    return (
+        f'<p class="empty">{visible}</p>'
+        f"{collapsible_details(bilingual('Show zero-candidate review fields', '展开 0 候选复核字段', language), review, 'zero-candidate-review')}"
+    )
 
 
 def empty_key_for(summary: dict[str, Any]) -> str:

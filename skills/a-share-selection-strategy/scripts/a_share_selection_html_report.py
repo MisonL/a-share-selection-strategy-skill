@@ -24,10 +24,10 @@ from a_share_selection_html_sections import (
     boundary_panel,
     candidates_panel,
     collapsible_details,
+    diagnostics_panel,
     evidence_list,
     empty_key_for,
     hero,
-    limited_table,
     report_overview,
     section,
     steps_table,
@@ -121,14 +121,14 @@ def report_sections(
         ),
         section(
             i18n("diagnostics", language),
-            limited_table(
+            diagnostics_panel(
+                summary,
                 diagnostics,
                 DISPLAY_DIAGNOSTIC_COLUMNS,
                 language,
                 truncated=diagnostics_truncated,
                 limit=HTML_DIAGNOSTIC_ROWS_LIMIT,
                 csv_path=summary.get("diagnostics_output", ""),
-                empty_key=empty_key_for(summary),
             ),
         ),
         section(
@@ -138,7 +138,14 @@ def report_sections(
                 steps_table(manifest.get("steps", []), language),
             ),
         ),
-        section(i18n("evidence_paths", language), evidence_list(summary, language)),
+        section(
+            i18n("evidence_paths", language),
+            collapsible_details(
+                i18n("evidence_paths", language),
+                evidence_list(summary, language),
+                "evidence-detail",
+            ),
+        ),
     ]
 
 

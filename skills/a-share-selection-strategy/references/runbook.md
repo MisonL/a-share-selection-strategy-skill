@@ -94,7 +94,8 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 
 检查：
 
-- `summary.json`: `requested_mode`、`mode`、`mode_decision`、`mode_decision_reason`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`consumes_prediction_columns`、`prediction_input_source`、`requested_prediction_input_source`、`prediction_model_executed_by_runner`、`source`、`source_scope`、`candidate_rows`、`diagnostic_rows`、`spot_matched_symbols`、`input_metadata`、`html_report_language`、`html_report_initial_language`、`html_report_error_type`、`candidates_output_written`、`diagnostics_output_written`。
+- `summary.json`: `requested_mode`、`mode`、`mode_decision`、`mode_decision_reason`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`consumes_prediction_columns`、`prediction_input_source`、`requested_prediction_input_source`、`prediction_model_executed_by_runner`、`source`、`source_scope`、`runner_source_scope`、`candidate_rows`、`diagnostic_rows`、`spot_matched_symbols`、`input_metadata`、`input_csv_provenance`、`html_report_language`、`html_report_initial_language`、`html_report_error_type`、`candidates_output_written`、`diagnostics_output_written`。
+- `input_csv_provenance`: 若 `real_market_data`、`source_scope` 或 `source_claim_boundary` 为 `mixed`、`unknown` 或空值，只能说明本地 CSV 内嵌来源信息混合或未完整声明，不能写成真实全量行情、今日全市场覆盖或交易日历门禁通过。
 - `run_manifest.json`: `html_report_enabled=false` 表示 `--no-html-report` 主动关闭 HTML；此时 `summary.html_report_written=false` 且 `html_report_error_type=""` 不是报告生成失败。
 - `report.html`: 浏览器可读汇总，展示候选、诊断、步骤和证据路径；默认 `--html-report-language auto` 跟随运行环境，也可传 `zh` 或 `en` 并在浏览器内切换；只从已写出的 JSON/CSV 派生，不能替代退出码或机器字段。
 - `candidates.csv`: 候选字段、spot 展示字段，以及 prediction 披露字段。

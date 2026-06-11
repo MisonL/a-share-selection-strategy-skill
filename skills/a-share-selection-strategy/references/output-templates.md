@@ -24,6 +24,7 @@
 | `html_report_language=auto` | HTML 初始语言跟随运行环境，且浏览器内可切换 | 不能改变机器字段或事实口径 |
 | `input_metadata.source_type=synthetic_demo` | 输入来自 `create_demo_data.py` 合成 demo | 不能写成真实行情、真实预测或真实选股结论 |
 | `input_metadata={}` 或未声明 `real_market_data=true` | 本地行情文件来源未证明 | 不能写成真实行情源、今日全市场扫描或数据覆盖已验证 |
+| `input_csv_provenance.real_market_data=mixed/unknown` 或 `input_csv_provenance.source_scope=mixed/unknown` | 本地行情文件来源未证明 | 不能把部分行来源声明写成全量真实行情证明 |
 
 ## 模板分组
 
@@ -94,8 +95,9 @@
 ```markdown
 ## 本地输入文件来源未证明
 - 本次只验证了本地行情文件的字段、格式和评分流程，不能证明它是真实行情源、今日全市场覆盖或完整交易日历数据。
-- 必须披露 `source_scope`、`input_metadata`、价格文件路径、信号日期或文件内 `date_min/date_max`。
+- 必须披露 `source_scope`、`runner_source_scope`、`input_metadata`、`input_csv_provenance`、价格文件路径、信号日期或文件内 `date_min/date_max`。
 - 当 `input_metadata={}` 或未声明 `real_market_data=true` 时，只能称为“本地输入文件评分结果”，不能写成“今日真实 A 股候选”。
+- 当 `input_csv_provenance.real_market_data`、`input_csv_provenance.source_scope` 或 `input_csv_provenance.source_claim_boundary` 为 `mixed`、`unknown` 或空值时，只能说明 CSV 内嵌来源信息不完整或混合，不能把部分行的真实来源声明外推为全文件真实行情证明。
 - 若需要真实行情口径，必须补齐数据源、抓取时间、复权口径、交易日历、覆盖范围和 metadata，再重新校验和评分。
 ```
 

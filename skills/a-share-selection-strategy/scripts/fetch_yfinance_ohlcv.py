@@ -5,11 +5,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 
+CLAIM_BOUNDARY = "market_label_not_source_exchange_or_calendar_proof"
 OUTPUT_COLUMNS = [
     "symbol",
     "name",
@@ -53,12 +56,30 @@ def main(argv: list[str] | None = None) -> int:
     output = Path(args.output)
     metadata_output = Path(args.metadata_output)
     try:
+        validate_arguments(args)
+    except ValueError as exc:
+        remove_output(output)
+        remove_output(metadata_output)
+        print(
+            "ERROR: code=invalid_argument output_written=false "
+            "metadata_output_written=false "
+            f"source_claim_boundary={CLAIM_BOUNDARY} message={exc}",
+            file=sys.stderr,
+        )
+        return 2
+    try:
         frame, metadata = fetch_prices(args)
         metadata = output_status(metadata, output_written=True, metadata_output_written=True)
         write_outputs(frame, metadata, output, metadata_output)
     except Exception as exc:  # noqa: BLE001
         remove_output(output)
-        print(f"ERROR: code=fetch_failed output_written=false message={exc}", file=sys.stderr)
+        remove_output(metadata_output)
+        print(
+            "ERROR: code=fetch_failed output_written=false "
+            f"metadata_output_written=false source_claim_boundary={CLAIM_BOUNDARY} "
+            f"message={exc}",
+            file=sys.stderr,
+        )
         return 2
     strict_errors = strict_gate_errors(metadata, fail_on_fetch_error=args.fail_on_fetch_error)
     if strict_errors:
@@ -117,6 +138,39 @@ def parse_symbols(text: str) -> list[str]:
     if not symbols:
         raise ValueError("symbols must not be empty")
     return symbols
+
+
+def validate_arguments(args: argparse.Namespace) -> None:
+    parse_symbols(args.symbols)
+    start = calendar_date(args.start_date)
+    end = calendar_date(args.end_date)
+    if start > end:
+        raise ValueError("start-date must be earlier than or equal to end-date")
+    args.timeout_seconds = positive_float(args.timeout_seconds, "timeout-seconds")
+    if not str(args.market).strip():
+        raise ValueError("market must not be empty")
+
+
+def calendar_date(text: str) -> datetime:
+    try:
+        date = datetime.strptime(str(text), "%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError(f"date must be a real calendar date: {text}") from exc
+    if date.strftime("%Y-%m-%d") != str(text):
+        raise ValueError(f"date must use YYYY-MM-DD format: {text}")
+    return date
+
+
+def positive_float(value: object, name: str) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a number: {value}") from exc
+    if not math.isfinite(parsed):
+        raise ValueError(f"{name} must be finite")
+    if parsed <= 0:
+        raise ValueError(f"{name} must be positive")
+    return parsed
 
 
 def history_rows(history: pd.DataFrame, symbol: str, *, market: str) -> list[dict[str, Any]]:
@@ -184,7 +238,7 @@ def build_metadata(
         "end_date": args.end_date,
         "market": args.market,
         "market_label_only": True,
-        "source_claim_boundary": "market_label_not_source_exchange_or_calendar_proof",
+        "source_claim_boundary": CLAIM_BOUNDARY,
         "timeout_seconds": float(args.timeout_seconds),
         "adjustment": "auto_adjust_false_close",
         "rows": int(len(frame)),

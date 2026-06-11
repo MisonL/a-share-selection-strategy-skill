@@ -26,14 +26,18 @@ def aggregate_input_provenance(frame: Any) -> dict[str, Any]:
 
 def aggregate_column_value(series: Any) -> Any:
     values = []
+    missing_seen = False
     for value in series:
         if missing_value(value):
+            missing_seen = True
             continue
         normalized = normalized_value(value)
         if normalized not in values:
             values.append(normalized)
     if not values:
         return ""
+    if missing_seen:
+        return "mixed"
     if len(values) == 1:
         return values[0]
     return "mixed"

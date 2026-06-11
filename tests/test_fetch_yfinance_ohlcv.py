@@ -250,6 +250,48 @@ class FetchYfinanceOhlcvTests(unittest.TestCase):
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn("empty_symbols=1", stderr.getvalue())
 
+    def test_cli_rejects_invalid_date_before_runtime_dependency(self) -> None:
+        old_module = sys.modules.get("yfinance")
+        sys.modules.pop("yfinance", None)
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                output = Path(tmpdir) / "prices.csv"
+                metadata = Path(tmpdir) / "metadata.json"
+                stdout = StringIO()
+                stderr = StringIO()
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    code = fetcher.main(
+                        [
+                            "--symbols",
+                            "AAPL",
+                            "--start-date",
+                            "2026-02-31",
+                            "--end-date",
+                            "2026-03-01",
+                            "--output",
+                            str(output),
+                            "--metadata-output",
+                            str(metadata),
+                            "--market",
+                            "NASDAQ",
+                        ]
+                    )
+        finally:
+            restore_module("yfinance", old_module)
+
+        self.assertEqual(2, code)
+        self.assertEqual("", stdout.getvalue())
+        self.assertFalse(output.exists())
+        self.assertFalse(metadata.exists())
+        self.assertIn("code=invalid_argument", stderr.getvalue())
+        self.assertIn("output_written=false", stderr.getvalue())
+        self.assertIn("metadata_output_written=false", stderr.getvalue())
+        self.assertIn("date must be a real calendar date: 2026-02-31", stderr.getvalue())
+        self.assertIn(
+            "source_claim_boundary=market_label_not_source_exchange_or_calendar_proof",
+            stderr.getvalue(),
+        )
+
 
 def fake_yfinance(
     histories: dict[str, pd.DataFrame],

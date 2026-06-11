@@ -577,6 +577,56 @@ class AShareSelectionScriptTests(unittest.TestCase):
             )
             self.assertEqual({"not_real_market_data"}, set(output["data_source_note"]))
 
+    def test_cli_marks_partially_missing_real_provenance_as_mixed(self) -> None:
+        config = load_config("example_config.json")
+        config["thresholds"] = permissive_thresholds(120)
+        frame = build_frame(include_turn=True)
+        frame["source_type"] = "external_fetch"
+        frame["source_scope"] = "zzshare_history_fetch"
+        frame["real_market_data"] = pd.Series([True] * len(frame), dtype=object)
+        frame["metadata_source"] = "manual_probe_real_claim"
+        frame["source_claim_boundary"] = "zzshare_public_api_not_long_term_proven"
+        frame["data_source_note"] = "subset claims real"
+        frame.loc[frame.index[::2], "source_scope"] = ""
+        frame.loc[frame.index[::2], "real_market_data"] = ""
+        frame.loc[frame.index[::2], "metadata_source"] = ""
+        frame.loc[frame.index[::2], "data_source_note"] = ""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            config_path = Path(tmpdir) / "config.json"
+            output_path = Path(tmpdir) / "candidates.csv"
+            diagnostics_path = Path(tmpdir) / "diagnostics.csv"
+            frame.to_csv(input_path, index=False)
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = scorer.main(
+                    [
+                        "--input",
+                        str(input_path),
+                        "--config",
+                        str(config_path),
+                        "--output",
+                        str(output_path),
+                        "--diagnostics-output",
+                        str(diagnostics_path),
+                    ]
+                )
+            candidates = pd.read_csv(output_path, dtype={"symbol": str})
+            diagnostics = pd.read_csv(diagnostics_path, dtype={"symbol": str})
+
+        self.assertEqual(0, code, stderr.getvalue())
+        self.assertIn("source_scope=mixed", stdout.getvalue())
+        self.assertIn("real_market_data=mixed", stdout.getvalue())
+        self.assertIn("metadata_source=mixed", stdout.getvalue())
+        self.assertIn("data_source_note=mixed", stdout.getvalue())
+        for output in (candidates, diagnostics):
+            self.assertEqual({"mixed"}, set(output["source_scope"]))
+            self.assertEqual({"mixed"}, set(output["real_market_data"]))
+            self.assertEqual({"mixed"}, set(output["metadata_source"]))
+            self.assertEqual({"mixed"}, set(output["data_source_note"]))
+
     def test_cli_preserves_as_of_metadata_in_candidates_and_diagnostics(self) -> None:
         frame = build_frame(include_turn=True)
         frame["requested_as_of_date"] = "2026-06-06"

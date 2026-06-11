@@ -460,14 +460,83 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             report = render_report(summary, {"steps": []}, language="zh")
 
         self.assertIn('class="executive-summary"', report)
+        self.assertIn('class="reader-guide"', report)
+        self.assertIn("筛选完成，找到 2 条候选", report)
+        self.assertIn("这次发生了什么", report)
+        self.assertIn("脚本已完成校验、评分和排序", report)
+        self.assertIn("候选只是通过当前配置", report)
+        self.assertIn("哪些内容可以相信", report)
+        self.assertIn("先看候选卡片理解原因", report)
         self.assertIn("一眼结论", report)
         self.assertIn("找到 2 条候选", report)
         self.assertIn("不是买卖指令", report)
+        self.assertLess(report.index('class="reader-guide"'), report.index('class="table-wrap"'))
         self.assertLess(report.index('class="executive-summary"'), report.index('class="table-wrap"'))
         self.assertLess(
             report.index('class="executive-summary"'),
             report.index('<details class="technical-details">'),
         )
+
+    def test_zero_candidate_report_explains_how_to_read_diagnostics(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            candidates.write_text(
+                "rank,symbol,name,date,close,total_score,key_reasons,risk_notes\n",
+                encoding="utf-8",
+            )
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "candidate_rows": 0,
+                    "candidates_output": str(candidates),
+                    "candidates_output_written": True,
+                    "score": {
+                        "effective_empty_result": True,
+                        "empty_result_reason": "threshold_filtered_all",
+                    },
+                }
+            )
+            report = render_report(summary, {"steps": []}, language="zh")
+
+        self.assertIn("筛选完成，但没有候选", report)
+        self.assertIn("没有标的满足当前配置门禁", report)
+        self.assertIn("先看诊断明细", report)
+        self.assertIn("判断是门槛过严还是数据不足", report)
+
+    def test_failed_report_warns_not_to_use_stale_candidate_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "status": "failed",
+                    "candidate_rows": 0,
+                    "diagnostic_rows": 0,
+                    "failed_steps": ["validate"],
+                    "candidates_output_written": False,
+                    "diagnostics_output_written": False,
+                }
+            )
+            report = render_report(
+                summary,
+                {
+                    "steps": [
+                        {
+                            "step": "validate",
+                            "returncode": 1,
+                            "allowed_returncodes": [0],
+                            "stderr": "missing close column",
+                        }
+                    ]
+                },
+                language="zh",
+            )
+
+        self.assertIn("运行失败，未完成候选筛选", report)
+        self.assertIn("脚本没有完成到有效候选输出", report)
+        self.assertIn("不要使用旧候选表当本次结果", report)
+        self.assertIn("先展开执行步骤", report)
 
     def test_synthetic_demo_boundary_appears_before_top_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

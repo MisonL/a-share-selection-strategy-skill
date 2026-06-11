@@ -203,7 +203,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertFalse(summary["candidates_output_written"])
         self.assertFalse(summary["diagnostics_output_written"])
         self.assertTrue(summary["html_report_written"])
-        self.assertIn("Failed report", report)
+        self.assertIn("Run failed before candidate screening finished", report)
         self.assertIn("prediction-derived profile requires prediction", report)
         self.assertIn("Missing required prediction columns", report)
         self.assertIn("validation failed before scoring", report)

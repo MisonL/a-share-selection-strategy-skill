@@ -32,6 +32,10 @@ h2{margin-bottom:18px;font-size:20px;line-height:1.25}
 .language-toggle button{min-height:34px;border:1px solid rgba(255,255,255,.28);border-radius:999px;background:rgba(255,255,255,.12);color:#d7dee8;font:inherit;font-weight:800;padding:5px 12px;cursor:pointer}
 .language-toggle button.active{border-color:#26d6a5;color:#26d6a5;background:rgba(38,214,165,.12)}
 .section{margin-top:20px;padding:26px}
+.reader-guide{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+.reader-guide>div{border:1px solid #c9d8d3;border-radius:8px;background:#f7fbf9;padding:18px}
+.reader-guide span{display:block;color:var(--accent-strong);font-size:12px;font-weight:800;text-transform:uppercase}
+.reader-guide p{margin-top:8px;color:var(--ink);font-size:17px;line-height:1.45}
 .executive-summary{display:grid;grid-template-columns:1.1fr 1.4fr .8fr;gap:16px;margin-bottom:18px}
 .executive-summary>div{border:1px solid var(--line);border-radius:8px;background:var(--soft);padding:18px}
 .executive-summary span,.summary-highlight span{display:block;color:var(--muted);font-size:12px;font-weight:800;text-transform:uppercase}
@@ -80,7 +84,7 @@ td.text-cell{min-width:220px;max-width:460px;white-space:normal;overflow:visible
 .evidence li{display:grid;grid-template-columns:minmax(130px,180px) 1fr;gap:12px}
 .evidence span{color:var(--muted);font-weight:700}
 code{white-space:normal;overflow-wrap:anywhere}
-@media(max-width:820px){.page{width:min(100% - 20px,1200px);padding-top:10px}.hero{display:block}.hero-main{padding:30px 24px}.hero-actions{justify-items:start;min-width:0;border-left:0;border-top:1px solid rgba(255,255,255,.12);padding:20px 24px}.executive-summary{grid-template-columns:1fr}.candidate-facts{grid-template-columns:1fr}.detail-table-heading{display:block}.detail-table-heading p{margin-top:4px}.facts,.evidence li{grid-template-columns:1fr}h1{font-size:34px}.section{padding:20px}}
+@media(max-width:820px){.page{width:min(100% - 20px,1200px);padding-top:10px}.hero{display:block}.hero-main{padding:30px 24px}.hero-actions{justify-items:start;min-width:0;border-left:0;border-top:1px solid rgba(255,255,255,.12);padding:20px 24px}.reader-guide,.executive-summary{grid-template-columns:1fr}.candidate-facts{grid-template-columns:1fr}.detail-table-heading{display:block}.detail-table-heading p{margin-top:4px}.facts,.evidence li{grid-template-columns:1fr}h1{font-size:34px}.section{padding:20px}}
 """
 
 JS = """

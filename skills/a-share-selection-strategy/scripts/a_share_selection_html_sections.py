@@ -34,7 +34,6 @@ from a_share_selection_html_modes import (
     mode_unresolved,
     mode_reason,
     prediction_status_key,
-    report_heading_key,
     report_status_key,
     scoring_method_key,
 )
@@ -99,11 +98,10 @@ DISPLAY_DIAGNOSTIC_COLUMNS = (
 
 def hero(summary: dict[str, Any], language: str) -> str:
     status = str(summary.get("status", "unknown"))
-    heading_key = report_heading_key(summary, status)
     return (
         '<section class="hero executive-hero"><div class="hero-main">'
         f'<p class="eyebrow">{i18n("brand", language)}</p>'
-        f"<h1>{i18n(heading_key, language, 'unknown_report')}</h1>"
+        f"<h1>{hero_headline(summary, language)}</h1>"
         f"<p>{i18n('scoring_method', language)}: "
         f"<strong>{i18n(scoring_method_key(summary), language)}</strong>. "
         f"{i18n(candidate_count_key(summary), language)}: "
@@ -119,11 +117,28 @@ def hero(summary: dict[str, Any], language: str) -> str:
     )
 
 
+def hero_headline(summary: dict[str, Any], language: str) -> str:
+    status = str(summary.get("status", "unknown"))
+    count = candidate_count(summary)
+    if status != "completed":
+        return bilingual(
+            "Run failed before candidate screening finished.",
+            "运行失败，未完成候选筛选。",
+            language,
+        )
+    if count == 0:
+        return bilingual(
+            "Screening completed with no candidates.",
+            "筛选完成，但没有候选。",
+            language,
+        )
+    en = f"Screening completed with {count} candidates."
+    zh = f"筛选完成，找到 {count} 条候选。"
+    return bilingual(en, zh, language)
+
+
 def signal_bars(summary: dict[str, Any]) -> str:
-    try:
-        count = int(summary.get("candidate_rows", 0))
-    except (TypeError, ValueError):
-        count = 0
+    count = candidate_count(summary)
     active = min(max(count, 0), 5)
     bars = "".join(
         f'<span class="{"active" if index < active else ""}"></span>' for index in range(5)
@@ -131,12 +146,19 @@ def signal_bars(summary: dict[str, Any]) -> str:
     return f'<div class="signal-bars" aria-hidden="true">{bars}</div>'
 
 
+def candidate_count(summary: dict[str, Any]) -> int:
+    try:
+        return int(summary.get("candidate_rows", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def executive_summary(
     summary: dict[str, Any],
     language: str,
     candidate_rows: list[dict[str, Any]],
 ) -> str:
-    count = int(summary.get("candidate_rows", 0) or 0)
+    count = candidate_count(summary)
     status = str(summary.get("status", "unknown"))
     lead = summary_lead(count, status, language)
     bullets = summary_bullets(summary, language)
@@ -243,12 +265,97 @@ def metric_grid(summary: dict[str, Any], language: str) -> str:
     return f'<div class="metrics">{cards}</div>'
 
 
+def reader_guide(summary: dict[str, Any], language: str) -> str:
+    cards = (
+        guide_card(
+            bilingual("What happened", "这次发生了什么", language),
+            run_story(summary, language),
+        )
+        + guide_card(
+            bilingual("What to trust", "哪些内容可以相信", language),
+            trust_story(summary, language),
+        )
+        + guide_card(
+            bilingual("Where to look first", "先看哪里", language),
+            next_read_story(summary, language),
+        )
+    )
+    return f'<section class="reader-guide">{cards}</section>'
+
+
+def guide_card(label: str, body: str) -> str:
+    return f"<div><span>{label}</span><p>{body}</p></div>"
+
+
+def run_story(summary: dict[str, Any], language: str) -> str:
+    status = str(summary.get("status", "unknown"))
+    count = candidate_count(summary)
+    if status != "completed":
+        return bilingual(
+            "The script did not reach a valid candidate output.",
+            "脚本没有完成到有效候选输出。",
+            language,
+        )
+    if count == 0:
+        return bilingual(
+            "No symbol satisfied the current configured gates.",
+            "没有标的满足当前配置门禁。",
+            language,
+        )
+    return bilingual(
+        "The script completed validation, scoring, and ranking.",
+        "脚本已完成校验、评分和排序。",
+        language,
+    )
+
+
+def trust_story(summary: dict[str, Any], language: str) -> str:
+    status = str(summary.get("status", "unknown"))
+    if status != "completed":
+        return bilingual(
+            "Treat this as a failed run report; do not use stale candidate files as this result.",
+            "这只是失败运行报告；不要使用旧候选表当本次结果。",
+            language,
+        )
+    return bilingual(
+        "Candidates only passed this configuration; they are not return forecasts or trade orders.",
+        "候选只是通过当前配置，不是收益预测或交易订单。",
+        language,
+    )
+
+
+def next_read_story(summary: dict[str, Any], language: str) -> str:
+    status = str(summary.get("status", "unknown"))
+    count = candidate_count(summary)
+    if status != "completed":
+        return bilingual(
+            "Open pipeline steps first, then check evidence paths.",
+            "先展开执行步骤，再看证据路径。",
+            language,
+        )
+    if count == 0:
+        return bilingual(
+            "Start with diagnostics to tell whether gates were too strict or data was insufficient.",
+            "先看诊断明细，判断是门槛过严还是数据不足。",
+            language,
+        )
+    return bilingual(
+        "Start with candidate cards for reasons, then use the table for auditable fields.",
+        "先看候选卡片理解原因，再用表格核对审计字段。",
+        language,
+    )
+
+
 def report_overview(
     summary: dict[str, Any],
     language: str,
     candidate_rows: list[dict[str, Any]],
 ) -> str:
-    return executive_summary(summary, language, candidate_rows) + metric_grid(summary, language)
+    return (
+        reader_guide(summary, language)
+        + executive_summary(summary, language, candidate_rows)
+        + metric_grid(summary, language)
+    )
 
 
 def boundary_panel(

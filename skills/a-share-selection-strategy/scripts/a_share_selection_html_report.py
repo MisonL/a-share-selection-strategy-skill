@@ -22,6 +22,7 @@ from a_share_selection_html_sections import (
     DISPLAY_CANDIDATE_COLUMNS,
     DISPLAY_DIAGNOSTIC_COLUMNS,
     boundary_panel,
+    confirmation_title,
     candidates_panel,
     collapsible_details,
     diagnostics_panel,
@@ -29,15 +30,19 @@ from a_share_selection_html_sections import (
     empty_key_for,
     hero,
     report_overview,
+    review_appendix_title,
+    review_numbers_panel,
+    review_scoring_panel,
     section,
     steps_table,
+    technical_details,
+    user_result_title,
+    watchlist_title,
     zero_candidates_message,
 )
 from a_share_selection_html_modes import (
-    candidate_section_key,
     report_status_key,
     report_title_key,
-    scoring_method_key,
 )
 
 
@@ -101,13 +106,9 @@ def report_sections(
     candidates, candidates_truncated = candidate_rows(summary)
     diagnostics, diagnostics_truncated = diagnostic_rows(summary)
     return [
-        section(i18n("run_summary", language), report_overview(summary, language, candidates)),
+        section(user_result_title(language), report_overview(summary, language, candidates)),
         section(
-            i18n("mode_boundary", language),
-            boundary_panel(summary, language, candidates),
-        ),
-        section(
-            i18n(candidate_section_key(summary), language),
+            watchlist_title(summary, language),
             candidates_panel(
                 candidates,
                 DISPLAY_CANDIDATE_COLUMNS,
@@ -120,33 +121,53 @@ def report_sections(
             ),
         ),
         section(
-            i18n("diagnostics", language),
-            diagnostics_panel(
+            confirmation_title(language),
+            boundary_panel(summary, language, candidates),
+        ),
+        section(
+            review_appendix_title(language),
+            review_appendix(
                 summary,
+                manifest,
                 diagnostics,
-                DISPLAY_DIAGNOSTIC_COLUMNS,
+                diagnostics_truncated,
                 language,
-                truncated=diagnostics_truncated,
-                limit=HTML_DIAGNOSTIC_ROWS_LIMIT,
-                csv_path=summary.get("diagnostics_output", ""),
-            ),
-        ),
-        section(
-            i18n("pipeline_steps", language),
-            collapsible_details(
-                i18n("pipeline_steps_hint", language),
-                steps_table(manifest.get("steps", []), language),
-            ),
-        ),
-        section(
-            i18n("evidence_paths", language),
-            collapsible_details(
-                i18n("evidence_paths", language),
-                evidence_list(summary, language),
-                "evidence-detail",
             ),
         ),
     ]
+
+
+def review_appendix(
+    summary: dict[str, Any],
+    manifest: dict[str, Any],
+    diagnostics: list[dict[str, Any]],
+    diagnostics_truncated: bool,
+    language: str,
+) -> str:
+    return (
+        review_numbers_panel(summary, language)
+        + review_scoring_panel(summary, language)
+        + technical_details(summary, language)
+        + diagnostics_panel(
+            summary,
+            diagnostics,
+            DISPLAY_DIAGNOSTIC_COLUMNS,
+            language,
+            truncated=diagnostics_truncated,
+            limit=HTML_DIAGNOSTIC_ROWS_LIMIT,
+            csv_path=summary.get("diagnostics_output", ""),
+        )
+        + collapsible_details(
+            i18n("pipeline_steps_hint", language),
+            steps_table(manifest.get("steps", []), language),
+            "pipeline-detail",
+        )
+        + collapsible_details(
+            i18n("evidence_paths", language),
+            evidence_list(summary, language),
+            "evidence-detail",
+        )
+    )
 
 
 def html_tag(requested_language: str, initial_language: str) -> str:
@@ -170,8 +191,7 @@ def report_title(summary: dict[str, Any], language: str) -> str:
     status = summary.get("status", "unknown")
     title = localized_text(report_title_key(summary), language)
     status_text = localized_text(report_status_key(summary, str(status)), language)
-    mode = localized_text(scoring_method_key(summary), language)
-    return f"{title} - {status_text} - {mode}"
+    return f"{title} - {status_text}"
 
 if __name__ == "__main__":
     from a_share_selection_cli_guard import fail_not_cli

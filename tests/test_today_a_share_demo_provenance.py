@@ -76,7 +76,7 @@ class TodayAShareDemoProvenanceTests(unittest.TestCase):
         self.assertFalse(summary["real_market_data"])
         self.assertIn("A-Share Selection Demo Report - Completed demo report", report)
         self.assertIn("Completed demo report", report)
-        self.assertIn("Demo candidates", report)
+        self.assertIn("Demo Watchlist", report)
         self.assertIn("Synthetic demo data", report)
         self.assertIn("not real market data", report)
         self.assertIn("Source type", report)

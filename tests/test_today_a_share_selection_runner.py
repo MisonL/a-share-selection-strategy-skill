@@ -125,8 +125,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             summary["html_report_initial_language"],
         )
         self.assertIn("A-Share Selection Strategy", report)
-        self.assertIn("Scoring Notes", report)
-        self.assertIn("Candidates", report)
+        self.assertIn("AI Agent Result", report)
+        self.assertIn("Watchlist", report)
+        self.assertIn("Review Appendix", report)
         self.assertIn("not_investment_advice_not_trade_instruction_not_real_fill_not_return_proof", report)
         self.assertIn('data-lang-mode="auto"', report)
         self.assertTrue(
@@ -203,7 +204,8 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertFalse(summary["candidates_output_written"])
         self.assertFalse(summary["diagnostics_output_written"])
         self.assertTrue(summary["html_report_written"])
-        self.assertIn("Run failed before candidate screening finished", report)
+        self.assertIn("No usable watchlist was produced", report)
+        self.assertIn("This failed run has no usable watchlist", report)
         self.assertIn("prediction-derived profile requires prediction", report)
         self.assertIn("Missing required prediction columns", report)
         self.assertIn("validation failed before scoring", report)

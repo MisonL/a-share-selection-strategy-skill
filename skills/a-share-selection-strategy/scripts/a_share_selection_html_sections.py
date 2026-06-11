@@ -26,13 +26,18 @@ from a_share_selection_html_format import (
     raw_text,
     table_cell,
 )
+from a_share_selection_html_i18n import localized_text
 from a_share_selection_html_history import history_selection_fields
 from a_share_selection_html_modes import (
     boundary_summary,
-    candidate_count_key,
+    generic_mode_not_ready,
+    generic_scoring_failed_at_strict_gate,
     limit_key,
     mode_unresolved,
     mode_reason,
+    prediction_columns_missing,
+    prediction_mode_not_ready,
+    prediction_scoring_failed_after_consumption,
     prediction_status_key,
     report_status_key,
     scoring_method_key,
@@ -43,6 +48,9 @@ from run_today_a_share_selection_input_metadata import (
     is_synthetic_demo,
     local_input_partial_result,
 )
+
+STRATEGY_MATCH_HIGH = 0.75
+STRATEGY_MATCH_MEDIUM = 0.55
 
 
 DISPLAY_CANDIDATE_COLUMNS = (
@@ -102,10 +110,7 @@ def hero(summary: dict[str, Any], language: str) -> str:
         '<section class="hero executive-hero"><div class="hero-main">'
         f'<p class="eyebrow">{i18n("brand", language)}</p>'
         f"<h1>{hero_headline(summary, language)}</h1>"
-        f"<p>{i18n('scoring_method', language)}: "
-        f"<strong>{i18n(scoring_method_key(summary), language)}</strong>. "
-        f"{i18n(candidate_count_key(summary), language)}: "
-        f"<strong>{esc(summary.get('candidate_rows', 0))}</strong>.</p>"
+        f"<p>{hero_subtitle(summary, language)}</p>"
         f"{signal_bars(summary)}</div>"
         '<div class="hero-actions">'
         f'<span class="status {esc(status_class(status))}">'
@@ -122,18 +127,42 @@ def hero_headline(summary: dict[str, Any], language: str) -> str:
     count = candidate_count(summary)
     if status != "completed":
         return bilingual(
-            "Run failed before candidate screening finished.",
-            "运行失败，未完成候选筛选。",
+            "No usable watchlist was produced.",
+            "本次没有生成可用观察清单。",
             language,
         )
     if count == 0:
         return bilingual(
-            "Screening completed with no candidates.",
-            "筛选完成，但没有候选。",
+            "No watchlist item matched this run.",
+            "本次没有筛出观察对象。",
             language,
         )
-    en = f"Screening completed with {count} candidates."
-    zh = f"筛选完成，找到 {count} 条候选。"
+    en = f"AI agent found {count} watchlist item."
+    if count != 1:
+        en = f"AI agent found {count} watchlist items."
+    zh = f"AI Agent 找到 {count} 个观察对象。"
+    return bilingual(en, zh, language)
+
+
+def hero_subtitle(summary: dict[str, Any], language: str) -> str:
+    status = str(summary.get("status", "unknown"))
+    count = candidate_count(summary)
+    if status != "completed":
+        return bilingual(
+            "The AI agent did not produce a usable watchlist in this run.",
+            "AI Agent 本次没有生成可用的观察清单。",
+            language,
+        )
+    if count == 0:
+        return bilingual(
+            "The AI agent checked the current data and found no watchlist item.",
+            "AI Agent 已检查当前数据，但没有找到观察对象。",
+            language,
+        )
+    en = f"The AI agent produced {count} watchlist item for human review."
+    if count != 1:
+        en = f"The AI agent produced {count} watchlist items for human review."
+    zh = f"AI Agent 已生成 {count} 个待复核观察对象。"
     return bilingual(en, zh, language)
 
 
@@ -167,9 +196,9 @@ def executive_summary(
     return (
         '<section class="executive-summary">'
         f"{source_boundary}"
-        f'<div><span>{bilingual("At a glance", "一眼结论", language)}</span>'
+        f'<div><span>{bilingual("Agent result", "AI Agent 结论", language)}</span>'
         f"<strong>{lead}</strong></div>"
-        f'<div><span>{bilingual("How to read it", "怎么理解", language)}</span>'
+        f'<div><span>{bilingual("How to use it", "该怎么用", language)}</span>'
         f"<ul>{bullet_html}</ul></div>"
         f"{top_candidate_hint(candidate_rows, language)}</section>"
     )
@@ -184,33 +213,35 @@ def summary_lead(count: int, status: str, language: str) -> str:
         )
     if count == 0:
         return bilingual(
-            "No candidate passed the configured gates.",
-            "没有候选通过当前配置门禁。",
+            "No watchlist item matched this run.",
+            "本次没有筛出观察对象。",
             language,
         )
-    en = f"Found {count} candidate rows from the configured gates."
-    zh = f"找到 {count} 条候选。"
+    en = f"Found {count} watchlist item that needs human review."
+    if count != 1:
+        en = f"Found {count} watchlist items that need human review."
+    zh = f"找到 {count} 个需要人工复核的观察对象。"
     return bilingual(en, zh, language)
 
 
 def summary_bullets(summary: dict[str, Any], language: str) -> list[str]:
     items = [
         bilingual(
-            "This is a screening report, not a buy or sell instruction.",
-            "这是筛选报告，不是买卖指令。",
+            "Use this as a watchlist for review, not as a buy or sell instruction.",
+            "把它当作待复核观察清单，不要当作买卖指令。",
             language,
         ),
         bilingual(
-            "Read scores as gate results, not as return forecasts.",
-            "分数代表门禁结果，不代表收益预测。",
+            "A match only means it fits the current strategy rules; it is not a return forecast.",
+            "匹配只表示符合当前策略规则，不代表收益预测。",
             language,
         ),
     ]
     if summary_uses_local_prices_input(summary):
         items.append(
             bilingual(
-                "The result depends on the local data file you provided.",
-                "结果取决于你提供的本地数据文件。",
+                "The result depends on the data file or data source used by this run.",
+                "结果取决于本次使用的数据文件或数据源。",
                 language,
             )
         )
@@ -223,14 +254,13 @@ def summary_source_boundary(summary: dict[str, Any], language: str) -> str:
         return ""
     value = metadata.get("real_market_data", "unknown")
     real_market_data = str(value).strip().lower()
-    en_tail = "Not today's real market data or full-market scan."
-    zh_tail = "不是今日真实行情或全市场扫描。"
+    en_tail = "Use it only to inspect the workflow and presentation, not as a live market result."
+    zh_tail = "只能用来查看流程和展示效果，不能当作实盘结果。"
     return (
         '<div class="summary-source-boundary">'
-        f'<span>{bilingual("Data source boundary", "数据来源边界", language)}</span>'
+        f'<span>{bilingual("Data used", "本次使用的数据", language)}</span>'
         f"<strong>{data_scope_value(summary, language)}</strong>"
-        f"<small>real_market_data={esc(real_market_data)}; "
-        f"{bilingual(en_tail, zh_tail, language)}</small></div>"
+        f"<small>{bilingual(en_tail, zh_tail, language)}</small></div>"
     )
 
 
@@ -240,12 +270,33 @@ def top_candidate_hint(rows: list[dict[str, Any]], language: str) -> str:
     first = rows[0]
     name = raw_text(first.get("name")) or raw_text(first.get("symbol")) or "-"
     score = format_numeric(first.get("total_score", ""), 3, "")
-    label = bilingual("Top row", "首位候选", language)
-    score_label = bilingual("score", "分数", language)
+    label = bilingual("First item to review", "首个观察对象", language)
+    match_label = bilingual("review priority", "复核优先级", language)
     return (
         f'<div class="summary-highlight"><span>{label}</span>'
-        f"<strong>{esc(name)}</strong><small>{score_label} {esc(score or '-')}</small></div>"
+        f"<strong>{esc(name)}</strong>"
+        f"<small>{match_label} {strategy_match_label(score, language)}</small></div>"
     )
+
+
+def watchlist_title(summary: dict[str, Any], language: str) -> str:
+    metadata = summary.get("input_metadata", {})
+    demo = isinstance(metadata, dict) and is_synthetic_demo(metadata)
+    if demo:
+        return bilingual("Demo Watchlist", "Demo 观察清单", language)
+    return bilingual("Watchlist", "观察清单", language)
+
+
+def user_result_title(language: str) -> str:
+    return bilingual("AI Agent Result", "AI Agent 结论", language)
+
+
+def confirmation_title(language: str) -> str:
+    return bilingual("Check Before Use", "使用前先确认", language)
+
+
+def review_appendix_title(language: str) -> str:
+    return bilingual("Review Appendix", "复核附录", language)
 
 
 def metric_grid(summary: dict[str, Any], language: str) -> str:
@@ -268,15 +319,15 @@ def metric_grid(summary: dict[str, Any], language: str) -> str:
 def reader_guide(summary: dict[str, Any], language: str) -> str:
     cards = (
         guide_card(
-            bilingual("What happened", "这次发生了什么", language),
+            bilingual("What the agent did", "AI Agent 做了什么", language),
             run_story(summary, language),
         )
         + guide_card(
-            bilingual("What to trust", "哪些内容可以相信", language),
+            bilingual("How to read the result", "怎么看结果", language),
             trust_story(summary, language),
         )
         + guide_card(
-            bilingual("Where to look first", "先看哪里", language),
+            bilingual("What to check first", "先确认什么", language),
             next_read_story(summary, language),
         )
     )
@@ -292,19 +343,19 @@ def run_story(summary: dict[str, Any], language: str) -> str:
     count = candidate_count(summary)
     if status != "completed":
         return bilingual(
-            "The script did not reach a valid candidate output.",
-            "脚本没有完成到有效候选输出。",
+            "It did not finish the workflow, so this report has no usable watchlist.",
+            "本次流程没有跑完，所以没有可用观察清单。",
             language,
         )
     if count == 0:
         return bilingual(
-            "No symbol satisfied the current configured gates.",
-            "没有标的满足当前配置门禁。",
+            "It checked the data, but no stock matched the current strategy rules.",
+            "它已经检查数据，但没有股票符合当前策略规则。",
             language,
         )
     return bilingual(
-        "The script completed validation, scoring, and ranking.",
-        "脚本已完成校验、评分和排序。",
+        "It checked the data, applied the strategy rules, and produced a review watchlist.",
+        "它已检查数据、应用策略规则，并生成待复核观察清单。",
         language,
     )
 
@@ -313,13 +364,13 @@ def trust_story(summary: dict[str, Any], language: str) -> str:
     status = str(summary.get("status", "unknown"))
     if status != "completed":
         return bilingual(
-            "Treat this as a failed run report; do not use stale candidate files as this result.",
-            "这只是失败运行报告；不要使用旧候选表当本次结果。",
+            "Treat this as a failed run report; do not reuse older watchlists as this result.",
+            "这只是失败运行报告；不要把旧观察清单当成本次结果。",
             language,
         )
     return bilingual(
-        "Candidates only passed this configuration; they are not return forecasts or trade orders.",
-        "候选只是通过当前配置，不是收益预测或交易订单。",
+        "Items are only stocks that matched the strategy rules; they are not return forecasts or trade orders.",
+        "观察对象只是符合策略规则的股票，不是收益预测或交易订单。",
         language,
     )
 
@@ -329,19 +380,19 @@ def next_read_story(summary: dict[str, Any], language: str) -> str:
     count = candidate_count(summary)
     if status != "completed":
         return bilingual(
-            "If you need to debug it, open pipeline steps first, then evidence paths.",
-            "需要排错时，先展开执行步骤，再看证据路径。",
+            "Check the failure message before doing anything with the result.",
+            "先看失败说明，不要直接使用本次结果。",
             language,
         )
     if count == 0:
         return bilingual(
-            "If you need the reason, open diagnostics to see which gates blocked the rows.",
-            "需要排查原因时，展开诊断明细看哪些门禁拦下了标的。",
+            "Confirm whether the data source and strategy scope are what you intended.",
+            "先确认数据来源和策略范围是不是你想要的。",
             language,
         )
     return bilingual(
-        "Start with candidate cards. Open the detail table only when you need audit fields.",
-        "先看候选卡片。只有需要复核字段时，再展开完整明细表。",
+        "Start with the watchlist cards, then confirm the data source and limitations.",
+        "先看观察对象卡片，再确认数据来源和使用边界。",
         language,
     )
 
@@ -354,15 +405,14 @@ def report_overview(
     return (
         reader_guide(summary, language)
         + executive_summary(summary, language, candidate_rows)
-        + review_numbers_panel(summary, language)
     )
 
 
 def review_numbers_panel(summary: dict[str, Any], language: str) -> str:
-    label = bilingual("Show review numbers", "展开复核运行数字", language)
+    label = bilingual("Run counts", "运行数字", language)
     hint = bilingual(
-        "These counts help audit the run. They are not the main reading path.",
-        "这些数字用于复核运行，不是普通阅读的主线。",
+        "These counts help audit the run and are not needed for normal reading.",
+        "这些数字用于复核运行，普通阅读不需要理解。",
         language,
     )
     return collapsible_details(
@@ -380,24 +430,22 @@ def boundary_panel(
     return (
         f'<div class="plain-boundary">{plain_boundary_cards(summary, language)}</div>'
         f"{disclosure_alerts(summary, language, candidate_rows or [])}"
-        f"{review_scoring_panel(summary, language)}"
-        f"{technical_details(summary, language)}"
     )
 
 
 def plain_boundary_cards(summary: dict[str, Any], language: str) -> str:
     rows = [
         (
-            bilingual("What was screened", "这次筛了什么", language),
-            boundary_summary(summary, language),
+            bilingual("What this means", "这份结果代表什么", language),
+            plain_result_meaning(summary, language),
         ),
         (
-            bilingual("Why this path", "为什么这样跑", language),
-            mode_reason(summary, language),
+            bilingual("How to use it", "适合怎么用", language),
+            plain_usage_story(summary, language),
         ),
         (
-            bilingual("What not to infer", "不能当成什么", language),
-            i18n(limit_key(summary), language),
+            bilingual("What it cannot prove", "不能证明什么", language),
+            plain_limit_story(summary, language),
         ),
     ]
     return "".join(
@@ -405,8 +453,136 @@ def plain_boundary_cards(summary: dict[str, Any], language: str) -> str:
     )
 
 
+def plain_result_meaning(summary: dict[str, Any], language: str) -> str:
+    status = str(summary.get("status", "unknown"))
+    count = candidate_count(summary)
+    if status != "completed":
+        return plain_failure_reason(summary, language)
+    if count == 0:
+        return bilingual(
+            "Under the current data and rules, no stock entered the watchlist.",
+            "在当前数据和规则下，没有股票进入观察清单。",
+            language,
+        )
+    en = f"{count} stock matched the current strategy rules and entered the review watchlist."
+    if count != 1:
+        en = f"{count} stocks matched the current strategy rules and entered the review watchlist."
+    zh = f"{count} 只股票符合当前策略规则，进入待复核观察清单。"
+    return bilingual(en, zh, language)
+
+
+def plain_usage_story(summary: dict[str, Any], language: str) -> str:
+    status = str(summary.get("status", "unknown"))
+    count = candidate_count(summary)
+    if status != "completed":
+        return plain_failure_action(summary, language)
+    if count == 0:
+        return bilingual(
+            "Use it to decide whether to adjust the data range, strategy rules, or data source.",
+            "用它判断是否需要调整数据范围、策略规则或数据来源。",
+            language,
+        )
+    return bilingual(
+        "Use it as a shortlist for manual review before any real trading decision.",
+        "把它当作人工复核前的短名单，不要直接拿去交易。",
+        language,
+    )
+
+
+def plain_limit_story(summary: dict[str, Any], language: str) -> str:
+    if str(summary.get("status", "unknown")) != "completed":
+        return plain_failure_limit(summary, language)
+    return bilingual(
+        "It does not prove the stock will rise, that it is suitable to buy, or that a real order can be filled.",
+        "它不能证明股票一定会上涨、适合买入，或真实下单一定能成交。",
+        language,
+    )
+
+
+def plain_failure_reason(summary: dict[str, Any], language: str) -> str:
+    return bilingual(
+        f"The agent stopped before a usable watchlist was produced. {plain_boundary_text(summary, 'en')}",
+        f"AI Agent 在生成可用观察清单前停止了。{plain_boundary_text(summary, 'zh')}",
+        language,
+    )
+
+
+def plain_failure_action(summary: dict[str, Any], language: str) -> str:
+    return bilingual(
+        f"Fix the input or settings, then rerun. {plain_mode_reason_text(summary, 'en')}",
+        f"先修复输入或设置，再重新运行。{plain_mode_reason_text(summary, 'zh')}",
+        language,
+    )
+
+
+def plain_failure_limit(summary: dict[str, Any], language: str) -> str:
+    return bilingual(
+        f"This failed run has no usable watchlist. {plain_limit_text(summary, 'en')}",
+        f"本次失败运行没有可用观察清单。{plain_limit_text(summary, 'zh')}",
+        language,
+    )
+
+
+def plain_boundary_text(summary: dict[str, Any], language: str) -> str:
+    return localized_text(boundary_key(summary), language)
+
+
+def plain_mode_reason_text(summary: dict[str, Any], language: str) -> str:
+    return localized_text(mode_reason_key(summary), language)
+
+
+def plain_limit_text(summary: dict[str, Any], language: str) -> str:
+    return localized_text(limit_key(summary), language)
+
+
+def boundary_key(summary: dict[str, Any]) -> str:
+    if mode_unresolved(summary):
+        return "unresolved_boundary_summary"
+    if not summary.get("prediction_mode"):
+        return generic_boundary_key(summary)
+    return prediction_boundary_key(summary)
+
+
+def generic_boundary_key(summary: dict[str, Any]) -> str:
+    if generic_scoring_failed_at_strict_gate(summary):
+        return "generic_strict_failed_boundary_summary"
+    if generic_mode_not_ready(summary):
+        return "generic_not_scored_boundary_summary"
+    return "generic_boundary_summary"
+
+
+def prediction_boundary_key(summary: dict[str, Any]) -> str:
+    if prediction_columns_missing(summary):
+        return "prediction_missing_boundary_summary"
+    if prediction_scoring_failed_after_consumption(summary):
+        return "prediction_strict_failed_boundary_summary"
+    if prediction_mode_not_ready(summary):
+        return "prediction_not_scored_boundary_summary"
+    return "prediction_boundary_summary"
+
+
+def mode_reason_key(summary: dict[str, Any]) -> str:
+    if mode_unresolved(summary):
+        return "why_unresolved_value"
+    if not summary.get("prediction_mode"):
+        if generic_scoring_failed_at_strict_gate(summary):
+            return "why_generic_strict_failed_value"
+        if generic_mode_not_ready(summary):
+            return "why_generic_not_scored_value"
+        if str(summary.get("requested_mode", "")) == "generic":
+            return "why_generic_requested_value"
+        return "why_generic_auto_value"
+    if prediction_columns_missing(summary):
+        return "why_prediction_missing_columns_value"
+    if prediction_scoring_failed_after_consumption(summary):
+        return "why_prediction_strict_failed_value"
+    if prediction_mode_not_ready(summary):
+        return "why_prediction_not_scored_value"
+    return "why_prediction_ready_value"
+
+
 def review_scoring_panel(summary: dict[str, Any], language: str) -> str:
-    label = bilingual("Show scoring fields for review", "展开评分复核字段", language)
+    label = bilingual("Strategy and scoring fields", "策略和评分字段", language)
     return collapsible_details(
         label,
         f'<div class="note-grid">{boundary_cards(summary, language)}</div>'
@@ -428,27 +604,98 @@ def candidate_card(row: dict[str, Any], language: str) -> str:
     rank = raw_text(row.get("rank")) or "-"
     score = format_numeric(row.get("total_score", ""), 3, "")
     close = format_numeric(row.get("close", ""), 4, "")
-    quantity = format_numeric(row.get("quantity", ""), 0, "")
-    cash_reserved = format_numeric(row.get("cash_reserved", ""), 2, "")
-    reasons = localized_phrase_html(raw_text(row.get("key_reasons")), language)
-    risks = localized_phrase_html(raw_text(row.get("risk_notes")), language)
+    reasons = beginner_candidate_reason(raw_text(row.get("key_reasons")), language)
+    risks = beginner_candidate_risk(raw_text(row.get("risk_notes")), language)
+    facts = candidate_fact_items(row, language)
     return (
         '<article class="candidate-card">'
         f'<div class="candidate-rank">#{esc(rank)}</div>'
         f'<div class="candidate-main"><strong>{esc(name)}</strong><span>{esc(symbol)}</span></div>'
-        f'<div class="candidate-score"><span>{bilingual("Score", "评分", language)}</span>'
-        f"<strong>{esc(score or '-')}</strong></div>"
-        '<div class="candidate-facts">'
-        f"<span>{bilingual('Close', '收盘价', language)} <strong>{esc(close or '-')}</strong></span>"
-        f"<span>{bilingual('Quantity', '数量', language)} <strong>{esc(quantity or '-')}</strong></span>"
-        f"<span>{bilingual('Cash reserved', '预留现金', language)} "
-        f"<strong>{esc(cash_reserved or '-')}</strong></span></div>"
+        f'<div class="candidate-score"><span>{bilingual("Review priority", "复核优先级", language)}</span>'
+        f"<strong>{strategy_match_label(score, language)}</strong></div>"
+        f'<div class="candidate-facts">{facts}</div>'
         '<div class="candidate-copy">'
-        f"<p><b>{bilingual('Why it passed', '为什么入选', language)}</b>{reasons}</p>"
-        f"<p><b>{bilingual('Risk notes', '风险提示', language)}</b>{risks}</p>"
-        f"<small>{bilingual('Not a broker order', '不是券商订单', language)}</small>"
+        f"<p><b>{bilingual('Why the agent picked it', '为什么被挑出来', language)}</b>{reasons}</p>"
+        f"<p><b>{bilingual('What to watch', '需要注意什么', language)}</b>{risks}</p>"
+        f"<small>{bilingual('Watchlist only, not an order', '只是观察清单，不是下单指令', language)}</small>"
         "</div></article>"
     )
+
+
+def candidate_fact_items(row: dict[str, Any], language: str) -> str:
+    items: list[tuple[str, str]] = []
+    close = format_numeric(row.get("close", ""), 4, "")
+    if display_value(close):
+        items.append((bilingual("Reference close", "参考收盘价", language), close))
+    date = raw_text(row.get("date"))
+    if display_value(date):
+        items.append((bilingual("Signal date", "信号日期", language), date))
+    spot_price = format_numeric(row.get("spot_price", ""), 4, "")
+    if display_value(spot_price):
+        items.append((bilingual("Realtime reference", "实时参考价", language), spot_price))
+    if not items:
+        items.append((bilingual("Review status", "复核状态", language), bilingual("Needs review", "需要复核", language)))
+    return "".join(
+        f"<span>{label} <strong>{esc(value)}</strong></span>" for label, value in items[:4]
+    )
+
+
+def display_value(value: Any) -> bool:
+    text = raw_text(value).strip().lower()
+    return text not in {"", "-", "nan", "none", "unknown", "not_used", "not_verified"}
+
+
+def strategy_match_label(value: Any, language: str) -> str:
+    try:
+        score = float(raw_text(value))
+    except ValueError:
+        return bilingual("Needs review", "需要复核", language)
+    if score >= STRATEGY_MATCH_HIGH:
+        return bilingual("High", "高", language)
+    if score >= STRATEGY_MATCH_MEDIUM:
+        return bilingual("Medium", "中等", language)
+    return bilingual("Low", "偏低", language)
+
+
+def beginner_candidate_reason(value: str, language: str) -> str:
+    text = value.strip()
+    if not text:
+        return bilingual(
+            "This item passed the main screening checks.",
+            "这个观察对象通过了主要筛选检查。",
+            language,
+        )
+    parts = [part.strip().lower() for part in text.split(";") if part.strip()]
+    labels: list[tuple[str, str]] = []
+    if any(part in {"positive momentum", "short-term activity"} for part in parts):
+        labels.append(("recent price action looks acceptable", "近期走势表现符合筛选要求"))
+    if any(part in {"acceptable volatility", "rsi in range"} for part in parts):
+        labels.append(("risk checks did not show an obvious rule breach", "风险检查没有触发明显拦截"))
+    if any(part in {"prediction above threshold", "passed configured filters"} for part in parts):
+        labels.append(("it passed the configured screening rules", "它通过了已配置的筛选规则"))
+    if not labels:
+        return localized_phrase_html(text, language)
+    en = "; ".join(label[0] for label in labels)
+    zh = "；".join(label[1] for label in labels)
+    return bilingual(en, zh, language)
+
+
+def beginner_candidate_risk(value: str, language: str) -> str:
+    text = value.strip()
+    if not text:
+        return bilingual(
+            "Still verify price, liquidity, news, and your own risk limit.",
+            "仍需复核价格、流动性、消息面和你自己的风险上限。",
+            language,
+        )
+    parts = [part.strip().lower() for part in text.split(";") if part.strip()]
+    if parts == ["no major configured risk flag"]:
+        return bilingual(
+            "No major configured warning was triggered, but manual review is still required.",
+            "未触发主要配置风险提示，但仍需要人工复核。",
+            language,
+        )
+    return localized_phrase_html(text, language)
 
 
 def candidates_panel(
@@ -475,17 +722,17 @@ def candidates_panel(
     )
     if not cards:
         return table_html
-    title = bilingual("Full detail table", "完整明细表", language)
+    title = bilingual("Audit table", "复核明细表", language)
     hint = bilingual(
-        "Cards are for quick reading. The table keeps every auditable field.",
-        "卡片方便快速阅读，表格保留可审计字段。",
+        "Cards are for normal reading. This table keeps the original fields for audit.",
+        "卡片用于普通阅读；这张表保留原始字段，供审计复核。",
         language,
     )
     detail = (
         f'<div class="detail-table-heading"><strong>{title}</strong>'
         f"<p>{hint}</p></div>{table_html}"
     )
-    label = bilingual("Show full candidate detail table", "展开完整候选明细表", language)
+    label = bilingual("Show audit table", "展开复核明细表", language)
     return f"{cards}{collapsible_details(label, detail, 'candidate-detail-table')}"
 
 
@@ -910,7 +1157,7 @@ def diagnostics_panel(
         csv_path=csv_path,
         empty_key=empty_key_for(summary),
     )
-    label = bilingual("Show diagnostics detail", "展开诊断明细", language)
+    label = bilingual("Gate diagnostics", "门禁诊断", language)
     return (
         f'<p class="diagnostic-intro">{diagnostic_intro(summary, language)}</p>'
         f"{collapsible_details(label, table_html, 'diagnostics-detail')}"
@@ -921,19 +1168,19 @@ def diagnostic_intro(summary: dict[str, Any], language: str) -> str:
     status = str(summary.get("status", "unknown"))
     if status != "completed":
         return bilingual(
-            "Diagnostics are for debugging failed runs and may be empty when scoring did not finish.",
-            "诊断明细用于排查失败运行；如果评分没有完成，这里可能没有内容。",
+            "This is for debugging failed runs and may be empty when scoring did not finish.",
+            "这里用于排查失败运行；如果评分没有完成，可能没有内容。",
             language,
         )
     if candidate_count(summary) == 0:
         return bilingual(
-            "No candidate passed. Open diagnostics only if you want to inspect which gates blocked each row.",
-            "没有候选通过。只有想排查每个标的被哪些门禁拦下时，再展开诊断明细。",
+            "No stock entered the watchlist. Open this only to inspect which rules blocked each row.",
+            "没有股票进入观察清单。只有想排查哪些规则拦下了标的时，再展开这里。",
             language,
         )
     return bilingual(
-        "Diagnostics keep per-symbol gate results for review. Candidate cards above are the normal reading path.",
-        "诊断明细保留每个标的的门禁结果，供复核使用；普通阅读先看上面的候选卡片。",
+        "This keeps per-stock rule results for audit. Normal users can stay with the watchlist cards.",
+        "这里保留每只股票的规则结果，供审计复核；普通用户看观察卡片即可。",
         language,
     )
 
@@ -1029,8 +1276,8 @@ def zero_candidates_message(summary: dict[str, Any], language: str) -> str:
         return ""
     reason = str(score.get("empty_result_reason", "unknown"))
     visible = bilingual(
-        "The run completed, but no row passed the configured gates.",
-        "本次运行已完成，但没有标的通过当前配置门禁。",
+        "The run completed, but no stock entered the watchlist.",
+        "本次运行已完成，但没有股票进入观察清单。",
         language,
     )
     review = bilingual(
@@ -1041,7 +1288,7 @@ def zero_candidates_message(summary: dict[str, Any], language: str) -> str:
     )
     return (
         f'<p class="empty">{visible}</p>'
-        f"{collapsible_details(bilingual('Show zero-candidate review fields', '展开 0 候选复核字段', language), review, 'zero-candidate-review')}"
+        f"{collapsible_details(bilingual('Zero-result audit fields', '0 结果复核字段', language), review, 'zero-candidate-review')}"
     )
 
 
@@ -1079,9 +1326,8 @@ def status_class(status: str) -> str:
 def data_scope_value(summary: dict[str, Any], language: str) -> str:
     metadata = summary.get("input_metadata", {})
     if isinstance(metadata, dict) and is_synthetic_demo(metadata):
-        scenario = str(metadata.get("scenario", "unknown"))
-        en = f"Synthetic demo data ({scenario}); not real market data."
-        zh = f"合成 demo 数据（{scenario}）；不是真实行情。"
+        en = "Synthetic demo data; not real market data."
+        zh = "合成 demo 数据；不是真实行情。"
         return bilingual(en, zh, language)
     source_scope = str(summary.get("source_scope", ""))
     if summary_uses_local_prices_input(summary) and source_scope == "local_prices_input":

@@ -260,7 +260,7 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
     html_report = html_report_stdout_value(manifest, output)
     html_error = html_report_error_stdout(manifest)
     disclosure = runner_disclosure_stdout(view)
-    runner_metadata = runner_metadata_stdout(metadata)
+    runner_metadata = runner_metadata_stdout(view, metadata)
     input_csv = input_csv_provenance_stdout(view.get("input_csv_provenance", {}))
     print(
         "OK: runner=run_today_a_share_selection "
@@ -292,11 +292,12 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
     )
 
 
-def runner_metadata_stdout(metadata: dict[str, Any]) -> str:
+def runner_metadata_stdout(view: dict[str, Any], metadata: dict[str, Any]) -> str:
     parts = [
         f"runner_metadata_source={metadata_stdout_value(metadata.get('source_type'))}",
         f"runner_real_market_data={metadata_stdout_value(metadata.get('real_market_data'))}",
-        f"runner_source_scope={metadata_stdout_value(metadata.get('source_scope'))}",
+        f"source_scope={metadata_stdout_value(view.get('source_scope'))}",
+        f"runner_source_scope={metadata_stdout_value(view.get('runner_source_scope'))}",
     ]
     if not history_metadata_stdout_available(metadata):
         parts.extend(input_metadata_stdout(metadata))

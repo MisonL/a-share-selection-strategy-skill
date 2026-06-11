@@ -1185,6 +1185,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             "baostock_history_fetch",
             summary["input_metadata"]["source_scope"],
         )
+        self.assertEqual("baostock_history_fetch", summary["source_scope"])
+        self.assertEqual("baostock_history_fetch", summary["runner_source_scope"])
+        self.assertIn("source_scope=baostock_history_fetch", stdout.getvalue())
         self.assertIn("runner_source_scope=baostock_history_fetch", stdout.getvalue())
         self.assertEqual("baostock", summary["input_metadata"]["history_provider"])
         self.assertEqual("3", summary["input_metadata"]["history_adjustflag"])
@@ -1418,8 +1421,11 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(2, metadata["input_invalid_rows"])
         self.assertEqual(1, metadata["input_dropped_invalid_rows"])
         self.assertEqual("auto_adjust_false_close", metadata["adjustment"])
+        self.assertEqual("yfinance_history_fetch", summary["source_scope"])
+        self.assertEqual("local_prices_input", summary["runner_source_scope"])
         self.assertIn("input_partial_result=true", stdout)
-        self.assertIn("runner_source_scope=yfinance_history_fetch", stdout)
+        self.assertIn("source_scope=yfinance_history_fetch", stdout)
+        self.assertIn("runner_source_scope=local_prices_input", stdout)
         self.assertIn("input_token_configured=false", stdout)
         self.assertIn("input_failed_symbol_count=1", stdout)
         self.assertIn("input_possibly_truncated_symbol_count=1", stdout)

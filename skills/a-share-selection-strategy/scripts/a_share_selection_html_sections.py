@@ -184,7 +184,7 @@ def summary_bullets(summary: dict[str, Any], language: str) -> list[str]:
             language,
         ),
     ]
-    if str(summary.get("source_scope", "")) == "local_prices_input":
+    if summary_uses_local_prices_input(summary):
         items.append(
             bilingual(
                 "The result depends on the local data file you provided.",
@@ -402,7 +402,7 @@ def input_metadata_alerts(summary: dict[str, Any], language: str) -> list[str]:
 
 
 def local_real_market_unknown(summary: dict[str, Any], metadata: dict[str, Any]) -> bool:
-    if str(summary.get("source_scope", "")) != "local_prices_input":
+    if not summary_uses_local_prices_input(summary):
         return False
     value = metadata.get("real_market_data", "unknown")
     return str(value).strip().lower() in {"", "none", "unknown"}
@@ -594,6 +594,7 @@ def technical_details(summary: dict[str, Any], language: str) -> str:
         (i18n("prediction_model_executed_by_runner", language), summary.get("prediction_model_executed_by_runner")),
         ("prediction_claim_boundary", summary.get("prediction_claim_boundary", "")),
         (i18n("source_scope", language), summary.get("source_scope")),
+        ("runner_source_scope", summary.get("runner_source_scope", "")),
         (i18n("source_type", language), metadata.get("source_type", "unknown")),
         ("source", metadata.get("source", "")),
         ("market", metadata.get("market", "")),
@@ -869,13 +870,18 @@ def data_scope_value(summary: dict[str, Any], language: str) -> str:
         zh = f"合成 demo 数据（{scenario}）；不是真实行情。"
         return bilingual(en, zh, language)
     source_scope = str(summary.get("source_scope", ""))
-    if source_scope == "local_prices_input":
+    if summary_uses_local_prices_input(summary) and source_scope == "local_prices_input":
         return i18n("generic_scope_value", language)
     if source_scope == "unresolved":
         return i18n("unresolved_scope_value", language)
     en = f"Recorded source scope: {source_scope or 'unknown'}"
     zh = f"已记录数据来源范围：{source_scope or 'unknown'}"
     return bilingual(en, zh, language)
+
+
+def summary_uses_local_prices_input(summary: dict[str, Any]) -> bool:
+    runner_scope = str(summary.get("runner_source_scope", summary.get("source_scope", "")))
+    return "local_prices_input" in runner_scope.split("+")
 
 if __name__ == "__main__":
     from a_share_selection_cli_guard import fail_not_cli

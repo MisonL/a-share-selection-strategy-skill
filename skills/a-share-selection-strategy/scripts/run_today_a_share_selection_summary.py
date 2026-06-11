@@ -28,7 +28,8 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         **run_identity(manifest, status),
         **prediction_fields(manifest, score),
         "source": summary_source(input_metadata, manifest),
-        "source_scope": manifest["source_scope"],
+        "source_scope": summary_source_scope(input_metadata, manifest),
+        "runner_source_scope": manifest["source_scope"],
         "source_type": input_metadata.get("source_type", "unknown"),
         "real_market_data": input_metadata.get("real_market_data", "unknown"),
         "source_claim_boundary": input_metadata.get("source_claim_boundary", ""),
@@ -70,6 +71,13 @@ def summary_source(input_metadata: dict[str, Any], manifest: dict[str, Any]) -> 
     if history_source:
         return str(history_source)
     return "unknown"
+
+
+def summary_source_scope(input_metadata: dict[str, Any], manifest: dict[str, Any]) -> str:
+    source_scope = input_metadata.get("source_scope")
+    if source_scope:
+        return str(source_scope)
+    return str(manifest["source_scope"])
 
 
 def input_csv_provenance(score: dict[str, Any]) -> dict[str, Any]:

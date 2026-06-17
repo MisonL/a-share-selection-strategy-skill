@@ -71,10 +71,24 @@ def normalized_spot_view(
 
 def normalized_input_symbols(frame: pd.DataFrame) -> set[str]:
     symbols = set(frame["symbol"].astype(str).str.strip())
-    markets = frame["market"].astype(str).str.strip().str.lower() if "market" in frame else []
-    if any(value in {"hk", "港股", "hong kong", "hong-kong"} for value in markets):
-        symbols.update(hk_aliases(symbol) for symbol in list(symbols) if hk_aliases(symbol))
+    markets = normalized_market_values(frame)
+    if any(is_hk_market(value) for value in markets):
+        symbols.update(
+            alias
+            for symbol in list(symbols)
+            if (alias := hk_aliases(symbol))
+        )
     return symbols
+
+
+def normalized_market_values(frame: pd.DataFrame) -> list[str]:
+    if "market" not in frame:
+        return []
+    return list(frame["market"].astype(str).str.strip().str.lower())
+
+
+def is_hk_market(value: str) -> bool:
+    return value in {"hk", "港股", "hong kong", "hong-kong"}
 
 
 def normalize_spot_symbol_values(values: Any, input_symbols: set[str]) -> list[str]:

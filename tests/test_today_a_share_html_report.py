@@ -161,6 +161,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("完整候选表", report)
         self.assertIn("data-candidate-master-detail", report)
         self.assertIn("data-candidate-search", report)
+        self.assertIn("部分字段为空", report)
 
     def test_complete_candidate_table_is_capped_at_one_thousand_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -180,7 +181,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             report = render_report(summary, {"steps": []}, language="zh")
 
         complete = report.split('<section id="complete-candidates"', 1)[1]
+        audit = report.split("展开审计明细表", 1)[1]
         self.assertIn("这里仅嵌入前 1000 行", report)
+        self.assertIn("这里仅嵌入前 25 行以保证 HTML 可用", audit)
+        self.assertNotIn("这里仅嵌入前 1000 行", audit)
         self.assertIn("Name 1000", complete)
         self.assertNotIn("Name 1001", complete)
         self.assertNotIn("Name 1002", complete)

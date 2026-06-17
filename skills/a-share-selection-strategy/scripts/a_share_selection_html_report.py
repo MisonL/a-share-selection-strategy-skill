@@ -212,9 +212,9 @@ def candidate_audit_table(
     limit_hint = ""
     if candidates_truncated_full:
         limit_hint = (
-            "<p>Only the first 1000 rows are embedded here to keep the HTML usable. See the CSV for the full result.</p>"
+            "<p>Only the first 25 rows are embedded here to keep the HTML usable. See the CSV for the full result.</p>"
             if language == "en"
-            else "<p>这里仅嵌入前 1000 行以保证 HTML 可用，完整结果请查看 CSV。</p>"
+            else "<p>这里仅嵌入前 25 行以保证 HTML 可用，完整结果请查看 CSV。</p>"
         )
     content = (
         f'<div class="detail-table-heading"><strong>{title}</strong><p>{hint}</p>{limit_hint}</div>'

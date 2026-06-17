@@ -152,7 +152,6 @@ def candidate_field(row: dict[str, Any], keys: tuple[str, ...], *, percent: bool
 
 def candidate_field_notice_needed(rows: list[dict[str, Any]]) -> bool:
     keys = (
-        "listing_board",
         "spot_industry",
         "industry",
         "sector",

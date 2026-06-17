@@ -35,6 +35,22 @@ class DocumentConsistencyTests(unittest.TestCase):
             self.assertIn(text, templates)
             self.assertIn(text, readme)
 
+    def test_docs_cover_spot_demo_and_provenance_outputs(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        skill = (
+            ROOT / "skills/a-share-selection-strategy/SKILL.md"
+        ).read_text(encoding="utf-8")
+        runbook = (
+            ROOT / "skills/a-share-selection-strategy/references/runbook.md"
+        ).read_text(encoding="utf-8")
+
+        for document in [readme, skill, runbook]:
+            self.assertIn("--spot-input", document)
+            self.assertIn("spot_industry", document)
+            self.assertIn("source_provenance", document)
+            self.assertIn("summary_output_written", document)
+            self.assertIn("manifest_output_written", document)
+
 
 if __name__ == "__main__":
     unittest.main()

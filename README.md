@@ -74,9 +74,14 @@ python3 skills/a-share-selection-strategy/scripts/create_demo_data.py \
 
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py \
   --prices-input /tmp/a-share-selection-low-price-demo/prices.csv \
+  --spot-input /tmp/a-share-selection-low-price-demo/spot.csv \
   --output-dir /tmp/a-share-selection-low-price-demo/today \
   --mode auto
 ```
+
+`create_demo_data.py` 会同时写出 `spot.csv` 和 `metadata.json`。显式传入
+`--spot-input` 后，候选和诊断输出会展示 `spot_industry`；该字段只用于展示，
+不参与核心评分。
 
 总控 CLI 默认同时写出 `report.html`，用于浏览器查看候选、诊断、步骤和证据路径；报告支持中英文切换，默认 `--html-report-language auto` 跟随运行环境。它只是 `summary.json`、`run_manifest.json`、`candidates.csv` 和 `diagnostics.csv` 的展示层，不替代机器字段或退出码。自动化场景可传 `--no-html-report` 关闭。
 
@@ -109,7 +114,8 @@ prediction-derived 输入必须包含：
 - 不得伪造行情、候选股、LightGBM prediction、回测收益或联网结果。
 - `effective_empty_result=true` 表示成功运行但没有候选，不等于策略有效。
 - `output_written=false` 表示输入失败或严格门禁失败，不能写成成功 0 候选。
-- `summary.json` 中有输出路径或旧文件存在不代表本次文件已生成；以 `prices_output_written`、`candidates_output_written`、`diagnostics_output_written` 为准。
+- `summary.json` 中有输出路径或旧文件存在不代表本次文件已生成；以 `prices_output_written`、`candidates_output_written`、`diagnostics_output_written`、`summary_output_written`、`manifest_output_written` 为准。
+- `source_provenance` 汇总 `input_metadata` 和输入 CSV 内嵌来源字段，便于机器消费；旧字段仍保留，冲突时以本次 `summary.json`、`run_manifest.json` 和 CSV 机器字段为准。
 - `input_metadata` 缺失或未声明 `real_market_data=true` 时，只能称为本地输入文件，不能写成真实行情源、今日全市场覆盖或数据源已验证。
 - `input_metadata.source_type=synthetic_demo` 表示输入来自合成 demo，不是真实行情或真实选股结论。
 - `run_today_a_share_selection.py` 生成的 `candidates.csv` 和 `diagnostics.csv` 会附带 runner provenance 字段，例如 `source_type`、`real_market_data`、`mode_decision`、`consumes_prediction_columns`、`prediction_model_executed_by_runner`、`lightgbm_executed_by_runner`。

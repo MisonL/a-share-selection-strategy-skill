@@ -264,7 +264,7 @@ uv run --with pandas --with numpy --with baostock python skills/a-share-selectio
 | 文件 | 检查字段 |
 | --- | --- |
 | `run_manifest.json` | 每一步命令、退出码、stdout/stderr、允许退出码 |
-| `summary.json` | `requested_mode`、`mode`、`mode_decision`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`prediction_mode`、`consumes_prediction_columns`、`prediction_input_source`、`prediction_model_executed_by_runner`、`source`、`source_scope`、`prices_rows`、`candidate_rows`、`diagnostic_rows`、`spot_rows`、`spot_matched_symbols`、`html_report_language`、`html_report_initial_language`、`html_report_error_type`、`*_output_written`、失败步骤 |
+| `summary.json` | `requested_mode`、`mode`、`mode_decision`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`prediction_mode`、`consumes_prediction_columns`、`prediction_input_source`、`prediction_model_executed_by_runner`、`source`、`source_scope`、`source_provenance`、`prices_rows`、`candidate_rows`、`diagnostic_rows`、`spot_rows`、`spot_matched_symbols`、`html_report_language`、`html_report_initial_language`、`html_report_error_type`、`summary_output_written`、`manifest_output_written`、`*_output_written`、失败步骤 |
 | `candidates.csv` | 候选字段、spot 展示字段、prediction 披露字段；prediction-derived 时检查 `prediction_source`、`prediction_input_source`、`prediction_model_executed_by_score_script` |
 | `diagnostics.csv` | 机器字段 `failed_thresholds`，展示字段 `failed_thresholds_zh`、`selection_status`、`short_reason`，以及与候选一致的 prediction 披露字段 |
 | `report.html` | 候选、诊断、步骤和证据路径的人类可读汇总；支持中英文切换，只读已有 JSON/CSV |

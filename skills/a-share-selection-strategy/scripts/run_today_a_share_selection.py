@@ -16,6 +16,7 @@ import run_today_a_share_selection_helpers as helpers
 from run_today_a_share_selection_commands import (
     fetch_history_command,
     fetch_spot_command,
+    history_market,
     initial_manifest,
     run_config_path,
     score_command,
@@ -129,6 +130,8 @@ def run_pipeline(context: RunContext) -> None:
     spot = run_spot_path(context.args)
     context.manifest["input_metadata"] = input_metadata_for_prices(context.args.prices_input)
     context.manifest["run_outputs_initialized"] = True
+    if not context.args.prices_input:
+        context.args.history_market = history_market(context.args)
     validate_preflight_inputs(context.args, spot)
     sync_validated_history_options(context.manifest, context.args)
     prepare_inputs(context.args, output, prices, spot)
@@ -166,7 +169,7 @@ def prepare_inputs(
 
 def validate_preflight_inputs(args: argparse.Namespace, spot: Path | None) -> None:
     validate_history_inputs(args, spot)
-    if not args.prices_input and args.history_source == "zzshare":
+    if not args.prices_input and args.history_source in {"zzshare", "yfinance"}:
         normalize_zzshare_history_options(args)
     if args.prices_input and not Path(args.prices_input).exists():
         raise FileNotFoundError(f"prices input not found: {Path(args.prices_input)}")

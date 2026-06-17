@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import sys
 from typing import Any
 
@@ -74,10 +75,16 @@ def fetch_history_command(
     prices: Path,
     symbols: list[str],
 ) -> list[str]:
-    if args.history_source not in {"akshare", "baostock", "zzshare"}:
+    sources = {"akshare", "akshare_hk_daily", "baostock", "zzshare", "yfinance"}
+    if args.history_source not in sources:
         raise ValueError(
-            "history-source must be akshare, baostock, or zzshare when prices-input is omitted"
+            "history-source must be akshare, akshare_hk_daily, baostock, "
+            "zzshare, or yfinance when prices-input is omitted"
         )
+    if args.history_source == "yfinance":
+        return fetch_yfinance_history_command(args, prices, symbols)
+    if args.history_source == "akshare_hk_daily":
+        return fetch_akshare_hk_daily_command(args, prices, symbols)
     command = [
         sys.executable,
         str(SCRIPTS / f"fetch_{args.history_source}_a_share.py"),
@@ -112,6 +119,70 @@ def fetch_history_command(
     if args.drop_invalid_history_rows:
         command.append("--drop-invalid-rows")
     return command
+
+
+def fetch_akshare_hk_daily_command(
+    args: Any,
+    prices: Path,
+    symbols: list[str],
+) -> list[str]:
+    command = [
+        sys.executable,
+        str(SCRIPTS / "fetch_akshare_hk_daily.py"),
+        "--symbols",
+        ",".join(symbols),
+        "--start-date",
+        str(args.start_date),
+        "--end-date",
+        str(args.end_date),
+        "--output",
+        str(prices),
+        "--metadata-output",
+        str(Path(args.output_dir) / "history_metadata.json"),
+    ]
+    if args.history_adjust is not None:
+        command.extend(["--adjust", str(args.history_adjust)])
+    if not args.allow_partial_history:
+        command.append("--fail-on-fetch-error")
+    if args.drop_invalid_history_rows:
+        command.append("--drop-invalid-rows")
+    return command
+
+
+def fetch_yfinance_history_command(
+    args: Any,
+    prices: Path,
+    symbols: list[str],
+) -> list[str]:
+    command = [
+        sys.executable,
+        str(SCRIPTS / "fetch_yfinance_ohlcv.py"),
+        "--symbols",
+        ",".join(symbols),
+        "--start-date",
+        str(args.start_date),
+        "--end-date",
+        str(args.end_date),
+        "--output",
+        str(prices),
+        "--metadata-output",
+        str(Path(args.output_dir) / "history_metadata.json"),
+        "--market",
+        history_market(args),
+    ]
+    append_optional_arg(command, "--timeout-seconds", args.history_timeout_seconds)
+    if not args.allow_partial_history:
+        command.append("--fail-on-fetch-error")
+    return command
+
+
+def history_market(args: Any) -> str:
+    try:
+        config = json.loads(run_config_path(args).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        config = json.loads(selected_config(args).read_text(encoding="utf-8"))
+    market = str(config.get("universe", {}).get("market", "")).strip()
+    return market or "US"
 
 
 def append_optional_arg(command: list[str], flag: str, value: Any) -> None:

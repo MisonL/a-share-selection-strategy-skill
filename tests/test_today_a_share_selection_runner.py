@@ -25,6 +25,7 @@ from run_today_a_share_selection_helpers import (  # noqa: E402
     spot_rows,
     tabular_row_count,
 )
+from run_today_a_share_selection_history import parse_history_symbols  # noqa: E402
 from run_today_a_share_selection_outputs import clear_stale_run_outputs  # noqa: E402
 from helpers import build_frame, load_config  # noqa: E402
 
@@ -685,6 +686,182 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("4", fetch_step["command"])
         self.assertEqual("zzshare", manifest["history_source"])
         self.assertEqual("zzshare_history_fetch", manifest["source_scope"])
+
+    def test_runner_accepts_yfinance_hk_history_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "yfinance",
+                    "--symbols",
+                    "00700,HK.09988,08001.HK",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--history-timeout-seconds",
+                    "8",
+                    "--mode",
+                    "generic",
+                    "--config",
+                    str(SCRIPTS / "hong_kong_generic_config.json"),
+                    "--no-html-report",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args,
+                manifest,
+                output / "run_manifest.json",
+                yfinance_hk_executor,
+            )
+
+            runner.run_pipeline(context)
+            summary = summary_view(manifest, "completed")
+
+        fetch_step = manifest["steps"][0]
+        self.assertEqual("fetch_history", fetch_step["step"])
+        self.assertIn("fetch_yfinance_ohlcv.py", fetch_step["command"][1])
+        self.assertIn("0700.HK,9988.HK,8001.HK", fetch_step["command"])
+        self.assertIn("--market", fetch_step["command"])
+        self.assertIn("HK", fetch_step["command"])
+        self.assertIn("--timeout-seconds", fetch_step["command"])
+        self.assertIn("8.0", fetch_step["command"])
+        self.assertEqual(
+            ["0700.HK", "9988.HK", "8001.HK"],
+            manifest["history_symbols"],
+        )
+        self.assertEqual("yfinance", manifest["history_source"])
+        self.assertEqual("yfinance_history_fetch", manifest["source_scope"])
+        self.assertEqual("yfinance", summary["input_metadata"]["source"])
+        self.assertEqual("HK", summary["input_metadata"]["market"])
+        self.assertTrue(summary["input_metadata"]["market_label_only"])
+        self.assertEqual("unknown", summary["input_metadata"]["real_market_data"])
+
+    def test_runner_accepts_akshare_hk_daily_history_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "akshare_hk_daily",
+                    "--symbols",
+                    "700,HK.09988,08001.HK",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--history-adjust",
+                    "",
+                    "--mode",
+                    "generic",
+                    "--config",
+                    str(SCRIPTS / "hong_kong_generic_config.json"),
+                    "--no-html-report",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args,
+                manifest,
+                output / "run_manifest.json",
+                akshare_hk_daily_executor,
+            )
+
+            runner.run_pipeline(context)
+            summary = summary_view(manifest, "completed")
+
+        fetch_step = manifest["steps"][0]
+        self.assertEqual("fetch_history", fetch_step["step"])
+        self.assertIn("fetch_akshare_hk_daily.py", fetch_step["command"][1])
+        self.assertIn("00700,09988,08001", fetch_step["command"])
+        self.assertEqual(
+            ["00700", "09988", "08001"],
+            manifest["history_symbols"],
+        )
+        self.assertEqual("akshare_hk_daily", manifest["history_source"])
+        self.assertEqual("akshare_hk_daily_history_fetch", manifest["source_scope"])
+        self.assertEqual("akshare_stock_hk_daily", summary["input_metadata"]["source"])
+        self.assertEqual("HK", summary["input_metadata"]["market"])
+        self.assertEqual("unknown", summary["input_metadata"]["real_market_data"])
+
+    def test_yfinance_hk_symbol_parser_maps_common_hk_forms(self) -> None:
+        args = SimpleNamespace(
+            history_source="yfinance",
+            symbols="00700,HK.09988,08001.HK",
+            history_market="HK",
+        )
+
+        self.assertEqual(
+            ["0700.HK", "9988.HK", "8001.HK"],
+            parse_history_symbols(args),
+        )
+
+    def test_yfinance_hk_symbol_parser_rejects_zero_code(self) -> None:
+        args = SimpleNamespace(
+            history_source="yfinance",
+            symbols="0,00700",
+            history_market="HK",
+        )
+
+        with self.assertRaisesRegex(ValueError, "HK yfinance symbols"):
+            parse_history_symbols(args)
+
+    def test_runner_rejects_yfinance_unsupported_adjust_option(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    tmpdir,
+                    "--history-source",
+                    "yfinance",
+                    "--symbols",
+                    "00700",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--history-adjust",
+                    "qfq",
+                    "--config",
+                    str(SCRIPTS / "hong_kong_generic_config.json"),
+                    "--no-html-report",
+                ]
+            )
+
+        self.assertEqual(2, code)
+        self.assertIn("unsupported yfinance history options would be ignored", stderr)
+        self.assertIn("--history-adjust", stderr)
+
+    def test_runner_rejects_yfinance_unsupported_drop_invalid_rows_option(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    tmpdir,
+                    "--history-source",
+                    "yfinance",
+                    "--symbols",
+                    "00700",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--drop-invalid-history-rows",
+                    "--config",
+                    str(SCRIPTS / "hong_kong_generic_config.json"),
+                    "--no-html-report",
+                ]
+            )
+
+        self.assertEqual(2, code)
+        self.assertIn("unsupported yfinance history options would be ignored", stderr)
+        self.assertIn("--drop-invalid-history-rows", stderr)
 
     def test_runner_rejects_zzshare_only_options_for_other_history_sources(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1570,6 +1747,63 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("max_history_symbols=1", stdout.getvalue())
         self.assertIn("allow_partial_history=false", stdout.getvalue())
 
+    def test_runner_derives_akshare_hk_symbols_from_spot_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            spot = root / "spot.csv"
+            output = root / "run"
+            spot.write_text(
+                "\n".join(
+                    [
+                        "ticker,name,price,amount,pct_chg",
+                        "HK.00700,Tencent,300,300000000,1.1",
+                        "09988.HK,Alibaba,80,400000000,0.8",
+                        "00000,InvalidZero,1,500000000,9.0",
+                        "600001,Ashare,8,600000000,5.0",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--spot-input",
+                    str(spot),
+                    "--history-source",
+                    "akshare_hk_daily",
+                    "--derive-symbols-from-spot",
+                    "--max-history-symbols",
+                    "2",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--mode",
+                    "generic",
+                    "--config",
+                    str(SCRIPTS / "hong_kong_generic_config.json"),
+                    "--no-html-report",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args,
+                manifest,
+                output / "run_manifest.json",
+                akshare_hk_daily_executor,
+            )
+
+            runner.run_pipeline(context)
+            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(["09988", "00700"], manifest["history_symbols"])
+        self.assertEqual(["09988", "00700"], selected["selected_symbols"])
+        self.assertEqual(4, selected["raw_spot_rows"])
+        self.assertEqual(2, selected["filtered_spot_rows"])
+        self.assertEqual(2, selected["selected_symbol_count"])
+
     def test_runner_derives_history_symbols_from_common_spot_code_aliases(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -2176,6 +2410,124 @@ def history_metadata_executor(command: list[str]) -> subprocess.CompletedProcess
             command,
             0,
             "OK: raw_symbols=1 input_symbols=1 candidates=1 effective_empty_result=false\n",
+            "",
+        )
+    return subprocess.CompletedProcess(command, 0, "", "")
+
+
+def yfinance_hk_executor(command: list[str]) -> subprocess.CompletedProcess[str]:
+    script = Path(command[1]).name
+    if script == "fetch_yfinance_ohlcv.py":
+        symbols = command[command.index("--symbols") + 1].split(",")
+        Path(command[command.index("--output") + 1]).write_text(
+            "\n".join(
+                [
+                    "symbol,name,market,date,open,high,low,close,volume",
+                    "0700.HK,0700.HK,HK,2026-01-01,300,310,295,305,100000",
+                    "9988.HK,9988.HK,HK,2026-01-01,80,82,78,81,200000",
+                    "8001.HK,8001.HK,HK,2026-01-01,1.2,1.3,1.1,1.25,300000",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        Path(command[command.index("--metadata-output") + 1]).write_text(
+            json.dumps(
+                {
+                    "source": "yfinance",
+                    "source_scope": "yfinance_history_fetch",
+                    "market": "HK",
+                    "market_label_only": True,
+                    "source_claim_boundary": (
+                        "market_label_not_source_exchange_or_calendar_proof"
+                    ),
+                    "requested_symbols": symbols,
+                    "rows": 3,
+                    "symbol_count": 3,
+                    "failed_symbols": [],
+                    "empty_symbols": [],
+                    "timeout_seconds": 8.0,
+                    "adjustment": "auto_adjust_false_close",
+                    "output_written": True,
+                    "metadata_output_written": True,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    if script == "score_candidates.py":
+        Path(command[command.index("--output") + 1]).write_text(
+            "symbol,total_score\n0700.HK,0.8\n",
+            encoding="utf-8",
+        )
+        Path(command[command.index("--diagnostics-output") + 1]).write_text(
+            "symbol,market,listing_board,selection_status\n"
+            "0700.HK,HK,港股主板,selected\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            "OK: raw_symbols=3 input_symbols=3 candidates=1 effective_empty_result=false\n",
+            "",
+        )
+    return subprocess.CompletedProcess(command, 0, "", "")
+
+
+def akshare_hk_daily_executor(command: list[str]) -> subprocess.CompletedProcess[str]:
+    script = Path(command[1]).name
+    if script == "fetch_akshare_hk_daily.py":
+        symbols = command[command.index("--symbols") + 1].split(",")
+        Path(command[command.index("--output") + 1]).write_text(
+            "\n".join(
+                [
+                    "symbol,name,market,date,open,high,low,close,volume,amount",
+                    "00700,00700,HK,2026-01-01,300,310,295,305,100000,30500000",
+                    "09988,09988,HK,2026-01-01,80,82,78,81,200000,16200000",
+                    "08001,08001,HK,2026-01-01,1.2,1.3,1.1,1.25,300000,375000",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        Path(command[command.index("--metadata-output") + 1]).write_text(
+            json.dumps(
+                {
+                    "source": "akshare_stock_hk_daily",
+                    "source_scope": "akshare_hk_daily_history_fetch",
+                    "source_type": "external_fetch",
+                    "market": "HK",
+                    "source_claim_boundary": (
+                        "akshare_stock_hk_daily_not_exchange_calendar_or_tradability_proof"
+                    ),
+                    "requested_symbols": symbols,
+                    "rows": 3,
+                    "symbol_count": 3,
+                    "failed_symbols": [],
+                    "empty_symbols": [],
+                    "adjust": "",
+                    "output_written": True,
+                    "metadata_output_written": True,
+                    "real_market_data": "unknown",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    if script == "score_candidates.py":
+        Path(command[command.index("--output") + 1]).write_text(
+            "symbol,total_score\n00700,0.8\n",
+            encoding="utf-8",
+        )
+        Path(command[command.index("--diagnostics-output") + 1]).write_text(
+            "symbol,market,listing_board,selection_status\n"
+            "00700,HK,港股主板,selected\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            "OK: raw_symbols=3 input_symbols=3 candidates=1 effective_empty_result=false\n",
             "",
         )
     return subprocess.CompletedProcess(command, 0, "", "")

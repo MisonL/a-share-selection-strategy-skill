@@ -14,10 +14,11 @@ from a_share_selection_provenance import (
     add_provenance_to_frame,
     aggregate_input_provenance,
 )
+from a_share_selection_symbols import listing_board_values
 
 
 OUTPUT_COLUMNS = [
-    "rank", "symbol", "name", "market", "date", "close", "volume", "turn", "amount",
+    "rank", "symbol", "name", "market", "listing_board", "date", "close", "volume", "turn", "amount",
     "tradestatus", "isST", "one_word_bar",
     "requested_as_of_date", "actual_data_date", "as_of_date_observed",
     "spot_price", "spot_pct_chg", "spot_amount", "spot_industry",
@@ -349,6 +350,10 @@ def apply_thresholds(frame: pd.DataFrame, thresholds: dict[str, Any]) -> pd.Data
 
 
 def ensure_output_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    if "listing_board" not in frame.columns and "symbol" in frame.columns:
+        frame = frame.copy()
+        markets = frame["market"] if "market" in frame.columns else None
+        frame["listing_board"] = listing_board_values(frame["symbol"], markets)
     for column in OUTPUT_COLUMNS:
         if column not in frame.columns:
             frame[column] = pd.NA

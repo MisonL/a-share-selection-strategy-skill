@@ -11,6 +11,7 @@ from a_share_selection_html_format import (
     localized_phrase,
     raw_text,
 )
+from a_share_selection_symbols import listing_board
 
 
 STRATEGY_MATCH_HIGH = 0.75
@@ -122,11 +123,18 @@ def level_css_class(row: dict[str, Any]) -> str:
 
 
 def candidate_industry(row: dict[str, Any]) -> str:
-    for key in ("industry", "sector", "sw_industry", "申万行业"):
+    for key in ("spot_industry", "industry", "sector", "sw_industry", "申万行业"):
         value = raw_text(row.get(key)).strip()
         if display_value(value):
             return value
     return "-"
+
+
+def candidate_listing_board(row: dict[str, Any]) -> str:
+    value = raw_text(row.get("listing_board")).strip()
+    if display_value(value):
+        return value
+    return listing_board(row.get("symbol"), row.get("market", ""))
 
 
 def candidate_field(row: dict[str, Any], keys: tuple[str, ...], *, percent: bool = False) -> str:
@@ -144,6 +152,8 @@ def candidate_field(row: dict[str, Any], keys: tuple[str, ...], *, percent: bool
 
 def candidate_field_notice_needed(rows: list[dict[str, Any]]) -> bool:
     keys = (
+        "listing_board",
+        "spot_industry",
         "industry",
         "sector",
         "sw_industry",

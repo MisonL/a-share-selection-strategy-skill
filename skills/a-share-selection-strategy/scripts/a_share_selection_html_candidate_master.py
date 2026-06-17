@@ -13,6 +13,7 @@ from a_share_selection_html_candidate_helpers import (
     candidate_field,
     candidate_field_notice_needed,
     candidate_industry,
+    candidate_listing_board,
     candidate_level,
     candidate_reason,
     candidate_review_action,
@@ -108,20 +109,23 @@ def candidate_file_chip(csv_path: Any, language: str) -> str:
 def candidate_master_toolbar(rows: list[dict[str, Any]], language: str) -> str:
     search_label = bilingual("Search", "搜索", language)
     search_placeholder = plain_bilingual(
-        "Code / name / industry / keyword",
-        "代码 / 名称 / 行业 / 关键词",
+        "Code / name / board / industry / keyword",
+        "代码 / 名称 / 板块 / 行业 / 关键词",
         language,
     )
     all_label = plain_bilingual("All", "全部", language)
     industry_label = bilingual("Industry", "行业", language)
+    board_label = bilingual("Board", "板块", language)
     level_label = bilingual("Observation level", "观察等级", language)
     sort_label = bilingual("Sort", "排序", language)
     clear_label = bilingual("Clear", "清空", language)
+    board_options = filter_options(candidate_listing_board(row) for row in rows)
     industry_options = filter_options(candidate_industry(row) for row in rows)
     level_options = filter_options(candidate_level(row, language) for row in rows)
     return (
         '<div class="candidate-toolbar">'
         f'<label><span>{search_label}</span><input type="search" data-candidate-search placeholder="{esc(search_placeholder)}"></label>'
+        f'<label><span>{board_label}</span><select data-candidate-board><option value="">{all_label}</option>{board_options}</select></label>'
         f'<label><span>{industry_label}</span><select data-candidate-industry><option value="">{all_label}</option>{industry_options}</select></label>'
         f'<label><span>{level_label}</span><select data-candidate-level><option value="">{all_label}</option>{level_options}</select></label>'
         f'<label><span>{sort_label}</span><select data-candidate-sort>'
@@ -141,6 +145,7 @@ def candidate_master_table(rows: list[dict[str, Any]], language: str) -> str:
         bilingual("No.", "序号", language),
         bilingual("Stock code", "股票代码", language),
         bilingual("Stock name", "股票名称", language),
+        bilingual("Board", "板块", language),
         bilingual("Industry", "行业", language),
         bilingual("Score", "综合评分", language),
         bilingual("Level", "观察等级", language),
@@ -205,16 +210,18 @@ def candidate_master_row(row: dict[str, Any], index: int, language: str) -> str:
     risk_label, risk_class = candidate_risk_level(row, language)
     action = candidate_review_action(row, language)
     industry = candidate_industry(row)
+    board = candidate_listing_board(row)
     selected = ' data-selected="true"' if index == 0 else ""
     attrs = candidate_detail_attrs(row, rank, level, summary, risk_label, risk_class, action, language)
-    search = f"{symbol} {name} {industry} {summary} {risk_label} {action}".lower()
+    search = f"{symbol} {name} {board} {industry} {summary} {risk_label} {action}".lower()
     score = score_value(row)
     return (
         f'<tr data-candidate-row data-rank="{esc(rank)}" data-score="{esc(score_value(row))}" '
-        f'data-search="{esc(search)}" data-industry="{esc(industry)}" data-level="{esc(level)}" data-risk="{esc(risk_label)}"{selected}{attrs}>'
+        f'data-search="{esc(search)}" data-board="{esc(board)}" data-industry="{esc(industry)}" data-level="{esc(level)}" data-risk="{esc(risk_label)}"{selected}{attrs}>'
         f'<td><span class="row-check" aria-hidden="true"></span> {esc(rank)}</td>'
         f'<td><span class="symbol-cell">{esc(symbol)}</span></td>'
         f'<td><strong class="name-cell">{esc(name)}</strong></td>'
+        f"<td>{esc(board)}</td>"
         f"<td>{esc(industry)}</td>"
         f"<td><strong>{esc(score or '-')}</strong></td>"
         f"<td>{level_badge(level, css_class=level_css_class(row))}</td>"
@@ -240,6 +247,7 @@ def candidate_detail_attrs(
     fields = {
         "row-title": f"{name} {symbol}",
         "row-date": raw_text(row.get("date")) or "-",
+        "row-board": candidate_listing_board(row),
         "row-rank": rank,
         "row-level": level,
         "row-level-class": level_css_class(row),

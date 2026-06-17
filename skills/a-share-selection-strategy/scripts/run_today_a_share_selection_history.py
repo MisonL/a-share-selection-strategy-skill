@@ -8,15 +8,19 @@ from typing import Any
 
 from a_share_selection_symbols import (
     A_SHARE_EXCHANGES,
+    is_hk_market,
+    normalize_hk_symbol,
     SH_SZ_EXCHANGES,
     normalize_prefixed_symbol,
     normalize_symbol_values,
     parse_a_share_symbols,
     parse_six_digit_symbols,
+    valid_hk_symbol_text,
 )
 
 
 DEFAULT_HISTORY_SYMBOL_LIMIT = 50
+AKSHARE_HK_DAILY_SOURCE = "akshare_hk_daily"
 SYMBOL_COLUMN_ALIASES = ["symbol", "code", "code_id", "stock_code", "ticker", "Ticker"]
 ZZSHARE_ONLY_HISTORY_OPTIONS = [
     "history_http_url",
@@ -24,6 +28,10 @@ ZZSHARE_ONLY_HISTORY_OPTIONS = [
     "history_request_interval_seconds",
     "history_limit",
     "history_max_pages",
+]
+YFINANCE_UNSUPPORTED_HISTORY_OPTIONS = [
+    "history_adjust",
+    "drop_invalid_history_rows",
 ]
 
 
@@ -52,6 +60,8 @@ def validate_history_required_inputs(args: Any, spot: Path | None) -> None:
         raise ValueError("prices-input omitted; provide --symbols or --derive-symbols-from-spot")
     if args.derive_symbols_from_spot and spot is None:
         raise ValueError("--derive-symbols-from-spot requires --spot-input or --fetch-spot")
+    if args.history_source == "yfinance":
+        reject_yfinance_unsupported_history_options(args)
     if args.history_source != "zzshare":
         reject_zzshare_only_history_options(args)
 
@@ -79,10 +89,24 @@ def reject_ignored_history_options(args: Any) -> None:
 
 
 def reject_zzshare_only_history_options(args: Any) -> None:
-    ignored = option_flags(args, ZZSHARE_ONLY_HISTORY_OPTIONS)
+    names = [
+        name
+        for name in ZZSHARE_ONLY_HISTORY_OPTIONS
+        if not (name == "history_timeout_seconds" and args.history_source == "yfinance")
+    ]
+    ignored = option_flags(args, names)
     if ignored:
         raise ValueError(
             "zzshare-specific history options require --history-source zzshare: "
+            + ",".join(ignored)
+        )
+
+
+def reject_yfinance_unsupported_history_options(args: Any) -> None:
+    ignored = option_flags(args, YFINANCE_UNSUPPORTED_HISTORY_OPTIONS)
+    if ignored:
+        raise ValueError(
+            "unsupported yfinance history options would be ignored: "
             + ",".join(ignored)
         )
 
@@ -96,6 +120,8 @@ def option_flags(args: Any, names: list[str]) -> list[str]:
 
 
 def option_configured(value: Any) -> bool:
+    if value is False:
+        return False
     return value is not None and value != ""
 
 
@@ -120,7 +146,53 @@ def history_symbols(
 def parse_history_symbols(args: Any) -> list[str]:
     if args.history_source == "zzshare":
         return parse_a_share_symbols(args.symbols)
+    if args.history_source == AKSHARE_HK_DAILY_SOURCE:
+        return parse_akshare_hk_symbols(args.symbols)
+    if args.history_source == "yfinance":
+        return parse_yfinance_symbols(args.symbols, getattr(args, "history_market", ""))
     return parse_six_digit_symbols(args.symbols)
+
+
+def parse_akshare_hk_symbols(text: str) -> list[str]:
+    raw_symbols = [item.strip() for item in text.split(",") if item.strip()]
+    if not raw_symbols:
+        raise ValueError("symbols must not be empty")
+    result = []
+    for symbol in raw_symbols:
+        normalized = normalize_hk_symbol(symbol)
+        if not valid_hk_symbol_text(normalized):
+            raise ValueError(
+                "HK symbols must be 1 to 5 digits or HK-prefixed/suffixed: "
+                f"{symbol}"
+            )
+        result.append(normalized.zfill(5))
+    return result
+
+
+def parse_yfinance_symbols(text: str, market: str = "") -> list[str]:
+    raw_symbols = [item.strip() for item in text.split(",") if item.strip()]
+    if not raw_symbols:
+        raise ValueError("symbols must not be empty")
+    if not is_hk_market(market):
+        return [symbol.upper() for symbol in raw_symbols]
+    return [normalize_yfinance_hk_symbol(symbol) for symbol in raw_symbols]
+
+
+def normalize_yfinance_hk_symbol(symbol: str) -> str:
+    text = symbol.strip()
+    if text.lower().endswith(".hk"):
+        normalized = normalize_hk_symbol(text)
+    elif text.lower().startswith("hk."):
+        normalized = normalize_hk_symbol(text)
+    elif text.isdigit() and 1 <= len(text) <= 5:
+        normalized = text
+    else:
+        return text.upper()
+    if not valid_hk_symbol_text(normalized):
+        raise ValueError(
+            f"HK yfinance symbols must be 1 to 5 digits or HK-prefixed/suffixed: {symbol}"
+        )
+    return f"{int(normalized):04d}.HK"
 
 
 def unique_symbols(symbols: list[str]) -> list[str]:
@@ -172,7 +244,10 @@ def read_spot_frame(path: Path):
 def filter_spot_universe(frame, config: dict[str, Any], history_source: str = ""):
     result = normalize_spot_filter_frame(frame, history_source)
     thresholds = config.get("thresholds", {})
-    result = result[result["symbol"].str.fullmatch(r"\d{6}", na=False)]
+    if history_source == AKSHARE_HK_DAILY_SOURCE:
+        result = result[result["symbol"].map(valid_hk_symbol_text)]
+    else:
+        result = result[result["symbol"].str.fullmatch(r"\d{6}", na=False)]
     result = apply_symbol_universe(result, config.get("universe", {}))
     if "min_close" in thresholds:
         result = result[result["spot_price"] >= float(thresholds["min_close"])]
@@ -191,9 +266,9 @@ def normalize_spot_filter_frame(frame, history_source: str = ""):
     import pandas as pd
 
     result = frame.copy()
-    result["symbol"] = normalize_symbol_values(
+    result["symbol"] = normalize_history_spot_symbols(
         first_existing_required(result, SYMBOL_COLUMN_ALIASES, "symbol"),
-        allowed_exchanges=history_symbol_exchanges(history_source),
+        history_source,
     )
     if "name" not in result:
         result["name"] = ""
@@ -210,6 +285,22 @@ def normalize_spot_filter_frame(frame, history_source: str = ""):
         errors="coerce",
     )
     return result.dropna(subset=["spot_price", "spot_amount"])
+
+
+def normalize_history_spot_symbols(values: Any, history_source: str) -> list[str]:
+    if history_source == AKSHARE_HK_DAILY_SOURCE:
+        return [normalize_akshare_hk_spot_symbol(value) for value in values]
+    return normalize_symbol_values(
+        values,
+        allowed_exchanges=history_symbol_exchanges(history_source),
+    )
+
+
+def normalize_akshare_hk_spot_symbol(value: Any) -> str:
+    normalized = normalize_hk_symbol(value)
+    if valid_hk_symbol_text(normalized):
+        return normalized.zfill(5)
+    return normalized
 
 
 def history_symbol_exchanges(history_source: str) -> tuple[str, ...]:

@@ -15,12 +15,14 @@ from a_share_selection_diagnostic_labels import (
 from a_share_selection_disclosure import prediction_disclosure
 from a_share_selection_metrics import is_prediction_mode
 from a_share_selection_provenance import PROVENANCE_COLUMNS
+from a_share_selection_symbols import listing_board
 
 
 DIAGNOSTIC_COLUMNS = [
     "symbol",
     "name",
     "market",
+    "listing_board",
     "date",
     "close",
     "volume",
@@ -204,6 +206,10 @@ def diagnostic_row(
         "symbol": symbol,
         "name": display_name(row, symbol),
         "market": row.get("market", ""),
+        "listing_board": row.get(
+            "listing_board",
+            listing_board(symbol, row.get("market", "")),
+        ),
         "date": row.get("date", ""),
         "close": row.get("close"),
         "volume": row.get("volume"),

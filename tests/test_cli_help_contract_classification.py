@@ -22,6 +22,7 @@ CLI_HELP_ENTRIES = [
     "backtest_buy_hold.py",
     "create_demo_data.py",
     "fetch_akshare_a_share.py",
+    "fetch_akshare_hk_daily.py",
     "fetch_baostock_a_share.py",
     "fetch_eastmoney_a_share_spot.py",
     "fetch_yfinance_ohlcv.py",

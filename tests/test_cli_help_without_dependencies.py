@@ -74,6 +74,13 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             "validate_ohlcv.py": {"--input", "--config", "--min-history-rows"},
             "fetch_baostock_a_share.py": FETCH_CORE_OPTIONS | {"--drop-invalid-rows"},
             "fetch_akshare_a_share.py": FETCH_CORE_OPTIONS | {"--drop-invalid-rows"},
+            "fetch_akshare_hk_daily.py": FETCH_CORE_OPTIONS
+            | {
+                "--adjust",
+                "--drop-invalid-rows",
+                "HKEX calendar",
+                "tradability",
+            },
             "fetch_zzshare_a_share.py": FETCH_CORE_OPTIONS
             | {
                 "--http-url",
@@ -288,6 +295,12 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "local CSV and metadata",
                 "Fallback providers and partial symbols",
                 "failed, empty, invalid, or fallback-affected rows",
+            ],
+            "fetch_akshare_hk_daily.py": [
+                "local CSV and metadata",
+                "HKEX calendar",
+                "tradability",
+                "long-term source stability",
             ],
             "fetch_zzshare_a_share.py": [
                 "local CSV and metadata",

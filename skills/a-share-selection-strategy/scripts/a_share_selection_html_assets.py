@@ -86,7 +86,7 @@ h1,h2,h3,p{margin:0}h2{font-size:21px;line-height:1.25;color:var(--ink)}h3{font-
 	.master-detail-header h3{font-size:20px}.master-detail-header p{margin-top:4px;max-width:760px;color:var(--muted);font-size:13px;line-height:1.35}
 .file-chip{display:inline-block;border:1px solid #a6d8c5;border-radius:7px;background:#f4fbf8;padding:6px 11px;color:var(--green-dark)}
 .field-notice{margin:-2px 0 9px;border:1px solid #f0cf9d;border-left:5px solid var(--orange);border-radius:8px;background:#fffaf0;padding:8px 12px;color:#6c3d00;font-size:13px;line-height:1.4}
-.candidate-toolbar{display:grid;grid-template-columns:2fr repeat(3,minmax(150px,1fr)) auto;gap:9px;margin-bottom:7px;align-items:end}
+.candidate-toolbar{display:grid;grid-template-columns:2fr repeat(4,minmax(130px,1fr)) auto;gap:9px;margin-bottom:7px;align-items:end}
 .candidate-toolbar label{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;font-weight:800}
 .candidate-toolbar label span{white-space:nowrap}
 .candidate-toolbar label input,.candidate-toolbar label select{flex:1;min-width:0}
@@ -183,7 +183,8 @@ JS = """
     document.querySelectorAll('[data-candidate-master-detail]').forEach(rootEl => {
       let rows = Array.from(rootEl.querySelectorAll('[data-candidate-row]'));
       const search = rootEl.querySelector('[data-candidate-search]');
-      const industry = rootEl.querySelector('[data-candidate-industry]');
+	const board = rootEl.querySelector('[data-candidate-board]');
+	const industry = rootEl.querySelector('[data-candidate-industry]');
       const level = rootEl.querySelector('[data-candidate-level]');
       const sort = rootEl.querySelector('[data-candidate-sort]');
       const reset = rootEl.querySelector('[data-candidate-reset]');
@@ -203,6 +204,7 @@ JS = """
       function rowMatches(row) {
         const query = (search?.value || '').trim().toLowerCase();
         return (!query || (row.dataset.search || '').includes(query))
+          && (!(board?.value || '') || row.dataset.board === board.value)
           && (!(industry?.value || '') || row.dataset.industry === industry.value)
           && (!(level?.value || '') || row.dataset.level === level.value);
       }
@@ -270,13 +272,14 @@ JS = """
         render();
       }
       rows.forEach(row => row.addEventListener('click', () => setDetail(row)));
-      [search, industry, level].forEach(el => el && el.addEventListener('input', applyFilters));
+      [search, board, industry, level].forEach(el => el && el.addEventListener('input', applyFilters));
       sort && sort.addEventListener('input', applySort);
       pageSize && pageSize.addEventListener('input', applyFilters);
       prev && prev.addEventListener('click', () => { currentPage = Math.max(1, currentPage - 1); render(); });
       next && next.addEventListener('click', () => { currentPage += 1; render(); });
       reset && reset.addEventListener('click', () => {
         if (search) { search.value = ''; }
+        if (board) { board.value = ''; }
         if (industry) { industry.value = ''; }
         if (level) { level.value = ''; }
         if (sort) { sort.value = 'score'; }

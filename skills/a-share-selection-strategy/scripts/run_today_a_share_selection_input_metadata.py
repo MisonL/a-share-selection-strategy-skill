@@ -97,7 +97,7 @@ def history_metadata_for_output(output_dir: Path) -> dict[str, Any]:
         "source_claim_boundary": str(data.get("source_claim_boundary", "")),
         "data_source_note": str(data.get("data_source_note", "")),
         "history_provider": source,
-        "real_market_data": True,
+        "real_market_data": history_real_market_data(data),
         "history_partial_result": history_partial_result(data),
         "history_failed_symbol_count": len(list_value(data, "failed_symbols")),
         "history_empty_symbol_count": len(list_value(data, "empty_symbols")),
@@ -123,11 +123,23 @@ def history_metadata_for_output(output_dir: Path) -> dict[str, Any]:
         metadata["history_request_interval_seconds"] = data["request_interval_seconds"]
     if "timeout_seconds" in data:
         metadata["history_timeout_seconds"] = data["timeout_seconds"]
+    if "market" in data:
+        metadata["market"] = data["market"]
+    if "market_label_only" in data:
+        metadata["market_label_only"] = bool(data["market_label_only"])
     if "limit" in data:
         metadata["history_limit"] = data["limit"]
     if "max_pages" in data:
         metadata["history_max_pages"] = data["max_pages"]
     return metadata
+
+
+def history_real_market_data(data: dict[str, Any]) -> Any:
+    if "real_market_data" in data:
+        return data["real_market_data"]
+    if data.get("market_label_only") is True:
+        return "unknown"
+    return True
 
 
 def list_value(data: dict[str, Any], key: str) -> list[Any]:

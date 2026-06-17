@@ -433,6 +433,69 @@ class AShareSelectionScriptTests(unittest.TestCase):
             self.assertIn("generic mode: turn/turnover missing", stderr)
             self.assertIn("no prediction-derived turnover gate is applied", stderr)
 
+    def test_score_outputs_listing_board_for_candidates_and_diagnostics(self) -> None:
+        config = load_config("example_config.json")
+        config["thresholds"] = permissive_thresholds(120)
+        frame = build_frame(include_turn=True)
+        extra = frame[frame["symbol"].eq("000002")].copy()
+        extra["symbol"] = "300001"
+        extra["name"] = "ChiNext"
+        extra["close"] = extra["close"] + 0.2
+        frame = pd.concat([frame, extra], ignore_index=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            config_path = Path(tmpdir) / "config.json"
+            output_path = Path(tmpdir) / "candidates.csv"
+            diagnostics_path = Path(tmpdir) / "diagnostics.csv"
+            frame.to_csv(input_path, index=False)
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = scorer.main(
+                    [
+                        "--input",
+                        str(input_path),
+                        "--config",
+                        str(config_path),
+                        "--output",
+                        str(output_path),
+                        "--diagnostics-output",
+                        str(diagnostics_path),
+                    ]
+                )
+            candidates = pd.read_csv(output_path, dtype={"symbol": str})
+            diagnostics = pd.read_csv(diagnostics_path, dtype={"symbol": str})
+
+        self.assertEqual(0, code, stderr.getvalue())
+        self.assertIn("listing_board", candidates.columns)
+        self.assertIn("listing_board", diagnostics.columns)
+        self.assertEqual(
+            {"000002": "主板", "300001": "创业板", "600001": "主板"},
+            dict(zip(candidates["symbol"], candidates["listing_board"])),
+        )
+        self.assertEqual(
+            {"000002": "主板", "300001": "创业板", "600001": "主板"},
+            dict(zip(diagnostics["symbol"], diagnostics["listing_board"])),
+        )
+
+    def test_hong_kong_generic_config_scores_hk_symbols_and_boards(self) -> None:
+        config = load_config("hong_kong_generic_config.json")
+        config["thresholds"] = permissive_thresholds(120)
+        frame = build_frame(include_turn=True)
+        frame["symbol"] = frame["symbol"].map({"000002": "00700", "600001": "08001"})
+        frame["name"] = frame["symbol"].map({"00700": "Tencent", "08001": "Gem Co"})
+        frame["market"] = "HK"
+
+        candidates, summary = scorer.score_candidates(frame, config)
+
+        self.assertEqual(2, summary["input_symbols"])
+        self.assertEqual(0, summary["market_filtered_symbols"])
+        self.assertEqual(
+            {"00700": "港股主板", "08001": "港股 GEM"},
+            dict(zip(candidates["symbol"], candidates["listing_board"])),
+        )
+
     def test_cli_writes_threshold_diagnostics_csv(self) -> None:
         config = load_config("example_config.json")
         config["thresholds"]["min_total_score"] = 999

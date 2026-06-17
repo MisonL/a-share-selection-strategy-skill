@@ -664,6 +664,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("搜索、筛选、排序", complete)
         self.assertIn("CSV 备用文件", complete)
         self.assertIn("data-candidate-search", complete)
+        self.assertIn("data-candidate-board", complete)
         self.assertIn("data-candidate-industry", complete)
         self.assertIn("data-candidate-level", complete)
         self.assertIn("data-candidate-sort", complete)
@@ -676,7 +677,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("data-detail-risk", detail)
         self.assertNotIn("data-detail-level-copy", detail)
         self.assertIn("data-detail-summary", complete)
-        self.assertIn('placeholder="代码 / 名称 / 行业 / 关键词"', complete)
+        self.assertIn('placeholder="代码 / 名称 / 板块 / 行业 / 关键词"', complete)
+        self.assertIn('data-i18n-zh="板块">板块</span></th>', complete)
+        self.assertIn(">创业板</td>", complete)
+        self.assertIn('data-board="创业板"', complete)
         self.assertNotIn("&lt;span data-i18n-en=", report)
         self.assertIn("aShareSelectionReportLang", report)
         self.assertIn("initCandidateMasterDetail", report)
@@ -711,8 +715,8 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             candidates.write_text(
                 "\n".join(
                     [
-                        "rank,symbol,name,date,close,total_score,key_reasons,risk_notes",
-                        '1,000001,Unsafe,2026-06-05,10.0,0.82,"<script>alert(1)</script>",',
+                        "rank,symbol,name,listing_board,date,close,total_score,key_reasons,risk_notes",
+                        '1,000001,Unsafe,主板,2026-06-05,10.0,0.82,"<script>alert(1)</script>",',
                     ]
                 )
                 + "\n",
@@ -1056,17 +1060,17 @@ def write_consumer_candidate_rows(path: Path) -> None:
         "\n".join(
             [
                 (
-                    "rank,symbol,name,date,close,total_score,cash_budget,lot_size,"
+                    "rank,symbol,name,listing_board,spot_industry,date,close,total_score,cash_budget,lot_size,"
                     "quantity,cash_reserved,notional,weight,unallocated,"
                     "sizing_claim_boundary,key_reasons,risk_notes"
                 ),
                 (
-                    "1,000001,Alpha Tech,2026-06-05,10.0,0.82,10000,100,"
+                    "1,300001,Alpha Tech,创业板,软件服务,2026-06-05,10.0,0.82,10000,100,"
                     "400,4000,4000,0.4,False,local_sizing_not_broker_order,"
                     "positive momentum; short-term activity,high volatility"
                 ),
                 (
-                    "2,600000,Beta Bank,2026-06-05,20.0,0.71,10000,100,"
+                    "2,600000,Beta Bank,主板,银行,2026-06-05,20.0,0.71,10000,100,"
                     "200,4000,4000,0.4,False,local_sizing_not_broker_order,"
                     "acceptable volatility; rsi in range,no major configured risk flag"
                 ),

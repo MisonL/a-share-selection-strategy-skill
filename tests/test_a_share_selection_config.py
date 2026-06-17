@@ -114,6 +114,14 @@ class AShareSelectionConfigTests(unittest.TestCase):
                 "prediction_model_executed_by_score_script": False,
                 "lightgbm_not_used": True,
             },
+            "hong_kong_generic_config.json": {
+                "prediction_policy": "not_used",
+                "prediction_mode": False,
+                "prediction_input_source": "not_used",
+                "prediction_model_executed_by_runner": False,
+                "prediction_model_executed_by_score_script": False,
+                "lightgbm_not_used": True,
+            },
         }
         for name, fields in expected.items():
             with self.subTest(name=name):

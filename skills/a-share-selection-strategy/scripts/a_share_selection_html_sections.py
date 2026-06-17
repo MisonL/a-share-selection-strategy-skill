@@ -9,6 +9,7 @@ from a_share_selection_html_candidate_master import (
     candidate_master_detail,
     candidate_open_banner,
 )
+from a_share_selection_html_candidate_helpers import candidate_listing_board
 from a_share_selection_html_data import (
     HTML_DIAGNOSTIC_ROWS_LIMIT,
     HTML_REPORT_ROWS_LIMIT,
@@ -61,6 +62,7 @@ DISPLAY_CANDIDATE_COLUMNS = (
     "rank",
     "symbol",
     "name",
+    "listing_board",
     "date",
     "requested_as_of_date",
     "actual_data_date",
@@ -776,6 +778,7 @@ def candidate_preview_table(rows: list[dict[str, Any]], language: str) -> str:
     )
     headers = (
         bilingual("Stock name (code)", "股票名称（代码）", language),
+        bilingual("Board", "板块", language),
         bilingual("Industry", "行业", language),
         bilingual("Level", "观察等级", language),
         bilingual("Summary", "简述", language),
@@ -795,11 +798,13 @@ def candidate_preview_row(row: dict[str, Any], language: str) -> str:
     name = raw_text(row.get("name")) or symbol
     display_name = name if name == symbol else f"{name} ({symbol})"
     score = format_numeric(row.get("total_score", ""), 3, "")
+    board = candidate_listing_board(row)
     industry = candidate_industry(row)
     summary = candidate_summary_text(raw_text(row.get("key_reasons")), language)
     return (
         "<tr>"
         f'<td><strong class="stock-anchor">{esc(display_name)}</strong></td>'
+        f"<td>{esc(board)}</td>"
         f"<td>{esc(industry)}</td>"
         f"<td>{strategy_level_badge(score, language)}</td>"
         f'<td class="text-cell">{summary}</td>'
@@ -808,7 +813,7 @@ def candidate_preview_row(row: dict[str, Any], language: str) -> str:
 
 
 def candidate_industry(row: dict[str, Any]) -> str:
-    for key in ("industry", "sector", "sw_industry", "申万行业"):
+    for key in ("spot_industry", "industry", "sector", "sw_industry", "申万行业"):
         value = raw_text(row.get(key)).strip()
         if display_value(value):
             return value

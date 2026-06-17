@@ -807,6 +807,16 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn('class="selection-flow"', report)
         self.assertIn(".report-overview-grid", report)
         self.assertIn(".candidate-cards[data-preview-table]", report)
+        self.assertIn("@media(max-width:1500px)", report)
+        self.assertIn("@media(max-width:1100px)", report)
+        self.assertIn("@media(max-width:640px)", report)
+        self.assertIn("overflow-x:auto", report)
+        self.assertIn("flex-wrap:wrap", report)
+        self.assertIn("min-height:44px", report)
+        self.assertIn("white-space:normal", report)
+        self.assertIn("grid-template-columns:repeat(2,minmax(0,1fr))", report)
+        self.assertIn("grid-template-columns:repeat(4,minmax(0,1fr))", report)
+        self.assertIn(".flow-arrow{display:none}", report)
 
     def test_non_finite_numeric_values_render_as_placeholder(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

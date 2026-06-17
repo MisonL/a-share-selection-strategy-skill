@@ -496,6 +496,30 @@ class AShareSelectionScriptTests(unittest.TestCase):
             dict(zip(candidates["symbol"], candidates["listing_board"])),
         )
 
+    def test_hong_kong_spot_aliases_match_plain_hk_symbols(self) -> None:
+        config = load_config("hong_kong_generic_config.json")
+        config["thresholds"] = permissive_thresholds(120)
+        frame = build_frame(include_turn=True)
+        frame["symbol"] = frame["symbol"].map({"000002": "00700", "600001": "08001"})
+        frame["name"] = frame["symbol"].map({"00700": "Tencent", "08001": "Gem Co"})
+        frame["market"] = "HK"
+        spot = pd.DataFrame(
+            [
+                {"symbol": "HK.00700", "industry": "互联网服务"},
+                {"symbol": "08001.HK", "industry": "软件服务"},
+            ]
+        )
+
+        candidates, summary = scorer.score_candidates(frame, config, spot)
+        by_symbol = {
+            row["symbol"]: row["spot_industry"]
+            for _, row in candidates.iterrows()
+        }
+
+        self.assertEqual(2, summary["spot_matched_symbols"])
+        self.assertEqual("互联网服务", by_symbol["00700"])
+        self.assertEqual("软件服务", by_symbol["08001"])
+
     def test_cli_writes_threshold_diagnostics_csv(self) -> None:
         config = load_config("example_config.json")
         config["thresholds"]["min_total_score"] = 999

@@ -6,7 +6,12 @@ from typing import Any
 
 import pandas as pd
 
-from a_share_selection_symbols import A_SHARE_EXCHANGES, normalize_symbol_values
+from a_share_selection_symbols import (
+    A_SHARE_EXCHANGES,
+    normalize_hk_symbol,
+    normalize_symbol_values,
+    valid_hk_symbol_text,
+)
 
 
 SYMBOL_COLUMN_ALIASES = ["symbol", "code", "code_id", "stock_code", "ticker", "Ticker"]
@@ -17,8 +22,8 @@ def merge_spot_view(
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     if spot is None:
         return pd.DataFrame(columns=spot_columns()), spot_summary(0, 0)
-    view = normalized_spot_view(spot)
-    input_symbols = set(input_frame["symbol"].astype(str))
+    input_symbols = normalized_input_symbols(input_frame)
+    view = normalized_spot_view(spot, input_symbols=input_symbols)
     matched = int(view["symbol"].isin(input_symbols).sum()) if not view.empty else 0
     return view, spot_summary(len(view), matched)
 
@@ -39,14 +44,17 @@ def spot_summary(rows: int, matched: int) -> dict[str, Any]:
     }
 
 
-def normalized_spot_view(spot: pd.DataFrame) -> pd.DataFrame:
+def normalized_spot_view(
+    spot: pd.DataFrame,
+    input_symbols: set[str] | None = None,
+) -> pd.DataFrame:
     source_frame = spot.reset_index(drop=True)
     symbol_values = first_existing_required(source_frame, SYMBOL_COLUMN_ALIASES, "symbol")
     result = pd.DataFrame(
         {
-            "symbol": normalize_symbol_values(
+            "symbol": normalize_spot_symbol_values(
                 symbol_values,
-                allowed_exchanges=A_SHARE_EXCHANGES,
+                input_symbols=input_symbols or set(),
             )
         }
     )
@@ -59,6 +67,37 @@ def normalized_spot_view(spot: pd.DataFrame) -> pd.DataFrame:
     return result[["symbol", *spot_columns()]].drop_duplicates(
         subset=["symbol"], keep="last"
     )
+
+
+def normalized_input_symbols(frame: pd.DataFrame) -> set[str]:
+    symbols = set(frame["symbol"].astype(str).str.strip())
+    markets = frame["market"].astype(str).str.strip().str.lower() if "market" in frame else []
+    if any(value in {"hk", "港股", "hong kong", "hong-kong"} for value in markets):
+        symbols.update(hk_aliases(symbol) for symbol in list(symbols) if hk_aliases(symbol))
+    return symbols
+
+
+def normalize_spot_symbol_values(values: Any, input_symbols: set[str]) -> list[str]:
+    base_values = normalize_symbol_values(values, allowed_exchanges=A_SHARE_EXCHANGES)
+    return [
+        normalized_spot_symbol(raw, normalized, input_symbols)
+        for raw, normalized in zip(values, base_values)
+    ]
+
+
+def normalized_spot_symbol(raw: Any, normalized: str, input_symbols: set[str]) -> str:
+    if normalized in input_symbols:
+        return normalized
+    hk = hk_aliases(raw)
+    if hk and hk in input_symbols:
+        return hk
+    return hk or normalized
+
+
+def hk_aliases(value: Any) -> str:
+    if not valid_hk_symbol_text(value):
+        return ""
+    return normalize_hk_symbol(value).zfill(5)
 
 
 def spot_columns() -> list[str]:

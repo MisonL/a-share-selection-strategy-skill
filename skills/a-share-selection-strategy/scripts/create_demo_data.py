@@ -28,6 +28,14 @@ FIELDNAMES = [
     "prediction_score",
 ]
 
+SPOT_FIELDNAMES = [
+    "symbol",
+    "spot_price",
+    "spot_pct_chg",
+    "spot_amount",
+    "industry",
+]
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
@@ -64,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"OK: wrote demo data to {output} "
         "prices=prices.csv "
+        "spot=spot.csv "
         "synthetic_prediction_input=prices_with_prediction.csv "
         "synthetic_prediction_proves_real_model=false"
     )
@@ -83,6 +92,7 @@ def write_demo_outputs(output: Path, *, days: int, scenario: str) -> None:
         days=days,
         scenario=scenario,
     )
+    write_spot_csv(output / "spot.csv", scenario=scenario)
     write_metadata(output / "metadata.json", days=days, scenario=scenario)
 
 
@@ -92,11 +102,50 @@ def write_metadata(path: Path, *, days: int, scenario: str) -> None:
         "scenario": scenario,
         "days": days,
         "prices": "prices.csv",
+        "spot": "spot.csv",
         "synthetic_prediction_input": "prices_with_prediction.csv",
         "synthetic_prediction_proves_real_model": False,
         "real_market_data": False,
     }
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def write_spot_csv(path: Path, *, scenario: str) -> None:
+    rows = demo_spot_rows(scenario)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=SPOT_FIELDNAMES)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def demo_spot_rows(scenario: str) -> list[dict[str, str]]:
+    if scenario == "low-price-ultra-short":
+        return [
+            {
+                "symbol": str(spec["symbol"]),
+                "spot_price": "",
+                "spot_pct_chg": "",
+                "spot_amount": f"{float(spec['amount']):.2f}",
+                "industry": str(spec["industry"]),
+            }
+            for spec in low_price_specs()
+        ]
+    return [
+        {
+            "symbol": "000002",
+            "spot_price": "",
+            "spot_pct_chg": "",
+            "spot_amount": "150000000.00",
+            "industry": "房地产开发",
+        },
+        {
+            "symbol": "600001",
+            "spot_price": "",
+            "spot_pct_chg": "",
+            "spot_amount": "150000000.00",
+            "industry": "综合金融",
+        },
+    ]
 
 
 def write_csv(
@@ -172,12 +221,12 @@ def low_price_ultra_short_rows(
 
 def low_price_specs() -> list[dict[str, object]]:
     return [
-        symbol_spec("000002", "Low Price Pass", 5.2, 150000000.0, 1.25, "1", "0"),
-        symbol_spec("000003", "High Price Reject", 10.8, 150000000.0, 1.25, "1", "0"),
-        symbol_spec("000004", "Amount Reject", 5.4, 50000000.0, 1.25, "1", "0"),
-        symbol_spec("000005", "Turn Reject", 5.6, 150000000.0, 0.35, "1", "0"),
-        symbol_spec("000006", "ST Reject", 5.8, 150000000.0, 1.25, "1", "1"),
-        symbol_spec("000007", "Suspended Reject", 6.0, 150000000.0, 1.25, "0", "0"),
+        symbol_spec("000002", "Low Price Pass", 5.2, 150000000.0, 1.25, "1", "0", "软件服务"),
+        symbol_spec("000003", "High Price Reject", 10.8, 150000000.0, 1.25, "1", "0", "医药商业"),
+        symbol_spec("000004", "Amount Reject", 5.4, 50000000.0, 1.25, "1", "0", "专用设备"),
+        symbol_spec("000005", "Turn Reject", 5.6, 150000000.0, 0.35, "1", "0", "消费电子"),
+        symbol_spec("000006", "ST Reject", 5.8, 150000000.0, 1.25, "1", "1", "建筑材料"),
+        symbol_spec("000007", "Suspended Reject", 6.0, 150000000.0, 1.25, "0", "0", "纺织制造"),
         symbol_spec(
             "000008",
             "One Word Bar Reject",
@@ -186,6 +235,7 @@ def low_price_specs() -> list[dict[str, object]]:
             1.25,
             "1",
             "0",
+            "基础化工",
             one_word_bar=True,
         ),
     ]
@@ -199,6 +249,7 @@ def symbol_spec(
     turn: float,
     tradestatus: str,
     is_st: str,
+    industry: str,
     *,
     one_word_bar: bool = False,
 ) -> dict[str, object]:
@@ -210,6 +261,7 @@ def symbol_spec(
         "turn": turn,
         "tradestatus": tradestatus,
         "isST": is_st,
+        "industry": industry,
         "one_word_bar": one_word_bar,
     }
 

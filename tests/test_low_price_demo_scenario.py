@@ -103,6 +103,8 @@ class LowPriceDemoScenarioTests(unittest.TestCase):
                     str(SCRIPTS / "run_today_a_share_selection.py"),
                     "--prices-input",
                     str(root / "prices.csv"),
+                    "--spot-input",
+                    str(root / "spot.csv"),
                     "--output-dir",
                     str(output),
                     "--mode",
@@ -113,6 +115,7 @@ class LowPriceDemoScenarioTests(unittest.TestCase):
                 text=True,
             )
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            candidates = pd.read_csv(output / "candidates.csv", dtype={"symbol": str})
             diagnostics = pd.read_csv(output / "diagnostics.csv", dtype={"symbol": str})
 
         self.assertEqual(0, result.returncode, result.stderr)
@@ -123,7 +126,16 @@ class LowPriceDemoScenarioTests(unittest.TestCase):
         self.assertEqual(1120, summary["prices_rows"])
         self.assertEqual(1, summary["candidate_rows"])
         self.assertEqual(7, summary["diagnostic_rows"])
+        self.assertEqual(7, summary["spot_rows"])
+        self.assertEqual(7, summary["spot_matched_symbols"])
+        self.assertTrue(summary["summary_output_written"])
+        self.assertTrue(summary["manifest_output_written"])
+        self.assertEqual("软件服务", candidates.iloc[0]["spot_industry"])
         self.assertEqual(7, len(diagnostics))
+        self.assertEqual(
+            "软件服务",
+            diagnostics[diagnostics["symbol"].eq("000002")]["spot_industry"].iloc[0],
+        )
         self.assertIn("threshold_failures", summary["score"])
         self.assertEqual(
             {

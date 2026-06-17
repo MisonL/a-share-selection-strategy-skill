@@ -154,7 +154,7 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/validate_ohlcv.py --input /tmp/a-share-selection-demo/prices_with_prediction.csv --config skills/a-share-selection-strategy/scripts/prediction_profile_config.json
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/score_candidates.py --input /tmp/a-share-selection-demo/prices.csv --config skills/a-share-selection-strategy/scripts/example_config.json --output /tmp/a-share-selection-demo/candidates.csv
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/score_candidates.py --input /tmp/a-share-selection-demo/prices_with_prediction.csv --config skills/a-share-selection-strategy/scripts/prediction_profile_config.json --output /tmp/a-share-selection-demo/prediction_candidates.csv
-uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py --prices-input /tmp/a-share-selection-demo/prices.csv --output-dir /tmp/a-share-selection-demo/today-low-price --mode auto --html-report-language zh
+uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py --prices-input /tmp/a-share-selection-demo/prices.csv --spot-input /tmp/a-share-selection-demo/spot.csv --output-dir /tmp/a-share-selection-demo/today-low-price --mode auto --html-report-language zh
 ```
 
 低价超短离线诊断样本：
@@ -162,11 +162,13 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 ```bash
 python3 skills/a-share-selection-strategy/scripts/create_demo_data.py --output /tmp/a-share-selection-low-price-demo --days 160 --scenario low-price-ultra-short
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py --prices-input /tmp/a-share-selection-low-price-demo/prices.csv --output-dir /tmp/a-share-selection-low-price-demo/today --mode auto --html-report-language zh
+uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py --prices-input /tmp/a-share-selection-low-price-demo/prices.csv --spot-input /tmp/a-share-selection-low-price-demo/spot.csv --output-dir /tmp/a-share-selection-low-price-demo/today-with-spot --mode auto --html-report-language zh
 ```
 
 预期口径：
 
 - `prices.csv` 不含 `prediction_score`，`--mode auto` 应选择 `mode=generic`、`mode_decision=auto_generic`、`consumes_prediction_columns=false`、`prediction_input_source=not_used`、`prediction_model_executed_by_runner=false`、`lightgbm_not_used=true`、`lightgbm_output_source=not_used`、`lightgbm_executed_by_runner=false`。
+- `spot.csv` 是 `create_demo_data.py` 生成的可追溯展示输入；显式传 `--spot-input` 后，候选和诊断表会展示 `spot_industry`，但这些字段不参与核心评分。
 - `summary.json` 顶层的 `candidate_rows`、`diagnostic_rows`、`prices_rows`、`spot_matched_symbols` 是输出文件和评分摘要的快速核对字段；嵌套 `score.candidates` 来自 `score_candidates.py` stdout 摘要。
 - `summary.json` 的 `*_output_written` 字段表示本次 run 初始化输出后对应产物是否有效写出；失败 run 中有输出路径或旧文件物理存在，不等于本次候选或诊断文件已生成。
 - `summary.json` 的 `input_metadata.source_type=synthetic_demo` 表示输入来自 `create_demo_data.py` 合成 demo，不是真实行情。

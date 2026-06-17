@@ -72,6 +72,8 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertTrue(manifest["html_report_enabled"])
         self.assertEqual("auto", manifest["html_report_language"])
         self.assertIn(manifest["html_report_initial_language"], {"zh", "en"})
+        self.assertTrue(manifest["summary_output_written"])
+        self.assertTrue(manifest["manifest_output_written"])
         self.assertIn("missing_prediction_columns:prediction", manifest["mode_decision_reason"])
         self.assertEqual(["prediction"], manifest["missing_prediction_column_groups"])
         self.assertEqual(

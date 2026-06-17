@@ -35,6 +35,7 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "source_claim_boundary": input_metadata.get("source_claim_boundary", ""),
         "input_metadata": input_metadata,
         "input_csv_provenance": input_csv_provenance(score),
+        "source_provenance": source_provenance(input_metadata, score, manifest),
         "advice_boundary": ADVICE_BOUNDARY,
         "recommendation_boundary": RECOMMENDATION_BOUNDARY,
         **row_count_fields(manifest, paths, score, history_selection, initialized),
@@ -48,6 +49,8 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
 def summary_paths(manifest: dict[str, Any]) -> dict[str, Path]:
     output_dir = Path(manifest["output_dir"])
     return {
+        "summary": output_dir / "summary.json",
+        "manifest": output_dir / "run_manifest.json",
         "prices": helpers.prices_output_path(manifest),
         "candidates": output_dir / "candidates.csv",
         "diagnostics": output_dir / "diagnostics.csv",
@@ -86,6 +89,32 @@ def input_csv_provenance(score: dict[str, Any]) -> dict[str, Any]:
         for key in INPUT_CSV_PROVENANCE_COLUMNS
         if key in score
     }
+
+
+def source_provenance(
+    input_metadata: dict[str, Any],
+    score: dict[str, Any],
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    fields = {
+        "source_type": input_metadata.get("source_type", score.get("source_type", "unknown")),
+        "source_scope": summary_source_scope(input_metadata, manifest),
+        "real_market_data": input_metadata.get(
+            "real_market_data",
+            score.get("real_market_data", "unknown"),
+        ),
+        "source": summary_source(input_metadata, manifest),
+        "source_claim_boundary": input_metadata.get(
+            "source_claim_boundary",
+            score.get("source_claim_boundary", ""),
+        ),
+        "input_csv_source_type": score.get("source_type", "unknown"),
+        "input_csv_source_scope": score.get("source_scope", "unknown"),
+        "input_csv_real_market_data": score.get("real_market_data", "unknown"),
+    }
+    if "market_label_only" in input_metadata:
+        fields["market_label_only"] = input_metadata["market_label_only"]
+    return fields
 
 
 def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:
@@ -208,6 +237,10 @@ def output_path_fields(paths: dict[str, Path], initialized: bool) -> dict[str, A
         "selected_symbols_output_written": initialized and paths["selected_symbols"].exists(),
         "history_metadata_output": str(paths["history_metadata"]),
         "history_metadata_output_written": initialized and paths["history_metadata"].exists(),
+        "summary_output": str(paths["summary"]),
+        "summary_output_written": initialized and paths["summary"].exists(),
+        "manifest_output": str(paths["manifest"]),
+        "manifest_output_written": initialized and paths["manifest"].exists(),
     }
 
 

@@ -5,6 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from a_share_selection_html_candidate_master import (
+    candidate_master_detail,
+    candidate_open_banner,
+)
 from a_share_selection_html_data import (
     HTML_DIAGNOSTIC_ROWS_LIMIT,
     HTML_REPORT_ROWS_LIMIT,
@@ -102,46 +106,96 @@ DISPLAY_DIAGNOSTIC_COLUMNS = (
     "selection_status",
     "failure_reason",
 )
+MASTER_DETAIL_PREVIEW_LIMIT = 5
 
 
 def hero(summary: dict[str, Any], language: str) -> str:
-    status = str(summary.get("status", "unknown"))
+    badges = "".join(hero_badge(label, kind) for label, kind in hero_badges(summary, language))
+    note = bilingual(
+        "Data is written into this HTML. Search, filters, sorting, and details run locally in the browser.",
+        "数据随 HTML 生成，搜索筛选排序均在本地浏览器完成。",
+        language,
+    )
     return (
-        '<section class="hero executive-hero"><div class="hero-main">'
-        f'<p class="eyebrow">{i18n("brand", language)}</p>'
-        f"<h1>{hero_headline(summary, language)}</h1>"
-        f"<p>{hero_subtitle(summary, language)}</p>"
-        f"{signal_bars(summary)}</div>"
-        '<div class="hero-actions">'
-        f'<span class="status {esc(status_class(status))}">'
-        f"{i18n(report_status_key(summary, status), language)}</span>"
-        '<div class="language-toggle" aria-label="Language">'
-        '<button type="button" data-set-lang="zh">中文</button>'
-        '<button type="button" data-set-lang="en">EN</button>'
+        '<section class="hero executive-hero">'
+        '<div class="hero-title-row">'
+        '<div class="hero-copy">'
+        f"<h1>{bilingual('A-share Strategy Selection Report', 'A 股策略选股报告', language)}</h1>"
+        f'<div class="hero-badges">{badges}</div>'
+        f'<p class="hero-note">{note}</p>'
+        "</div>"
+        '<div class="hero-side">'
+        f"{hero_fact_card(summary, language)}"
         "</div></div></section>"
     )
 
 
-def hero_headline(summary: dict[str, Any], language: str) -> str:
-    status = str(summary.get("status", "unknown"))
-    count = candidate_count(summary)
-    if status != "completed":
-        return bilingual(
-            "No usable watchlist was produced.",
-            "本次没有生成可用观察清单。",
-            language,
-        )
-    if count == 0:
-        return bilingual(
-            "No watchlist item matched this run.",
-            "本次没有筛出观察对象。",
-            language,
-        )
-    en = f"AI agent found {count} watchlist item."
-    if count != 1:
-        en = f"AI agent found {count} watchlist items."
-    zh = f"AI Agent 找到 {count} 个观察对象。"
-    return bilingual(en, zh, language)
+def hero_badges(summary: dict[str, Any], language: str) -> list[tuple[str, str]]:
+    prediction = bool(summary.get("prediction_mode"))
+    return [
+        (bilingual("Static HTML", "纯静态 HTML", language), "neutral"),
+        (bilingual("A-share", "A 股", language), "neutral"),
+        (bilingual("Public or user-provided data", "公开或用户提供数据", language), "blue"),
+        (bilingual("Not investment advice", "非投资建议", language), "neutral"),
+        (
+            bilingual("Prediction model used", "已使用预测模型", language)
+            if prediction
+            else bilingual("No prediction model", "无预测模型", language),
+            "neutral",
+        ),
+        (bilingual("No real fill proof", "无真实成交证明", language), "neutral"),
+    ]
+
+
+def hero_badge(label: str, kind: str) -> str:
+    return f'<span class="hero-badge {esc(kind)}">{label}</span>'
+
+
+def hero_fact_card(summary: dict[str, Any], language: str) -> str:
+    rows = [
+        (
+            bilingual("Report subject", "报告主题", language),
+            bilingual(
+                "A-share rule-based screening watchlist",
+                "A 股规则筛选观察",
+                language,
+            ),
+        ),
+        (
+            bilingual("Generated at", "生成时间", language),
+            report_generated_at(summary, language),
+        ),
+        (
+            bilingual("Data source", "数据来源", language),
+            data_scope_value(summary, language),
+        ),
+        (
+            bilingual("File note", "文件说明", language),
+            bilingual("Single static HTML, local browser only", "单个静态 HTML 文件，纯前端实现", language),
+        ),
+    ]
+    items = "".join(f"<div><span>{label}</span><strong>{value}</strong></div>" for label, value in rows)
+    return f'<aside class="hero-fact-card">{items}</aside>'
+
+
+def report_generated_at(summary: dict[str, Any], language: str) -> str:
+    candidates_path = raw_text(summary.get("candidates_output"))
+    if candidates_path:
+        path = Path(candidates_path)
+        try:
+            value = path_mtime(path)
+        except OSError:
+            pass
+        else:
+            from datetime import datetime
+
+            dt = datetime.fromtimestamp(value)
+            return dt.strftime("%Y-%m-%d %H:%M")
+    return bilingual("Generated when this report was written", "随本报告生成时间写入", language)
+
+
+def path_mtime(path: Path) -> float:
+    return path.stat().st_mtime
 
 
 def hero_subtitle(summary: dict[str, Any], language: str) -> str:
@@ -159,20 +213,11 @@ def hero_subtitle(summary: dict[str, Any], language: str) -> str:
             "AI Agent 已检查当前数据，但没有找到观察对象。",
             language,
         )
-    en = f"The AI agent produced {count} watchlist item for human review."
+    en = f"The AI agent produced {count} watchlist item for user confirmation."
     if count != 1:
-        en = f"The AI agent produced {count} watchlist items for human review."
-    zh = f"AI Agent 已生成 {count} 个待复核观察对象。"
+        en = f"The AI agent produced {count} watchlist items for user confirmation."
+    zh = f"AI Agent 已生成 {count} 个待确认观察对象。"
     return bilingual(en, zh, language)
-
-
-def signal_bars(summary: dict[str, Any]) -> str:
-    count = candidate_count(summary)
-    active = min(max(count, 0), 5)
-    bars = "".join(
-        f'<span class="{"active" if index < active else ""}"></span>' for index in range(5)
-    )
-    return f'<div class="signal-bars" aria-hidden="true">{bars}</div>'
 
 
 def candidate_count(summary: dict[str, Any]) -> int:
@@ -217,18 +262,20 @@ def summary_lead(count: int, status: str, language: str) -> str:
             "本次没有筛出观察对象。",
             language,
         )
-    en = f"Found {count} watchlist item that needs human review."
+    en = f"Found {count} watchlist item that needs user confirmation."
     if count != 1:
-        en = f"Found {count} watchlist items that need human review."
-    zh = f"找到 {count} 个需要人工复核的观察对象。"
+        en = f"Found {count} watchlist items that need user confirmation."
+    zh = f"找到 {count} 个需要确认的观察对象。"
     return bilingual(en, zh, language)
 
 
 def summary_bullets(summary: dict[str, Any], language: str) -> list[str]:
+    status = str(summary.get("status", "unknown"))
+    count = candidate_count(summary)
     items = [
         bilingual(
-            "Use this as a watchlist for review, not as a buy or sell instruction.",
-            "把它当作待复核观察清单，不要当作买卖指令。",
+            "Use this as a watchlist for confirmation, not as a buy or sell instruction.",
+            "把它当作待确认观察清单，不要当作买卖指令。",
             language,
         ),
         bilingual(
@@ -237,6 +284,42 @@ def summary_bullets(summary: dict[str, Any], language: str) -> list[str]:
             language,
         ),
     ]
+    if status != "completed":
+        items.extend(
+            [
+                bilingual(
+                    "It did not finish the workflow, so this report has no usable watchlist.",
+                    "本次流程没有跑完，所以没有可用观察清单。",
+                    language,
+                ),
+                bilingual(
+                    "Do not reuse older watchlists as this result.",
+                    "不要把旧观察清单当成本次结果。",
+                    language,
+                ),
+                bilingual(
+                    "Check the failure message before doing anything with the result.",
+                    "先看失败说明，不要直接使用本次结果。",
+                    language,
+                ),
+            ]
+        )
+        return items
+    if count == 0:
+        items.extend(
+            [
+                bilingual(
+                    "No stock matched the current strategy rules.",
+                    "没有股票符合当前策略规则。",
+                    language,
+                ),
+                bilingual(
+                    "Confirm whether the data source and strategy scope are what you intended.",
+                    "先确认数据来源和策略范围是不是你想要的。",
+                    language,
+                ),
+            ]
+        )
     if summary_uses_local_prices_input(summary):
         items.append(
             bilingual(
@@ -271,7 +354,7 @@ def top_candidate_hint(rows: list[dict[str, Any]], language: str) -> str:
     name = raw_text(first.get("name")) or raw_text(first.get("symbol")) or "-"
     score = format_numeric(first.get("total_score", ""), 3, "")
     label = bilingual("First item to review", "首个观察对象", language)
-    match_label = bilingual("review priority", "复核优先级", language)
+    match_label = bilingual("check priority", "核验优先级", language)
     return (
         f'<div class="summary-highlight"><span>{label}</span>'
         f"<strong>{esc(name)}</strong>"
@@ -296,7 +379,7 @@ def confirmation_title(language: str) -> str:
 
 
 def review_appendix_title(language: str) -> str:
-    return bilingual("Review Appendix", "复核附录", language)
+    return bilingual("Audit Appendix", "审计附录", language)
 
 
 def metric_grid(summary: dict[str, Any], language: str) -> str:
@@ -316,95 +399,135 @@ def metric_grid(summary: dict[str, Any], language: str) -> str:
     return f'<div class="metrics">{cards}</div>'
 
 
-def reader_guide(summary: dict[str, Any], language: str) -> str:
-    cards = (
-        guide_card(
-            bilingual("What the agent did", "AI Agent 做了什么", language),
-            run_story(summary, language),
-        )
-        + guide_card(
-            bilingual("How to read the result", "怎么看结果", language),
-            trust_story(summary, language),
-        )
-        + guide_card(
-            bilingual("What to check first", "先确认什么", language),
-            next_read_story(summary, language),
-        )
-    )
-    return f'<section class="reader-guide">{cards}</section>'
-
-
-def guide_card(label: str, body: str) -> str:
-    return f"<div><span>{label}</span><p>{body}</p></div>"
-
-
-def run_story(summary: dict[str, Any], language: str) -> str:
-    status = str(summary.get("status", "unknown"))
-    count = candidate_count(summary)
-    if status != "completed":
-        return bilingual(
-            "It did not finish the workflow, so this report has no usable watchlist.",
-            "本次流程没有跑完，所以没有可用观察清单。",
-            language,
-        )
-    if count == 0:
-        return bilingual(
-            "It checked the data, but no stock matched the current strategy rules.",
-            "它已经检查数据，但没有股票符合当前策略规则。",
-            language,
-        )
-    return bilingual(
-        "It checked the data, applied the strategy rules, and produced a review watchlist.",
-        "它已检查数据、应用策略规则，并生成待复核观察清单。",
-        language,
-    )
-
-
-def trust_story(summary: dict[str, Any], language: str) -> str:
-    status = str(summary.get("status", "unknown"))
-    if status != "completed":
-        return bilingual(
-            "Treat this as a failed run report; do not reuse older watchlists as this result.",
-            "这只是失败运行报告；不要把旧观察清单当成本次结果。",
-            language,
-        )
-    return bilingual(
-        "Items are only stocks that matched the strategy rules; they are not return forecasts or trade orders.",
-        "观察对象只是符合策略规则的股票，不是收益预测或交易订单。",
-        language,
-    )
-
-
-def next_read_story(summary: dict[str, Any], language: str) -> str:
-    status = str(summary.get("status", "unknown"))
-    count = candidate_count(summary)
-    if status != "completed":
-        return bilingual(
-            "Check the failure message before doing anything with the result.",
-            "先看失败说明，不要直接使用本次结果。",
-            language,
-        )
-    if count == 0:
-        return bilingual(
-            "Confirm whether the data source and strategy scope are what you intended.",
-            "先确认数据来源和策略范围是不是你想要的。",
-            language,
-        )
-    return bilingual(
-        "Start with the watchlist cards, then confirm the data source and limitations.",
-        "先看观察对象卡片，再确认数据来源和使用边界。",
-        language,
-    )
-
-
 def report_overview(
     summary: dict[str, Any],
     language: str,
     candidate_rows: list[dict[str, Any]],
 ) -> str:
+    _ = candidate_rows
     return (
-        reader_guide(summary, language)
-        + executive_summary(summary, language, candidate_rows)
+        '<div class="report-overview-grid">'
+        f"{pipeline_metric_cards(summary, language)}"
+        f"{selection_flow_card(summary, language)}"
+        "</div>"
+    )
+
+
+def pipeline_metric_cards(summary: dict[str, Any], language: str) -> str:
+    candidate_total = candidate_count(summary)
+    prices_total = summary.get("prices_rows", 0)
+    diagnostics_total = summary.get("diagnostic_rows", 0)
+    high_total = high_priority_count(summary)
+    cards = [
+        (
+            bilingual("Input stocks", "输入股票", language),
+            prices_total,
+            bilingual("from this run", "本次样本", language),
+            "input",
+        ),
+        (
+            bilingual("Passed first checks", "通过初筛", language),
+            diagnostics_total,
+            bilingual("basic rule checks", "通过基础条件检查", language),
+            "passed",
+        ),
+        (
+            bilingual("To confirm", "待确认观察", language),
+            candidate_total,
+            bilingual("review before action", "进入观察名单", language),
+            "watch",
+        ),
+        (
+            bilingual("Needs risk review", "需重点核验", language),
+            high_total,
+            bilingual("check risk first", "先看风险", language),
+            "risk",
+        ),
+    ]
+    html = "".join(pipeline_metric_card(label, value, note, kind) for label, value, note, kind in cards)
+    title = "流程指标" if language == "zh" else "Pipeline counts"
+    return f'<section class="pipeline-metrics" aria-label="{title}">{html}</section>'
+
+
+def pipeline_metric_card(label: str, value: Any, note: str, kind: str) -> str:
+    icon = {
+        "input": "circle",
+        "passed": "funnel",
+        "watch": "eye",
+        "risk": "shield",
+    }.get(kind, "circle")
+    return (
+        f'<div class="pipeline-card {esc(kind)}">'
+        f'<span class="pipeline-icon {esc(icon)}" aria-hidden="true"></span>'
+        f"<div><span>{label}</span><strong>{esc(value)}</strong><small>{note}</small></div></div>"
+    )
+
+
+def selection_flow_card(summary: dict[str, Any], language: str) -> str:
+    title = bilingual("Selection flow", "选股流程", language)
+    subtitle = bilingual("Static illustration", "静态示意", language)
+    return f'<section class="selection-flow-card"><h2>{title}<span>{subtitle}</span></h2>{selection_flow(summary, language)}</section>'
+
+
+def selection_flow(summary: dict[str, Any], language: str) -> str:
+    candidate_total = candidate_count(summary)
+    prices_total = summary.get("prices_rows", 0)
+    diagnostics_total = summary.get("diagnostic_rows", 0)
+    high_total = high_priority_count(summary)
+    steps = [
+        (
+            bilingual("Input stocks", "输入股票", language),
+            prices_total,
+            bilingual("read from data file", "读取数据文件", language),
+            "input",
+        ),
+        (
+            bilingual("First checks", "基础检查", language),
+            diagnostics_total,
+            bilingual("remove obvious mismatches", "排除明显不符合项", language),
+            "passed",
+        ),
+        (
+            bilingual("Watchlist", "观察名单", language),
+            candidate_total,
+            bilingual("needs user confirmation", "需要人工确认", language),
+            "watch",
+        ),
+        (
+            bilingual("Risk review", "风险核验", language),
+            high_total,
+            bilingual("read warnings first", "先看风险提示", language),
+            "risk",
+        ),
+    ]
+    cards = "".join(flow_steps_with_arrows(steps))
+    title = "选股流程" if language == "zh" else "Selection flow"
+    return f'<section class="selection-flow" aria-label="{title}">{cards}</section>'
+
+
+def flow_steps_with_arrows(steps: list[tuple[str, Any, str, str]]) -> str:
+    parts = []
+    for index, (label, value, note, kind) in enumerate(steps):
+        parts.append(flow_step(label, value, note, kind))
+        if index < len(steps) - 1:
+            parts.append('<span class="flow-arrow" aria-hidden="true"></span>')
+    return "".join(parts)
+
+
+def high_priority_count(summary: dict[str, Any]) -> int:
+    try:
+        return int(summary.get("high_priority_candidate_rows", "") or 0)
+    except (TypeError, ValueError):
+        return min(candidate_count(summary), 5)
+
+
+def flow_step(label: str, value: Any, note: str, kind: str) -> str:
+    index = {"input": "1", "passed": "2", "watch": "3", "risk": "4"}.get(kind, "")
+    return (
+        f'<div class="flow-step {esc(kind)}">'
+        f'<span class="flow-index">{index}</span>'
+        f"<span>{label}</span><strong>{esc(value)}</strong>"
+        f"<small>{note}</small></div>"
     )
 
 
@@ -412,7 +535,7 @@ def review_numbers_panel(summary: dict[str, Any], language: str) -> str:
     label = bilingual("Run counts", "运行数字", language)
     hint = bilingual(
         "These counts help audit the run and are not needed for normal reading.",
-        "这些数字用于复核运行，普通阅读不需要理解。",
+        "这些数字用于审计运行，普通阅读不需要理解。",
         language,
     )
     return collapsible_details(
@@ -428,8 +551,55 @@ def boundary_panel(
     candidate_rows: list[dict[str, Any]] | None = None,
 ) -> str:
     return (
-        f'<div class="plain-boundary">{plain_boundary_cards(summary, language)}</div>'
+        '<div class="final-notice-grid">'
+        f"{result_notice_card(summary, language)}"
+        f"{disclaimer_card(language)}"
+        "</div>"
         f"{disclosure_alerts(summary, language, candidate_rows or [])}"
+    )
+
+
+def result_notice_card(summary: dict[str, Any], language: str) -> str:
+    title = result_notice_title(summary, language)
+    body = (
+        f'<p>{plain_result_meaning(summary, language)}</p>'
+        f'<p>{plain_usage_story(summary, language)}</p>'
+        f'<p>{plain_limit_story(summary, language)}</p>'
+    )
+    return (
+        '<section class="result-notice-card">'
+        f"<div><h3>{title}</h3>{body}</div>"
+        '<span class="result-notice-illustration" aria-hidden="true"></span></section>'
+    )
+
+
+def result_notice_title(summary: dict[str, Any], language: str) -> str:
+    status = str(summary.get("status", "unknown"))
+    if status != "completed":
+        return bilingual("Run incomplete / no usable result", "未完成 / 无可用结果", language)
+    if candidate_count(summary) == 0:
+        return bilingual("No candidate / incomplete data", "无候选 / 数据不完整", language)
+    return bilingual("Use boundary / risk reminder", "使用边界 / 风险提示", language)
+
+
+def disclaimer_card(language: str) -> str:
+    title = bilingual("Disclaimer", "免责声明（必读）", language)
+    paragraphs = (
+        bilingual(
+            "This report is for reference only and does not constitute any investment advice, contract, or commitment.",
+            "本报告仅供参考，不构成任何形式的投资建议、要约或承诺。",
+            language,
+        ),
+        bilingual(
+            "The investor bears investment decision risk independently. Review risks carefully before acting.",
+            "投资者应自行承担投资决策风险，请在充分了解相关风险的基础上审慎决策。",
+            language,
+        ),
+    )
+    body = "".join(f"<p>{item}</p>" for item in paragraphs)
+    return (
+        f'<section class="disclaimer-card"><div><h3>{title}</h3>{body}</div>'
+        '<span class="disclaimer-illustration" aria-hidden="true"></span></section>'
     )
 
 
@@ -460,14 +630,14 @@ def plain_result_meaning(summary: dict[str, Any], language: str) -> str:
         return plain_failure_reason(summary, language)
     if count == 0:
         return bilingual(
-            "Under the current data and rules, no stock entered the watchlist.",
-            "在当前数据和规则下，没有股票进入观察清单。",
+            "Under the current data and rules, no stock matched the strategy rules or entered the watchlist.",
+            "在当前数据和规则下，没有股票符合当前策略规则，因此没有进入观察清单。",
             language,
         )
-    en = f"{count} stock matched the current strategy rules and entered the review watchlist."
+    en = f"{count} stock matched the current strategy rules and entered the confirmation watchlist."
     if count != 1:
-        en = f"{count} stocks matched the current strategy rules and entered the review watchlist."
-    zh = f"{count} 只股票符合当前策略规则，进入待复核观察清单。"
+        en = f"{count} stocks matched the current strategy rules and entered the confirmation watchlist."
+    zh = f"{count} 只股票符合当前策略规则，进入待确认观察清单。"
     return bilingual(en, zh, language)
 
 
@@ -478,13 +648,13 @@ def plain_usage_story(summary: dict[str, Any], language: str) -> str:
         return plain_failure_action(summary, language)
     if count == 0:
         return bilingual(
-            "Use it to decide whether to adjust the data range, strategy rules, or data source.",
-            "用它判断是否需要调整数据范围、策略规则或数据来源。",
+            "First confirm whether the data source and strategy scope are what you intended, then decide whether to adjust them.",
+            "先确认数据来源和策略范围是不是你想要的，再判断是否需要调整数据范围、策略规则或数据来源。",
             language,
         )
     return bilingual(
-        "Use it as a shortlist for manual review before any real trading decision.",
-        "把它当作人工复核前的短名单，不要直接拿去交易。",
+        "Use it as a shortlist for your own confirmation before any real trading decision.",
+        "把它当作进一步确认前的短名单，不要直接拿去交易。",
         language,
     )
 
@@ -501,7 +671,7 @@ def plain_limit_story(summary: dict[str, Any], language: str) -> str:
 
 def plain_failure_reason(summary: dict[str, Any], language: str) -> str:
     return bilingual(
-        f"The agent stopped before a usable watchlist was produced. {plain_boundary_text(summary, 'en')}",
+        f"The AI agent did not produce a usable watchlist in this run. {plain_boundary_text(summary, 'en')}",
         f"AI Agent 在生成可用观察清单前停止了。{plain_boundary_text(summary, 'zh')}",
         language,
     )
@@ -594,50 +764,55 @@ def review_scoring_panel(summary: dict[str, Any], language: str) -> str:
 def candidate_cards(rows: list[dict[str, Any]], language: str) -> str:
     if not rows:
         return ""
-    cards = "".join(candidate_card(row, language) for row in rows)
-    return f'<div class="candidate-cards">{cards}</div>'
+    return candidate_preview_table(rows[:MASTER_DETAIL_PREVIEW_LIMIT], language)
 
 
-def candidate_card(row: dict[str, Any], language: str) -> str:
+def candidate_preview_table(rows: list[dict[str, Any]], language: str) -> str:
+    title = bilingual("Watchlist Top 5 Preview", "观察池 Top 5 预览", language)
+    hint = bilingual(
+        "Top 5 are shown first. Open the complete table below for all rows and row details.",
+        "这里先显示前 5 条；完整候选表在下方页面内展示，可查看全部行和行详情。",
+        language,
+    )
+    headers = (
+        bilingual("Stock name (code)", "股票名称（代码）", language),
+        bilingual("Industry", "行业", language),
+        bilingual("Level", "观察等级", language),
+        bilingual("Summary", "简述", language),
+    )
+    head = "".join(f"<th>{label}</th>" for label in headers)
+    body = "".join(candidate_preview_row(row, language) for row in rows)
+    return (
+        '<div class="candidate-cards" data-preview-table>'
+        f'<div class="preview-heading"><div><h3>{title}</h3><p>{hint}</p></div></div>'
+        f'<div class="table-wrap"><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
+        "</div>"
+    )
+
+
+def candidate_preview_row(row: dict[str, Any], language: str) -> str:
     symbol = raw_text(row.get("symbol")) or "-"
     name = raw_text(row.get("name")) or symbol
-    rank = raw_text(row.get("rank")) or "-"
+    display_name = name if name == symbol else f"{name} ({symbol})"
     score = format_numeric(row.get("total_score", ""), 3, "")
-    close = format_numeric(row.get("close", ""), 4, "")
-    reasons = beginner_candidate_reason(raw_text(row.get("key_reasons")), language)
-    risks = beginner_candidate_risk(raw_text(row.get("risk_notes")), language)
-    facts = candidate_fact_items(row, language)
+    industry = candidate_industry(row)
+    summary = candidate_summary_text(raw_text(row.get("key_reasons")), language)
     return (
-        '<article class="candidate-card">'
-        f'<div class="candidate-rank">#{esc(rank)}</div>'
-        f'<div class="candidate-main"><strong>{esc(name)}</strong><span>{esc(symbol)}</span></div>'
-        f'<div class="candidate-score"><span>{bilingual("Review priority", "复核优先级", language)}</span>'
-        f"<strong>{strategy_match_label(score, language)}</strong></div>"
-        f'<div class="candidate-facts">{facts}</div>'
-        '<div class="candidate-copy">'
-        f"<p><b>{bilingual('Why the agent picked it', '为什么被挑出来', language)}</b>{reasons}</p>"
-        f"<p><b>{bilingual('What to watch', '需要注意什么', language)}</b>{risks}</p>"
-        f"<small>{bilingual('Watchlist only, not an order', '只是观察清单，不是下单指令', language)}</small>"
-        "</div></article>"
+        "<tr>"
+        f'<td><strong class="stock-anchor">{esc(display_name)}</strong></td>'
+        f"<td>{esc(industry)}</td>"
+        f"<td>{strategy_level_badge(score, language)}</td>"
+        f'<td class="text-cell">{summary}</td>'
+        "</tr>"
     )
 
 
-def candidate_fact_items(row: dict[str, Any], language: str) -> str:
-    items: list[tuple[str, str]] = []
-    close = format_numeric(row.get("close", ""), 4, "")
-    if display_value(close):
-        items.append((bilingual("Reference close", "参考收盘价", language), close))
-    date = raw_text(row.get("date"))
-    if display_value(date):
-        items.append((bilingual("Signal date", "信号日期", language), date))
-    spot_price = format_numeric(row.get("spot_price", ""), 4, "")
-    if display_value(spot_price):
-        items.append((bilingual("Realtime reference", "实时参考价", language), spot_price))
-    if not items:
-        items.append((bilingual("Review status", "复核状态", language), bilingual("Needs review", "需要复核", language)))
-    return "".join(
-        f"<span>{label} <strong>{esc(value)}</strong></span>" for label, value in items[:4]
-    )
+def candidate_industry(row: dict[str, Any]) -> str:
+    for key in ("industry", "sector", "sw_industry", "申万行业"):
+        value = raw_text(row.get(key)).strip()
+        if display_value(value):
+            return value
+    return "-"
 
 
 def display_value(value: Any) -> bool:
@@ -649,7 +824,7 @@ def strategy_match_label(value: Any, language: str) -> str:
     try:
         score = float(raw_text(value))
     except ValueError:
-        return bilingual("Needs review", "需要复核", language)
+        return bilingual("Needs check", "待确认", language)
     if score >= STRATEGY_MATCH_HIGH:
         return bilingual("High", "高", language)
     if score >= STRATEGY_MATCH_MEDIUM:
@@ -657,7 +832,23 @@ def strategy_match_label(value: Any, language: str) -> str:
     return bilingual("Low", "偏低", language)
 
 
-def beginner_candidate_reason(value: str, language: str) -> str:
+def strategy_level_badge(value: Any, language: str) -> str:
+    label = strategy_match_label(value, language)
+    try:
+        score = float(raw_text(value))
+    except ValueError:
+        css_class = "low"
+    else:
+        if score >= STRATEGY_MATCH_HIGH:
+            css_class = "high"
+        elif score >= STRATEGY_MATCH_MEDIUM:
+            css_class = "medium"
+        else:
+            css_class = "low"
+    return f'<span class="level-badge {css_class}">{label}</span>'
+
+
+def candidate_summary_text(value: str, language: str) -> str:
     text = value.strip()
     if not text:
         return bilingual(
@@ -680,19 +871,19 @@ def beginner_candidate_reason(value: str, language: str) -> str:
     return bilingual(en, zh, language)
 
 
-def beginner_candidate_risk(value: str, language: str) -> str:
+def candidate_risk_text(value: str, language: str) -> str:
     text = value.strip()
     if not text:
         return bilingual(
             "Still verify price, liquidity, news, and your own risk limit.",
-            "仍需复核价格、流动性、消息面和你自己的风险上限。",
+            "仍需核验价格、流动性、消息面和你自己的风险上限。",
             language,
         )
     parts = [part.strip().lower() for part in text.split(";") if part.strip()]
     if parts == ["no major configured risk flag"]:
         return bilingual(
-            "No major configured warning was triggered, but manual review is still required.",
-            "未触发主要配置风险提示，但仍需要人工复核。",
+            "No major configured warning was triggered, but user confirmation is still required.",
+            "未触发主要配置风险提示，但仍需要自行确认。",
             language,
         )
     return localized_phrase_html(text, language)
@@ -700,6 +891,8 @@ def beginner_candidate_risk(value: str, language: str) -> str:
 
 def candidates_panel(
     rows: list[dict[str, Any]],
+    all_rows: list[dict[str, Any]],
+    all_rows_truncated: bool,
     columns: tuple[str, ...],
     language: str,
     *,
@@ -710,6 +903,15 @@ def candidates_panel(
     empty_html: str = "",
 ) -> str:
     cards = candidate_cards(rows, language)
+    master_detail = candidate_master_detail(
+        all_rows,
+        language,
+        csv_path=csv_path,
+        truncated=all_rows_truncated,
+        empty_html=empty_html,
+        empty_key=empty_key,
+    )
+    checklist = operator_checklist(language)
     table_html = limited_table(
         rows,
         columns,
@@ -721,19 +923,41 @@ def candidates_panel(
         empty_html=empty_html,
     )
     if not cards:
-        return table_html
-    title = bilingual("Audit table", "复核明细表", language)
-    hint = bilingual(
-        "Cards are for normal reading. This table keeps the original fields for audit.",
-        "卡片用于普通阅读；这张表保留原始字段，供审计复核。",
-        language,
+        return (
+            '<div class="watchlist-dashboard empty-watchlist">'
+            f'<div class="watchlist-preview-pane">{table_html}</div>'
+            f"{checklist}</div>{master_detail}"
+        )
+    _ = table_html
+    return (
+        '<div class="watchlist-dashboard">'
+        f'<div class="watchlist-preview-pane">{cards}</div>'
+        f'<div class="candidate-open-slot">{candidate_open_banner(all_rows, csv_path, language)}</div>'
+        f"{checklist}</div>"
+        f"{master_detail}"
     )
-    detail = (
-        f'<div class="detail-table-heading"><strong>{title}</strong>'
-        f"<p>{hint}</p></div>{table_html}"
+
+
+def operator_checklist(language: str) -> str:
+    title = bilingual("Pre-use checklist", "操作前校验清单", language)
+    subtitle = bilingual("Confirm item by item before acting", "建议逐项确认", language)
+    items = (
+        bilingual("Data source is public or user-provided, not private information.", "确认数据来源为公开渠道或用户提供，非内幕或未公开信息。", language),
+        bilingual("Strategy rules match the intended research framework.", "确认策略逻辑与筛选规则符合自身研究框架。", language),
+        bilingual("Financial period, units, and dates are understood consistently.", "确认财务口径、单位与时间区间理解一致。", language),
+        bilingual("Risk windows such as sector, style, valuation, and liquidity are acceptable.", "确认风险窗口（行业/风格/估值/流动性）可控。", language),
+        bilingual("Recheck announcements, filings, and industry information.", "二次核验公司公告、财报与行业信息。", language),
+        bilingual("Make an independent judgment and record the decision evidence.", "形成独立判断并记录决策依据。", language),
     )
-    label = bilingual("Show audit table", "展开复核明细表", language)
-    return f"{cards}{collapsible_details(label, detail, 'candidate-detail-table')}"
+    rows = "".join(
+        '<div class="check-item"><span class="check-dot" aria-hidden="true"></span>'
+        f"<span>{item}</span></div>"
+        for item in items
+    )
+    return (
+        '<aside class="operator-checklist">'
+        f"<h3>{title}<span>{subtitle}</span></h3>{rows}</aside>"
+    )
 
 
 def boundary_cards(summary: dict[str, Any], language: str) -> str:
@@ -1179,8 +1403,8 @@ def diagnostic_intro(summary: dict[str, Any], language: str) -> str:
             language,
         )
     return bilingual(
-        "This keeps per-stock rule results for audit. Normal users can stay with the watchlist cards.",
-        "这里保留每只股票的规则结果，供审计复核；普通用户看观察卡片即可。",
+        "This keeps per-stock rule results for audit. Normal users can start with the Top 5 preview and complete candidate table.",
+        "这里保留每只股票的规则结果，供审计查看；普通用户先看 Top 5 预览和完整候选表即可。",
         language,
     )
 
@@ -1228,8 +1452,19 @@ def evidence_paths(
     return paths
 
 
-def section(title: str, content: str) -> str:
-    return f'<section class="section"><h2>{title}</h2>{content}</section>'
+def section(
+    title: str,
+    content: str,
+    *,
+    section_id: str = "",
+    extra_class: str = "",
+) -> str:
+    id_attr = f' id="{esc(section_id)}"' if section_id else ""
+    classes = "section"
+    if extra_class:
+        classes = f"{classes} {esc(extra_class)}"
+    heading = f"<h2>{title}</h2>" if title else ""
+    return f'<section{id_attr} class="{classes}">{heading}{content}</section>'
 
 
 def table(
@@ -1288,7 +1523,7 @@ def zero_candidates_message(summary: dict[str, Any], language: str) -> str:
     )
     return (
         f'<p class="empty">{visible}</p>'
-        f"{collapsible_details(bilingual('Zero-result audit fields', '0 结果复核字段', language), review, 'zero-candidate-review')}"
+        f"{collapsible_details(bilingual('Zero-result audit fields', '0 结果审计字段', language), review, 'zero-candidate-review')}"
     )
 
 

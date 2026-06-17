@@ -11,6 +11,7 @@ from a_share_selection_html_data import (
     HTML_REPORT_ROWS_LIMIT,
     candidate_rows,
     diagnostic_rows,
+    full_candidate_rows,
 )
 from a_share_selection_html_format import esc, i18n
 from a_share_selection_html_i18n import (
@@ -22,13 +23,13 @@ from a_share_selection_html_sections import (
     DISPLAY_CANDIDATE_COLUMNS,
     DISPLAY_DIAGNOSTIC_COLUMNS,
     boundary_panel,
-    confirmation_title,
     candidates_panel,
     collapsible_details,
     diagnostics_panel,
     evidence_list,
     empty_key_for,
     hero,
+    limited_table,
     report_overview,
     review_appendix_title,
     review_numbers_panel,
@@ -36,8 +37,6 @@ from a_share_selection_html_sections import (
     section,
     steps_table,
     technical_details,
-    user_result_title,
-    watchlist_title,
     zero_candidates_message,
 )
 from a_share_selection_html_modes import (
@@ -104,13 +103,21 @@ def report_sections(
     language: str,
 ) -> list[str]:
     candidates, candidates_truncated = candidate_rows(summary)
+    all_candidates, all_candidates_truncated = full_candidate_rows(summary)
     diagnostics, diagnostics_truncated = diagnostic_rows(summary)
     return [
-        section(user_result_title(language), report_overview(summary, language, candidates)),
         section(
-            watchlist_title(summary, language),
+            "",
+            report_overview(summary, language, candidates),
+            section_id="result-section",
+            extra_class="dashboard-section",
+        ),
+        section(
+            "",
             candidates_panel(
                 candidates,
+                all_candidates,
+                all_candidates_truncated,
                 DISPLAY_CANDIDATE_COLUMNS,
                 language,
                 truncated=candidates_truncated,
@@ -119,20 +126,28 @@ def report_sections(
                 empty_key=empty_key_for(summary),
                 empty_html=zero_candidates_message(summary, language),
             ),
+            section_id="watchlist-section",
+            extra_class="watchlist-section",
         ),
         section(
-            confirmation_title(language),
+            "",
             boundary_panel(summary, language, candidates),
+            section_id="confirmation-section",
+            extra_class="notice-section",
         ),
         section(
             review_appendix_title(language),
             review_appendix(
                 summary,
                 manifest,
+                candidates,
+                all_candidates_truncated,
+                candidates_truncated,
                 diagnostics,
                 diagnostics_truncated,
                 language,
             ),
+            section_id="appendix-section",
         ),
     ]
 
@@ -140,6 +155,9 @@ def report_sections(
 def review_appendix(
     summary: dict[str, Any],
     manifest: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    all_candidates_truncated: bool,
+    candidates_truncated: bool,
     diagnostics: list[dict[str, Any]],
     diagnostics_truncated: bool,
     language: str,
@@ -148,6 +166,13 @@ def review_appendix(
         review_numbers_panel(summary, language)
         + review_scoring_panel(summary, language)
         + technical_details(summary, language)
+        + candidate_audit_table(
+            summary,
+            candidates,
+            all_candidates_truncated,
+            candidates_truncated,
+            language,
+        )
         + diagnostics_panel(
             summary,
             diagnostics,
@@ -168,6 +193,43 @@ def review_appendix(
             "evidence-detail",
         )
     )
+
+
+def candidate_audit_table(
+    summary: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    candidates_truncated_full: bool,
+    truncated: bool,
+    language: str,
+) -> str:
+    title = "Audit table" if language == "en" else "审计明细表"
+    hint = (
+        "Cards are for normal reading. This table keeps the original fields for audit."
+        if language == "en"
+        else "卡片用于普通阅读；这张表保留原始字段，供审计查看。"
+    )
+    label = "Show audit table" if language == "en" else "展开审计明细表"
+    limit_hint = ""
+    if candidates_truncated_full:
+        limit_hint = (
+            "<p>Only the first 1000 rows are embedded here to keep the HTML usable. See the CSV for the full result.</p>"
+            if language == "en"
+            else "<p>这里仅嵌入前 1000 行以保证 HTML 可用，完整结果请查看 CSV。</p>"
+        )
+    content = (
+        f'<div class="detail-table-heading"><strong>{title}</strong><p>{hint}</p>{limit_hint}</div>'
+        + limited_table(
+            candidates,
+            DISPLAY_CANDIDATE_COLUMNS,
+            language,
+            truncated=truncated or candidates_truncated_full,
+            limit=HTML_REPORT_ROWS_LIMIT,
+            csv_path=summary.get("candidates_output", ""),
+            empty_key=empty_key_for(summary),
+            empty_html=zero_candidates_message(summary, language),
+        )
+    )
+    return collapsible_details(label, content, "candidate-detail-table")
 
 
 def html_tag(requested_language: str, initial_language: str) -> str:

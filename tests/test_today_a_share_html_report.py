@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,12 +30,13 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertEqual("auto", summary["html_report_language"])
         self.assertEqual("zh", summary["html_report_initial_language"])
         self.assertIn('<html lang="zh-CN" data-lang="zh" data-lang-mode="auto">', report)
-        self.assertIn("A 股选股策略", report)
+        self.assertIn("A 股策略选股报告", report)
         self.assertIn("A 股选股报告 - 已完成", report)
-        self.assertIn("AI Agent 结论", report)
-        self.assertIn("观察清单", report)
-        self.assertIn("使用前先确认", report)
-        self.assertIn("复核附录", report)
+        self.assertIn("流程指标", report)
+        self.assertIn("观察池 Top 5 预览", report)
+        self.assertIn("操作前校验清单", report)
+        self.assertIn("免责声明", report)
+        self.assertIn("审计附录", report)
         self.assertIn("策略和评分字段", report)
         self.assertIn("通用技术评分", report)
         self.assertIn("输入没有预测列，auto 因此使用技术门禁。", report)
@@ -64,21 +66,22 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertEqual("en", summary["html_report_language"])
         self.assertEqual("en", summary["html_report_initial_language"])
         self.assertIn('<html lang="en" data-lang="en" data-lang-mode="en">', report)
-        self.assertIn("A-Share Selection Strategy", report)
+        self.assertIn("A-share Strategy Selection Report", report)
         self.assertIn("A-Share Selection Report - Completed", report)
-        self.assertIn("AI Agent Result", report)
-        self.assertIn("Watchlist", report)
-        self.assertIn("Check Before Use", report)
-        self.assertIn("Review Appendix", report)
+        self.assertIn("Pipeline counts", report)
+        self.assertIn("Watchlist Top 5 Preview", report)
+        self.assertIn("Pre-use checklist", report)
+        self.assertIn("Disclaimer", report)
+        self.assertIn("Audit Appendix", report)
         self.assertIn("Strategy and scoring fields", report)
         self.assertIn("Scoring Method", report)
         self.assertIn("Generic technical scoring", report)
         self.assertIn("Why this mode", report)
         self.assertIn("Input has no prediction column, so auto mode used technical gates.", report)
-        self.assertIn("el.open=false", report)
-        self.assertIn("const initial=mode==='auto'?(saved||generated):mode", report)
+        self.assertIn("el.open = false", report)
+        self.assertIn("const initial = mode === 'auto' ? (saved || generated) : mode", report)
         self.assertIn("aShareSelectionReportLang", report)
-        self.assertIn('data-i18n-zh="A 股选股策略"', report)
+        self.assertIn('data-i18n-zh="A 股策略选股报告"', report)
         self.assertIn("Show command-level execution details", report)
         self.assertIn("Reason", report)
         self.assertIn("recent price action looks acceptable; risk checks did not show an obvious rule breach", report)
@@ -94,8 +97,8 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
 
         self.assertEqual(0, result.code, result.stderr)
         self.assertIn('data-lang="zh" data-lang-mode="auto"', report)
-        self.assertIn("const generated=root.dataset.lang||'en'", report)
-        self.assertIn("const initial=mode==='auto'?(saved||generated):mode", report)
+        self.assertIn("const generated = root.dataset.lang || 'en'", report)
+        self.assertIn("const initial = mode === 'auto' ? (saved || generated) : mode", report)
         self.assertNotIn("browserLang", report)
 
     def test_can_disable_html_report(self) -> None:
@@ -150,7 +153,39 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("仅展示前 25 行", report)
         self.assertIn("完整结果：./candidates.csv", report)
         self.assertIn("Name 25", report)
-        self.assertNotIn("Name 26", report)
+        self.assertIn("Name 26", report)
+        preview = report.split('<section id="complete-candidates"', 1)[0]
+        complete = report.split('<section id="complete-candidates"', 1)[1]
+        self.assertNotIn("Name 26", preview)
+        self.assertIn("Name 26", complete)
+        self.assertIn("完整候选表", report)
+        self.assertIn("data-candidate-master-detail", report)
+        self.assertIn("data-candidate-search", report)
+
+    def test_complete_candidate_table_is_capped_at_one_thousand_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            candidates = Path(tmpdir) / "candidates.csv"
+            rows = [
+                "rank,symbol,name,date,close,spot_price,spot_pct_chg,total_score,key_reasons,risk_notes"
+            ]
+            rows.extend(
+                f"{index},000{index:03d},Name {index},2025-01-01,7.1,,,0.5,positive momentum,"
+                for index in range(1, 1003)
+            )
+            candidates.write_text("\n".join(rows) + "\n", encoding="utf-8")
+            summary = minimal_summary(tmpdir, Path(tmpdir) / "diagnostics.csv")
+            summary["candidate_rows"] = 1002
+            summary["candidates_output"] = str(candidates)
+            summary["candidates_output_written"] = True
+            report = render_report(summary, {"steps": []}, language="zh")
+
+        complete = report.split('<section id="complete-candidates"', 1)[1]
+        self.assertIn("这里仅嵌入前 1000 行", report)
+        self.assertIn("Name 1000", complete)
+        self.assertNotIn("Name 1001", complete)
+        self.assertNotIn("Name 1002", complete)
+        self.assertIn("完整候选表", report)
+        self.assertIn("CSV 备用文件", report)
 
     def test_report_ignores_stale_csvs_when_outputs_were_not_written(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -460,32 +495,32 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             )
             report = render_report(summary, {"steps": []}, language="zh")
 
-        self.assertIn('class="executive-summary"', report)
-        self.assertIn('class="reader-guide"', report)
-        self.assertIn("AI Agent 找到 2 个观察对象", report)
-        self.assertIn("AI Agent 做了什么", report)
-        self.assertIn("它已检查数据、应用策略规则，并生成待复核观察清单", report)
-        self.assertIn("怎么看结果", report)
-        self.assertIn("观察对象只是符合策略规则的股票", report)
-        self.assertIn("先确认什么", report)
-        self.assertIn("先看观察对象卡片，再确认数据来源和使用边界", report)
-        self.assertIn("AI Agent 结论", report)
-        self.assertIn("找到 2 个需要人工复核的观察对象", report)
-        self.assertIn("不要当作买卖指令", report)
+        self.assertIn('class="report-overview-grid"', report)
+        self.assertIn('class="pipeline-metrics"', report)
+        self.assertIn('class="selection-flow-card"', report)
+        self.assertIn('class="selection-flow"', report)
+        self.assertNotIn('class="reader-guide"', report)
+        self.assertIn("2 只股票符合当前策略规则，进入待确认观察清单", report)
+        self.assertIn("选股流程", report)
+        self.assertIn("观察名单", report)
+        self.assertIn("风险核验", report)
+        self.assertIn("操作前校验清单", report)
+        self.assertIn("完整候选表", report)
+        self.assertIn("使用边界 / 风险提示", report)
+        self.assertIn("把它当作进一步确认前的短名单", report)
         self.assertIn('<details class="report-details review-metrics">', report)
         self.assertIn('<details class="report-details candidate-detail-table">', report)
         self.assertIn('<details class="report-details diagnostics-detail">', report)
         self.assertIn("运行数字", report)
-        self.assertIn("展开复核明细表", report)
+        self.assertIn("展开审计明细表", report)
         self.assertIn("门禁诊断", report)
-        self.assertLess(report.index('class="reader-guide"'), report.index('class="table-wrap"'))
-        self.assertLess(report.index('class="executive-summary"'), report.index('class="table-wrap"'))
+        self.assertLess(report.index('class="selection-flow"'), report.index('class="table-wrap"'))
         self.assertLess(
             report.index('class="candidate-cards"'),
             report.index('<details class="report-details candidate-detail-table">'),
         )
         self.assertLess(
-            report.index('class="executive-summary"'),
+            report.index('class="report-overview-grid"'),
             report.index('<details class="technical-details">'),
         )
 
@@ -511,7 +546,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             )
             report = render_report(summary, {"steps": []}, language="zh")
 
-        self.assertIn("本次没有筛出观察对象", report)
+        self.assertIn("无候选 / 数据不完整", report)
         self.assertIn("没有股票符合当前策略规则", report)
         self.assertIn("先确认数据来源和策略范围是不是你想要的", report)
         self.assertIn("本次运行已完成，但没有股票进入观察清单", report)
@@ -547,10 +582,9 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
                 language="zh",
             )
 
-        self.assertIn("本次没有生成可用观察清单", report)
-        self.assertIn("本次流程没有跑完，所以没有可用观察清单", report)
-        self.assertIn("不要把旧观察清单当成本次结果", report)
-        self.assertIn("先看失败说明，不要直接使用本次结果", report)
+        self.assertIn("AI Agent 在生成可用观察清单前停止了", report)
+        self.assertIn("未完成 / 无可用结果", report)
+        self.assertIn("本次失败运行没有可用观察清单", report)
         visible = visible_before_technical_details(report)
         self.assertIn("AI Agent 在生成可用观察清单前停止了", visible)
         self.assertNotIn("&lt;span data-i18n-en=", visible)
@@ -576,14 +610,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             report = render_report(summary, {"steps": []}, language="zh")
 
         visible = visible_before_technical_details(report)
-        self.assertIn("本次使用的数据", visible)
         self.assertIn("合成 demo 数据；不是真实行情。", visible)
         self.assertNotIn("low-price-ultra-short", visible)
-        self.assertIn("不能当作实盘结果", visible)
-        self.assertLess(
-            report.index("本次使用的数据"),
-            report.index("首个观察对象"),
-        )
+        self.assertIn("使用边界 / 风险提示", visible)
+        self.assertLess(report.index("合成 demo 数据；不是真实行情。"), report.index("观察池 Top 5 预览"))
 
     def test_report_renders_candidate_cards_before_full_table(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -601,15 +631,110 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             report = render_report(summary, {"steps": []}, language="en")
 
         self.assertIn('class="candidate-cards"', report)
-        self.assertEqual(2, report.count('class="candidate-card"'))
-        self.assertIn("Why the agent picked it", report)
-        self.assertIn("What to watch", report)
-        self.assertIn("Review priority", report)
-        self.assertIn("Watchlist only, not an order", report)
+        self.assertIn("data-preview-table", report)
+        self.assertIn("Watchlist Top 5 Preview", report)
+        self.assertIn('class="candidate-open-banner"', report)
+        self.assertIn('id="complete-candidates"', report)
+        self.assertIn('class="candidate-master-detail"', report)
+        self.assertIn("View table below", report)
+        self.assertIn("Summary", report)
+        self.assertIn("Risk", report)
+        self.assertIn("Top 5 are shown first", report)
         self.assertNotIn("Cash reserved", report.split('<details class="report-details candidate-detail-table">', 1)[0])
         self.assertLess(report.index('class="candidate-cards"'), report.index('class="table-wrap"'))
 
-    def test_auditable_tables_and_paths_are_folded_for_beginner_view(self) -> None:
+    def test_complete_candidate_table_is_viewable_inside_static_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            write_consumer_candidate_rows(candidates)
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "candidate_rows": 2,
+                    "candidates_output": str(candidates),
+                    "candidates_output_written": True,
+                }
+            )
+            report = render_report(summary, {"steps": []}, language="zh")
+
+        complete = report.split('<section id="complete-candidates"', 1)[1]
+        self.assertIn("完整候选表", complete)
+        self.assertIn("数据已随 HTML 生成", complete)
+        self.assertIn("搜索、筛选、排序", complete)
+        self.assertIn("CSV 备用文件", complete)
+        self.assertIn("data-candidate-search", complete)
+        self.assertIn("data-candidate-industry", complete)
+        self.assertIn("data-candidate-level", complete)
+        self.assertIn("data-candidate-sort", complete)
+        self.assertIn("data-candidate-row", complete)
+        self.assertIn("data-candidate-detail", complete)
+        self.assertIn("data-row-title", complete)
+        self.assertEqual(complete.count("data-detail-title"), 1)
+        detail = complete.split('data-candidate-detail', 1)[1].split("</aside>", 1)[0]
+        self.assertEqual(detail.count("data-detail-level"), 2)
+        self.assertIn("data-detail-risk", detail)
+        self.assertNotIn("data-detail-level-copy", detail)
+        self.assertIn("data-detail-summary", complete)
+        self.assertIn('placeholder="代码 / 名称 / 行业 / 关键词"', complete)
+        self.assertNotIn("&lt;span data-i18n-en=", report)
+        self.assertIn("aShareSelectionReportLang", report)
+        self.assertIn("initCandidateMasterDetail", report)
+        self.assertIn("addEventListener('click'", report)
+
+    def test_report_time_falls_back_when_candidate_stat_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            write_consumer_candidate_rows(candidates)
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "candidate_rows": 2,
+                    "candidates_output": str(candidates),
+                    "candidates_output_written": True,
+                }
+            )
+            with patch(
+                "a_share_selection_html_sections.path_mtime",
+                side_effect=PermissionError("denied"),
+            ):
+                report = render_report(summary, {"steps": []}, language="en")
+
+        self.assertIn("Generated when this report was written", report)
+        self.assertIn("Complete Candidate Table", report)
+
+    def test_candidate_detail_panel_escapes_source_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            candidates.write_text(
+                "\n".join(
+                    [
+                        "rank,symbol,name,date,close,total_score,key_reasons,risk_notes",
+                        '1,000001,Unsafe,2026-06-05,10.0,0.82,"<script>alert(1)</script>",',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "candidate_rows": 1,
+                    "candidates_output": str(candidates),
+                    "candidates_output_written": True,
+                }
+            )
+            report = render_report(summary, {"steps": []}, language="en")
+
+        complete = report.split('<section id="complete-candidates"', 1)[1]
+        detail = complete.split('data-detail-reason', 1)[1].split("</aside>", 1)[0]
+        self.assertNotIn("<script>alert(1)</script>", detail)
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", detail)
+        self.assertIn('data-row-reason="&lt;script&gt;alert(1)&lt;/script&gt;"', complete)
+
+    def test_auditable_tables_and_paths_are_folded_for_consumer_view(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
             candidates = output / "candidates.csv"
@@ -643,11 +768,11 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         evidence_detail = details_block(report, "evidence-detail")
         self.assertIn('class="candidate-cards"', report)
         self.assertIn('class="table-wrap"', candidate_detail)
-        self.assertIn("复核明细表", candidate_detail)
+        self.assertIn("审计明细表", candidate_detail)
         self.assertIn('class="table-wrap"', diagnostics_detail)
         self.assertIn("Gamma", diagnostics_detail)
         self.assertIn(">./summary.json</code>", evidence_detail)
-        self.assertLess(report.index("为什么被挑出来"), report.index(candidate_detail))
+        self.assertLess(report.index("观察池 Top 5 预览"), report.index(candidate_detail))
         self.assertLess(report.index("这里保留每只股票的规则结果"), report.index(diagnostics_detail))
 
     def test_report_uses_productized_visual_shell(self) -> None:
@@ -666,9 +791,14 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             report = render_report(summary, {"steps": []}, language="en")
 
         self.assertIn('class="hero executive-hero"', report)
-        self.assertIn('class="signal-bars"', report)
-        self.assertIn(".executive-summary", report)
-        self.assertIn(".candidate-card", report)
+        self.assertIn('class="hero-badges"', report)
+        self.assertIn('class="pipeline-metrics"', report)
+        self.assertIn('class="watchlist-dashboard"', report)
+        self.assertIn('class="operator-checklist"', report)
+        self.assertIn('class="final-notice-grid"', report)
+        self.assertIn('class="selection-flow"', report)
+        self.assertIn(".report-overview-grid", report)
+        self.assertIn(".candidate-cards[data-preview-table]", report)
 
     def test_non_finite_numeric_values_render_as_placeholder(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -861,7 +991,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("external_input", report)
         self.assertIn("equal_cash_budget_lot_floor", report)
         self.assertIn("Showing the first 25 rows only", report)
-        self.assertNotIn("Name 26", report)
+        preview = report.split('<section id="complete-candidates"', 1)[0]
+        complete = report.split('<section id="complete-candidates"', 1)[1]
+        self.assertNotIn("Name 26", preview)
+        self.assertIn("Name 26", complete)
 
     def test_missing_key_disclosure_fields_render_as_unknown(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

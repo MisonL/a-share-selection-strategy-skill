@@ -64,6 +64,8 @@ HELP_CONTRACT_EXCLUDED_HELPERS = [
     "a_share_selection_data.py",
     "a_share_selection_diagnostics.py",
     "a_share_selection_html_assets.py",
+    "a_share_selection_html_candidate_helpers.py",
+    "a_share_selection_html_candidate_master.py",
     "a_share_selection_html_data.py",
     "a_share_selection_html_format.py",
     "a_share_selection_html_history.py",

@@ -11,12 +11,19 @@ from a_share_selection_html_format import failure_reason, missing_key_disclosure
 
 HTML_REPORT_ROWS_LIMIT = 25
 HTML_DIAGNOSTIC_ROWS_LIMIT = 80
+HTML_MASTER_ROWS_LIMIT = 1000
 
 
 def candidate_rows(summary: dict[str, Any]) -> tuple[list[dict[str, Any]], bool]:
     if not output_written(summary, "candidates_output_written"):
         return [], False
     return read_csv_rows(summary.get("candidates_output", ""), HTML_REPORT_ROWS_LIMIT)
+
+
+def full_candidate_rows(summary: dict[str, Any]) -> tuple[list[dict[str, Any]], bool]:
+    if not output_written(summary, "candidates_output_written"):
+        return [], False
+    return read_csv_rows(summary.get("candidates_output", ""), HTML_MASTER_ROWS_LIMIT)
 
 
 def diagnostic_rows(summary: dict[str, Any]) -> tuple[list[dict[str, Any]], bool]:
@@ -37,14 +44,14 @@ def diagnostic_display_row(row: dict[str, Any]) -> dict[str, Any]:
     return display
 
 
-def read_csv_rows(path_value: Any, limit: int) -> tuple[list[dict[str, Any]], bool]:
+def read_csv_rows(path_value: Any, limit: int | None) -> tuple[list[dict[str, Any]], bool]:
     path = Path(str(path_value)) if path_value else Path()
     if not path_value or not path.is_file() or path.suffix.lower() != ".csv":
         return [], False
     with path.open(encoding="utf-8", newline="") as handle:
         rows = []
         for index, row in enumerate(csv.DictReader(handle)):
-            if index >= limit:
+            if limit is not None and index >= limit:
                 return rows, True
             rows.append(row)
     return rows, False

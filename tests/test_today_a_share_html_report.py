@@ -810,6 +810,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("@media(max-width:1500px)", report)
         self.assertIn("@media(max-width:1100px)", report)
         self.assertIn("@media(max-width:640px)", report)
+        self.assertIn("@media(max-width:520px)", report)
         self.assertIn("overflow-x:auto", report)
         self.assertIn("flex-wrap:wrap", report)
         self.assertIn("min-height:44px", report)
@@ -817,6 +818,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("grid-template-columns:repeat(2,minmax(0,1fr))", report)
         self.assertIn("grid-template-columns:repeat(4,minmax(0,1fr))", report)
         self.assertIn(".flow-arrow{display:none}", report)
+        self.assertIn(".hero-fact-card{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))", report)
+        self.assertIn(".pipeline-card:nth-child(2n){border-right:0}", report)
+        self.assertIn(".flow-step small{display:none}", report)
+        self.assertIn("min-width:0;border:1px solid var(--line);border-radius:8px;background:#fff;padding:11px", report)
 
     def test_non_finite_numeric_values_render_as_placeholder(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

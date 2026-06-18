@@ -820,6 +820,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn(".flow-arrow{display:none}", report)
         self.assertIn(".hero-fact-card{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))", report)
         self.assertIn(".pipeline-card:nth-child(2n){border-right:0}", report)
+        self.assertIn(".hero-fact-card,.pipeline-metrics,.selection-flow{grid-template-columns:1fr}", report)
         self.assertIn(".flow-step small{display:none}", report)
         self.assertIn("min-width:0;border:1px solid var(--line);border-radius:8px;background:#fff;padding:11px", report)
 

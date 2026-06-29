@@ -9,6 +9,7 @@ from a_share_selection_html_assets import CSS, JS
 from a_share_selection_html_data import (
     HTML_DIAGNOSTIC_ROWS_LIMIT,
     HTML_REPORT_ROWS_LIMIT,
+    candidate_candle_rows,
     candidate_rows,
     diagnostic_rows,
     full_candidate_rows,
@@ -29,11 +30,12 @@ from a_share_selection_html_sections import (
     evidence_list,
     empty_key_for,
     hero,
+    insight_drawer,
     limited_table,
     report_overview,
-    review_appendix_title,
-    review_numbers_panel,
-    review_scoring_panel,
+    appendix_title,
+    run_numbers_panel,
+    scoring_fields_panel,
     section,
     steps_table,
     technical_details,
@@ -81,14 +83,17 @@ def render_report(
             "<head>",
             '<meta charset="utf-8">',
             '<meta name="viewport" content="width=device-width, initial-scale=1">',
+            '<link rel="icon" href="data:,">',
             title_tag(report_summary, initial_language),
+            f'<meta name="description" content="{esc(report_description(report_summary, initial_language))}">',
             f"<style>{CSS}</style>",
             "</head>",
             "<body>",
-            '<main class="page">',
+            '<main class="page" data-report-content>',
             hero(report_summary, initial_language),
             *body_sections,
             "</main>",
+            insight_drawer(initial_language),
             f"<script>{JS}</script>",
             "</body>",
             "</html>",
@@ -105,6 +110,7 @@ def report_sections(
     candidates, candidates_truncated = candidate_rows(summary)
     all_candidates, all_candidates_truncated = full_candidate_rows(summary)
     diagnostics, diagnostics_truncated = diagnostic_rows(summary)
+    candle_rows = candidate_candle_rows(summary, all_candidates)
     return [
         section(
             "",
@@ -123,6 +129,7 @@ def report_sections(
                 truncated=candidates_truncated,
                 limit=HTML_REPORT_ROWS_LIMIT,
                 csv_path=summary.get("candidates_output", ""),
+                candle_rows=candle_rows,
                 empty_key=empty_key_for(summary),
                 empty_html=zero_candidates_message(summary, language),
             ),
@@ -136,8 +143,8 @@ def report_sections(
             extra_class="notice-section",
         ),
         section(
-            review_appendix_title(language),
-            review_appendix(
+            appendix_title(language),
+            report_appendix(
                 summary,
                 manifest,
                 candidates,
@@ -152,7 +159,7 @@ def report_sections(
     ]
 
 
-def review_appendix(
+def report_appendix(
     summary: dict[str, Any],
     manifest: dict[str, Any],
     candidates: list[dict[str, Any]],
@@ -163,10 +170,10 @@ def review_appendix(
     language: str,
 ) -> str:
     return (
-        review_numbers_panel(summary, language)
-        + review_scoring_panel(summary, language)
+        run_numbers_panel(summary, language)
+        + scoring_fields_panel(summary, language)
         + technical_details(summary, language)
-        + candidate_audit_table(
+        + candidate_detail_table(
             summary,
             candidates,
             all_candidates_truncated,
@@ -195,20 +202,20 @@ def review_appendix(
     )
 
 
-def candidate_audit_table(
+def candidate_detail_table(
     summary: dict[str, Any],
     candidates: list[dict[str, Any]],
     candidates_truncated_full: bool,
     truncated: bool,
     language: str,
 ) -> str:
-    title = "Audit table" if language == "en" else "审计明细表"
+    title = "Detailed table" if language == "en" else "明细表"
     hint = (
-        "Cards are for normal reading. This table keeps the original fields for audit."
+        "Cards are for normal reading. This table keeps the original fields for reference."
         if language == "en"
-        else "卡片用于普通阅读；这张表保留原始字段，供审计查看。"
+        else "卡片用于普通阅读；这张表保留原始字段，供参考。"
     )
-    label = "Show audit table" if language == "en" else "展开审计明细表"
+    label = "Show details" if language == "en" else "展开明细表"
     limit_hint = ""
     if candidates_truncated_full:
         limit_hint = (
@@ -254,6 +261,13 @@ def report_title(summary: dict[str, Any], language: str) -> str:
     title = localized_text(report_title_key(summary), language)
     status_text = localized_text(report_status_key(summary, str(status)), language)
     return f"{title} - {status_text}"
+
+
+def report_description(summary: dict[str, Any], language: str) -> str:
+    title = localized_text(report_title_key(summary), language)
+    if language == "zh":
+        return f"{title}，用于查看候选股票、筛选依据、风险提示和本地生成的静态报告。"
+    return f"{title} for reviewing candidates, screening rationale, risk notes, and the locally generated static report."
 
 if __name__ == "__main__":
     from a_share_selection_cli_guard import fail_not_cli

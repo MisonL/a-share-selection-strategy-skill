@@ -58,12 +58,12 @@ def candidate_reason(row: dict[str, Any], language: str) -> str:
     return plain_bilingual(en, zh, language)
 
 
-def candidate_review_action(row: dict[str, Any], language: str) -> str:
+def candidate_data_note(row: dict[str, Any], language: str) -> str:
     if not display_value(raw_text(row.get("actual_data_date"))):
-        return plain_bilingual("Verify data date and live quote", "核验数据日期和实时行情", language)
+        return plain_bilingual("Data date or live quote is not included.", "未包含数据日期或实时行情。", language)
     if not display_value(raw_text(row.get("cash_budget"))):
-        return plain_bilingual("Check quote, news, and liquidity", "核对行情、公告和流动性", language)
-    return plain_bilingual("Check sizing evidence and broker quote", "核验资金分配依据和券商行情", language)
+        return plain_bilingual("Quote, news, and liquidity are outside this static report.", "行情、公告和流动性不在本静态报告内。", language)
+    return plain_bilingual("Sizing fields are local report data, not broker orders.", "资金字段是本地报告数据，不是券商订单。", language)
 
 
 def candidate_evidence(row: dict[str, Any], language: str) -> str:

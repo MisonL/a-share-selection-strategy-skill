@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -11,13 +12,13 @@ from a_share_selection_html_candidate_helpers import (
     candidate_entry_body,
     candidate_entry_button_text,
     candidate_field,
-    candidate_field_notice_needed,
     candidate_industry,
     candidate_listing_board,
     candidate_level,
     candidate_reason,
-    candidate_review_action,
+    candidate_data_note,
     candidate_risk_level,
+    display_value,
     level_badge,
     level_css_class,
     plain_bilingual,
@@ -31,6 +32,13 @@ from a_share_selection_html_format import (
     i18n,
     raw_text,
 )
+
+
+ONE_YEAR_FIELD_KEYS = ("one_year_pct_chg", "pct_chg_1y")
+MARKET_CAP_FIELD_KEYS = ("market_cap_billion", "market_cap_cny_billion", "market_cap")
+PE_FIELD_KEYS = ("pe_ttm", "peTTM", "pe")
+PB_FIELD_KEYS = ("pb_lf", "pbLF", "pb")
+OPTIONAL_MASTER_COLUMNS = ("industry", "one_year_pct_chg", "market_cap", "pe_ttm", "pb_lf")
 
 
 def candidate_open_banner(rows: list[dict[str, Any]], csv_path: Any, language: str) -> str:
@@ -55,6 +63,7 @@ def candidate_master_detail(
     *,
     csv_path: Any,
     truncated: bool,
+    candle_rows: dict[str, list[list[Any]]],
     empty_key: str,
     empty_html: str,
 ) -> str:
@@ -84,16 +93,21 @@ def candidate_master_detail(
         '<div class="master-detail-grid">'
         f"{candidate_master_table(rows, language)}"
         f"{candidate_detail_panel(rows[0], language)}"
-        "</div></section>"
+        "</div>"
+        f"{candidate_stock_dialog(language)}"
+        f"{candidate_candle_data_script(candle_rows)}"
+        "</section>"
     )
 
 
 def candidate_field_notice(rows: list[dict[str, Any]], language: str) -> str:
-    if not candidate_field_notice_needed(rows):
+    hidden_en = candidate_hidden_field_labels(rows, "en")
+    hidden_zh = candidate_hidden_field_labels(rows, "zh")
+    if not hidden_en:
         return ""
     text = bilingual(
-        "Some fields are blank because the input file did not provide industry, valuation, or long-range performance columns. This table only displays traceable source fields.",
-        "部分字段为空，是因为本次输入文件没有提供行业、估值或长期涨跌幅等列。本表只展示可追溯的来源字段。",
+        f"Hidden unavailable columns: {', '.join(hidden_en)}. The CSV is still available for raw field audit.",
+        f"已隐藏本次源数据未提供或整列为空的字段：{'、'.join(hidden_zh)}。CSV 原始字段仍可下载核查。",
         language,
     )
     return f'<p class="field-notice">{text}</p>'
@@ -102,17 +116,22 @@ def candidate_field_notice(rows: list[dict[str, Any]], language: str) -> str:
 def candidate_file_chip(csv_path: Any, language: str) -> str:
     path = evidence_path(csv_path, Path(str(csv_path)).parent if csv_path else None)
     label = bilingual("CSV backup", "CSV 备用文件", language)
+    download_label = bilingual("Download CSV", "下载 CSV", language)
     display = path["display"] or "candidates.csv"
-    return f'<code class="file-chip" title="{esc(path["title"])}">{label}: {esc(display)}</code>'
+    href = esc(display)
+    title = esc(path["title"])
+    return (
+        '<div class="candidate-file-actions">'
+        f'<code class="file-chip" title="{title}">{label}: {esc(display)}</code>'
+        f'<a class="candidate-download-link" href="{href}" download>{download_label}</a>'
+        "</div>"
+    )
 
 
 def candidate_master_toolbar(rows: list[dict[str, Any]], language: str) -> str:
     search_label = bilingual("Search", "搜索", language)
-    search_placeholder = plain_bilingual(
-        "Code / name / board / industry / keyword",
-        "代码 / 名称 / 板块 / 行业 / 关键词",
-        language,
-    )
+    has_industry = candidate_column_has_values(rows, "industry")
+    search_placeholder = candidate_search_placeholder(has_industry, language)
     all_label = plain_bilingual("All", "全部", language)
     industry_label = bilingual("Industry", "行业", language)
     board_label = bilingual("Board", "板块", language)
@@ -120,15 +139,27 @@ def candidate_master_toolbar(rows: list[dict[str, Any]], language: str) -> str:
     sort_label = bilingual("Sort", "排序", language)
     clear_label = bilingual("Clear", "清空", language)
     board_options = filter_options(candidate_listing_board(row) for row in rows)
-    industry_options = filter_options(candidate_industry(row) for row in rows)
-    level_options = filter_options(candidate_level(row, language) for row in rows)
+    level_options = level_filter_options(rows, language)
+    industry_control = ""
+    if has_industry:
+        industry_options = filter_options(candidate_industry(row) for row in rows)
+        industry_control = (
+            f'<label for="candidate-filter-industry"><span>{industry_label}</span>'
+            '<select id="candidate-filter-industry" name="candidate_filter_industry" data-candidate-industry>'
+            f'<option value="">{all_label}</option>{industry_options}</select></label>'
+        )
+    toolbar_class = "candidate-toolbar has-industry" if has_industry else "candidate-toolbar"
     return (
-        '<div class="candidate-toolbar">'
-        f'<label><span>{search_label}</span><input type="search" data-candidate-search placeholder="{esc(search_placeholder)}"></label>'
-        f'<label><span>{board_label}</span><select data-candidate-board><option value="">{all_label}</option>{board_options}</select></label>'
-        f'<label><span>{industry_label}</span><select data-candidate-industry><option value="">{all_label}</option>{industry_options}</select></label>'
-        f'<label><span>{level_label}</span><select data-candidate-level><option value="">{all_label}</option>{level_options}</select></label>'
-        f'<label><span>{sort_label}</span><select data-candidate-sort>'
+        f'<div class="{toolbar_class}">'
+        f'<label for="candidate-search"><span>{search_label}</span>'
+        f'<input id="candidate-search" name="candidate_search" type="search" data-candidate-search placeholder="{esc(search_placeholder)}"></label>'
+        f'<label for="candidate-filter-board"><span>{board_label}</span>'
+        f'<select id="candidate-filter-board" name="candidate_filter_board" data-candidate-board><option value="">{all_label}</option>{board_options}</select></label>'
+        f"{industry_control}"
+        f'<label for="candidate-filter-level"><span>{level_label}</span>'
+        f'<select id="candidate-filter-level" name="candidate_filter_level" data-candidate-level><option value="">{all_label}</option>{level_options}</select></label>'
+        f'<label for="candidate-sort"><span>{sort_label}</span>'
+        '<select id="candidate-sort" name="candidate_sort" data-candidate-sort>'
         f'<option value="score">{plain_bilingual("Score", "评分", language)}</option>'
         f'<option value="rank">{plain_bilingual("Rank", "序号", language)}</option>'
         f'</select></label><button type="button" data-candidate-reset>{clear_label}</button></div>'
@@ -140,30 +171,110 @@ def filter_options(values: Any) -> str:
     return "".join(f'<option value="{esc(value)}">{esc(value)}</option>' for value in unique)
 
 
-def candidate_master_table(rows: list[dict[str, Any]], language: str) -> str:
-    header = (
-        bilingual("No.", "序号", language),
-        bilingual("Stock code", "股票代码", language),
-        bilingual("Stock name", "股票名称", language),
-        bilingual("Board", "板块", language),
-        bilingual("Industry", "行业", language),
-        bilingual("Score", "综合评分", language),
-        bilingual("Level", "观察等级", language),
-        bilingual("1Y change", "近一年涨跌幅", language),
-        bilingual("Market cap", "市值（亿元）", language),
-        bilingual("PE TTM", "PE（TTM）", language),
-        bilingual("PB LF", "PB（LF）", language),
+def level_filter_options(rows: list[dict[str, Any]], language: str) -> str:
+    options = []
+    seen = set()
+    for row in rows:
+        key = level_css_class(row)
+        if key in seen:
+            continue
+        seen.add(key)
+        options.append((key, candidate_level(row, language)))
+    order = {"high": 0, "medium": 1, "low": 2}
+    options.sort(key=lambda item: (order.get(item[0], 99), item[1]))
+    return "".join(
+        f'<option value="{esc(value)}">{esc(label)}</option>'
+        for value, label in options
     )
-    head = "".join(f"<th>{label}</th>" for label in header)
-    body = "".join(candidate_master_row(row, index, language) for index, row in enumerate(rows))
+
+
+def candidate_master_table(rows: list[dict[str, Any]], language: str) -> str:
+    columns = candidate_master_columns(rows)
+    head = "".join(f"<th>{candidate_master_header(column, language)}</th>" for column in columns)
+    body = "".join(
+        candidate_master_row(row, index, language, columns=columns)
+        for index, row in enumerate(rows)
+    )
     footer = candidate_table_footer(len(rows), language)
     sparse_note = candidate_sparse_note(len(rows), language)
+    table_class = "master-table has-wide-table" if len(columns) > 7 else "master-table"
     return (
         '<div class="master-list-panel">'
         f"{candidate_master_toolbar(rows, language)}"
-        f'<div class="master-table"><table><thead><tr>{head}</tr></thead>'
+        f'<div class="{table_class}"><table><thead><tr>{head}</tr></thead>'
         f"<tbody>{body}</tbody></table>{sparse_note}</div>{footer}</div>"
     )
+
+
+def candidate_search_placeholder(has_industry: bool, language: str) -> str:
+    if has_industry:
+        return plain_bilingual(
+            "Code / name / board / industry / keyword",
+            "代码 / 名称 / 板块 / 行业 / 关键词",
+            language,
+        )
+    return plain_bilingual(
+        "Code / name / board / keyword",
+        "代码 / 名称 / 板块 / 关键词",
+        language,
+    )
+
+
+def candidate_master_columns(rows: list[dict[str, Any]]) -> list[str]:
+    columns = ["rank", "symbol", "name", "board"]
+    if candidate_column_has_values(rows, "industry"):
+        columns.append("industry")
+    columns.extend(["score", "level"])
+    for column in ("one_year_pct_chg", "market_cap", "pe_ttm", "pb_lf"):
+        if candidate_column_has_values(rows, column):
+            columns.append(column)
+    return columns
+
+
+def candidate_master_header(column: str, language: str) -> str:
+    labels = {
+        "rank": ("No.", "序号"),
+        "symbol": ("Stock code", "股票代码"),
+        "name": ("Stock name", "股票名称"),
+        "board": ("Board", "板块"),
+        "industry": ("Industry", "行业"),
+        "score": ("Score", "综合评分"),
+        "level": ("Level", "观察等级"),
+        "one_year_pct_chg": ("1Y change", "近一年涨跌幅"),
+        "market_cap": ("Market cap", "市值（亿元）"),
+        "pe_ttm": ("PE TTM", "PE（TTM）"),
+        "pb_lf": ("PB LF", "PB（LF）"),
+    }
+    en, zh = labels[column]
+    return bilingual(en, zh, language)
+
+
+def candidate_hidden_field_labels(rows: list[dict[str, Any]], language: str) -> list[str]:
+    return [
+        strip_tags(candidate_master_header(column, language))
+        for column in OPTIONAL_MASTER_COLUMNS
+        if not candidate_column_has_values(rows, column)
+    ]
+
+
+def candidate_column_has_values(rows: list[dict[str, Any]], column: str) -> bool:
+    return any(candidate_column_has_value(row, column) for row in rows)
+
+
+def candidate_column_has_value(row: dict[str, Any], column: str) -> bool:
+    if column == "industry":
+        return display_value(candidate_industry(row))
+    field_keys = {
+        "one_year_pct_chg": ONE_YEAR_FIELD_KEYS,
+        "market_cap": MARKET_CAP_FIELD_KEYS,
+        "pe_ttm": PE_FIELD_KEYS,
+        "pb_lf": PB_FIELD_KEYS,
+    }
+    return candidate_has_any_field(row, field_keys[column])
+
+
+def candidate_has_any_field(row: dict[str, Any], keys: tuple[str, ...]) -> bool:
+    return any(display_value(raw_text(row.get(key))) for key in keys)
 
 
 def candidate_sparse_note(row_count: int, language: str) -> str:
@@ -194,42 +305,126 @@ def candidate_table_footer(row_count: int, language: str) -> str:
         f'<span class="candidate-page-status">{page_label} <b data-candidate-page-current>1</b> / '
         '<b data-candidate-page-total>1</b></span>'
         f'<button type="button" data-candidate-next>{next_page}</button>'
-        f'<label>{per_page_label} <select data-candidate-page-size>'
+        f'<label for="candidate-page-size">{per_page_label} <select id="candidate-page-size" name="candidate_page_size" data-candidate-page-size>'
         '<option value="10">10</option><option value="25">25</option>'
         '<option value="50">50</option></select></label>'
         "</div></div>"
     )
 
 
-def candidate_master_row(row: dict[str, Any], index: int, language: str) -> str:
+def candidate_master_row(
+    row: dict[str, Any],
+    index: int,
+    language: str,
+    *,
+    columns: list[str],
+) -> str:
     symbol = raw_text(row.get("symbol")) or "-"
-    name = raw_text(row.get("name")) or symbol
+    name = candidate_stock_name(row, symbol, language)
+    name_missing_class = " missing" if candidate_stock_name_missing(row, symbol) else ""
     rank = raw_text(row.get("rank")) or str(index + 1)
     level = candidate_level(row, language)
+    level_key = level_css_class(row)
+    level_en = candidate_level(row, "en")
+    level_zh = candidate_level(row, "zh")
     summary = candidate_reason(row, language)
+    summary_en = candidate_reason(row, "en")
+    summary_zh = candidate_reason(row, "zh")
     risk_label, risk_class = candidate_risk_level(row, language)
-    action = candidate_review_action(row, language)
+    risk_label_en, _ = candidate_risk_level(row, "en")
+    risk_label_zh, _ = candidate_risk_level(row, "zh")
+    action = candidate_data_note(row, language)
+    action_en = candidate_data_note(row, "en")
+    action_zh = candidate_data_note(row, "zh")
     industry = candidate_industry(row)
     board = candidate_listing_board(row)
     selected = ' data-selected="true"' if index == 0 else ""
+    initial_hidden = " hidden" if index >= 10 else ""
     attrs = candidate_detail_attrs(row, rank, level, summary, risk_label, risk_class, action, language)
-    search = f"{symbol} {name} {board} {industry} {summary} {risk_label} {action}".lower()
+    search = " ".join(
+        str(part)
+        for part in (
+            symbol,
+            name,
+            board,
+            industry,
+            level,
+            level_key,
+            level_en,
+            level_zh,
+            summary,
+            summary_en,
+            summary_zh,
+            risk_label,
+            risk_label_en,
+            risk_label_zh,
+            action,
+            action_en,
+            action_zh,
+        )
+    ).lower()
     score = score_value(row)
-    return (
-        f'<tr data-candidate-row data-rank="{esc(rank)}" data-score="{esc(score_value(row))}" '
-        f'data-search="{esc(search)}" data-board="{esc(board)}" data-industry="{esc(industry)}" data-level="{esc(level)}" data-risk="{esc(risk_label)}"{selected}{attrs}>'
-        f'<td><span class="row-check" aria-hidden="true"></span> {esc(rank)}</td>'
-        f'<td><span class="symbol-cell">{esc(symbol)}</span></td>'
-        f'<td><strong class="name-cell">{esc(name)}</strong></td>'
-        f"<td>{esc(board)}</td>"
-        f"<td>{esc(industry)}</td>"
-        f"<td><strong>{esc(score or '-')}</strong></td>"
-        f"<td>{level_badge(level, css_class=level_css_class(row))}</td>"
-        f"<td>{esc(candidate_field(row, ('pct_chg_1y', 'one_year_pct_chg', 'spot_pct_chg'), percent=True))}</td>"
-        f"<td>{esc(candidate_field(row, ('market_cap_billion', 'market_cap_cny_billion', 'market_cap')))}</td>"
-        f"<td>{esc(candidate_field(row, ('pe_ttm', 'peTTM', 'pe')))}</td>"
-        f"<td>{esc(candidate_field(row, ('pb_lf', 'pbLF', 'pb')))}</td></tr>"
+    state = {
+        "rank": rank,
+        "symbol": symbol,
+        "name": name,
+        "name_missing_class": name_missing_class,
+        "board": board,
+        "level": level,
+        "level_key": level_key,
+        "score": score,
+    }
+    cells = "".join(
+        candidate_master_cell(column, row, state)
+        for column in columns
     )
+    title = plain_bilingual("Open stock detail", "打开股票明细", language)
+    row_label = plain_bilingual(
+        f"Open stock detail: {rank} {symbol} {name} {board} {score} {level}",
+        f"打开股票明细：{rank} {symbol} {name} {board} {score} {level}",
+        language,
+    )
+    return (
+        f'<tr data-candidate-row role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" title="{esc(title)}" aria-label="{esc(row_label)}" '
+        f'data-rank="{esc(rank)}" data-score="{esc(score_value(row))}" '
+        f'data-search="{esc(search)}" data-board="{esc(board)}" data-industry="{esc(industry)}" data-level="{esc(level_key)}" '
+        f'data-level-label="{esc(level)}" data-risk="{esc(risk_class)}" data-risk-label="{esc(risk_label)}"{selected}{initial_hidden}{attrs}>'
+        f"{cells}</tr>"
+    )
+
+
+def candidate_master_cell(
+    column: str,
+    row: dict[str, Any],
+    state: dict[str, str],
+) -> str:
+    if column == "rank":
+        return (
+            '<td class="rank-cell">'
+            f'<span class="rank-number"><span class="row-check" aria-hidden="true"></span> {esc(state["rank"])}</span>'
+            "</td>"
+        )
+    if column == "symbol":
+        return f'<td><span class="symbol-cell">{esc(state["symbol"])}</span></td>'
+    if column == "name":
+        return f'<td><strong class="name-cell{state["name_missing_class"]}">{esc(state["name"])}</strong></td>'
+    if column == "board":
+        return f"<td>{esc(state['board'])}</td>"
+    if column == "industry":
+        return f"<td>{esc(candidate_industry(row))}</td>"
+    if column == "score":
+        return f"<td><strong>{esc(state['score'] or '-')}</strong></td>"
+    if column == "level":
+        return f'<td>{level_badge(state["level"], css_class=state["level_key"])}</td>'
+    if column == "one_year_pct_chg":
+        return f"<td>{esc(candidate_field(row, ONE_YEAR_FIELD_KEYS, percent=True))}</td>"
+    if column == "market_cap":
+        return f"<td>{esc(candidate_field(row, MARKET_CAP_FIELD_KEYS))}</td>"
+    if column == "pe_ttm":
+        return f"<td>{esc(candidate_field(row, PE_FIELD_KEYS))}</td>"
+    if column == "pb_lf":
+        return f"<td>{esc(candidate_field(row, PB_FIELD_KEYS))}</td>"
+    raise ValueError(f"unknown candidate master column: {column}")
 
 
 def candidate_detail_attrs(
@@ -243,22 +438,73 @@ def candidate_detail_attrs(
     language: str,
 ) -> str:
     symbol = raw_text(row.get("symbol")) or "-"
-    name = raw_text(row.get("name")) or symbol
+    name = candidate_stock_name(row, symbol, language)
     fields = {
         "row-title": f"{name} {symbol}",
+        "row-symbol": symbol,
+        "row-name": name,
         "row-date": raw_text(row.get("date")) or "-",
         "row-board": candidate_listing_board(row),
+        "row-industry": candidate_industry(row),
         "row-rank": rank,
         "row-level": level,
         "row-level-class": level_css_class(row),
+        "row-score": score_value(row) or "-",
+        "row-close": candidate_field(row, ("close", "signal_close", "spot_price")),
+        "row-one-year": candidate_field(row, ONE_YEAR_FIELD_KEYS, percent=True),
+        "row-market-cap": candidate_field(row, MARKET_CAP_FIELD_KEYS),
+        "row-pe": candidate_field(row, PE_FIELD_KEYS),
+        "row-pb": candidate_field(row, PB_FIELD_KEYS),
         "row-summary": summary,
         "row-reason": summary,
         "row-risk": risk_label,
         "row-risk-class": risk_class,
         "row-action": action,
         "row-evidence": candidate_evidence(row, language),
+        "row-field-availability": candidate_field_availability(row, language),
     }
     return "".join(f' data-{key}="{esc(value)}"' for key, value in fields.items())
+
+
+def candidate_stock_name(row: dict[str, Any], symbol: str, language: str) -> str:
+    name = raw_text(row.get("name")).strip()
+    if candidate_stock_name_missing(row, symbol):
+        return plain_bilingual("Name not provided", "名称未提供", language)
+    return name
+
+
+def candidate_stock_name_missing(row: dict[str, Any], symbol: str) -> bool:
+    name = raw_text(row.get("name")).strip()
+    return not name or name == symbol
+
+
+def candidate_field_availability(row: dict[str, Any], language: str) -> str:
+    groups = [
+        ("Industry", "行业", candidate_industry(row)),
+        ("1Y change", "近一年涨跌幅", candidate_field(row, ONE_YEAR_FIELD_KEYS, percent=True)),
+        ("Market cap", "市值", candidate_field(row, MARKET_CAP_FIELD_KEYS)),
+        ("PE TTM", "PE TTM", candidate_field(row, PE_FIELD_KEYS)),
+        ("PB LF", "PB LF", candidate_field(row, PB_FIELD_KEYS)),
+    ]
+    provided = [plain_bilingual(en, zh, language) for en, zh, value in groups if display_value(value)]
+    missing = [plain_bilingual(en, zh, language) for en, zh, value in groups if not display_value(value)]
+    if not missing:
+        return plain_bilingual(
+            "Key display fields are provided in this row.",
+            "本行关键展示字段均已提供。",
+            language,
+        )
+    if not provided:
+        return plain_bilingual(
+            "Industry, 1Y change, market cap, PE TTM, and PB LF are not provided in this source.",
+            "本次源数据未提供行业、近一年涨跌幅、市值、PE TTM、PB LF。",
+            language,
+        )
+    return plain_bilingual(
+        f"Provided: {', '.join(provided)}. Not provided: {', '.join(missing)}.",
+        f"已提供：{'、'.join(provided)}。未提供：{'、'.join(missing)}。",
+        language,
+    )
 
 
 def candidate_detail_panel(row: dict[str, Any], language: str) -> str:
@@ -267,7 +513,7 @@ def candidate_detail_panel(row: dict[str, Any], language: str) -> str:
     level = candidate_level(row, language)
     summary = candidate_reason(row, language)
     risk_label, risk_class = candidate_risk_level(row, language)
-    action = candidate_review_action(row, language)
+    action = candidate_data_note(row, language)
     evidence = strip_tags(candidate_evidence(row, language))
     date = raw_text(row.get("date")) or "-"
     evidence_html = esc(evidence).replace("\n", "<br>")
@@ -280,7 +526,7 @@ def candidate_detail_panel(row: dict[str, Any], language: str) -> str:
         f"{detail_grid('One-line summary', '一句话摘要', summary, 'detail-summary', language)}"
         f"{detail_grid('Why selected', '入选原因', summary, 'detail-reason', language)}"
         f"{risk_detail_grid(risk_label, risk_class, language)}"
-        f"{detail_grid('Next check', '下一步核验', action, 'detail-action', language)}"
+        f"{detail_grid('Report note', '报告提示', action, 'detail-action', language)}"
         "</div>"
         f"{evidence_detail_card(evidence_html, language)}</div>"
         "</aside>"
@@ -330,6 +576,155 @@ def detail_grid(en: str, zh: str, value: str, attr: str, language: str) -> str:
 
 def detail_title(en: str, zh: str, language: str) -> str:
     return f"<span>{bilingual(en, zh, language)}</span>"
+
+
+def candidate_stock_dialog(language: str) -> str:
+    close_label = bilingual("Close", "关闭", language)
+    note = bilingual(
+        "K-line uses only the local prices file embedded in this report; it is not live market data or fill proof.",
+        "K 线仅使用本报告本地行情文件，不是实时行情或成交证明。",
+        language,
+    )
+    basis_sections = [
+        ("One-line summary", "一句话摘要", "summary"),
+        ("Why selected", "入选原因", "reason"),
+        ("Field availability", "字段可用性", "field-availability"),
+    ]
+    risk_sections = [
+        ("Risk note", "风险提示", "risk"),
+        ("Report note", "报告提示", "action"),
+        ("Public evidence", "公开证据", "evidence"),
+    ]
+    actions_title = bilingual("Useful actions", "常用操作", language)
+    copy_label = bilingual("Copy summary", "复制摘要", language)
+    board_filter_label = bilingual("Same board", "同板块筛选", language)
+    level_filter_label = bilingual("Same level", "同等级筛选", language)
+    locate_label = bilingual("Back to row", "回到表格行", language)
+    next_title = bilingual("Report tips", "报告提示", language)
+    next_items = [
+        bilingual("Use the same-board or same-level filters to compare context inside the report.", "使用同板块或同等级筛选，在报告内比较上下文。", language),
+        bilingual("The static report does not include live quote or tradability checks.", "静态报告不包含实时行情或可交易状态检查。", language),
+        bilingual("Use the CSV download when you need the raw row fields.", "需要原始字段时下载 CSV 查看。", language),
+    ]
+    next_body = "".join(f"<li>{item}</li>" for item in next_items)
+    return (
+        '<div class="stock-detail-drawer" data-stock-detail-drawer data-report-modal-root hidden aria-hidden="true">'
+        '<section class="stock-dialog" role="dialog" aria-modal="true" aria-labelledby="stock-detail-title">'
+        '<div class="stock-dialog-head">'
+        '<div><span class="stock-dialog-eyebrow" data-stock-field="board"></span>'
+        '<h3 id="stock-detail-title" data-stock-field="title"></h3>'
+        '<p><span data-stock-field="date"></span><span data-stock-field="industry"></span></p></div>'
+        f'<button type="button" class="stock-dialog-close" data-stock-detail-close>{close_label}</button>'
+        "</div>"
+        '<div class="stock-dialog-grid">'
+        '<div class="stock-chart-panel">'
+        f'<div class="stock-chart-head"><div><strong>{bilingual("K-line Chart", "K 线图", language)}</strong>'
+        '<span data-stock-field="candle-range">-</span></div>'
+        '<span data-stock-field="candle-count">0</span></div>'
+        '<div class="stock-chart-wrap" data-stock-chart-wrap><canvas data-stock-chart></canvas>'
+        '<div class="stock-chart-tooltip" data-stock-chart-tooltip hidden></div>'
+        '<p class="stock-chart-empty" data-stock-chart-empty hidden></p></div>'
+        f'<p class="stock-chart-note">{note}</p></div>'
+        '<div class="stock-facts-panel">'
+        '<section class="stock-panel-section stock-action-section">'
+        f'<h4 class="stock-panel-title">{actions_title}</h4>'
+        '<div class="stock-action-grid">'
+        f'<button type="button" data-stock-copy>{copy_label}</button>'
+        f'<button type="button" data-stock-filter-board>{board_filter_label}</button>'
+        f'<button type="button" data-stock-filter-level>{level_filter_label}</button>'
+        f'<button type="button" data-stock-locate-row>{locate_label}</button>'
+        "</div>"
+        '<p class="stock-action-status" data-stock-action-status aria-live="polite"></p>'
+        "</section>"
+        f"{stock_panel_section('Key metrics', '关键指标', stock_fact_grid(language), language)}"
+        f"{stock_panel_section('Technical indicators', '技术指标', stock_technical_panel(language), language)}"
+        f"{stock_panel_section('Selection basis', '筛选依据', stock_text_sections(basis_sections, language), language)}"
+        f"{stock_panel_section('Risk and evidence', '风险与证据', stock_text_sections(risk_sections, language), language)}"
+        '<section class="stock-panel-section stock-next-section">'
+        f'<h4 class="stock-panel-title">{next_title}</h4><ol class="stock-next-list">{next_body}</ol>'
+        "</section>"
+        "</div></div></section></div>"
+    )
+
+
+def stock_technical_panel(language: str) -> str:
+    indicators = [
+        ("Trend", "趋势", "technical-trend", "trend"),
+        ("Momentum", "动量", "technical-momentum", "momentum"),
+        ("MA5 / MA20", "MA5 / MA20", "technical-ma-spread", "ma"),
+        ("RSI 14", "RSI 14", "technical-rsi", "rsi"),
+        ("MACD hist", "MACD 柱", "technical-macd", "macd"),
+        ("KDJ", "KDJ", "technical-kdj", "kdj"),
+        ("BOLL position", "BOLL 位置", "technical-bollinger", "bollinger"),
+        ("ATR 14", "ATR 14", "technical-atr", "atr"),
+        ("Volatility 20D", "20日波动", "technical-volatility", "volatility"),
+        ("Volume ratio", "量能比", "technical-volume-ratio", "volume"),
+        ("20D range", "20日区间", "technical-range", "range"),
+        ("20D drawdown", "20日回撤", "technical-drawdown", "drawdown"),
+        ("Support / pressure", "支撑 / 压力", "technical-support-pressure", "support-pressure"),
+    ]
+    summary = (
+        '<p class="stock-tech-summary" data-stock-field="technical-summary"></p>'
+    )
+    cards = "".join(
+        '<div class="stock-tech-card" data-stock-tech-card="'
+        f'{card_key}"><span>{bilingual(en, zh, language)}</span>'
+        f'<strong data-stock-field="{field_key}"></strong></div>'
+        for en, zh, field_key, card_key in indicators
+    )
+    note = (
+        '<p class="stock-tech-note" data-stock-field="technical-data-quality"></p>'
+    )
+    return f'{summary}<div class="stock-technical-grid">{cards}</div>{note}'
+
+
+def stock_panel_section(en: str, zh: str, body: str, language: str) -> str:
+    return (
+        '<section class="stock-panel-section">'
+        f'<h4 class="stock-panel-title">{bilingual(en, zh, language)}</h4>{body}'
+        "</section>"
+    )
+
+
+def stock_text_sections(sections: list[tuple[str, str, str]], language: str) -> str:
+    return "".join(
+        f'<div class="stock-text-section {key}">'
+        f"<span>{bilingual(en, zh, language)}</span><p data-stock-field=\"{key}\"></p></div>"
+        for en, zh, key in sections
+    )
+
+
+def stock_fact_grid(language: str) -> str:
+    primary_facts = [
+        ("Stock code", "股票代码", "symbol"),
+        ("Stock name", "股票名称", "name"),
+        ("Score", "综合评分", "score"),
+        ("Level", "观察等级", "level"),
+        ("Close", "参考收盘价", "close"),
+        ("1Y change", "近一年涨跌幅", "one-year"),
+    ]
+    secondary_facts = [
+        ("Market cap", "市值", "market-cap"),
+        ("PE TTM", "PE TTM", "pe"),
+        ("PB LF", "PB LF", "pb"),
+    ]
+    primary_body = "".join(
+        f"<div><span>{bilingual(en, zh, language)}</span><strong data-stock-field=\"{key}\"></strong></div>"
+        for en, zh, key in primary_facts
+    )
+    secondary_body = "".join(
+        f"<div><span>{bilingual(en, zh, language)}</span><strong data-stock-field=\"{key}\"></strong></div>"
+        for en, zh, key in secondary_facts
+    )
+    return (
+        f'<div class="stock-fact-grid primary">{primary_body}</div>'
+        f'<div class="stock-fact-grid secondary">{secondary_body}</div>'
+    )
+
+
+def candidate_candle_data_script(candle_rows: dict[str, list[list[Any]]]) -> str:
+    data = json.dumps(candle_rows, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+    return f'<script type="application/json" data-candidate-candles>{data}</script>'
 
 
 if __name__ == "__main__":

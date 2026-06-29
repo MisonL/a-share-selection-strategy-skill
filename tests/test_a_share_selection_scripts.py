@@ -21,6 +21,7 @@ sys.path.insert(0, str(TESTS))
 import score_candidates as scorer  # noqa: E402
 import a_share_selection_metrics as metrics  # noqa: E402
 from a_share_selection_data import ACCEPTED_DATE_FORMATS, read_table  # noqa: E402
+from a_share_selection_html_data import stock_symbol_key  # noqa: E402
 from a_share_selection_prepare import prepare_frame  # noqa: E402
 from a_share_selection_spot import normalized_spot_view  # noqa: E402
 from a_share_selection_universe import apply_universe_filter  # noqa: E402
@@ -139,8 +140,35 @@ class AShareSelectionScriptTests(unittest.TestCase):
         self.assertEqual(2, summary["scored_symbols"])
         self.assertTrue(candidates["data_window"].str.startswith("2025-").all())
 
+    def test_score_outputs_one_year_pct_change_from_history(self) -> None:
+        config = load_config("example_config.json")
+        config["thresholds"] = permissive_thresholds(260)
+        frame = build_frame(days=260, include_turn=True)
+
+        candidates, summary = scorer.score_candidates(frame, config)
+
+        symbol = str(candidates.iloc[0]["symbol"])
+        source = frame[frame["symbol"].astype(str).eq(symbol)].sort_values("date")
+        expected = (source["close"].iloc[-1] / source["close"].iloc[-253] - 1) * 100
+        diagnostics = pd.DataFrame(summary["threshold_diagnostics"])
+        candidate_value = float(candidates.iloc[0]["one_year_pct_chg"])
+        diagnostic_value = float(
+            diagnostics[diagnostics["symbol"].astype(str).eq(symbol)]["one_year_pct_chg"].iloc[0]
+        )
+
+        self.assertAlmostEqual(expected, candidate_value)
+        self.assertAlmostEqual(expected, diagnostic_value)
+
     def test_parse_dates_exposes_accepted_formats(self) -> None:
         self.assertEqual(("%Y%m%d", "%Y-%m-%d"), ACCEPTED_DATE_FORMATS)
+
+    def test_html_data_symbol_key_normalizes_hk_symbol_aliases(self) -> None:
+        self.assertEqual("00700", stock_symbol_key("HK.00700"))
+        self.assertEqual("00700", stock_symbol_key("00700.HK"))
+        self.assertEqual("00700", stock_symbol_key("0700.HK"))
+        self.assertEqual("00700", stock_symbol_key("700.HK"))
+        self.assertEqual("00700", stock_symbol_key("HK.700"))
+        self.assertEqual("300001", stock_symbol_key("sz.300001"))
 
     def test_slash_dates_are_rejected_instead_of_silently_parsed(self) -> None:
         frame = build_frame()

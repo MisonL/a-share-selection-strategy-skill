@@ -16,6 +16,9 @@ from a_share_selection_output import (
 )
 
 
+ONE_YEAR_TRADING_DAYS = 252
+
+
 def score_symbol(group: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any]:
     data = apply_cleaning(group.copy(), config)
     close = data["close"].astype(float)
@@ -35,6 +38,7 @@ def score_symbol(group: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any]:
         "market": str(latest.get("market", "")),
         "date": iso_date(latest["date"]),
         "close": float(latest["close"]),
+        "one_year_pct_chg": one_year_pct_change(close),
         "volume": float(latest["volume"]),
         "turn": latest_turnover_value(latest),
         "requested_as_of_date": latest.get("requested_as_of_date", ""),
@@ -203,6 +207,15 @@ def pct_change_at(series: pd.Series, window: int) -> float:
         return 0.0
     base = float(series.iloc[-window - 1])
     return 0.0 if base <= 0 else float(series.iloc[-1] / base - 1)
+
+
+def one_year_pct_change(close: pd.Series) -> float:
+    if len(close) <= ONE_YEAR_TRADING_DAYS:
+        return math.nan
+    base = float(close.iloc[-ONE_YEAR_TRADING_DAYS - 1])
+    if base <= 0 or math.isnan(base):
+        return math.nan
+    return float((float(close.iloc[-1]) / base - 1.0) * 100.0)
 
 
 def calculate_explosion_score(

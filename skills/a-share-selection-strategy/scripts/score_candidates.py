@@ -21,7 +21,7 @@ OUTPUT_COLUMNS = [
     "rank", "symbol", "name", "market", "listing_board", "date", "close", "volume", "turn", "amount",
     "tradestatus", "isST", "one_word_bar",
     "requested_as_of_date", "actual_data_date", "as_of_date_observed",
-    "spot_price", "spot_pct_chg", "spot_amount", "spot_industry",
+    "one_year_pct_chg", "spot_price", "spot_pct_chg", "spot_amount", "spot_industry",
     "rsi", "volatility", "macd", "macd_status", "momentum_score", "trend_score",
     "prediction_score", "prediction_source", "prediction_input_source",
     "prediction_model", "prediction_horizon_days", "prediction_scope",

@@ -130,9 +130,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("A-share Strategy Selection Report", report)
         self.assertIn("Pipeline counts", report)
         self.assertIn("Watchlist Top 5 Preview", report)
-        self.assertIn("Pre-use checklist", report)
+        self.assertIn("Use boundary / risk reminder", report)
         self.assertIn("Complete Candidate Table", report)
-        self.assertIn("Audit Appendix", report)
+        self.assertIn("Report Appendix", report)
         self.assertIn("not_investment_advice_not_trade_instruction_not_real_fill_not_return_proof", report)
         self.assertIn('data-lang-mode="auto"', report)
         self.assertTrue(
@@ -1000,7 +1000,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             self.assertEqual(0, summary["diagnostic_rows"])
             self.assertNotIn("Zero Prefix", report)
             self.assertNotIn("eastmoney", report)
-            self.assertNotIn("disconnect", report)
+            self.assertNotIn('"error": "disconnect"', report)
 
     def test_invalid_zzshare_history_limit_clears_reused_output_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

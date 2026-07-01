@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 from datetime import date, datetime
 from typing import Any
 
 import run_today_a_share_selection_helpers as helpers
+from a_share_selection_candidate_fields import (
+    OPTIONAL_CANDIDATE_FIELD_ALIASES,
+    candidate_field_value_present,
+)
 from a_share_selection_provenance import (
     PROVENANCE_COLUMNS as INPUT_CSV_PROVENANCE_COLUMNS,
 )
@@ -39,6 +44,7 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "advice_boundary": ADVICE_BOUNDARY,
         "recommendation_boundary": RECOMMENDATION_BOUNDARY,
         **row_count_fields(manifest, paths, score, history_selection, initialized),
+        "candidate_field_coverage": candidate_field_coverage(paths["candidates"], initialized),
         **empty_result_fields(score),
         "score": score,
         **output_path_fields(paths, initialized),
@@ -126,6 +132,16 @@ def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:
     return {
         "runner": manifest["runner"],
         "status": status,
+        "execution_path": manifest.get("execution_path", "unresolved"),
+        "execution_path_reason": manifest.get("execution_path_reason", ""),
+        "coverage_class": manifest.get("coverage_class", "unknown"),
+        "full_market_claim_allowed": bool(
+            manifest.get("full_market_claim_allowed", False)
+        ),
+        "full_market_claim_boundary": manifest.get(
+            "full_market_claim_boundary",
+            "not_evaluated",
+        ),
         "requested_mode": manifest.get("requested_mode", manifest["mode"]),
         "mode": manifest["mode"],
         "mode_decision": manifest.get("mode_decision", ""),
@@ -260,13 +276,18 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
     date_range = history_date_range_view(metadata, manifest)
     view = {
         "source": selected_data.get("source", ""),
+        "preflight_stage": selected_data.get("preflight_stage", ""),
+        "selection_failed": bool(selected_data.get("selection_failed", False)),
+        "selection_failed_reason": selected_data.get("selection_failed_reason", ""),
+        "selection_failed_next_action": selected_data.get(
+            "selection_failed_next_action",
+            selected_data.get("next_action", ""),
+        ),
         "raw_spot_rows": selected_data.get("raw_spot_rows"),
         "filtered_spot_rows": selected_data.get("filtered_spot_rows"),
         "selected_symbol_count": selected_symbol_count(selected_data, selected_symbols),
-        "max_history_symbols": selected_data.get(
-            "max_history_symbols",
-            manifest.get("max_history_symbols", 0),
-        ),
+        "max_history_symbols": history_limit_value(selected_data, manifest),
+        "history_symbol_limit_source": history_limit_source(selected_data, manifest),
         "allow_partial_history": bool(manifest.get("allow_partial_history", False)),
         "history_partial_result": history_partial_result(metadata),
         "history_output_written": bool(metadata.get("output_written", True)),
@@ -311,6 +332,48 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
     return view
 
 
+def candidate_field_coverage(path: Path, initialized: bool) -> dict[str, Any]:
+    if not initialized or not path.is_file() or path.suffix.lower() != ".csv":
+        return {}
+    present_rows = {key: 0 for key in OPTIONAL_CANDIDATE_FIELD_ALIASES}
+    total_rows = 0
+    with path.open(encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            total_rows += 1
+            update_candidate_field_counts(row, present_rows)
+    fields = {
+        key: candidate_field_counts(present, total_rows)
+        for key, present in present_rows.items()
+    }
+    return {
+        "rows_evaluated": total_rows,
+        "all_fields_present": total_rows > 0 and all(
+            field["present_rows"] == total_rows for field in fields.values()
+        ),
+        "fields": fields,
+    }
+
+
+def update_candidate_field_counts(
+    row: dict[str, str],
+    present_rows: dict[str, int],
+) -> None:
+    for key, aliases in OPTIONAL_CANDIDATE_FIELD_ALIASES.items():
+        if any(candidate_field_value_present(row.get(alias)) for alias in aliases):
+            present_rows[key] += 1
+
+
+def candidate_field_counts(present_rows: int, total_rows: int) -> dict[str, Any]:
+    missing_rows = max(total_rows - present_rows, 0)
+    ratio = round((present_rows / total_rows), 4) if total_rows else 0.0
+    return {
+        "present_rows": present_rows,
+        "missing_rows": missing_rows,
+        "coverage_ratio": ratio,
+    }
+
+
 def history_selection_available(
     manifest: dict[str, Any],
     selected_path: Path,
@@ -344,6 +407,30 @@ def selected_symbol_count(selected_data: dict[str, Any], selected_symbols: list[
     if value is None:
         return len(selected_symbols)
     return int(value)
+
+
+def history_limit_value(selected_data: dict[str, Any], manifest: dict[str, Any]) -> Any:
+    if explicit_history_symbols(selected_data, manifest):
+        return selected_data.get("max_history_symbols", "")
+    return selected_data.get("max_history_symbols", manifest.get("max_history_symbols", 0))
+
+
+def history_limit_source(selected_data: dict[str, Any], manifest: dict[str, Any]) -> str:
+    source = selected_data.get("history_symbol_limit_source")
+    if source:
+        return str(source)
+    if explicit_history_symbols(selected_data, manifest):
+        return "explicit_symbols_no_spot_limit"
+    if not bool(manifest.get("max_history_symbols_supplied", False)):
+        return "small_sample_default_cap"
+    return "explicit_user_input"
+
+
+def explicit_history_symbols(selected_data: dict[str, Any], manifest: dict[str, Any]) -> bool:
+    return (
+        selected_data.get("source") == "explicit_symbols"
+        or manifest.get("execution_path_reason") == "explicit_symbols"
+    )
 
 
 def metadata_list(metadata: dict[str, Any], key: str) -> list[Any]:

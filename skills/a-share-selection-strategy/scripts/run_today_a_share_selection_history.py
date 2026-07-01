@@ -134,7 +134,12 @@ def history_symbols(
     if args.symbols:
         symbols = unique_symbols(parse_history_symbols(args))
         write_json(
-            {"source": "explicit_symbols", "symbols": symbols},
+            {
+                "source": "explicit_symbols",
+                "symbols": symbols,
+                "selected_symbol_count": len(symbols),
+                "history_symbol_limit_source": "explicit_symbols_no_spot_limit",
+            },
             output / "selected_symbols.json",
         )
         return symbols
@@ -216,12 +221,40 @@ def derive_symbols_from_spot(
     config = json.loads(config_path.read_text(encoding="utf-8"))
     filtered = filter_spot_universe(frame, config, history_source=args.history_source)
     limit = int(args.max_history_symbols)
+    max_history_symbols_is_default = not bool(
+        getattr(args, "max_history_symbols_supplied", False)
+    )
     ranked = rank_spot_candidates(filtered).head(limit)
     symbols = ranked["symbol"].astype(str).tolist()
     if not symbols:
-        raise ValueError("spot snapshot produced zero history symbols after configured filters")
+        write_json(
+            spot_symbol_metadata(
+                frame,
+                filtered,
+                ranked,
+                config,
+                limit,
+                max_history_symbols_is_default=max_history_symbols_is_default,
+                failed=True,
+            ),
+            output / "selected_symbols.json",
+        )
+        raise ValueError(
+            "spot snapshot produced zero history symbols after configured filters; "
+            "preflight_stage=derive_symbols filtered_spot_rows="
+            f"{int(len(filtered))} raw_spot_rows={int(len(frame))} "
+            f"selected_symbols_count={int(len(ranked))} max_history_symbols={int(limit)} "
+            "next_action=expand_spot_universe_or_relax_filters"
+    )
     write_json(
-        spot_symbol_metadata(frame, filtered, ranked, config, limit),
+        spot_symbol_metadata(
+            frame,
+            filtered,
+            ranked,
+            config,
+            limit,
+            max_history_symbols_is_default=max_history_symbols_is_default,
+        ),
         output / "selected_symbols.json",
     )
     return symbols
@@ -336,16 +369,31 @@ def rank_spot_candidates(frame):
     return frame.sort_values(["spot_amount", "spot_pct_chg"], ascending=[False, False])
 
 
-def spot_symbol_metadata(frame, filtered, ranked, config: dict[str, Any], limit: int) -> dict[str, Any]:
+def spot_symbol_metadata(
+    frame,
+    filtered,
+    ranked,
+    config: dict[str, Any],
+    limit: int,
+    *,
+    max_history_symbols_is_default: bool,
+    failed: bool = False,
+) -> dict[str, Any]:
     thresholds = config.get("thresholds", {})
-    return {
+    metadata = {
         "source": "spot_snapshot",
         "filter_profile": config.get("profile_name", ""),
+        "preflight_stage": "derive_symbols",
         "raw_spot_rows": int(len(frame)),
         "filtered_spot_rows": int(len(filtered)),
         "selected_symbols": ranked["symbol"].astype(str).tolist(),
         "selected_symbol_count": int(len(ranked)),
         "max_history_symbols": int(limit),
+        "history_symbol_limit_source": (
+            "small_sample_default_cap"
+            if max_history_symbols_is_default
+            else "explicit_user_input"
+        ),
         "filters": {
             "universe": config.get("universe", {}),
             "thresholds": {
@@ -355,6 +403,16 @@ def spot_symbol_metadata(frame, filtered, ranked, config: dict[str, Any], limit:
             },
         },
     }
+    if failed:
+        metadata.update(
+            {
+                "selection_failed": True,
+                "selection_failed_reason": "spot_snapshot_filtered_to_zero_history_symbols",
+                "selection_failed_next_action": "expand_spot_universe_or_relax_filters",
+                "next_action": "expand_spot_universe_or_relax_filters",
+            }
+        )
+    return metadata
 
 
 def write_json(data: dict[str, Any], path: Path) -> None:

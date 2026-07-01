@@ -43,6 +43,16 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("输入没有预测列，auto 因此使用技术门禁。", report)
         self.assertIn("技术细节", report)
         self.assertIn("机器边界", report)
+        self.assertIn("执行路径", report)
+        self.assertIn("覆盖等级", report)
+        self.assertIn("全市场声明", report)
+        self.assertIn("local_prices_generic", report)
+        self.assertIn("local_input", report)
+        self.assertIn("不允许 / local_prices_input_not_full_market_scan", report)
+        self.assertIn('data-i18n-en="not allowed / local_prices_input_not_full_market_scan"', report)
+        self.assertIn('data-i18n-zh="不允许 / local_prices_input_not_full_market_scan"', report)
+        self.assertIn('data-i18n-en="Machine fields explain how the run was executed:', report)
+        self.assertIn('data-i18n-zh="机器字段说明：', report)
         self.assertIn("details.technical-details", report)
         self.assertIn("查看命令级执行细节", report)
         self.assertIn("原因", report)
@@ -79,6 +89,14 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("Generic technical scoring", report)
         self.assertIn("Why this mode", report)
         self.assertIn("Input has no prediction column, so auto mode used technical gates.", report)
+        self.assertIn("Execution path", report)
+        self.assertIn("Coverage class", report)
+        self.assertIn("Full-market claim", report)
+        self.assertIn("local_prices_generic", report)
+        self.assertIn("local_input", report)
+        self.assertIn("not allowed / local_prices_input_not_full_market_scan", report)
+        self.assertIn('data-i18n-en="not allowed / local_prices_input_not_full_market_scan"', report)
+        self.assertIn('data-i18n-zh="不允许 / local_prices_input_not_full_market_scan"', report)
         self.assertIn("el.open = false", report)
         self.assertIn("const initial = mode === 'auto' ? (saved || generated) : mode", report)
         self.assertIn("aShareSelectionReportLang", report)
@@ -89,6 +107,9 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn(">0.613<", report)
         self.assertNotIn(">0.6132124346769261<", report)
         self.assertIn(">./summary.json</code>", report)
+        self.assertIn("function emptyDetailDataset()", report)
+        self.assertIn("function refreshEmptyRowText()", report)
+        self.assertIn("if (!selectedRow) {", report)
 
     def test_auto_report_preserves_generated_language_on_first_browser_load(self) -> None:
         with report_run(
@@ -101,6 +122,9 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("const generated = root.dataset.lang || 'en'", report)
         self.assertIn("const initial = mode === 'auto' ? (saved || generated) : mode", report)
         self.assertNotIn("browserLang", report)
+        self.assertIn("function emptyDetailDataset()", report)
+        self.assertIn("refreshEmptyRowText();", report)
+        self.assertIn("if (!selectedRow) {", report)
 
     def test_can_disable_html_report(self) -> None:
         with report_run(extra_args=["--no-html-report"]) as result:
@@ -254,6 +278,80 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn(">2.10</td>", complete)
         self.assertNotIn("已隐藏本次源数据未提供或整列为空的字段", complete)
 
+    def test_complete_candidate_table_renders_field_coverage_card(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            candidates.write_text(
+                "\n".join(
+                    [
+                        (
+                            "rank,symbol,name,listing_board,spot_industry,one_year_pct_chg,"
+                            "market_cap_billion,pe_ttm,pb_lf,date,close,total_score,"
+                            "key_reasons,risk_notes"
+                        ),
+                        (
+                            "1,000001,Alpha,主板,软件服务,,,,,"
+                            "2026-06-17,10.0,0.82,positive momentum,"
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "candidate_rows": 1,
+                    "candidates_output": str(candidates),
+                    "candidates_output_written": True,
+                    "candidate_field_coverage": {
+                        "rows_evaluated": 1,
+                        "all_fields_present": False,
+                        "fields": {
+                            "industry": {
+                                "present_rows": 1,
+                                "coverage_ratio": 1.0,
+                                "missing_rows": 0,
+                            },
+                            "one_year_pct_chg": {
+                                "present_rows": 0,
+                                "coverage_ratio": 0.0,
+                                "missing_rows": 1,
+                            },
+                            "market_cap": {
+                                "present_rows": 0,
+                                "coverage_ratio": 0.0,
+                                "missing_rows": 1,
+                            },
+                            "pe_ttm": {
+                                "present_rows": 0,
+                                "coverage_ratio": 0.0,
+                                "missing_rows": 1,
+                            },
+                            "pb_lf": {
+                                "present_rows": 0,
+                                "coverage_ratio": 0.0,
+                                "missing_rows": 1,
+                            },
+                        },
+                    },
+                }
+            )
+            report = render_report(summary, {"steps": []}, language="zh")
+
+        self.assertIn("机器字段说明", report)
+        self.assertIn('data-i18n-en="Machine fields explain how the run was executed:', report)
+        self.assertIn('data-i18n-zh="机器字段说明：', report)
+        self.assertIn("字段覆盖率", report)
+        self.assertIn("field-coverage-card", report)
+        self.assertIn("字段覆盖率只说明本次候选表源字段是否写入 CSV", report)
+        self.assertIn("行业", report)
+        self.assertIn("1/1", report)
+        self.assertIn("100%", report)
+        self.assertIn('data-field-key="industry"', report)
+        self.assertIn('data-field-missing="true"', report)
+
     def test_report_ignores_stale_csvs_when_outputs_were_not_written(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
@@ -313,6 +411,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
                     "score": {
                         "effective_empty_result": True,
                         "empty_result_reason": "threshold_filtered_all",
+                        "threshold_failures_by_rule": {
+                            "close_below_ma20": 8,
+                            "volume_too_low": 3,
+                        },
                     },
                 }
             )
@@ -323,8 +425,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertNotIn("No rows written for this run.", en_report)
         self.assertIn("Completed run with zero candidates", en_report)
         self.assertIn("effective_empty_result=true", en_report)
+        self.assertIn("Top blocking rules: close_below_ma20=8, volume_too_low=3.", en_report)
         self.assertNotIn("本次运行未写出相关行。", zh_report)
         self.assertIn("本次成功运行但没有候选", zh_report)
+        self.assertIn("主要拦截规则：close_below_ma20=8，volume_too_low=3。", zh_report)
 
     def test_failed_missing_candidate_output_does_not_claim_successful_empty_result(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -349,6 +453,37 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertNotIn("Completed run with zero candidates", en_report)
         self.assertNotIn("本次成功运行但没有候选", zh_report)
         self.assertIn("No rows written for this run.", en_report)
+
+    def test_selection_failure_copy_remains_language_switchable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "status": "failed",
+                    "candidate_rows": 0,
+                    "diagnostic_rows": 0,
+                    "candidates_output_written": False,
+                    "diagnostics_output_written": False,
+                    "history_selection": {
+                        "selection_failed": True,
+                        "preflight_stage": "derive_symbols",
+                        "selection_failed_reason": "zero_history_symbols",
+                        "selection_failed_next_action": "expand_spot_universe_or_relax_filters",
+                    },
+                }
+            )
+            report = render_report(summary, {"steps": []}, language="zh")
+
+        self.assertIn("本次在前置筛选阶段停止", report)
+        self.assertIn("先扩大 spot 股票池或放宽过滤条件", report)
+        self.assertIn("这次失败没有形成可用观察清单", report)
+        self.assertIn('data-i18n-en="The run stopped at the preflight spot-selection stage', report)
+        self.assertIn('data-i18n-zh="本次在前置筛选阶段停止', report)
+        self.assertIn('data-i18n-en="Expand the spot universe or relax the filters', report)
+        self.assertIn('data-i18n-zh="先扩大 spot 股票池或放宽过滤条件', report)
+        self.assertIn('data-i18n-en="This failed run has no usable watchlist because', report)
+        self.assertIn('data-i18n-zh="这次失败没有形成可用观察清单', report)
 
     def test_report_shows_history_selection_evidence_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -607,6 +742,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
                     "score": {
                         "effective_empty_result": True,
                         "empty_result_reason": "threshold_filtered_all",
+                        "threshold_failures_by_rule": {
+                            "close_below_ma20": 8,
+                            "volume_too_low": 3,
+                        },
                     },
                 }
             )
@@ -616,6 +755,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("没有股票符合当前策略规则", report)
         self.assertIn("先确认数据来源和策略范围是不是你想要的", report)
         self.assertIn("本次运行已完成，但没有股票进入观察清单", report)
+        self.assertIn("主要拦截规则：close_below_ma20=8，volume_too_low=3。", report)
         self.assertIn('<details class="report-details zero-candidate-details">', report)
         self.assertIn('<details class="report-details diagnostics-detail">', report)
 
@@ -749,7 +889,15 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn('id="candidate-page-size" name="candidate_page_size"', complete)
         self.assertIn("data-candidate-row", complete)
         self.assertIn('class="candidate-toolbar has-industry"', complete)
-        self.assertIn('role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false"', complete)
+        self.assertIn('role="button" tabindex="0" aria-expanded="false"', complete)
+        candidate_rows = complete.split("data-candidate-row")[1:]
+        self.assertGreaterEqual(len(candidate_rows), 2)
+        self.assertTrue(
+            all(
+                'aria-haspopup="dialog"' not in row.split(">", 1)[0]
+                for row in candidate_rows
+            )
+        )
         self.assertIn("data-candidate-detail", complete)
         self.assertIn('class="master-table"', complete)
         self.assertNotIn('class="master-table has-wide-table"', complete)
@@ -761,11 +909,14 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn('<strong class="name-cell">Alpha Tech</strong>', complete)
         self.assertIn('class="stock-detail-drawer"', complete)
         self.assertIn("data-stock-detail-drawer", complete)
-        self.assertIn('class="stock-dialog-close" data-stock-detail-close', complete)
-        self.assertNotIn('class="stock-dialog-close" aria-label=', complete)
+        self.assertIn(
+            'class="stock-dialog-close" data-stock-detail-close aria-label="关闭" data-i18n-aria-label-en="Close" data-i18n-aria-label-zh="关闭"',
+            complete,
+        )
         self.assertIn("data-stock-chart", complete)
         self.assertIn("data-candidate-candles", complete)
         self.assertIn("K 线图", complete)
+        self.assertIn("最多内嵌 100 只股票、每只 80 行", complete)
         self.assertIn("常用操作", complete)
         self.assertIn("data-stock-copy", complete)
         self.assertIn("data-stock-filter-board", complete)
@@ -805,21 +956,49 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         detail = complete.split('data-candidate-detail', 1)[1].split("</aside>", 1)[0]
         self.assertEqual(detail.count("data-detail-level"), 2)
         self.assertIn("data-detail-risk", detail)
+        self.assertIn("data-detail-open-stock", detail)
+        self.assertIn('aria-haspopup="dialog"', detail)
+        self.assertIn('aria-controls="stock-detail-dialog"', detail)
+        self.assertIn('aria-label="查看 K 线与技术指标"', detail)
+        self.assertIn('data-i18n-aria-label-en="View K-line and indicators"', detail)
+        self.assertIn('data-i18n-aria-label-zh="查看 K 线与技术指标"', detail)
+        self.assertIn('title="查看 K 线与技术指标"', detail)
+        self.assertIn('data-i18n-title-en="View K-line and indicators"', detail)
+        self.assertIn('data-i18n-title-zh="查看 K 线与技术指标"', detail)
+        self.assertIn("查看 K 线与技术指标", detail)
+        self.assertIn("单击预览；双击或再次按 Enter 打开 K 线。", detail)
+        self.assertIn('id="stock-detail-dialog"', complete)
         self.assertNotIn("data-detail-level-copy", detail)
         self.assertIn("data-detail-summary", complete)
         self.assertIn('placeholder="代码 / 名称 / 板块 / 行业 / 关键词"', complete)
+        self.assertIn('data-i18n-placeholder-en="Code / name / board / industry / keyword"', complete)
+        self.assertIn('data-i18n-placeholder-zh="代码 / 名称 / 板块 / 行业 / 关键词"', complete)
         self.assertIn('data-i18n-zh="板块">板块</span></th>', complete)
         self.assertIn(">创业板</td>", complete)
         self.assertIn('data-board="创业板"', complete)
         self.assertIn("aShareSelectionReportLang", report)
         self.assertIn("initCandidateMasterDetail", report)
         self.assertIn("function runAfterFirstPaint(callback)", report)
+        self.assertIn("['aria-label', 'title', 'placeholder'].forEach(attribute =>", report)
+        self.assertIn("el.setAttribute(attribute, value)", report)
         self.assertIn("window.requestIdleCallback(callback, { timeout: 350 })", report)
         self.assertIn("setLang(initial, { forceText: initial !== generated, silent: true })", report)
         self.assertIn("root.dataset.uiReady = 'true'", report)
         self.assertIn("addEventListener('click'", report)
         self.assertIn("tbody.addEventListener('click'", report)
+        self.assertIn("tbody.addEventListener('dblclick'", report)
         self.assertIn("let selectedRow = null", report)
+        self.assertIn("const reportContent = rootEl.closest('[data-report-content]') || document", report)
+        self.assertIn("const previewTriggers = reportContent.querySelectorAll('[data-preview-symbol]')", report)
+        self.assertIn("data-preview-symbol", report)
+        self.assertIn("if (index < 0)", report)
+        self.assertIn("data-candidate-toolbar-status", complete)
+        self.assertIn("function setToolbarStatus(text)", report)
+        self.assertIn("function clearFiltersForPreview()", report)
+        self.assertIn("Filters were cleared to locate this stock.", report)
+        self.assertIn("已清空筛选以定位该股票。", report)
+        self.assertIn("candidate-empty-row", report)
+        self.assertIn("暂无匹配股票", report)
         self.assertIn("requestAnimationFrame", report)
         self.assertIn("let mountedRows = []", report)
         self.assertIn("tbody.replaceChildren(fragment)", report)
@@ -830,6 +1009,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("drawStockCandles", report)
         self.assertIn("stockChart.getContext('2d')", report)
         self.assertIn("tbody.addEventListener('keydown'", report)
+        self.assertIn("event.key === 'Enter' && row === selectedRow", report)
         self.assertIn("trapStockFocus", report)
         self.assertIn("copyCurrentStockSummary", report)
         self.assertIn("Clipboard access is often blocked for local file reports", report)
@@ -1012,6 +1192,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn('<span class="stock-code">000100</span>', preview)
         self.assertIn('<span class="symbol-cell">000100</span>', complete)
         self.assertIn('<strong class="name-cell missing">名称未提供</strong>', complete)
+        self.assertIn("<h3 data-detail-title>名称未提供 000100</h3>", complete)
         self.assertNotIn('<strong class="name-cell">000100</strong>', complete)
         self.assertNotIn("&lt;span data-i18n-en=", report)
 
@@ -1176,10 +1357,15 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn(".pipeline-card:hover,.pipeline-card:focus-visible", report)
         self.assertIn(".flow-step:hover,.flow-step:focus-visible", report)
         self.assertIn(".insight-drawer[hidden]{display:none}", report)
+        self.assertIn(
+            'class="insight-close" data-insight-close aria-label="Close" data-i18n-aria-label-en="Close" data-i18n-aria-label-zh="关闭"',
+            report,
+        )
         self.assertIn(".insight-facts{display:grid;grid-template-columns:minmax(140px,190px)", report)
         self.assertIn(".insight-drawer{place-items:end center;padding:12px}", report)
         self.assertIn(".insight-close{min-width:44px;min-height:44px}", report)
         self.assertIn(".candidate-cards[data-preview-table]", report)
+        self.assertIn(".candidate-cards[data-preview-table] tr[data-preview-symbol]{cursor:pointer}", report)
         self.assertIn(".candidate-cards[data-preview-table] th:nth-last-child(2),.candidate-cards[data-preview-table] td:nth-last-child(2){width:88px}", report)
         self.assertIn("@media(max-width:1500px)", report)
         self.assertIn(
@@ -1191,13 +1377,13 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             report,
         )
         self.assertIn(
-            ".master-detail-grid{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(480px,.92fr);gap:12px;align-items:start}",
+            ".master-detail-grid{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(420px,.88fr);gap:12px;align-items:start}",
             report,
         )
         self.assertNotIn("candidate-entry-card", report)
         self.assertIn("justify-content:center", report)
         self.assertIn(".candidate-file-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}", report)
-        self.assertIn(".candidate-download-link{display:inline-flex;align-items:center;justify-content:center;min-height:34px", report)
+        self.assertIn(".candidate-download-link{display:inline-flex;align-items:center;justify-content:center;min-height:40px", report)
         self.assertIn(".candidate-file-actions{display:grid;grid-template-columns:1fr;justify-content:stretch;width:100%}", report)
         self.assertIn(".candidate-download-link{min-height:44px}", report)
         self.assertIn(".stock-code{display:block;margin-top:3px;color:#334155;font-size:13px", report)
@@ -1213,7 +1399,11 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn(".stock-dialog-close:hover,.stock-dialog-close:focus-visible{outline:2px solid #1b75d0;outline-offset:2px", report)
         self.assertIn(".stock-action-grid button:hover,.stock-action-grid button:focus-visible{outline:2px solid #1b75d0;outline-offset:2px", report)
         self.assertIn(".stock-chart-wrap canvas{display:block;width:100%;height:100%;touch-action:none}", report)
+        self.assertIn(".candidate-toolbar{display:grid;grid-template-columns:2fr repeat(3,minmax(130px,1fr)) max-content", report)
+        self.assertIn(".candidate-toolbar.has-industry{grid-template-columns:2fr repeat(4,minmax(130px,1fr)) max-content}", report)
+        self.assertIn(".candidate-toolbar input:focus-visible,.candidate-toolbar select:focus-visible{outline:2px solid #1b75d0;outline-offset:2px", report)
         self.assertIn(".candidate-toolbar button:focus-visible{outline:2px solid #1b75d0;outline-offset:2px", report)
+        self.assertIn(".detail-action-button:hover,.detail-action-button:focus-visible{outline:2px solid #1b75d0;outline-offset:2px", report)
         self.assertIn(".candidate-pager button:not(:disabled):hover,.candidate-pager button:not(:disabled):focus-visible{outline:2px solid #1b75d0;outline-offset:2px", report)
         self.assertIn(".stock-technical-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}", report)
         self.assertIn("@media(max-width:1100px)", report)
@@ -1248,10 +1438,18 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn(".master-list-panel{min-width:0;max-width:100%;overflow:clip}", report)
         self.assertIn(".master-table:not(.has-wide-table) th:nth-child(1),.master-table:not(.has-wide-table) td:nth-child(1){width:62px}", report)
         self.assertIn(".master-table tbody tr[hidden]{display:none}", report)
+        self.assertIn(".candidate-detail-panel{position:sticky;top:12px}", report)
+        self.assertIn(".detail-head-copy{display:grid;gap:4px;min-width:0}", report)
+        self.assertIn(".detail-head-note{color:#64748b;font-size:12px;font-weight:700;line-height:1.35}", report)
+        self.assertIn(".candidate-detail-panel{max-height:520px;position:relative;top:auto}", report)
         self.assertIn(".candidate-detail-panel{align-self:stretch;height:100%;max-height:560px;border:1px solid var(--line);border-radius:8px;background:#fff;min-width:0;overflow:auto;box-shadow:0 8px 18px rgba(15,23,42,.04);contain:content;scrollbar-gutter:stable}", report)
         self.assertIn(".master-table tr[data-selected=\"true\"]{background:#eaf4ff;box-shadow:inset 0 0 0 2px #6daff0}", report)
         self.assertIn(".candidate-page-numbers{grid-column:1/-1;grid-row:2;justify-content:center}", report)
         self.assertIn(".candidate-pager label{grid-column:2;grid-row:3;display:flex;align-items:center;justify-content:flex-end;gap:6px}", report)
+        self.assertIn(
+            "@media(hover:none){.candidate-open-button,.candidate-download-link,.candidate-toolbar input,.candidate-toolbar select,.candidate-toolbar button,.candidate-pager button,.candidate-pager select,.stock-dialog-close,.stock-action-grid button,.detail-action-button{min-height:44px}}",
+            report,
+        )
         self.assertNotIn("scroll-behavior:smooth", report)
         self.assertNotIn("scrollIntoView", report)
         self.assertIn("function initInsightDrawer()", report)

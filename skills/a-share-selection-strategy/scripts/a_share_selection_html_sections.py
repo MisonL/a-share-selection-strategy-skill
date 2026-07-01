@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from a_share_selection_candidate_fields import candidate_field_value_present
 from a_share_selection_html_candidate_master import (
     candidate_master_detail,
     candidate_open_banner,
@@ -27,8 +28,10 @@ from a_share_selection_html_format import (
     esc,
     format_numeric,
     i18n,
+    i18n_attr,
     localized_phrase_html,
     missing_key_disclosure_value,
+    phrase_translation,
     raw_text,
     table_cell,
 )
@@ -129,6 +132,7 @@ def hero(summary: dict[str, Any], language: str) -> str:
         "</div>"
         '<div class="hero-side">'
         f"{hero_fact_card(summary, language)}"
+        f"{hero_machine_note(summary, language)}"
         "</div></div></section>"
     )
 
@@ -176,9 +180,51 @@ def hero_fact_card(summary: dict[str, Any], language: str) -> str:
             bilingual("File note", "文件说明", language),
             bilingual("Single static HTML, local browser only", "单个静态 HTML 文件，纯前端实现", language),
         ),
+        (
+            bilingual("Execution path", "执行路径", language),
+            str(summary.get("execution_path", "unresolved")),
+        ),
+        (
+            bilingual("Coverage class", "覆盖等级", language),
+            str(summary.get("coverage_class", "unknown")),
+        ),
+        (
+            bilingual("Full-market claim", "全市场声明", language),
+            full_market_claim_value(summary, language),
+        ),
     ]
     items = "".join(f"<div><span>{label}</span><strong>{value}</strong></div>" for label, value in rows)
     return f'<aside class="hero-fact-card">{items}</aside>'
+
+
+def hero_machine_note(summary: dict[str, Any], language: str) -> str:
+    execution_path = str(summary.get("execution_path", "unresolved"))
+    coverage_class = str(summary.get("coverage_class", "unknown"))
+    claim_boundary = str(summary.get("full_market_claim_boundary", "not_evaluated"))
+    allowed = bool(summary.get("full_market_claim_allowed", False))
+    en = (
+        "Machine fields explain how the run was executed: "
+        f"execution_path={execution_path} describes how the pool was built and scored; "
+        f"coverage_class={coverage_class} describes how broad the pool is; "
+        f"full_market_claim_allowed={'allowed' if allowed else 'not allowed'}, "
+        f"full_market_claim_boundary={claim_boundary} explains whether this report may be described as a full-market scan."
+    )
+    zh = (
+        "机器字段说明："
+        f"execution_path={execution_path} 说明这轮如何构建和评分样本池；"
+        f"coverage_class={coverage_class} 说明样本池覆盖到什么广度；"
+        f"full_market_claim_allowed={'允许' if allowed else '不允许'}，"
+        f"full_market_claim_boundary={claim_boundary} 说明这份报告能否按全市场闭环来表述。"
+    )
+    return f'<p class="hero-machine-note">{bilingual(en, zh, language)}</p>'
+
+
+def full_market_claim_value(summary: dict[str, Any], language: str) -> str:
+    allowed = bool(summary.get("full_market_claim_allowed", False))
+    boundary = str(summary.get("full_market_claim_boundary", "not_evaluated"))
+    en = f"{'allowed' if allowed else 'not allowed'} / {boundary}"
+    zh = f"{'允许' if allowed else '不允许'} / {boundary}"
+    return bilingual(en, zh, language)
 
 
 def report_generated_at(summary: dict[str, Any], language: str) -> str:
@@ -472,8 +518,8 @@ def pipeline_metric_cards(summary: dict[str, Any], language: str) -> str:
         pipeline_metric_card(label, value, note, kind, insight)
         for label, value, note, kind, insight in cards
     )
-    title = "流程指标" if language == "zh" else "Pipeline counts"
-    return f'<section class="pipeline-metrics" aria-label="{title}">{html}</section>'
+    label_attr = i18n_attr("aria-label", "Pipeline counts", "流程指标", language)
+    return f'<section class="pipeline-metrics" {label_attr}>{html}</section>'
 
 
 def pipeline_metric_card(label: str, value: Any, note: str, kind: str, insight: dict[str, Any]) -> str:
@@ -533,8 +579,8 @@ def selection_flow(summary: dict[str, Any], language: str) -> str:
         ),
     ]
     cards = "".join(flow_steps_with_arrows(steps))
-    title = "选股流程" if language == "zh" else "Selection flow"
-    return f'<section class="selection-flow" aria-label="{title}">{cards}</section>'
+    label_attr = i18n_attr("aria-label", "Selection flow", "选股流程", language)
+    return f'<section class="selection-flow" {label_attr}>{cards}</section>'
 
 
 def flow_steps_with_arrows(steps: list[tuple[str, Any, str, str, dict[str, Any]]]) -> str:
@@ -718,7 +764,7 @@ def insight_drawer(language: str) -> str:
     return (
         '<div class="insight-drawer" data-insight-drawer data-report-modal-root hidden aria-hidden="true">'
         '<section class="insight-dialog" role="dialog" aria-modal="true" aria-labelledby="insight-title" aria-describedby="insight-summary">'
-        f'<button type="button" class="insight-close" data-insight-close>{close_label}</button>'
+        f'<button type="button" class="insight-close" data-insight-close {i18n_attr("aria-label", "Close", "关闭", language)}>{close_label}</button>'
         '<span class="insight-eyebrow" data-insight-kind></span>'
         '<h3 id="insight-title" data-insight-title></h3>'
         '<p id="insight-summary" class="insight-summary" data-insight-summary></p>'
@@ -867,6 +913,9 @@ def plain_limit_story(summary: dict[str, Any], language: str) -> str:
 
 
 def plain_failure_reason(summary: dict[str, Any], language: str) -> str:
+    history = summary.get("history_selection", {})
+    if isinstance(history, dict) and bool(history.get("selection_failed")):
+        return plain_selection_failure_reason(history, language)
     return bilingual(
         f"The AI agent did not produce a usable watchlist in this run. {plain_boundary_text(summary, 'en')}",
         f"AI Agent 在生成可用观察清单前停止了。{plain_boundary_text(summary, 'zh')}",
@@ -875,6 +924,9 @@ def plain_failure_reason(summary: dict[str, Any], language: str) -> str:
 
 
 def plain_failure_action(summary: dict[str, Any], language: str) -> str:
+    history = summary.get("history_selection", {})
+    if isinstance(history, dict) and bool(history.get("selection_failed")):
+        return plain_selection_failure_action(history, language)
     return bilingual(
         f"Fix the input or settings, then rerun. {plain_mode_reason_text(summary, 'en')}",
         f"先修复输入或设置，再重新运行。{plain_mode_reason_text(summary, 'zh')}",
@@ -883,11 +935,47 @@ def plain_failure_action(summary: dict[str, Any], language: str) -> str:
 
 
 def plain_failure_limit(summary: dict[str, Any], language: str) -> str:
+    history = summary.get("history_selection", {})
+    if isinstance(history, dict) and bool(history.get("selection_failed")):
+        return plain_selection_failure_limit(history, language)
     return bilingual(
         f"This failed run has no usable watchlist. {plain_limit_text(summary, 'en')}",
         f"本次失败运行没有可用观察清单。{plain_limit_text(summary, 'zh')}",
         language,
     )
+
+
+def plain_selection_failure_reason(history: dict[str, Any], language: str) -> str:
+    stage = str(history.get("preflight_stage", "unknown"))
+    reason = str(history.get("selection_failed_reason", "unknown"))
+    en = (
+        "The run stopped at the preflight spot-selection stage because the filtered spot "
+        f"snapshot produced no history symbols. preflight_stage={stage} "
+        f"selection_failed_reason={reason}"
+    )
+    zh = (
+        "本次在前置筛选阶段停止，spot 快照经过过滤后没有留下任何可抓历史的标的。"
+        f"preflight_stage={stage} selection_failed_reason={reason}"
+    )
+    return bilingual(en, zh, language)
+
+
+def plain_selection_failure_action(history: dict[str, Any], language: str) -> str:
+    action = str(history.get("selection_failed_next_action", ""))
+    action_text = action or "expand_spot_universe_or_relax_filters"
+    en = (
+        "Expand the spot universe or relax the filters, then rerun. "
+        f"next_action={action_text}"
+    )
+    zh = f"先扩大 spot 股票池或放宽过滤条件，再重新运行。next_action={action_text}"
+    return bilingual(en, zh, language)
+
+
+def plain_selection_failure_limit(history: dict[str, Any], language: str) -> str:
+    stage = str(history.get("preflight_stage", "unknown"))
+    en = f"This failed run has no usable watchlist because preflight_stage={stage} produced no history symbols."
+    zh = f"这次失败没有形成可用观察清单，因为 preflight_stage={stage} 没有产出历史标的。"
+    return bilingual(en, zh, language)
 
 
 def plain_boundary_text(summary: dict[str, Any], language: str) -> str:
@@ -971,7 +1059,7 @@ def candidate_preview_table(rows: list[dict[str, Any]], language: str) -> str:
         "这里先显示前 5 条；完整候选表在下方页面内展示，可查看全部行和行详情。",
         language,
     )
-    show_industry = any(display_value(candidate_industry(row)) for row in rows)
+    show_industry = any(candidate_field_value_present(candidate_industry(row)) for row in rows)
     headers = [
         bilingual("Stock name (code)", "股票名称（代码）", language),
         bilingual("Board", "板块", language),
@@ -1014,7 +1102,7 @@ def candidate_preview_row(
     summary = candidate_summary_text(raw_text(row.get("key_reasons")), language)
     industry_cell = f"<td>{esc(industry)}</td>" if show_industry else ""
     return (
-        "<tr>"
+        f'<tr data-preview-symbol="{esc(symbol)}" tabindex="0" role="button">'
         f'<td><strong class="stock-anchor{missing_class}">{esc(display_name)}</strong>'
         f'<span class="stock-code">{esc(symbol)}</span></td>'
         f"<td>{esc(board)}</td>"
@@ -1047,7 +1135,7 @@ def candidate_preview_card(
             f'<b>{industry_label}</b>{esc(industry)}</span>'
         )
     return (
-        '<article class="preview-mobile-card">'
+        f'<article class="preview-mobile-card" data-preview-symbol="{esc(symbol)}" tabindex="0" role="button">'
         '<div class="preview-mobile-head">'
         f'<div><strong class="stock-anchor{missing_class}">{esc(display_name)}</strong>'
         f'<span class="stock-code">{esc(symbol)}</span></div>'
@@ -1075,14 +1163,9 @@ def stock_name_missing(name: str, symbol: str) -> bool:
 def candidate_industry(row: dict[str, Any]) -> str:
     for key in ("spot_industry", "industry", "sector", "sw_industry", "申万行业"):
         value = raw_text(row.get(key)).strip()
-        if display_value(value):
+        if candidate_field_value_present(value):
             return value
     return "-"
-
-
-def display_value(value: Any) -> bool:
-    text = raw_text(value).strip().lower()
-    return text not in {"", "-", "nan", "none", "unknown", "not_used", "not_verified"}
 
 
 def strategy_match_label(value: Any, language: str) -> str:
@@ -1164,6 +1247,7 @@ def candidates_panel(
     truncated: bool,
     limit: int,
     csv_path: Any,
+    field_coverage: dict[str, Any] | None = None,
     candle_rows: dict[str, list[list[Any]]] | None = None,
     empty_key: str = "empty",
     empty_html: str = "",
@@ -1174,6 +1258,7 @@ def candidates_panel(
         language,
         csv_path=csv_path,
         truncated=all_rows_truncated,
+        field_coverage=field_coverage,
         candle_rows=candle_rows or {},
         empty_html=empty_html,
         empty_key=empty_key,
@@ -1755,6 +1840,7 @@ def zero_candidates_message(summary: dict[str, Any], language: str) -> str:
     if summary.get("candidates_output_written") is not True:
         return ""
     reason = str(score.get("empty_result_reason", "unknown"))
+    threshold_summary_en, threshold_summary_zh = threshold_failures_summary_pair(score)
     visible = bilingual(
         "The run completed, but no stock entered the watchlist.",
         "本次运行已完成，但没有股票进入观察清单。",
@@ -1762,14 +1848,40 @@ def zero_candidates_message(summary: dict[str, Any], language: str) -> str:
     )
     review = bilingual(
         "Completed run with zero candidates; "
-        f"effective_empty_result=true empty_result_reason={reason}.",
-        f"本次成功运行但没有候选；effective_empty_result=true empty_result_reason={reason}。",
+        f"effective_empty_result=true empty_result_reason={reason}. {threshold_summary_en}",
+        f"本次成功运行但没有候选；effective_empty_result=true empty_result_reason={reason}。{threshold_summary_zh}",
         language,
     )
     return (
         f'<p class="empty">{visible}</p>'
         f"{collapsible_details(bilingual('Zero-result details', '0 结果明细', language), review, 'zero-candidate-details')}"
     )
+
+
+def threshold_failures_summary_pair(score: dict[str, Any]) -> tuple[str, str]:
+    failures = score.get("threshold_failures_by_rule", {})
+    if not isinstance(failures, dict) or not failures:
+        return ("Top blocking rules: none.", "主要拦截规则：无。")
+    ordered = sorted(
+        ((str(key), int(value)) for key, value in failures.items()),
+        key=lambda item: (-item[1], item[0]),
+    )
+    top = ordered[:3]
+    parts = [threshold_failure_summary_part(key, value, "en") for key, value in top]
+    parts_zh = [threshold_failure_summary_part(key, value, "zh") for key, value in top]
+    return (
+        "Top blocking rules: " + ", ".join(parts) + ".",
+        "主要拦截规则：" + "，".join(parts_zh) + "。",
+    )
+
+
+def threshold_failure_summary_part(key: str, value: int, language: str) -> str:
+    label = phrase_translation(key, language)
+    if label == key:
+        return f"{key}={value}"
+    if language == "zh":
+        return f"{label}（{key}）={value}"
+    return f"{label} ({key})={value}"
 
 
 def empty_key_for(summary: dict[str, Any]) -> str:

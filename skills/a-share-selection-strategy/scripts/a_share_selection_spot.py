@@ -33,7 +33,16 @@ def merge_latest_spot_fields(scored: pd.DataFrame, spot_view: pd.DataFrame) -> p
         return scored
     result = scored.copy()
     result["symbol"] = result["symbol"].astype(str).str.strip()
-    return result.merge(spot_view, on="symbol", how="left")
+    merged = result.merge(spot_view, on="symbol", how="left", suffixes=("", "_spot"))
+    if "name_spot" in merged.columns:
+        merged["name"] = merged["name"].where(
+            merged["name"].notna()
+            & merged["name"].astype(str).str.strip().ne("")
+            & ~merged["name"].astype(str).str.fullmatch(r"\d+"),
+            merged["name_spot"],
+        )
+        merged = merged.drop(columns=["name_spot"])
+    return merged
 
 
 def spot_summary(rows: int, matched: int) -> dict[str, Any]:
@@ -115,11 +124,13 @@ def hk_aliases(value: Any) -> str:
 
 
 def spot_columns() -> list[str]:
-    return ["spot_price", "spot_pct_chg", "spot_amount", "spot_industry"]
+    return ["name", "spot_price", "spot_pct_chg", "spot_amount", "spot_industry"]
 
 
 def spot_column_map() -> dict[str, str]:
     return {
+        "name": "name",
+        "stock_name": "name",
         "spot_price": "spot_price",
         "price": "spot_price",
         "close": "spot_price",

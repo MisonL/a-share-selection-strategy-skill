@@ -88,8 +88,12 @@ def add_history_options(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--max-history-symbols",
-        type=positive_int,
+        action=MaxHistorySymbolsAction,
         default=DEFAULT_HISTORY_SYMBOL_LIMIT,
+        help=(
+            "Maximum symbols derived from spot for history fetch. The default 50 is a "
+            "small-sample safety cap, not a full-market recommendation."
+        ),
     )
     parser.add_argument("--history-adjust", help="Forwarded adjust value for history fetch.")
     parser.add_argument(
@@ -160,6 +164,17 @@ def positive_int(value: str) -> int:
     if parsed < 1:
         raise argparse.ArgumentTypeError("value must be positive")
     return parsed
+
+
+class MaxHistorySymbolsAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None) -> None:
+        try:
+            parsed = positive_int(str(values))
+        except (argparse.ArgumentTypeError, ValueError) as exc:
+            raise argparse.ArgumentError(self, str(exc)) from exc
+        setattr(namespace, self.dest, parsed)
+        setattr(namespace, f"{self.dest}_supplied", True)
+
 
 if __name__ == "__main__":
     from a_share_selection_cli_guard import fail_not_cli

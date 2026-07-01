@@ -224,6 +224,15 @@ def bilingual(en: str, zh: str, language: str = "zh") -> str:
     )
 
 
+def i18n_attr(name: str, en: str, zh: str, language: str) -> str:
+    value = zh if language == "zh" else en
+    return (
+        f'{name}="{attr_text(value)}" '
+        f'data-i18n-{name}-en="{attr_text(en)}" '
+        f'data-i18n-{name}-zh="{attr_text(zh)}"'
+    )
+
+
 def format_numeric(value: Any, digits: int, suffix: str) -> str:
     text = raw_text(value)
     if not text:

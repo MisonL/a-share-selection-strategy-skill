@@ -212,6 +212,7 @@ def pct_change_at(series: pd.Series, window: int) -> float:
 def one_year_pct_change(close: pd.Series) -> float:
     if len(close) <= ONE_YEAR_TRADING_DAYS:
         return math.nan
+    # 252 completed sessions back requires the current close plus 252 prior closes.
     base = float(close.iloc[-ONE_YEAR_TRADING_DAYS - 1])
     if base <= 0 or math.isnan(base):
         return math.nan

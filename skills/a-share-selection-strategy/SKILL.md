@@ -18,9 +18,10 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 | 1 | [../../AGENTS.md](../../AGENTS.md) 的禁止伪造和验证命令 | 修改代码、跑测试或汇报真实门禁时 |
 | 2 | 本文件的快速路由、输入数据契约、今日选股入口 | 任意选股、评分、审查或 Agent 工作流任务 |
 | 3 | [references/output-templates.md](references/output-templates.md) | 需要向用户解释失败、0 候选、partial result 或最终候选 |
-| 4 | [references/runbook.md](references/runbook.md) | 需要完整 demo、联网取数、P1/P2/P3 门禁命令时 |
-| 5 | [references/index.md](references/index.md) | 需要找专题文档或历史复验报告 |
-| 6 | [references/prediction-derived-profile.md](references/prediction-derived-profile.md) | 只在用户明确要求 prediction-derived 或使用 `prediction_profile_config.json` 时 |
+| 4 | [references/full-a-strict-workflow.md](references/full-a-strict-workflow.md) | 用户明确要求全 A、全市场、扩大股票池或真实广度扫描时 |
+| 5 | [references/runbook.md](references/runbook.md) | 需要完整 demo、联网取数、P1/P2/P3 门禁命令时 |
+| 6 | [references/index.md](references/index.md) | 需要找专题文档或历史复验报告 |
+| 7 | [references/prediction-derived-profile.md](references/prediction-derived-profile.md) | 只在用户明确要求 prediction-derived 或使用 `prediction_profile_config.json` 时 |
 
 ## 适用场景
 
@@ -35,12 +36,71 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 
 若用户没有提供可验证行情文件或明确联网授权，不要输出候选表。使用 `references/output-templates.md` 中的“无法直接选股”模板。
 
+## 任务拓扑
+
+先选任务路径，再选评分 `mode`。任务路径回答“怎么取数和收口”，`mode` 只回答“最终评分按 generic 还是 prediction-derived”。
+
+| 路径 | 适用场景 | 首选入口 | 首选起手命令 | 必看产物 | 常见误判 |
+| --- | --- | --- | --- | --- | --- |
+| 本地评分 | 用户已给本地 `prices.csv` / `prices.parquet`，只需校验、评分、解释 | `run_today_a_share_selection.py --prices-input ...` | `uv run --with pandas --with numpy --with pyarrow python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py --prices-input <prices> --output-dir <run>` | `summary.json`、`candidates.csv`、`diagnostics.csv` | 不要写成真实全市场扫描 |
+| 定向真实任务 | 用户给出明确 symbol、板块、少量标的，想验证真实取数链路 | `run_today_a_share_selection.py --history-source ... --symbols ...` | `uv run --with pandas --with numpy --with baostock python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py --history-source baostock --symbols <codes> --output-dir <run>` | `run_manifest.json`、`history_metadata.json`、`summary.json` | 不要把小样本成功外推到全 A |
+| 全 A 严格任务 | 用户要求全 A、全市场、扩大股票池、真实广度扫描 | 先读 `references/full-a-strict-workflow.md`，再执行 `eastmoney spot -> history breadth -> clean rerun -> final report` | `uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/fetch_eastmoney_a_share_spot.py --output <run>/spot.csv --metadata-output <run>/spot_metadata.json --pages 300 --fail-on-partial` | `spot_metadata.json`、`selected_symbols.json`、`history_metadata.json`、`summary.json` | 不要把 `mode=auto` 当成工作流已经自动选对 |
+| prediction-derived | 用户坚持 prediction-derived，或输入已经有预测列 | `validate_ohlcv.py --config prediction_profile_config.json`，必要时先跑 `generate_lightgbm_predictions.py` | `uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/validate_ohlcv.py --input <prices> --config skills/a-share-selection-strategy/scripts/prediction_profile_config.json` | `prediction_summary.json`、`prediction_candidates.csv`、prediction 相关字段 | 不要用 generic 结果替代 prediction 口径 |
+
+如果同时出现“全 A/全市场”和“prediction-derived”，先按全 A 严格路径收口数据，再决定最终评分 `mode`。
+
+## Agent 执行协议
+
+触发本 Skill 后，Agent 默认按以下顺序行动：
+
+1. 先判断任务路径：本地评分、定向真实任务、全 A 严格任务、prediction-derived。
+2. 再判断数据条件：是否已有本地价格文件、是否已有预测列、是否只有联网授权。
+3. 只选择一个主入口脚本，不要一开始就混用多个入口。
+4. 先读该路径对应的必看 artifact，再决定是否继续下一轮。
+5. 先读取 `summary.json` 或 stdout 中的 `execution_path`、`coverage_class`、`candidate_field_coverage`、`full_market_claim_allowed`、`full_market_claim_boundary`，再判断本轮结果能否按用户目标汇报。
+6. 任何一轮出现 strict gate failed、partial result、provider error、provenance 缺口时，先恢复，再汇报。
+
+默认不要先做这些事：
+
+- 不要先生成 HTML 再决定本轮是否成功。
+- 不要先看候选股数量再判断数据链是否闭环。
+- 不要把 demo、小样本、固定池命令当成全市场路径。
+- 不要把 `mode=auto` 当成“工作流自动规划”。
+- 不要把历史 review 报告当成当前推荐命令。
+
+## Agent 控制合同
+
+每次执行前先把任务收敛成下面 5 个控制项；执行后用机器字段回填，不靠印象判断。
+
+| 控制项 | Agent 必须确定 | 可观测字段或产物 | 停止条件 |
+| --- | --- | --- | --- |
+| 任务目标 | 本地评分、定向真实任务、全 A 严格任务、prediction-derived 之一 | `execution_path`、`coverage_class`、`candidate_field_coverage` | 无法归类时先澄清，不盲跑 |
+| 数据输入 | 本地文件、spot 快照、历史源、prediction 列是否存在 | `input_metadata`、`source_scope`、`source_provenance` | 来源不明时不能声称真实行情或全市场 |
+| 执行动作 | 只选一个主入口和一条主路径 | `run_manifest.json.steps[]` | 多入口混跑且无统一 manifest 时不下结论 |
+| 质量门禁 | validate、history、score、partial、empty、failed symbols | `summary.json`、`history_metadata.json`、`diagnostics.csv` | strict gate failed 或 partial 未处理时先恢复 |
+| 汇报边界 | 本轮能否按用户目标汇报 | `full_market_claim_allowed`、`full_market_claim_boundary`、`selection_failed_reason`、`selection_failed_next_action` | `false` 时必须缩短结论并说明边界 |
+
+高效执行的标准不是“尽快出 HTML”，而是每轮都能回答：这次跑了哪条路径、覆盖到哪里、哪些字段阻止外推、下一步该恢复还是汇报。
+
+## 路径到入口的映射
+
+| 路径 | 第一入口 | 第二入口 | 首轮必看 artifact |
+| --- | --- | --- | --- |
+| 本地评分 | `validate_ohlcv.py` | `score_candidates.py` 或 `run_today_a_share_selection.py --prices-input ...` | `stdout`、`summary.json`、`diagnostics.csv` |
+| 定向真实任务 | `run_today_a_share_selection.py --history-source ... --symbols ...` | 必要时单独 `fetch_*` | `run_manifest.json`、`history_metadata.json`、`summary.json` |
+| 全 A 严格任务 | `references/full-a-strict-workflow.md` | `fetch_eastmoney_a_share_spot.py` 或 `run_today_a_share_selection.py --spot-input/--derive-symbols-from-spot ...`，再做 clean rerun | `spot_metadata.json`、`selected_symbols.json`、`history_metadata.json`、`summary.json` |
+| prediction-derived | `validate_ohlcv.py --config prediction_profile_config.json` | `generate_lightgbm_predictions.py`（如缺预测列） | `prediction_summary.json`、prediction 相关字段、`prediction_candidates.csv` |
+
+如果 Agent 无法在 30 秒内判断应该走哪条路径，说明当前上下文不够清晰，先回到“任务拓扑”和“快速路由”，不要盲跑脚本。
+
 ## 快速路由
 
 | 用户意图 | 首选动作 | 不能声称 |
 |----------|----------|----------|
 | 只说“帮我选股”“今日 A 股”或“短线一点”，但无数据源 | 用“无法直接选股”模板，要求本地行情文件或联网授权 | 不能给示例候选名单 |
 | 要“今日 A 股”“10 元以内超短”，且已有本地行情或明确联网授权 | 优先 `run_today_a_share_selection.py --mode auto` | generic 结果不能写成 prediction-derived/LightGBM |
+| 要“扩大股票池”“全 A”“全市场”“真实扫描” | 先读 `references/full-a-strict-workflow.md`，显式选择 source strategy 和批次策略 | 不能把默认 50 只样本命令写成全市场路径 |
+| 要少量真实代码或定向板块复核 | 用 `run_today_a_share_selection.py --history-source ... --symbols ...` 或先单独 fetch 再评分 | 不能把定向成功外推成全 A |
 | 要 prediction-derived 且已有预测列 | `validate_ohlcv.py --config prediction_profile_config.json` 后评分 | 评分通过不证明预测源真实 |
 | 要 prediction-derived 但缺 `prediction_score` | `--mode prediction` 应显式失败，或先跑真实预测生成器 | 不能用技术指标替代 prediction |
 | 要离线 demo 全链路 | 读 `references/runbook.md` 的本地 demo 和单信号日定位链路 | demo 不能写成真实收益 |
@@ -50,11 +110,25 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 ## 决策树
 
 1. 没有本地行情文件，也没有明确联网授权时，停止并使用“无法直接选股”模板。
-2. 有本地行情文件时，先运行 `validate_ohlcv.py`；缺字段或重复日期要显式失败。
-3. 用户要求“今日 A 股”“10 元以内超短”时，只有在已有本地行情文件或明确联网授权后，才优先走 `run_today_a_share_selection.py --mode auto`。
-4. 用户坚持 prediction-derived 口径时，必须要求 `market=A-share`、`prediction` 或 `prediction_score`、`turn` 或 `turnover`；缺字段时使用 `--mode prediction` 暴露失败。
-5. 用户接受通用技术评分时，使用 `skills/a-share-selection-strategy/scripts/example_config.json` 或 `skills/a-share-selection-strategy/scripts/ultra_short_low_price_config.json`；报告必须写明不是 prediction-derived 或模型预测结果。
-6. 任何联网取数结果都先落地为本地 CSV/Parquet 和 metadata，再校验、评分和解释。
+2. 用户明确要求“全 A / 全市场 / 扩大股票池 / 真实扫描”时，先读 `references/full-a-strict-workflow.md`，不要直接套 demo、小样本或默认 `max-history-symbols` 命令。
+3. 有本地行情文件时，先运行 `validate_ohlcv.py`；缺字段或重复日期要显式失败。
+4. 用户要求“今日 A 股”“10 元以内超短”且是本地评分或小样本真实任务时，优先走 `run_today_a_share_selection.py --mode auto`。
+5. 用户坚持 prediction-derived 口径时，必须要求 `market=A-share`、`prediction` 或 `prediction_score`、`turn` 或 `turnover`；缺字段时使用 `--mode prediction` 暴露失败。
+6. 用户接受通用技术评分时，使用 `skills/a-share-selection-strategy/scripts/example_config.json` 或 `skills/a-share-selection-strategy/scripts/ultra_short_low_price_config.json`；报告必须写明不是 prediction-derived 或模型预测结果。
+7. 任何联网取数结果都先落地为本地 CSV/Parquet 和 metadata，再校验、评分和解释。
+
+## 每条路径的必看 artifact
+
+在向用户下结论前，至少核对下表中的首组 artifact：
+
+| 路径 | 必看 artifact | 最低判断目标 |
+| --- | --- | --- |
+| 本地评分 | `validate_ohlcv.py` 退出码、`summary.json`、`diagnostics.csv` | 输入格式通过、评分完成、失败原因可解释 |
+| 定向真实任务 | `run_manifest.json`、`history_metadata.json`、`summary.json` | 真实取数成功、实际日期范围清楚、失败 symbol 清楚 |
+| 全 A 严格任务 | `spot_metadata.json`、`selected_symbols.json`、`history_metadata.json`、`summary.json` | 广度快照范围清楚、历史 breadth 范围清楚、清洗和保留数清楚 |
+| prediction-derived | `prediction_summary.json`、`summary.json`、prediction 相关字段 | 预测列来源清楚、评分口径清楚、未误写成模型质量证明 |
+
+只要这些 artifact 里还有一个关键字段没看清，就不要提前给“已完成”“已经跑通”“结果可信”这类结论。
 
 ## 资源索引
 
@@ -63,6 +137,7 @@ description: 当用户要求 AI Agent 设计、解释、实现、审查或运行
 本文件中的 `scripts/`、`references/` 和 `requirements*.txt` 默认相对本 Skill 目录解析，即 `skills/a-share-selection-strategy/`。若 shell 当前目录是仓库根目录，执行命令时使用 `skills/a-share-selection-strategy/scripts/...`，或先 `cd skills/a-share-selection-strategy`。
 
 - `references/factor-framework.md`：通用因子、评分、过滤和输出字段。
+- `references/full-a-strict-workflow.md`：全 A / 全市场 / 扩大股票池任务的严格路径、source strategy 和失败恢复。
 - `references/prediction-derived-profile.md`：prediction-derived A 股默认剖面、ML 口径和工程边界。
 - `references/index.md`：专题文档和历史复验报告索引。
 - `references/runbook.md`：完整 demo、联网取数、P1/P2/P3 门禁命令和运行解释。
@@ -207,6 +282,8 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 
 ## 今日选股入口
 
+这里的 `mode=generic/prediction/auto` 只是评分口径选择，不是全 A 工作流选择。只要用户目标是全 A、全市场或扩大股票池，先按 `references/full-a-strict-workflow.md` 走完数据路径，再决定最终 `mode`。
+
 当用户要求“今日选股”“10 元以内超短爆发”时，优先使用 `run_today_a_share_selection.py --mode auto`。如果本地行情文件缺少 prediction-derived 必需列，auto 会显式选择 generic 低价超短剖面，并在 manifest 记录 `requested_mode`、实际 `mode`、`mode_decision` 和 `mode_decision_reason`；这不是静默降级。若输入同时包含 `market`、`prediction` 或 `prediction_score`、以及 `turn` 或 `turnover` 三组字段，auto 会走 prediction-derived 外部 prediction 评分，但 `consumes_prediction_columns=true`、`prediction_input_source=external_input`、`prediction_model_executed_by_runner=false` 仍表示本 runner 只消费输入预测列，没有训练或执行预测模型；如果校验在评分前失败，summary 中 `consumes_prediction_columns=false` 表示本次没有实际消费预测列。`lightgbm_output_source` 和 `lightgbm_executed_by_runner` 是旧产物兼容字段；新报告优先引用中性字段。该入口可合并本地或东方财富实时快照作为展示字段，也可显式调用仓库内 baostock/akshare/zzshare 历史取数脚本；历史抓取本身不会生成 prediction。zzshare token 只能来自 `ZZSHARE_TOKEN` 环境变量；无 token 成功不证明无限免费额度或长期稳定性。若要 prediction-derived 口径必须显式提供外部预测列或使用 `--mode prediction` 暴露缺口，不证明实时全市场扫描完成。
 
 | mode | 触发条件 | 必须披露 |
@@ -264,7 +341,7 @@ uv run --with pandas --with numpy --with baostock python skills/a-share-selectio
 | 文件 | 检查字段 |
 | --- | --- |
 | `run_manifest.json` | 每一步命令、退出码、stdout/stderr、允许退出码 |
-| `summary.json` | `requested_mode`、`mode`、`mode_decision`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`prediction_mode`、`consumes_prediction_columns`、`prediction_input_source`、`prediction_model_executed_by_runner`、`source`、`source_scope`、`source_provenance`、`prices_rows`、`candidate_rows`、`diagnostic_rows`、`spot_rows`、`spot_matched_symbols`、`html_report_language`、`html_report_initial_language`、`html_report_error_type`、`summary_output_written`、`manifest_output_written`、`*_output_written`、失败步骤 |
+| `summary.json` | `requested_mode`、`mode`、`mode_decision`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`prediction_mode`、`consumes_prediction_columns`、`prediction_input_source`、`prediction_model_executed_by_runner`、`source`、`source_scope`、`source_provenance`、`prices_rows`、`candidate_rows`、`candidate_field_coverage`、`diagnostic_rows`、`spot_rows`、`spot_matched_symbols`、`selection_failed_reason`、`selection_failed_next_action`、`html_report_language`、`html_report_initial_language`、`html_report_error_type`、`summary_output_written`、`manifest_output_written`、`*_output_written`、失败步骤 |
 | `candidates.csv` | 候选字段、spot 展示字段、prediction 披露字段；prediction-derived 时检查 `prediction_source`、`prediction_input_source`、`prediction_model_executed_by_score_script` |
 | `diagnostics.csv` | 机器字段 `failed_thresholds`，展示字段 `failed_thresholds_zh`、`selection_status`、`short_reason`，以及与候选一致的 prediction 披露字段 |
 | `report.html` | 候选、诊断、步骤和证据路径的人类可读汇总；支持中英文切换，只读已有 JSON/CSV |

@@ -59,13 +59,14 @@ QUALITY_COUNT_KEYS = (
 def input_metadata_for_prices(prices_input: str | None) -> dict[str, Any]:
     if not prices_input:
         return {}
-    metadata_path = Path(prices_input).parent / "metadata.json"
+    metadata_path = input_metadata_path(prices_input)
     if not metadata_path.is_file():
         return {}
     data = json.loads(metadata_path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError(f"input metadata must be a JSON object: {metadata_path}")
     metadata = {key: data[key] for key in METADATA_KEYS if key in data}
+    metadata["input_metadata_file"] = metadata_path.name
     if local_input_partial_result(data):
         metadata["input_partial_result"] = True
     if "failed_symbols" in data:
@@ -80,6 +81,17 @@ def input_metadata_for_prices(prices_input: str | None) -> dict[str, Any]:
     if "requested_symbols" in data:
         metadata["input_requested_symbol_count"] = len(list_value(data, "requested_symbols"))
     return metadata
+
+
+def input_metadata_path(prices_input: str) -> Path:
+    root = Path(prices_input).parent
+    primary = root / "metadata.json"
+    if primary.is_file():
+        return primary
+    history = root / "history_metadata.json"
+    if history.is_file():
+        return history
+    return primary
 
 
 def history_metadata_for_output(output_dir: Path) -> dict[str, Any]:

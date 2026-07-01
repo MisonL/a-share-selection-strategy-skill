@@ -2,6 +2,8 @@
 
 本手册收纳可复制命令和门禁解释。根 [README.md](../../../README.md) 只保留入口、数据契约和常用路径；文档地图见 [index.md](index.md)。需要执行完整 demo、联网取数、回测或真实门禁复验时读本文件。
 
+如果任务目标是“全 A / 全市场 / 扩大股票池 / 真实广度扫描”，先读 [full-a-strict-workflow.md](full-a-strict-workflow.md)。本文件中的 demo、小样本和单轮命令不能直接等价为全市场主路径。
+
 ## 使用边界
 
 - 所有脚本以本地文件为稳定入口。
@@ -95,11 +97,11 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 
 检查：
 
-- `summary.json`: `requested_mode`、`mode`、`mode_decision`、`mode_decision_reason`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`consumes_prediction_columns`、`prediction_input_source`、`requested_prediction_input_source`、`prediction_model_executed_by_runner`、`source`、`source_scope`、`runner_source_scope`、`candidate_rows`、`diagnostic_rows`、`spot_matched_symbols`、`input_metadata`、`input_csv_provenance`、`source_provenance`、`html_report_language`、`html_report_initial_language`、`html_report_error_type`、`summary_output_written`、`manifest_output_written`、`candidates_output_written`、`diagnostics_output_written`。
+- `summary.json`: `requested_mode`、`mode`、`mode_decision`、`mode_decision_reason`、`missing_prediction_column_groups`、`missing_prediction_requirement`、`consumes_prediction_columns`、`prediction_input_source`、`requested_prediction_input_source`、`prediction_model_executed_by_runner`、`source`、`source_scope`、`runner_source_scope`、`candidate_rows`、`candidate_field_coverage`、`selection_failed_reason`、`selection_failed_next_action`、`diagnostic_rows`、`spot_matched_symbols`、`input_metadata`、`input_csv_provenance`、`source_provenance`、`html_report_language`、`html_report_initial_language`、`html_report_error_type`、`summary_output_written`、`manifest_output_written`、`candidates_output_written`、`diagnostics_output_written`。
 - `input_csv_provenance`: 若 `real_market_data`、`source_scope` 或 `source_claim_boundary` 为 `mixed`、`unknown` 或空值，只能说明本地 CSV 内嵌来源信息混合或未完整声明，不能写成真实全量行情、今日全市场覆盖或交易日历门禁通过。
 - `source_provenance`: 汇总 `input_metadata` 和 CSV 内嵌来源字段，便于机器消费；旧字段仍保留，冲突时以本次 `summary.json`、`run_manifest.json` 和 CSV 机器字段为准。
 - `run_manifest.json`: `html_report_enabled=false` 表示 `--no-html-report` 主动关闭 HTML；此时 `summary.html_report_written=false` 且 `html_report_error_type=""` 不是报告生成失败。
-- `report.html`: 浏览器可读汇总，展示候选、诊断、步骤和证据路径；默认 `--html-report-language auto` 跟随运行环境，也可传 `zh` 或 `en` 并在浏览器内切换；只从已写出的 JSON/CSV 派生，不能替代退出码或机器字段。
+- `report.html`: 浏览器可读汇总，展示候选、字段覆盖率、诊断、步骤和证据路径；默认 `--html-report-language auto` 跟随运行环境，也可传 `zh` 或 `en` 并在浏览器内切换；只从已写出的 JSON/CSV 派生，不能替代退出码或机器字段。
 - `candidates.csv`: 候选字段、spot 展示字段，以及 prediction 披露字段；低价超短 demo 显式传 `--spot-input spot.csv` 后，`spot_industry` 应展示 demo 行业。
 - `diagnostics.csv`: `failed_thresholds`、`failed_thresholds_zh`、`selection_status`、`short_reason`，以及与候选一致的 prediction 披露字段。
 - 价格、成交额、换手率、ST、停牌和一字板失败项只代表 demo 覆盖，不代表真实今日 A 股扫描。
@@ -210,7 +212,7 @@ uv run --with pandas --with numpy --with baostock python skills/a-share-selectio
 
 `--symbols` 接受 `000001`、`600000`、`sh.600000`、`sz.000001`，manifest 和 `selected_symbols.json` 会记录归一化后的六位代码。
 
-### 从快照筛选历史抓取标的
+### 从快照筛选小样本历史抓取标的
 
 ```bash
 uv run --with pandas --with numpy --with baostock python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py \
@@ -226,6 +228,9 @@ uv run --with pandas --with numpy --with baostock python skills/a-share-selectio
   --fail-on-partial-spot \
   --fail-on-skipped
 ```
+
+`--max-history-symbols 50` 在这里是“小样本演示上限”，不是全 A 推荐值。
+如果目标是全市场 breadth 或扩大股票池，不要复用这条命令；改读 [full-a-strict-workflow.md](full-a-strict-workflow.md)，并显式设置适合该轮任务的 `--max-history-symbols`、批次策略和中间 artifact 检查。
 
 `selected_symbols.json` 只证明按 spot 字段筛出了历史抓取列表，不证明实时全市场扫描完整，也不证明这些标的最终通过历史评分。
 

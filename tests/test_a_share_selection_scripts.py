@@ -6,6 +6,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 import json
+from typing import get_type_hints
 from pathlib import Path
 
 import pandas as pd
@@ -19,6 +20,7 @@ sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(TESTS))
 
 import score_candidates as scorer  # noqa: E402
+import a_share_selection_candidate_fields  # noqa: E402
 import a_share_selection_metrics as metrics  # noqa: E402
 from a_share_selection_data import ACCEPTED_DATE_FORMATS, read_table  # noqa: E402
 from a_share_selection_html_data import stock_symbol_key  # noqa: E402
@@ -69,6 +71,11 @@ class AShareSelectionScriptTests(unittest.TestCase):
             frame.to_csv(path, index=False)
             loaded = read_table(path)
         self.assertEqual("000002", loaded["symbol"].iloc[0])
+
+    def test_candidate_field_type_hints_resolve_after_lazy_pandas_import(self) -> None:
+        hints = get_type_hints(a_share_selection_candidate_fields.merge_latest_gate_fields)
+        self.assertIn("scored", hints)
+        self.assertIn("input_frame", hints)
 
     def test_validate_rejects_numeric_damaged_symbol(self) -> None:
         frame = build_frame()
@@ -169,6 +176,8 @@ class AShareSelectionScriptTests(unittest.TestCase):
         self.assertEqual("00700", stock_symbol_key("700.HK"))
         self.assertEqual("00700", stock_symbol_key("HK.700"))
         self.assertEqual("300001", stock_symbol_key("sz.300001"))
+        self.assertEqual("430047", stock_symbol_key("bj.430047"))
+        self.assertEqual("835185", stock_symbol_key("835185.BJ"))
 
     def test_slash_dates_are_rejected_instead_of_silently_parsed(self) -> None:
         frame = build_frame()

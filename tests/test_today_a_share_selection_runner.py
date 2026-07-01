@@ -59,6 +59,14 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
         self.assertEqual(0, code, stderr)
         self.assertIn("runner=run_today_a_share_selection", stdout)
+        self.assertIn("execution_path=local_prices_generic", stdout)
+        self.assertIn("execution_path_reason=prices_input_provided", stdout)
+        self.assertIn("coverage_class=local_input", stdout)
+        self.assertIn("full_market_claim_allowed=false", stdout)
+        self.assertIn(
+            "full_market_claim_boundary=local_prices_input_not_full_market_scan",
+            stdout,
+        )
         self.assertIn("candidate_rows=2", stdout)
         self.assertIn("diagnostic_rows=2", stdout)
         self.assertIn("html_report=", stdout)
@@ -67,6 +75,14 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("lightgbm_executed_by_runner=false", stdout)
         self.assertEqual(["validate", "score"], [step["step"] for step in manifest["steps"]])
         self.assertEqual("auto", manifest["requested_mode"])
+        self.assertEqual("local_prices_generic", manifest["execution_path"])
+        self.assertEqual("prices_input_provided", manifest["execution_path_reason"])
+        self.assertEqual("local_input", manifest["coverage_class"])
+        self.assertFalse(manifest["full_market_claim_allowed"])
+        self.assertEqual(
+            "local_prices_input_not_full_market_scan",
+            manifest["full_market_claim_boundary"],
+        )
         self.assertEqual("generic", manifest["mode"])
         self.assertEqual("auto_generic", manifest["mode_decision"])
         self.assertTrue(manifest["html_report_enabled"])
@@ -87,6 +103,14 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertFalse(manifest["prediction_model_executed_by_runner"])
         self.assertEqual("not_used", manifest["lightgbm_output_source"])
         self.assertEqual("completed", summary["status"])
+        self.assertEqual("local_prices_generic", summary["execution_path"])
+        self.assertEqual("prices_input_provided", summary["execution_path_reason"])
+        self.assertEqual("local_input", summary["coverage_class"])
+        self.assertFalse(summary["full_market_claim_allowed"])
+        self.assertEqual(
+            "local_prices_input_not_full_market_scan",
+            summary["full_market_claim_boundary"],
+        )
         self.assertEqual("auto", summary["requested_mode"])
         self.assertEqual("generic", summary["mode"])
         self.assertEqual("auto_generic", summary["mode_decision"])
@@ -138,8 +162,23 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertTrue(
             all(row["advice_boundary"] == summary["advice_boundary"] for row in candidate_rows)
         )
+        self.assertTrue(all(row["execution_path"] == "local_prices_generic" for row in candidate_rows))
+        self.assertTrue(all(row["coverage_class"] == "local_input" for row in candidate_rows))
+        self.assertTrue(
+            all(row["full_market_claim_allowed"] == "False" for row in candidate_rows)
+        )
+        self.assertTrue(
+            all(
+                row["full_market_claim_boundary"]
+                == "local_prices_input_not_full_market_scan"
+                for row in candidate_rows
+            )
+        )
         self.assertTrue(
             all(row["advice_boundary"] == summary["advice_boundary"] for row in diagnostic_rows)
+        )
+        self.assertTrue(
+            all(row["execution_path_reason"] == "prices_input_provided" for row in diagnostic_rows)
         )
         self.assertTrue(
             all(
@@ -1130,6 +1169,42 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(1, summary["spot_rows"])
         self.assertEqual(1, summary["spot_matched_symbols"])
 
+    def test_runner_uses_spot_name_when_history_name_is_numeric(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=True)
+        frame = frame[frame["symbol"] == "000002"].copy()
+        frame["name"] = "2"
+        frame[["open", "high", "low", "close"]] = frame[
+            ["open", "high", "low", "close"]
+        ] * 0.75
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            spot = root / "spot.csv"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+            spot.write_text(
+                "symbol,name,price,amount\n000002,万科A,8.88,200000000\n",
+                encoding="utf-8",
+            )
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--spot-input",
+                    str(spot),
+                    "--output-dir",
+                    str(output),
+                ]
+            )
+
+            candidate_rows = csv_rows(output / "candidates.csv")
+            report = (output / "report.html").read_text(encoding="utf-8")
+
+        self.assertEqual(0, code, stderr)
+        self.assertEqual("万科A", candidate_rows[0]["name"])
+        self.assertIn("万科A", report)
+
     def test_runner_records_eastmoney_fetch_step_before_score(self) -> None:
         args = runner.build_parser().parse_args(
             [
@@ -1615,6 +1690,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual("yfinance_history_fetch", summary["source_scope"])
         self.assertEqual("local_prices_input", summary["runner_source_scope"])
         self.assertIn("input_partial_result=true", stdout)
+        self.assertIn("input_metadata_file=metadata.json", stdout)
         self.assertIn("source_scope=yfinance_history_fetch", stdout)
         self.assertIn("runner_source_scope=local_prices_input", stdout)
         self.assertIn("input_token_configured=false", stdout)
@@ -1627,14 +1703,75 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("input_failed_symbols=MSFT:timeout", stdout)
         self.assertIn("input_empty_symbols=none", stdout)
         self.assertIn("input_output_written=true", stdout)
-        self.assertIn("input_metadata_output_written=true", stdout)
+
+    def test_local_prices_use_history_metadata_when_metadata_json_missing(self) -> None:
+        frame = build_frame(days=130, include_tradability=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "prices.csv"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+            (root / "history_metadata.json").write_text(
+                json.dumps(
+                    {
+                        "source_type": "external_fetch",
+                        "source": "zzshare",
+                        "source_scope": "zzshare_history_fetch",
+                        "source_claim_boundary": (
+                            "zzshare_external_api_not_broker_order_or_long_term_stability_proof"
+                        ),
+                        "requested_symbols": ["000001", "600000"],
+                        "symbol_count": 2,
+                        "rows": int(len(frame)),
+                        "failed_symbols": [],
+                        "empty_symbols": [],
+                        "possibly_truncated_symbols": [],
+                        "token_configured": False,
+                        "output_written": True,
+                        "metadata_output_written": True,
+                        "real_market_data": True,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            code, stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--output-dir",
+                    str(output),
+                    "--mode",
+                    "generic",
+                    "--no-html-report",
+                ]
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            candidate_rows = csv_rows(output / "candidates.csv")
+            diagnostic_rows = csv_rows(output / "diagnostics.csv")
+
+        self.assertEqual(0, code, stderr)
+        self.assertEqual("zzshare", summary["input_metadata"]["source"])
+        self.assertEqual(
+            "zzshare_history_fetch",
+            summary["input_metadata"]["source_scope"],
+        )
+        self.assertEqual(
+            "history_metadata.json",
+            summary["input_metadata"]["input_metadata_file"],
+        )
+        self.assertEqual("zzshare_history_fetch", summary["source_scope"])
+        self.assertIn("source_scope=zzshare_history_fetch", stdout)
+        self.assertIn("input_metadata_file=history_metadata.json", stdout)
         for row in candidate_rows + diagnostic_rows:
-            self.assertEqual("yfinance_history_fetch", row["source_scope"])
+            self.assertEqual("zzshare_history_fetch", row["source_scope"])
             self.assertEqual("False", row["input_token_configured"])
-            self.assertEqual("True", row["input_partial_result"])
-            self.assertEqual("1", row["input_possibly_truncated_symbol_count"])
-            self.assertEqual("2", row["input_invalid_rows"])
-            self.assertEqual("1", row["input_dropped_invalid_rows"])
+            self.assertEqual("", row["input_partial_result"])
+            self.assertEqual("0", row["input_possibly_truncated_symbol_count"])
+        self.assertIn(
+            "candidate_field_coverage=industry:0/0,one_year_pct_chg:0/0,market_cap:0/0,pe_ttm:0/0,pb_lf:0/0",
+            stdout,
+        )
 
     def test_history_fallback_marks_partial_in_summary_stdout_and_csvs(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1736,14 +1873,41 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 runner.helpers.print_summary(manifest, output)
 
         self.assertEqual(["000001"], manifest["history_symbols"])
+        self.assertEqual("history_fetch_spot_derived_explicit_limit_with_local_spot_generic", manifest["execution_path"])
+        self.assertEqual("derive_symbols_from_spot+explicit_history_limit+spot_input", manifest["execution_path_reason"])
+        self.assertEqual("spot_derived_limited_pool", manifest["coverage_class"])
+        self.assertFalse(manifest["full_market_claim_allowed"])
+        self.assertEqual(
+            "spot_derived_explicit_limit_requires_artifact_review",
+            manifest["full_market_claim_boundary"],
+        )
         self.assertEqual(["000001"], selected["selected_symbols"])
         self.assertEqual(1, selected["filtered_spot_rows"])
         self.assertEqual(1, selected["selected_symbol_count"])
         self.assertEqual(1, selected["max_history_symbols"])
+        self.assertEqual("explicit_user_input", selected["history_symbol_limit_source"])
         self.assertEqual(4, summary["history_selection"]["raw_spot_rows"])
+        self.assertEqual(
+            "history_fetch_spot_derived_explicit_limit_with_local_spot_generic",
+            summary["execution_path"],
+        )
+        self.assertEqual(
+            "derive_symbols_from_spot+explicit_history_limit+spot_input",
+            summary["execution_path_reason"],
+        )
+        self.assertEqual("spot_derived_limited_pool", summary["coverage_class"])
+        self.assertFalse(summary["full_market_claim_allowed"])
+        self.assertEqual(
+            "spot_derived_explicit_limit_requires_artifact_review",
+            summary["full_market_claim_boundary"],
+        )
         self.assertEqual(1, summary["history_selection"]["filtered_spot_rows"])
         self.assertEqual(1, summary["history_selection"]["selected_symbol_count"])
         self.assertEqual(1, summary["history_selection"]["max_history_symbols"])
+        self.assertEqual(
+            "explicit_user_input",
+            summary["history_selection"]["history_symbol_limit_source"],
+        )
         self.assertFalse(summary["history_selection"]["allow_partial_history"])
         self.assertEqual(
             1,
@@ -1752,10 +1916,198 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertTrue(summary["selected_symbols_output_written"])
         self.assertTrue(summary["history_metadata_output_written"])
         self.assertIn("history_symbols=1", stdout.getvalue())
+        self.assertIn(
+            "execution_path=history_fetch_spot_derived_explicit_limit_with_local_spot_generic",
+            stdout.getvalue(),
+        )
+        self.assertIn("coverage_class=spot_derived_limited_pool", stdout.getvalue())
+        self.assertIn("full_market_claim_allowed=false", stdout.getvalue())
+        self.assertIn(
+            "full_market_claim_boundary=spot_derived_explicit_limit_requires_artifact_review",
+            stdout.getvalue(),
+        )
         self.assertIn("raw_spot_rows=4", stdout.getvalue())
         self.assertIn("filtered_spot_rows=1", stdout.getvalue())
         self.assertIn("max_history_symbols=1", stdout.getvalue())
+        self.assertIn(
+            "history_symbol_limit_source=explicit_user_input",
+            stdout.getvalue(),
+        )
         self.assertIn("allow_partial_history=false", stdout.getvalue())
+        self.assertIn("candidate_field_coverage=unknown", stdout.getvalue())
+
+    def test_explicit_history_symbols_do_not_report_spot_sample_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "baostock",
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+
+            runner.run_pipeline(context)
+            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                summary = summary_view(manifest, "completed")
+                runner.helpers.print_summary(manifest, output)
+
+        self.assertEqual("history_fetch_explicit_symbols_generic", manifest["execution_path"])
+        self.assertEqual("explicit_symbols", manifest["execution_path_reason"])
+        self.assertEqual("explicit_symbol_pool", manifest["coverage_class"])
+        self.assertEqual("explicit_symbols_not_full_market_scan", manifest["full_market_claim_boundary"])
+        self.assertEqual(["000001"], selected["symbols"])
+        self.assertEqual(1, selected["selected_symbol_count"])
+        self.assertEqual("explicit_symbols_no_spot_limit", selected["history_symbol_limit_source"])
+        self.assertEqual("explicit_symbols", summary["history_selection"]["source"])
+        self.assertEqual(1, summary["history_selection"]["selected_symbol_count"])
+        self.assertEqual("", summary["history_selection"]["max_history_symbols"])
+        self.assertEqual(
+            "explicit_symbols_no_spot_limit",
+            summary["history_selection"]["history_symbol_limit_source"],
+        )
+        self.assertIn("max_history_symbols=unknown", stdout.getvalue())
+        self.assertIn(
+            "history_symbol_limit_source=explicit_symbols_no_spot_limit",
+            stdout.getvalue(),
+        )
+
+    def test_explicit_history_symbols_with_limit_report_limited_pool(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "baostock",
+                    "--symbols",
+                    "000001,000002",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--max-history-symbols",
+                    "50",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+
+            runner.run_pipeline(context)
+            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                summary = summary_view(manifest, "completed")
+                runner.helpers.print_summary(manifest, output)
+
+        self.assertEqual(
+            "history_fetch_explicit_symbols_explicit_limit_generic",
+            manifest["execution_path"],
+        )
+        self.assertEqual(
+            "explicit_symbols+explicit_history_limit",
+            manifest["execution_path_reason"],
+        )
+        self.assertEqual("explicit_symbol_limited_pool", manifest["coverage_class"])
+        self.assertEqual(
+            "explicit_symbols_explicit_limit_requires_artifact_review",
+            manifest["full_market_claim_boundary"],
+        )
+        self.assertEqual(["000001", "000002"], selected["symbols"])
+        self.assertEqual(2, summary["history_selection"]["selected_symbol_count"])
+        self.assertEqual("", summary["history_selection"]["max_history_symbols"])
+        self.assertEqual(
+            "explicit_symbols_no_spot_limit",
+            summary["history_selection"]["history_symbol_limit_source"],
+        )
+        self.assertIn(
+            "execution_path=history_fetch_explicit_symbols_explicit_limit_generic",
+            stdout.getvalue(),
+        )
+        self.assertIn("coverage_class=explicit_symbol_limited_pool", stdout.getvalue())
+
+    def test_explicit_default_history_limit_is_not_misclassified_as_spot_sample_cap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            spot = root / "spot.csv"
+            output = root / "run"
+            spot.write_text(
+                "\n".join(
+                    [
+                        "symbol,name,spot_price,spot_amount,spot_pct_chg",
+                        "000001,Alpha,8.2,200000000,1.2",
+                        "000002,Beta,8.0,300000000,9.0",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--spot-input",
+                    str(spot),
+                    "--history-source",
+                    "baostock",
+                    "--derive-symbols-from-spot",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--max-history-symbols",
+                    "50",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+
+            runner.run_pipeline(context)
+            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                summary = summary_view(manifest, "completed")
+                runner.helpers.print_summary(manifest, output)
+
+        self.assertTrue(getattr(args, "max_history_symbols_supplied", False))
+        self.assertEqual(
+            "history_fetch_spot_derived_explicit_limit_with_local_spot_generic",
+            manifest["execution_path"],
+        )
+        self.assertEqual(
+            "derive_symbols_from_spot+explicit_history_limit+spot_input",
+            manifest["execution_path_reason"],
+        )
+        self.assertEqual("spot_derived_limited_pool", manifest["coverage_class"])
+        self.assertEqual(
+            "spot_derived_explicit_limit_requires_artifact_review",
+            manifest["full_market_claim_boundary"],
+        )
+        self.assertEqual("explicit_user_input", selected["history_symbol_limit_source"])
+        self.assertEqual("explicit_user_input", summary["history_selection"]["history_symbol_limit_source"])
+        self.assertEqual(50, summary["history_selection"]["max_history_symbols"])
+        self.assertEqual(
+            "history_fetch_spot_derived_explicit_limit_with_local_spot_generic",
+            summary["execution_path"],
+        )
+        self.assertEqual("spot_derived_limited_pool", summary["coverage_class"])
+        self.assertIn("max_history_symbols=50", stdout.getvalue())
+        self.assertIn(
+            "history_symbol_limit_source=explicit_user_input",
+            stdout.getvalue(),
+        )
 
     def test_runner_derives_akshare_hk_symbols_from_spot_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2144,8 +2496,31 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             manifest = runner.initial_manifest(args)
             context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
 
-            with self.assertRaisesRegex(ValueError, "zero history symbols"):
+            with self.assertRaisesRegex(
+                ValueError,
+                (
+                    "zero history symbols.*preflight_stage=derive_symbols.*"
+                    "filtered_spot_rows=0.*raw_spot_rows=1.*"
+                    "selected_symbols_count=0.*max_history_symbols=50.*"
+                    "next_action=expand_spot_universe_or_relax_filters"
+                ),
+            ):
                 runner.run_pipeline(context)
+            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+
+        self.assertTrue(selected["selection_failed"])
+        self.assertEqual(
+            "spot_snapshot_filtered_to_zero_history_symbols",
+            selected["selection_failed_reason"],
+        )
+        self.assertEqual(
+            "expand_spot_universe_or_relax_filters",
+            selected["next_action"],
+        )
+        self.assertEqual(
+            "expand_spot_universe_or_relax_filters",
+            selected["selection_failed_next_action"],
+        )
 
     def test_runner_counts_parquet_spot_rows_in_summary(self) -> None:
         pd = __import__("pandas")
@@ -2322,7 +2697,69 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
 
         self.assertEqual(["000001"], manifest["history_symbols"])
+        self.assertEqual(
+            "history_fetch_spot_derived_explicit_limit_with_local_spot_generic",
+            manifest["execution_path"],
+        )
+        self.assertEqual(
+            "derive_symbols_from_spot+explicit_history_limit+spot_input",
+            manifest["execution_path_reason"],
+        )
         self.assertEqual(["000001"], selected["selected_symbols"])
+        self.assertEqual("explicit_user_input", selected["history_symbol_limit_source"])
+
+    def test_runner_marks_default_spot_derived_history_path_as_sample(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            spot = root / "spot.csv"
+            output = root / "run"
+            spot.write_text(
+                "\n".join(
+                    [
+                        "symbol,name,spot_price,spot_amount,spot_pct_chg",
+                        "000001,Alpha,8.2,200000000,1.2",
+                        "000002,Beta,8.0,300000000,9.0",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--spot-input",
+                    str(spot),
+                    "--history-source",
+                    "baostock",
+                    "--derive-symbols-from-spot",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+
+            runner.run_pipeline(context)
+            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            "history_fetch_spot_derived_sample_with_local_spot_generic",
+            manifest["execution_path"],
+        )
+        self.assertEqual(
+            "derive_symbols_from_spot+default_small_sample_cap+spot_input",
+            manifest["execution_path_reason"],
+        )
+        self.assertEqual("spot_derived_sample", manifest["coverage_class"])
+        self.assertFalse(manifest["full_market_claim_allowed"])
+        self.assertEqual(
+            "default_small_sample_cap_not_full_market",
+            manifest["full_market_claim_boundary"],
+        )
+        self.assertEqual("small_sample_default_cap", selected["history_symbol_limit_source"])
 
 
 

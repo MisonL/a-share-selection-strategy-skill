@@ -17,14 +17,34 @@
 | `prediction_model_executed_by_runner=false` | 今日入口或外部 prediction 评分 | 不能说 runner 训练或执行了预测模型 |
 | `requested_prediction_input_source=external_input` 且 `consumes_prediction_columns=false` | 请求了 prediction 口径但本次未实际消费预测列 | 不能说已经使用 prediction 列完成评分 |
 | `spot_matched_symbols` | spot 展示字段实际匹配到评分股票数 | 不能证明实时全市场扫描完整 |
+| `coverage_class=local_input` | 本轮是本地价格文件评分 | 不能写成真实全市场扫描 |
+| `coverage_class=spot_derived_sample` | 本轮使用默认小样本上限 | 不能写成扩大股票池或全 A |
+| `coverage_class=spot_derived_limited_pool` | 本轮使用显式 spot 派生历史池上限 | 必须继续核对 `selected_symbols.json`、`history_metadata.json`、`summary.json` 后才可描述覆盖范围 |
+| `candidate_field_coverage` | 候选表中可选字段的实际写出覆盖率 | 不能写成市场覆盖或数据完整性证明 |
+| `full_market_claim_allowed=false` | runner 不允许自动宣称全市场闭环 | 必须按 `full_market_claim_boundary` 缩短结论 |
+| 全 A / 全市场真实任务 | 全 A 严格任务汇报骨架 | 不能只报候选数，必须报股票池收口过程 |
 | `lightgbm_*` 字段 | 旧产物兼容字段 | 新报告优先引用中性的 prediction 字段 |
 | `html_report_written=true` | 人类可读 HTML 报告已写出 | 不能替代 JSON/CSV、退出码或门禁字段 |
 | `html_report_enabled=false` 或 stdout `html_report=disabled` | HTML 展示层被主动关闭 | 不能写成报告生成失败，也不能替代 JSON/CSV 和退出码 |
 | `html_report_written=false` 且 `html_report_error_type` 非空 | HTML 展示层写出失败 | 不能改写候选、诊断、退出码或 strict gate 事实 |
+| `selection_failed_reason` / `selection_failed_next_action` | 预检失败时的可读原因与下一步 | 不能写成路径通过或数据已恢复 |
 | `html_report_language=auto` | HTML 初始语言跟随运行环境，且浏览器内可切换 | 不能改变机器字段或事实口径 |
 | `input_metadata.source_type=synthetic_demo` | 输入来自 `create_demo_data.py` 合成 demo | 不能写成真实行情、真实预测或真实选股结论 |
 | `input_metadata={}` 或未声明 `real_market_data=true` | 本地行情文件来源未证明 | 不能写成真实行情源、今日全市场扫描或数据覆盖已验证 |
 | `input_csv_provenance.real_market_data=mixed/unknown` 或 `input_csv_provenance.source_scope=mixed/unknown` | 本地行情文件来源未证明 | 不能把部分行来源声明写成全量真实行情证明 |
+
+## 恢复动作快速路由
+
+先判定失败类型，再决定下一步，不要一看到 `output_written=true` 或 HTML 存在就继续向用户展示结果。
+
+| 机器信号 | 先读哪个产物 | 推荐下一步 | 不能误判 |
+| --- | --- | --- | --- |
+| `partial_result=true` | `spot_metadata.json`、`summary.json` | 先决定是否补抓分页；必要时重跑 spot，再继续历史抓取 | 不能写成实时全市场扫描完成 |
+| `failed_symbols`、`empty_symbols`、`possibly_truncated_symbols` 非空 | `history_metadata.json`、`run_manifest.json` | 调整 provider 参数、降低批次或拆轮次重跑 | 不能把部分写出当成全量历史抓取成功 |
+| `invalid_rows>0`、`non_trading_rows>0`、`st_rows>0` | `history_metadata.json` | 先形成清洗清单，再重跑 clean history | 不能把 strict gate failed 说成 0 候选成功 |
+| `output_written=false` 或 validate 非 0 | `summary.json`、validate stderr | 回到 `validate_ohlcv.py` 或输入数据修复 | 不能直接进入评分或 HTML 汇报 |
+| `candidate_rows=0` 且 `effective_empty_result=true` | `summary.json`、`diagnostics.csv` | 使用“0 候选结果”模板，解释真实过滤原因 | 不能写成策略一定无效或数据一定失败 |
+| `source_scope=unknown` 且本轮使用 `--prices-input` | `summary.json`、输入目录中的 provenance 文件 | 确认同目录至少存在 `metadata.json` 或 `history_metadata.json`，必要时补齐 provenance 后再复跑 | 不能把 provenance 丢失的结果写成真实来源已证明 |
 
 ## 模板分组
 
@@ -88,6 +108,31 @@
 - 缺少真实 `turn` 或 `turnover` 时，不能自行估算并当作真实换手率；yfinance 通用链路只能披露 `turnover_assumption=neutral_series_missing_turnover`。
 - 数据窗口必须覆盖评分配置的最小历史行数；最近一个月通常不足默认 120 行历史，可能导致历史不足或候选不足。
 - 只有 `validate_ohlcv.py` 和 `score_candidates.py` 完成后，才能按真实输出解释候选、0 候选或不足 5 只的原因。
+```
+
+### 全 A 严格任务汇报骨架
+
+```markdown
+## 全 A 严格任务结果
+- 本轮目标: 全 A / 全市场真实广度扫描，不是 demo，也不是固定小样本复验。
+- 执行路径: `execution_path`、`execution_path_reason`、`coverage_class`。
+- 字段覆盖率: `candidate_field_coverage`。
+- 全市场声明边界: `full_market_claim_allowed`、`full_market_claim_boundary`。
+- 快照范围: `spot_metadata.json` 的 `raw_items/filtered_items/requested_pages/successful_pages/partial_result`。
+- 历史抓取范围: `selected_symbols.json` 或 `history_metadata.json` 中的初始历史样本数。
+- 清洗过程: 说明剔除了多少只、按什么原因剔除，例如 `invalid_rows/non_trading_rows/st_rows/history_rows不足`。
+- 最终有效股票池: `validate` 通过后的 `symbol_count` 或 `prices_rows` 对应的去重股票数。
+- 诊断结果: `diagnostic_rows`。
+- 最终候选: `candidate_rows`。
+- 字段覆盖率卡片: `candidate_field_coverage`。
+- 数据来源: 历史源 `source/source_scope`，实时快照源 `spot source/source_scope`。
+- 必须保留边界:
+  - 非实时全市场成交证明
+  - 非真实收益证明
+  - 非券商订单或真实成交容量证明
+  - 外部源长期稳定性未证明
+
+如果 `report.html` 没有直接展示“初始历史样本数 -> 清洗剔除数 -> 最终有效股票池”的链路，必须在文字汇报中手动补齐，不能只贴页面或只报候选数量。
 ```
 
 ### 本地行情来源未证明

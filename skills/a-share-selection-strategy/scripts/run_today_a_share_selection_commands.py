@@ -212,6 +212,9 @@ def initial_manifest(args: Any) -> dict[str, Any]:
         "symbols": args.symbols or "",
         "derive_symbols_from_spot": bool(args.derive_symbols_from_spot),
         "max_history_symbols": int(args.max_history_symbols),
+        "max_history_symbols_supplied": bool(
+            getattr(args, "max_history_symbols_supplied", False)
+        ),
         "history_adjust": args.history_adjust or "",
         "history_http_url": args.history_http_url or "",
         "history_timeout_seconds": manifest_optional(args.history_timeout_seconds),

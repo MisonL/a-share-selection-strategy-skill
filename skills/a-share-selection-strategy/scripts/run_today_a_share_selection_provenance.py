@@ -18,6 +18,11 @@ RUN_PROVENANCE_COLUMNS = (
     "real_market_data",
     "market_label_only",
     "source_claim_boundary",
+    "execution_path",
+    "execution_path_reason",
+    "coverage_class",
+    "full_market_claim_allowed",
+    "full_market_claim_boundary",
     "mode_decision",
     "consumes_prediction_columns",
     "prediction_model_executed_by_runner",
@@ -70,6 +75,16 @@ def provenance_fields(manifest: dict[str, Any]) -> dict[str, Any]:
         "source_type": metadata.get("source_type", "unknown"),
         "source_scope": metadata.get("source_scope", manifest.get("source_scope", "unknown")),
         "real_market_data": metadata.get("real_market_data", "unknown"),
+        "execution_path": manifest.get("execution_path", "unresolved"),
+        "execution_path_reason": manifest.get("execution_path_reason", ""),
+        "coverage_class": manifest.get("coverage_class", "unknown"),
+        "full_market_claim_allowed": bool(
+            manifest.get("full_market_claim_allowed", False)
+        ),
+        "full_market_claim_boundary": manifest.get(
+            "full_market_claim_boundary",
+            "not_evaluated",
+        ),
         "mode_decision": manifest.get("mode_decision", ""),
         "consumes_prediction_columns": bool(manifest.get("consumes_prediction_columns", False)),
         "prediction_model_executed_by_runner": bool(

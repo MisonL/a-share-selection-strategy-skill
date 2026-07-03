@@ -91,7 +91,7 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 ```bash
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/score_candidates.py \
   --input /tmp/a-share-selection-demo/prices.csv \
-  --config skills/a-share-selection-strategy/scripts/example_config.json \
+  --config skills/a-share-selection-strategy/configs/example_config.json \
   --output /tmp/a-share-selection-demo/candidates.csv
 ```
 
@@ -100,10 +100,10 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 ```bash
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/validate_ohlcv.py \
   --input /tmp/a-share-selection-demo/prices_with_prediction.csv \
-  --config skills/a-share-selection-strategy/scripts/prediction_profile_config.json
+  --config skills/a-share-selection-strategy/configs/prediction_profile_config.json
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/score_candidates.py \
   --input /tmp/a-share-selection-demo/prices_with_prediction.csv \
-  --config skills/a-share-selection-strategy/scripts/prediction_profile_config.json \
+  --config skills/a-share-selection-strategy/configs/prediction_profile_config.json \
   --output /tmp/a-share-selection-demo/prediction_candidates.csv
 ```
 
@@ -151,7 +151,7 @@ uv run --with pandas --with numpy --with pyarrow python skills/a-share-selection
   --input /tmp/a-share-selection-demo/prices.parquet
 uv run --with pandas --with numpy --with pyarrow python skills/a-share-selection-strategy/scripts/score_candidates.py \
   --input /tmp/a-share-selection-demo/prices.parquet \
-  --config skills/a-share-selection-strategy/scripts/example_config.json \
+  --config skills/a-share-selection-strategy/configs/example_config.json \
   --output /tmp/a-share-selection-demo/candidates_parquet.csv
 ```
 
@@ -169,10 +169,10 @@ uv run --with pandas --with numpy --with scikit-learn --with lightgbm \
   --fail-on-skipped
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/validate_ohlcv.py \
   --input /tmp/a-share-selection-ml-demo/prices_generated_prediction.csv \
-  --config skills/a-share-selection-strategy/scripts/prediction_profile_config.json
+  --config skills/a-share-selection-strategy/configs/prediction_profile_config.json
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/score_candidates.py \
   --input /tmp/a-share-selection-ml-demo/prices_generated_prediction.csv \
-  --config skills/a-share-selection-strategy/scripts/prediction_profile_config.json \
+  --config skills/a-share-selection-strategy/configs/prediction_profile_config.json \
   --output /tmp/a-share-selection-ml-demo/prediction_candidates.csv \
   --fail-on-skipped \
   --fail-on-empty-result
@@ -306,7 +306,7 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
   --input /tmp/a-share-selection-akshare/prices.csv
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/score_candidates.py \
   --input /tmp/a-share-selection-akshare/prices.csv \
-  --config skills/a-share-selection-strategy/scripts/example_config.json \
+  --config skills/a-share-selection-strategy/configs/example_config.json \
   --output /tmp/a-share-selection-akshare/candidates.csv \
   --diagnostics-output /tmp/a-share-selection-akshare/score_diagnostics.csv
 ```
@@ -327,7 +327,7 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
   --input /tmp/a-share-selection-zzshare/prices.csv
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/score_candidates.py \
   --input /tmp/a-share-selection-zzshare/prices.csv \
-  --config skills/a-share-selection-strategy/scripts/example_config.json \
+  --config skills/a-share-selection-strategy/configs/example_config.json \
   --output /tmp/a-share-selection-zzshare/candidates.csv \
   --diagnostics-output /tmp/a-share-selection-zzshare/score_diagnostics.csv
 ```
@@ -351,7 +351,7 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
   --input /tmp/a-share-selection-us/prices.csv
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/score_candidates.py \
   --input /tmp/a-share-selection-us/prices.csv \
-  --config skills/a-share-selection-strategy/scripts/example_config.json \
+  --config skills/a-share-selection-strategy/configs/example_config.json \
   --output /tmp/a-share-selection-us/candidates.csv \
   --diagnostics-output /tmp/a-share-selection-us/score_diagnostics.csv \
   --fail-on-skipped \
@@ -501,8 +501,8 @@ python3 skills/a-share-selection-strategy/scripts/validate_walk_forward_artifact
 ```bash
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/slice_prices_as_of.py --input prices.csv --output prices_signal_window.csv --as-of-date YYYY-MM-DD
 uv run --with-requirements skills/a-share-selection-strategy/requirements-ml.txt python skills/a-share-selection-strategy/scripts/generate_lightgbm_predictions.py --input prices_signal_window.csv --output predictions_signal_window.csv --summary-output prediction_summary.json --fail-on-skipped
-uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/validate_ohlcv.py --input predictions_signal_window.csv --config skills/a-share-selection-strategy/scripts/prediction_profile_config.json
-uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/score_candidates.py --input predictions_signal_window.csv --config skills/a-share-selection-strategy/scripts/prediction_profile_config.json --output prediction_candidates.csv --fail-on-skipped --fail-on-empty-result
+uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/validate_ohlcv.py --input predictions_signal_window.csv --config skills/a-share-selection-strategy/configs/prediction_profile_config.json
+uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/score_candidates.py --input predictions_signal_window.csv --config skills/a-share-selection-strategy/configs/prediction_profile_config.json --output prediction_candidates.csv --fail-on-skipped --fail-on-empty-result
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/allocate_candidate_capital.py --prices prices.csv --candidates prediction_candidates.csv --output prediction_sized_candidates.csv --cash-budget 1000000 --lot-size 100 --fail-on-unallocated
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/backtest_buy_hold.py --prices prices.csv --candidates prediction_sized_candidates.csv --output prediction_backtest.csv --hold-days 5 --fail-on-incomplete
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/portfolio_equity_curve.py --backtests prediction_backtest.csv --output prediction_equity_curve.csv
@@ -517,10 +517,9 @@ uv run --with pandas python skills/a-share-selection-strategy/scripts/summarize_
 ## 验证命令
 
 ```bash
-python3 -m json.tool skills/a-share-selection-strategy/evals/evals.json >/tmp/a-share-selection-evals.json
-python3 -m json.tool skills/a-share-selection-strategy/scripts/example_config.json >/tmp/a-share-selection-example-config.json
-python3 -m json.tool skills/a-share-selection-strategy/scripts/prediction_profile_config.json >/tmp/a-share-selection-prediction-config.json
-python3 -m json.tool skills/a-share-selection-strategy/scripts/ultra_short_low_price_config.json >/tmp/a-share-selection-ultra-short-config.json
+for file in skills/a-share-selection-strategy/evals/*.json skills/a-share-selection-strategy/configs/*.json; do
+  python3 -m json.tool "$file" >/tmp/"$(basename "$file")"
+done
 uv run --with pyyaml python - <<'PY'
 import yaml
 from pathlib import Path

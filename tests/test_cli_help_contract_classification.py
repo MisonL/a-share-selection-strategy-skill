@@ -78,6 +78,7 @@ HELP_CONTRACT_EXCLUDED_HELPERS = [
     "a_share_selection_metrics.py",
     "a_share_selection_model_contracts.py",
     "a_share_selection_output.py",
+    "a_share_selection_paths.py",
     "a_share_selection_profile.py",
     "a_share_selection_prepare.py",
     "a_share_selection_provenance.py",

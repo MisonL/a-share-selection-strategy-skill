@@ -2,6 +2,8 @@
 
 本文件是 `scripts/` 目录入口分层的唯一事实源。看到脚本文件时，先按“稳定 CLI / 取数入口 / 门禁回测入口 / 内部 helper”四类判断，不要按文件数量或 `__main__` 保护猜入口。
 
+配置文件的权威路径在 `../configs/`；旧命令传入的 `scripts/*.json` 会由 CLI 自动回退到 `../configs/`。
+
 命令细节、依赖和字段映射仍以 [../references/script-reference.md](../references/script-reference.md) 为准；脚本边界和 helper 边界先读本文件。
 
 ## 稳定 CLI
@@ -53,6 +55,7 @@
 - `zzshare_a_share_quality.py`
 - `lightgbm_prediction_summary.py`
 - `portfolio_candidate_allocation.py`
+- `a_share_selection_paths.py`
 
 直接复用 Python 代码时，需要将本目录加入 `PYTHONPATH` 或 `sys.path`。不要把内部 helper 的导入路径当成稳定 package API。
 

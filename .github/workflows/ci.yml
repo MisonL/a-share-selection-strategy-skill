@@ -16,10 +16,9 @@ jobs:
         run: python3 -m pip install -r skills/a-share-selection-strategy/requirements-parquet.txt
       - name: Validate JSON files
         run: |
-          python3 -m json.tool skills/a-share-selection-strategy/evals/evals.json >/tmp/a-share-selection-evals.json
-          python3 -m json.tool skills/a-share-selection-strategy/scripts/example_config.json >/tmp/a-share-selection-example-config.json
-          python3 -m json.tool skills/a-share-selection-strategy/scripts/prediction_profile_config.json >/tmp/a-share-selection-prediction-config.json
-          python3 -m json.tool skills/a-share-selection-strategy/scripts/ultra_short_low_price_config.json >/tmp/a-share-selection-ultra-short-config.json
+          for file in skills/a-share-selection-strategy/evals/*.json skills/a-share-selection-strategy/configs/*.json; do
+            python3 -m json.tool "$file" >/tmp/"$(basename "$file")"
+          done
       - name: Validate agent manifest
         run: |
           python3 - <<'PY'

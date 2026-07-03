@@ -17,11 +17,12 @@ from a_share_selection_model_contracts import (
     TRADABILITY_MODEL_ENTRY_EXIT,
     TRADABILITY_MODEL_HOLDING_PERIOD,
 )
+from a_share_selection_paths import SCRIPTS_DIR, config_path
 from a_share_selection_symbols import parse_six_digit_symbols
 from walk_forward_portfolio_commands import ALLOCATION_MODEL_EQUAL, ALLOCATION_MODEL_PORTFOLIO, portfolio_allocate_command
 
-SCRIPTS = Path(__file__).resolve().parent
-CONFIG_PATH = SCRIPTS / "prediction_profile_config.json"
+SCRIPTS = SCRIPTS_DIR
+CONFIG_PATH = config_path("prediction_profile_config.json")
 TRADABILITY_MODEL = TRADABILITY_MODEL_ENTRY_EXIT
 LIMIT_RULES_MODEL = LIMIT_RULES_MODEL_NOT_MODELED
 Executor = Callable[[list[str]], subprocess.CompletedProcess[str]]

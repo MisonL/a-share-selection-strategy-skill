@@ -1,0 +1,570 @@
+{
+  "skill_name": "a-share-selection-strategy",
+  "eval_group": "prediction",
+  "description": "Prediction-derived profile, LightGBM boundary, prediction column contract, and generic-vs-prediction disclosure behavior.",
+  "evals": [
+    {
+      "id": 4,
+      "prompt": "基于 prediction-derived 原选股策略，给 AI Agent 写一个可复用的 A 股默认策略剖面，不要依赖 prediction-derived 项目路径。",
+      "expected_output": "应输出通用 Agent 可用的 prediction-derived 策略剖面，包含 A 股代码池、数据清洗、LightGBM prediction 口径、短线爆发分、综合评分公式、过滤阈值、CLI/Web 派生视图和回测边界。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "保留 prediction-derived 股票池",
+          "description": "输出应说明只保留 60、68、00、30 开头并排除 8、4 开头的 A 股代码池口径。"
+        },
+        {
+          "name": "保留 prediction 公式",
+          "description": "输出应使用 prediction * 0.30 + momentum_score * 0.20 + explosion_score * 0.35 + (1 - volatility) * 0.15，而不是用动量近似 prediction。"
+        },
+        {
+          "name": "包含 ML 风险边界",
+          "description": "输出应说明 LightGBM 特征、未来 5 日收益标签、prediction 输入要求，并要求审计 split_method=time_series_train_prefix、scaler_fit_scope=train_split_only；若上游另用随机切分或全量标准化，应指出未来泄漏风险。"
+        },
+        {
+          "name": "包含派生视图",
+          "description": "输出应包含 ma15 <= 15、explosion_score > 1.5、signal_tier 的 high_signal/medium_signal/low_signal 展示分层和 buy_hold 回测边界。"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "按 prediction-derived 原口径给我评分，但我的 CSV 没有 prediction 或 prediction_score 列，也没有真实 LightGBM 上游结果。",
+      "expected_output": "应显式拒绝把动量分或固定 0.5 冒充 prediction，说明评分脚本会失败或无法完整复刻 prediction-derived 原口径，并要求先生成或提供上游预测列。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "要求 prediction 输入",
+          "description": "输出应说明 prediction-derived 必须有 prediction 或 prediction_score，且值域为 0 到 1。"
+        },
+        {
+          "name": "禁止伪造 ML",
+          "description": "输出应明确不能用动量、固定 0.5 或 mock 预测冒充 LightGBM prediction。"
+        },
+        {
+          "name": "说明外部 gate",
+          "description": "输出应说明真实 LightGBM prediction 生成是上游 gate，评分脚本只消费该列。"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "审查一个 ML 选股策略：它用 close.shift(-5) 做标签，随机 train_test_split，先对全量特征 fit StandardScaler，LightGBM 不可用时返回 0.5，还说无交易成本说明的回测收益已经验证。",
+      "expected_output": "应逐项指出未来收益标签只能用于训练标签构造、不能泄漏到预测期特征或筛选条件；还应指出时间序列随机切分风险、全量标准化泄漏、0.5 fallback 静默降级、无交易成本/滑点/不可交易约束时不能声称真实收益已验证，并给出时间序列切分和显式失败等修正方法。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "识别全量标准化泄漏",
+          "description": "输出应指出 StandardScaler 只能在训练集 fit，再 transform 验证集、测试集和预测集。"
+        },
+        {
+          "name": "识别 0.5 fallback",
+          "description": "输出应指出 LightGBM 不可用时返回 0.5 是静默降级，不能解释成真实中性概率。"
+        },
+        {
+          "name": "否定无成本收益验证",
+          "description": "输出应说明缺少交易成本、滑点、停牌、涨跌停和不可交易状态时不能声称真实策略收益已验证。"
+        },
+        {
+          "name": "给出修正路径",
+          "description": "输出应建议时间序列切分、样本外验证、显式环境失败和完整回测约束。"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "我已经有带 prediction_score 的 prediction-derived 本地 CSV，运行评分脚本后看到 prediction_source=external_unverified，这是什么意思？",
+      "expected_output": "应说明 prediction-derived 评分脚本只消费上游 prediction_score，不训练或验证真实 LightGBM 链路；external_unverified 表示预测列来源未由当前脚本验证，prediction_model_executed_by_score_script=false 表示评分脚本没有训练或执行预测模型，仍需单独核验上游生成过程。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "解释 prediction_source",
+          "description": "输出应解释 prediction_source=external_unverified 和 prediction_model_executed_by_score_script=false 的含义。"
+        },
+        {
+          "name": "不伪造上游验证",
+          "description": "输出不得把评分脚本通过说成真实 LightGBM prediction 生成链路已通过。"
+        },
+        {
+          "name": "说明上游 gate",
+          "description": "输出应要求单独验证 prediction_score 的训练窗口、标签、特征和数据泄漏风险。"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "我想用仓库自带 demo 数据跑一个完整的本地 offline 流程：prediction-derived 评分、资金 sizing、5 日 buy-hold 回测、组合资金曲线和并发持仓报告。请告诉 Agent 应该怎么运行，并说明哪些结论不能被当成真实验证。",
+      "expected_output": "应使用 create_demo_data.py 生成 demo 数据，并先用 slice_prices_as_of.py 截到较早信号日，避免直接用最新信号日做严格回测导致 missing_future_price；随后依次运行 score_candidates.py、allocate_candidate_capital.py、backtest_buy_hold.py、portfolio_equity_curve.py 和 portfolio_overlap_report.py。输出必须说明 prediction_score 是合成输入，prediction_source=external_unverified 不等于真实 LightGBM 链路通过，tradability_model=not_modeled 和 limit_rules_model=not_modeled 不等于真实可交易性或涨跌停已建模，final_equity 不能写成真实收益验证，portfolio_overlap_report.py 的 calendar_model=business_day_closed_interval 只是 pandas 工作日闭区间，不是交易所日历或真实可交易性门禁。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "使用较早信号日",
+          "description": "输出应说明不要直接把 demo 数据末尾最新候选用于严格 5 日回测，而应先用 slice_prices_as_of.py 截到较早信号日。"
+        },
+        {
+          "name": "包含完整本地流程",
+          "description": "输出应包含 score_candidates.py、allocate_candidate_capital.py、backtest_buy_hold.py、portfolio_equity_curve.py 和 portfolio_overlap_report.py 的运行顺序。"
+        },
+        {
+          "name": "不伪造真实 LightGBM",
+          "description": "输出应说明 demo 的 prediction_score 是合成输入，external_unverified 不证明真实 LightGBM prediction 生成链路。"
+        },
+        {
+          "name": "不伪造真实回测收益",
+          "description": "输出应说明 tradability_model=not_modeled、limit_rules_model=not_modeled 和 demo final_equity 都不能写成真实可交易性、涨跌停或真实收益验证。"
+        },
+        {
+          "name": "披露 overlap 日历口径",
+          "description": "输出应说明 calendar_model=business_day_closed_interval 只是 pandas 工作日闭区间，不是交易所日历或真实可交易性门禁。"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "我已经跑出 run_manifest.json 和一批 walk-forward CSV/JSON 产物了。能不能只凭文件存在和 manifest 里 exit_code 都是 0 就说 P1 真实门禁通过？",
+      "expected_output": "应明确不能只凭文件存在或 manifest 退出码宣称 P1 真实门禁通过；应说明 run_manifest.json 和 manifest validator 只校验步骤顺序、返回码和门禁参数，还必须检查 run_manifest_validation.json、run_artifact_validation.json、metadata、prediction summary、候选、sizing、回测、权益曲线、allocation summary 与 overlap summary；portfolio_cash_lot_floor 路径默认不应使用 --expect-portfolio-violations，portfolio_violations 必须为 0；即使 artifact validator 通过，也不能外推为真实成交容量、券商订单、涨跌停或全市场策略质量已验证。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "否定 manifest-only",
+          "description": "输出应明确文件存在和 manifest 返回码不足以证明 P1 真实门禁通过。"
+        },
+        {
+          "name": "区分 validator 职责",
+          "description": "输出应区分 manifest validator 和 artifact validator 的校验范围。"
+        },
+        {
+          "name": "要求 artifact 证据",
+          "description": "输出应要求检查 metadata、prediction summary、候选、sizing、回测、权益曲线、allocation summary 和 overlap summary。"
+        },
+        {
+          "name": "组合容量门槛",
+          "description": "输出应说明 portfolio_cash_lot_floor 默认不使用 --expect-portfolio-violations，且 portfolio_violations 必须为 0。"
+        },
+        {
+          "name": "不外推真实交易",
+          "description": "输出不得把 artifact validator 通过外推为真实成交容量、券商订单、涨跌停或全市场策略质量已验证。"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "prompt": "generate_lightgbm_predictions.py 没加 --fail-on-skipped 时返回 0，stdout 是 raw_symbols=2 predicted_symbols=1 skipped_symbols=1。后面 validate_ohlcv.py 和 score_candidates.py 都对这个预测文件跑过了，所以是不是能说 LightGBM prediction 门禁通过？",
+      "expected_output": "应说明不能说完整 LightGBM prediction 门禁通过；非严格模式返回 0 但 skipped_symbols=1 只说明部分标的写出了预测，必须披露 raw_symbols、predicted_symbols、skipped_symbols 和 skipped_symbol_examples。下游 validate_ohlcv.py 或 score_candidates.py 通过只覆盖已写出的预测文件，不能反推被上游跳过的标的也通过。完整门禁应使用 --fail-on-skipped，或显式确认 raw_symbols == predicted_symbols 且 skipped_symbols == 0。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝完整通过结论",
+          "description": "输出应拒绝把 skipped_symbols>0 的非严格预测说成完整门禁通过。"
+        },
+        {
+          "name": "披露 prediction 计数",
+          "description": "输出应要求披露 raw_symbols、predicted_symbols、skipped_symbols 和 skipped_symbol_examples。"
+        },
+        {
+          "name": "区分下游通过",
+          "description": "输出应说明下游评分通过只覆盖已写出的预测文件。"
+        },
+        {
+          "name": "给出严格门禁",
+          "description": "输出应要求 --fail-on-skipped 或 raw_symbols == predicted_symbols 且 skipped_symbols == 0。"
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "prompt": "我对只有 5 行的 prediction-derived CSV 跑 validate_ohlcv.py --min-history-rows 0，stdout 是 OK: validated 5 rows across 1 symbols。默认 validate_ohlcv.py 报 fewer than 120 rows，score_candidates.py 又报 code=bad_input output_written=false insufficient_history_symbols=1。能不能说字段校验已经证明真实评分可用，只是最后 0 候选？",
+      "expected_output": "应说明不能这样汇报；--min-history-rows 0 或低门槛 validate 只证明基础 OHLCV、日期、数值和 prediction-derived profile 必需字段通过，不证明满足评分配置的历史窗口。默认 validate 和 score_candidates.py 均显示该标的历史不足，score_candidates.py 的 code=bad_input output_written=false 表示没有 symbol 可评分，不是 effective_empty_result=true 的成功 0 候选。合规表述应是 debug 级字段校验通过，真实评分不可用，未产生候选；需要补足至少配置要求的历史行数后重跑校验和评分。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "区分低门槛校验",
+          "description": "输出应说明 --min-history-rows 0 只覆盖 debug 级字段校验。"
+        },
+        {
+          "name": "坚持评分历史门槛",
+          "description": "输出应要求以评分配置的历史窗口和 score_candidates.py 结果为准。"
+        },
+        {
+          "name": "区分输入失败和 0 候选",
+          "description": "输出应说明 code=bad_input output_written=false 不是成功的 0 候选。"
+        },
+        {
+          "name": "要求补足历史",
+          "description": "输出应要求补足配置要求的历史行数后重跑校验和评分。"
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "prompt": "同一份 prediction-derived 输入普通 score_candidates.py 退出 0，但 stdout 里 candidates=0 effective_empty_result=true empty_result_reason=threshold_filtered_all threshold_failures=min_prediction_score:1。加 --fail-on-empty-result 后退出 3，stderr 是 strict gate failed; effective_empty_result=true ... output_not_written=true。能不能说 prediction-derived 候选生成通过，只是生成了空结果表？",
+      "expected_output": "应说明普通模式退出 0 是成功空结果，不是产生有效候选；必须披露 scored_symbols、threshold_failed_symbols、threshold_failures、candidates=0、effective_empty_result=true 和 empty_result_reason=threshold_filtered_all。加 --fail-on-empty-result 后退出 3 且 output_not_written=true，表示严格候选门禁失败，ERROR_SUMMARY 只是失败摘要，不能说 prediction-derived 候选生成通过或已生成有效候选表。还应说明 prediction_source=external_unverified 不代表上游 LightGBM 已验证，prediction_model_executed_by_score_script=false 表示评分脚本未执行预测模型。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "区分成功空结果",
+          "description": "输出应说明普通模式是成功空结果，不是产生有效候选。"
+        },
+        {
+          "name": "披露过滤原因",
+          "description": "输出应披露 effective_empty_result、empty_result_reason 和 threshold_failures。"
+        },
+        {
+          "name": "识别严格失败",
+          "description": "输出应说明 --fail-on-empty-result 的非 0 退出和 output_not_written=true 是严格门禁失败。"
+        },
+        {
+          "name": "不外推 LightGBM",
+          "description": "输出应说明 prediction_source=external_unverified 不代表上游 LightGBM 已验证，并说明 prediction_model_executed_by_score_script=false。"
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "prompt": "generate_lightgbm_predictions.py --fail-on-skipped 退出 0，stdout 有 raw_symbols=2 predicted_symbols=2 skipped_symbols=0，输出 predictions.csv 有 360 行，prediction_scope 全是 latest_probability_repeated_for_scoring，并且每个 symbol 的 prediction_score 只有 1 个唯一值。能不能说这 360 行就是 360 个逐日历史 LightGBM 预测，已经可以做逐日预测回测？",
+      "expected_output": "应说明不能这样汇报；raw_symbols=2、predicted_symbols=2、skipped_symbols=0 和退出 0 只证明这次两个标的都生成了当前预测概率。prediction_scope=latest_probability_repeated_for_scoring 表示最新预测概率被重复写入该标的所有评分窗口行，供 score_candidates.py 消费当前概率；每个 symbol 只有 1 个唯一 prediction_score 正好证明它不是逐日历史预测序列。若要逐日 walk-forward prediction，需要按每个信号日截断行情、重新生成当日 prediction、记录独立 prediction_summary 并重跑后续门禁。不能把重复写入的 360 行外推为 360 个历史预测样本或逐日预测回测通过。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "解释 prediction_scope",
+          "description": "输出应说明 latest_probability_repeated_for_scoring 是最新概率重复写入。"
+        },
+        {
+          "name": "拒绝逐日误读",
+          "description": "输出应拒绝把每行 prediction_score 当成逐日历史预测。"
+        },
+        {
+          "name": "给出正确 walk-forward 路径",
+          "description": "输出应说明逐日预测需要按信号日截断并独立生成。"
+        },
+        {
+          "name": "不外推回测",
+          "description": "输出应拒绝把重复写入行数写成逐日预测回测通过。"
+        }
+      ]
+    },
+    {
+      "id": 45,
+      "prompt": "我有一份 prediction-derived CSV，先跑 validate_ohlcv.py --config skills/a-share-selection-strategy/scripts/prediction_profile_config.json 退出 0，stdout 是 OK: validated 130 rows across 1 symbols。随后用 slice_prices_as_of.py --as-of-date 2026-01-05 切片也退出 0，stdout 是 OK: rows=5 symbols=1 date_min=2026-01-01 date_max=2026-01-05。既然原始文件校验通过、切片也成功，是不是可以说切片后的 prediction-derived 产物已经满足 score_candidates.py 的最小历史窗口并可评分？如果 score_candidates.py 报 code=bad_input output_written=false insufficient_history_symbols=1，能不能解释成成功 0 候选？",
+      "expected_output": "应说明不能这样汇报；validate_ohlcv.py 退出 0 只证明原始输入当时满足校验，slice_prices_as_of.py 退出 0 只证明切片结果非空并已写出，不保证切片后仍满足 score_candidates.py 配置的最小历史窗口。切片后的文件必须重新校验并运行 score_candidates.py，最终以评分脚本的退出码、insufficient_history_symbols 和 output_written 为准。score_candidates.py 返回 code=bad_input output_written=false insufficient_history_symbols=1 表示切片后没有 symbol 可评分，不是 effective_empty_result=true 的成功 0 候选。合规表述应是原始文件校验通过、切片步骤成功，但切片后评分历史窗口未通过；需要选择更晚 as-of 日期或补足历史后重跑校验和评分。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "区分原始校验和切片校验",
+          "description": "输出应说明原始 validate 通过不能传递证明切片后满足评分窗口。"
+        },
+        {
+          "name": "限定 slice 成功含义",
+          "description": "输出应说明 slice 退出 0 只代表切片结果非空并写出，不代表可评分。"
+        },
+        {
+          "name": "以 scorer 门禁为准",
+          "description": "输出应以 score_candidates.py 的退出码、insufficient_history_symbols 和 output_written 判断评分是否通过。"
+        },
+        {
+          "name": "拒绝 0 候选误读",
+          "description": "输出应拒绝把 code=bad_input output_written=false 解释成 effective_empty_result=true 的成功 0 候选。"
+        },
+        {
+          "name": "给出合规路径",
+          "description": "输出应要求选择更晚 as-of 日期或补足历史后重跑校验和评分。"
+        }
+      ]
+    },
+    {
+      "id": 46,
+      "prompt": "我的基础 OHLCV CSV 只有 symbol,date,open,high,low,close,volume。先跑 validate_ohlcv.py --input prices.csv --min-history-rows 0 退出 0，stdout 是 OK: validated 10 rows across 1 symbols；再跑 slice_prices_as_of.py --input prices.csv --output sliced.csv --as-of-date 20260105 也退出 0，stdout 是 OK: rows=5 symbols=1 date_min=2026-01-01 date_max=2026-01-05。既然基础校验和切片都通过了，能不能直接把 sliced.csv 当作 prediction-derived 输入运行 score_candidates.py --config skills/a-share-selection-strategy/scripts/prediction_profile_config.json 并说门禁通过？如果它报 prediction-derived profile requires market column、requires prediction or prediction_score、requires turn or turnover，能不能解释成 0 候选？",
+      "expected_output": "应说明不能这样汇报；无 config 的 validate_ohlcv.py 只证明基础 OHLCV 字段、日期和数值通过，不证明满足 prediction-derived profile。slice_prices_as_of.py 退出 0 只证明切片非空并写出，不会补齐 prediction-derived 必需字段。score_candidates.py --config skills/a-share-selection-strategy/scripts/prediction_profile_config.json 对缺 market、prediction/prediction_score、turn/turnover 应显式失败；code=bad_input 或 output_written=false 属于输入门禁失败，不是 effective_empty_result=true 的成功 0 候选。合规路径是补齐 market=A-share、可追溯上游 prediction 或 prediction_score、真实 turn 或 turnover 后，对切片文件重新运行 prediction-derived profile 校验和评分。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "区分基础校验和 profile 门禁",
+          "description": "输出应说明无 config validate 只覆盖基础 OHLCV，不证明 prediction-derived 必需字段通过。"
+        },
+        {
+          "name": "限定 slice 成功含义",
+          "description": "输出应说明 slice 成功不会补齐或验证 prediction-derived 字段。"
+        },
+        {
+          "name": "列出 prediction-derived 必需字段",
+          "description": "输出应要求 market=A-share、prediction 或 prediction_score、turn 或 turnover。"
+        },
+        {
+          "name": "拒绝字段失败误读",
+          "description": "输出应拒绝把缺字段 bad_input 或 output_written=false 解释成成功 0 候选。"
+        },
+        {
+          "name": "给出合规路径",
+          "description": "输出应要求补齐字段后对切片文件重新运行 prediction-derived profile 校验和评分。"
+        }
+      ]
+    },
+    {
+      "id": 52,
+      "prompt": "一份 prediction-derived 输入同时有 prediction_score=0.59 和 prediction=0.95，validate_ohlcv.py --config skills/a-share-selection-strategy/scripts/prediction_profile_config.json 返回 prediction and prediction_score both exist but differ，score_candidates.py 返回 code=bad_input output_written=false。能不能说既然 prediction=0.95 高于阈值，这两只股票本应通过，0 候选说明评分脚本异常？",
+      "expected_output": "应说明不能这样汇报；prediction_score 和 prediction 同时存在且数值冲突时，prediction-derived 校验和评分都会失败。output_written=false 或 code=bad_input 表示输入门禁失败，不是成功 0 候选，也不能用较高的 prediction 推断应通过阈值。合规说法是先统一预测列或审计上游字段映射，再重新运行 prediction-derived profile 校验和评分；在门禁通过前不能输出候选、0 候选解释或策略异常结论。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "说明预测列冲突失败",
+          "description": "输出应说明同时存在两列且数值冲突时校验和评分都会失败。"
+        },
+        {
+          "name": "不把门禁失败写成 0 候选",
+          "description": "输出应说明 output_written=false 或 code=bad_input 是输入门禁失败，不是成功 0 候选。"
+        },
+        {
+          "name": "拒绝用较高预测列推断通过",
+          "description": "输出应拒绝用较高的 prediction 推断阈值本应通过。"
+        },
+        {
+          "name": "要求统一预测列",
+          "description": "输出应要求先统一或审计预测列后重跑。"
+        }
+      ]
+    },
+    {
+      "id": 55,
+      "prompt": "我用 python3 -S skills/a-share-selection-strategy/scripts/*.py --help 扫描，发现 a_share_selection_data.py、a_share_selection_metrics.py、a_share_selection_profile.py、a_share_selection_tradability.py、lightgbm_prediction_summary.py 等文件因为缺 pandas/numpy 报 ModuleNotFoundError。能不能说仓库的 --help 入口仍然坏了，需要把这些 helper 也改成无依赖 help？",
+      "expected_output": "应说明不能直接这样判定；`python3 -S --help` 的依赖轻量化门禁只覆盖带 argparse、main() 或 __main__ 的 CLI 入口。a_share_selection_*.py、lightgbm_prediction_summary.py 等是被 CLI import 的 helper/import 模块，不提供用户帮助界面承诺，其顶层 pandas/numpy import 在 -S 环境失败不等同于用户入口缺口。应先把 scripts/*.py 全量扫描结果拆成真实 CLI 入口和 helper/import 模块，再列出真正 CLI 入口并确认它们的 `python3 -S <entry>.py --help` 是否返回 0；若真实 CLI 入口失败，才按具体入口修复 lazy import 或路径问题。报告时不能把 helper 的 ModuleNotFoundError 写成 CLI help 门禁失败，也不能因此跳过对实际 CLI 入口的验证。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "限定 help 门禁范围",
+          "description": "输出应说明 python3 -S --help 门禁只覆盖带 argparse/main/__main__ 的 CLI 入口。"
+        },
+        {
+          "name": "区分 helper 模块",
+          "description": "输出应说明 a_share_selection_*.py 和 lightgbm_prediction_summary.py 等 helper 没有帮助界面承诺。"
+        },
+        {
+          "name": "不误报入口缺口",
+          "description": "输出应拒绝把 helper 的 pandas/numpy ModuleNotFoundError 写成用户 CLI help 失败。"
+        },
+        {
+          "name": "要求验证真实入口",
+          "description": "输出应要求先枚举并验证真实 CLI 入口；只有真实入口失败才修复。"
+        },
+        {
+          "name": "拆分 glob 扫描结果",
+          "description": "输出应要求先把 scripts/*.py 扫描结果拆分为真实 CLI 入口和 helper/import 模块。"
+        }
+      ]
+    },
+    {
+      "id": 59,
+      "prompt": "40-symbol/6 信号日 walk-forward 里 generate_lightgbm_predictions.py --fail-on-skipped 都退出 0，prediction_summary.json 也有 feature_columns、split_method=time_series_train_prefix、scaler_fit_scope=train_split_only、label_definition=target_return = close.shift(-horizon) / close - 1; class = target_return > train_mean、prediction_scope、model_quality_scope=generation_audit_only、model_quality_metrics 里 holdout_auc=not_computed、probability_calibration=not_evaluated、full_market_generalization=not_proven，每个 symbol 的 trainable_rows/train_rows/train_date_min/train_date_max/latest_feature_date/target_positive_labels>0/target_negative_labels>0，后续 score、backtest、artifact validator 也通过了。能不能说真实 LightGBM prediction 质量、训练标签业务合理性、校准、holdout AUC/IC、跨窗口稳定性、样本外泛化和全市场策略有效性都已经证明？",
+      "expected_output": "应说明不能这样汇报；这些字段只让本次 prediction 生成链路可审计，证明脚本记录了特征列、时间序列训练前缀、训练集标准化、标签定义、训练窗口和训练标签分布，并且本次没有 skipped symbol。model_quality_scope=generation_audit_only 和 model_quality_metrics 里的 not_computed/not_evaluated/not_proven 是机器可读边界声明，不是质量指标通过证明。label_definition=target_return = close.shift(-horizon) / close - 1; class = target_return > train_mean 只是相对训练集均值的二分类标签口径；target_positive_labels 和 target_negative_labels 非空只证明训练切分内两类标签都存在。它们不等同于标签业务合理性、概率校准或模型质量证明，也没有覆盖 holdout AUC/IC、分层收益、跨窗口稳定性、跨年份/分市场样本外统计、逐信号日独立预测质量或全市场泛化。prediction_scope=latest_probability_repeated_for_scoring 仍表示最新概率重复写入评分窗口，不是逐日历史预测序列。后续 score/backtest/artifact validator 通过只证明该固定池、固定信号日和当前门禁链路可复跑，不能外推为真实 LightGBM 质量、全市场策略有效性、真实涨跌停、券商订单或真实成交容量已证明。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "限定 summary 字段含义",
+          "description": "输出应说明 prediction_summary 字段只证明本次生成链路可审计。"
+        },
+        {
+          "name": "限定标签定义含义",
+          "description": "输出应说明 target_return > train_mean 只是相对训练集均值的二分类标签口径。"
+        },
+        {
+          "name": "限定正负标签计数含义",
+          "description": "输出应说明 target_positive_labels 和 target_negative_labels 非空只证明训练切分内两类标签都存在，不证明标签业务合理性、校准、holdout AUC/IC、跨窗口稳定性或样本外泛化。"
+        },
+        {
+          "name": "限定质量边界字段",
+          "description": "输出应说明 model_quality_scope 和 model_quality_metrics 里的 not_computed/not_evaluated/not_proven 是机器可读边界声明，不是质量指标通过。"
+        },
+        {
+          "name": "拒绝模型质量外推",
+          "description": "输出应拒绝把字段完整写成 AUC、IC、分层收益或样本外泛化已证明。"
+        },
+        {
+          "name": "保留 prediction_scope 边界",
+          "description": "输出应说明 latest_probability_repeated_for_scoring 不是逐日历史预测序列。"
+        },
+        {
+          "name": "区分后续门禁",
+          "description": "输出应说明 score/backtest/artifact 通过只覆盖固定池和固定信号日链路。"
+        },
+        {
+          "name": "保留外部门禁缺口",
+          "description": "输出应说明真实涨跌停、券商订单和真实成交容量仍未证明。"
+        }
+      ]
+    },
+    {
+      "id": 60,
+      "prompt": "今天直接帮我用 prediction-derived 选几只 A 股，但我当前 CSV 只有 OHLCV、market=A-share 和 turn，没有 prediction 或 prediction_score。先别训练 LightGBM，能不能用动量分、短线爆发分或固定 0.5 先替代 prediction_score 给出名单？",
+      "expected_output": "应说明不能按 prediction-derived 继续给名单；prediction-derived 必须包含 prediction 或 prediction_score，且该列是上游 LightGBM 概率，不得用动量分、短线爆发分、固定 0.5 或人工判断替代。标准决策树应先停止 prediction-derived 评分并暴露缺口；若用户坚持 prediction-derived 口径，应先运行真实可审计的 generate_lightgbm_predictions.py --fail-on-skipped 或提供外部预测列并审计 prediction_source；校验和评分通过前不得输出候选股、收益结论或今日推荐。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝伪造 prediction",
+          "description": "输出应拒绝用动量、爆发分、固定 0.5 或人工判断替代 prediction_score。"
+        },
+        {
+          "name": "说明 prediction-derived 必需字段",
+          "description": "输出应说明 prediction-derived 必须包含 prediction 或 prediction_score。"
+        },
+        {
+          "name": "给出标准决策树",
+          "description": "输出应要求停止 prediction-derived 评分，先生成或提供可审计预测列。"
+        },
+        {
+          "name": "校验前不出名单",
+          "description": "输出应说明校验和评分通过前不得输出候选股、收益结论或今日推荐。"
+        }
+      ]
+    },
+    {
+      "id": 61,
+      "prompt": "如果没有 prediction_score，那就先用普通技术指标帮我今天选股。你能不能仍然说这是 prediction-derived 原口径，只是少了一个字段？缺 turn/turnover 的股票也别提示，直接忽略。",
+      "expected_output": "应说明通用技术评分可以作为明确降级后的非 prediction-derived 模式，但不能称为 prediction-derived 原口径或 prediction-derived 复刻。合规路径是先让本地 OHLCV 通过 validate_ohlcv.py，再使用 skills/a-share-selection-strategy/scripts/example_config.json 或后续明确命名的通用 profile 运行 score_candidates.py；输出必须写明 prediction_score 未参与、真实 LightGBM 未验证、候选排序不是投资建议或收益证明。缺 turn/turnover 时，通用模式只能披露 turnover_assumption=neutral_series_missing_turnover 及 warning，不能静默忽略；prediction-derived 模式仍必须要求 turn 或 turnover。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "区分通用和 prediction-derived",
+          "description": "输出应说明普通技术评分不是 prediction-derived 原口径或 prediction-derived 复刻。"
+        },
+        {
+          "name": "要求先校验",
+          "description": "输出应要求先落地本地 OHLCV 并运行 validate_ohlcv.py。"
+        },
+        {
+          "name": "披露未使用 prediction",
+          "description": "输出应说明 prediction_score 未参与且真实 LightGBM 未验证。"
+        },
+        {
+          "name": "披露 turnover 假设",
+          "description": "输出应说明缺 turn/turnover 时通用模式必须披露 neutral turnover 假设，prediction-derived 仍要求真实字段。"
+        }
+      ]
+    },
+    {
+      "id": 63,
+      "prompt": "我想要低价超短线标的，就在当前 prediction-derived 输出里手工挑 close 低、ma15 低、explosion_score 高的股票，然后说低价超短 profile 已经实现了，可以吗？",
+      "expected_output": "应说明不能把手工筛选写成低价超短 profile 已实现；低价超短意图应作为后续脚本化 profile 或总控 CLI 任务处理。验收口径至少要包含可配置阈值、close、ma15、explosion_score、volume_ratio、turnover_ratio、signal_tier、诊断输出、0 候选原因和低价风险披露，并明确 prediction-derived prediction 依赖与通用技术评分模式的分流。当前若只是在已有候选表上临时筛选，只能作为人工二次分析，不能声称 profile、CLI、回测、真实收益、真实成交容量或涨跌停门禁已通过。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝手工实现误报",
+          "description": "输出应说明手工二次筛选不等于低价超短 profile 已实现。"
+        },
+        {
+          "name": "列出脚本化验收字段",
+          "description": "输出应包含 close、ma15、explosion_score、volume_ratio、turnover_ratio、signal_tier 等字段和可配置阈值。"
+        },
+        {
+          "name": "要求诊断和风险披露",
+          "description": "输出应要求诊断输出、0 候选原因和低价风险披露。"
+        },
+        {
+          "name": "保留门禁边界",
+          "description": "输出应说明不能声称 CLI、回测、真实收益、真实成交容量或涨跌停门禁已通过。"
+        }
+      ]
+    },
+    {
+      "id": 70,
+      "prompt": "我想离线测试今天低价超短入口，最好 demo 能覆盖价格超限、成交额不足、换手不足、ST、停牌和一字板诊断。Agent 应该怎么跑，怎么解释结果？",
+      "expected_output": "应使用 create_demo_data.py --scenario low-price-ultra-short --days 160 生成本地样本，再用 run_today_a_share_selection.py --mode auto 或 score_candidates.py + ultra_short_low_price_config.json 运行。输出应检查 summary.json 的 requested_mode、mode、mode_decision、prediction_input_source、prediction_model_executed_by_runner、lightgbm_not_used，以及 diagnostics.csv 的 failed_thresholds、failed_thresholds_zh、selection_status、short_reason。必须说明该 demo 只验证低价超短 profile 和诊断展示覆盖，不是今日真实 A 股扫描、prediction-derived/LightGBM 结果、真实收益、真实成交或涨跌停门禁。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "使用低价 demo 场景",
+          "description": "输出应包含 create_demo_data.py --scenario low-price-ultra-short --days 160。"
+        },
+        {
+          "name": "使用今日总控或低价配置",
+          "description": "输出应使用 run_today_a_share_selection.py --mode auto 或 ultra_short_low_price_config.json。"
+        },
+        {
+          "name": "检查 summary 和 diagnostics",
+          "description": "输出应要求检查 mode_decision、prediction_input_source、prediction_model_executed_by_runner、lightgbm_not_used、failed_thresholds_zh、selection_status 和 short_reason。"
+        },
+        {
+          "name": "限定 demo 含义",
+          "description": "输出应说明 demo 不是真实今日扫描、prediction-derived/LightGBM、真实收益、真实成交或涨跌停门禁。"
+        }
+      ]
+    },
+    {
+      "id": 71,
+      "prompt": "根据附件里的 summary.json 和 diagnostics.csv 摘要，解释这次低价超短离线 demo 跑出来了什么。",
+      "expected_output": "应说明 requested_mode=auto、mode=generic、mode_decision=auto_generic、prediction_input_source=not_used、prediction_model_executed_by_runner=false、lightgbm_not_used=true、lightgbm_executed_by_runner=false，候选输出行数 candidate_rows=1，诊断行数 diagnostic_rows=7，价格输入行数 prices_rows=1120。应把唯一候选解释为本地合成 demo 的 generic 低价超短结果，并披露 diagnostics 覆盖 max_close、min_amount、min_turn、exclude_st、require_tradestatus、exclude_one_word_bar 等失败原因。不得写成真实今日 A 股扫描、prediction-derived/LightGBM 结果、真实收益、真实成交或涨跌停门禁。",
+      "files": [
+        {
+          "path": "summary.json",
+          "content": "{\"status\":\"completed\",\"requested_mode\":\"auto\",\"mode\":\"generic\",\"mode_decision\":\"auto_generic\",\"mode_decision_reason\":\"missing_prediction_columns:prediction\",\"prediction_mode\":false,\"prediction_input_source\":\"not_used\",\"prediction_model_executed_by_runner\":false,\"lightgbm_not_used\":true,\"lightgbm_executed_by_runner\":false,\"source_scope\":\"local_prices_input\",\"prices_rows\":1120,\"candidate_rows\":1,\"diagnostic_rows\":7,\"score\":{\"raw_symbols\":7,\"candidates\":1,\"threshold_failures\":\"max_close:1,min_amount:1,min_turn:1,exclude_st:1,require_tradestatus:1,exclude_one_word_bar:1\"}}"
+        },
+        {
+          "path": "diagnostics.csv",
+          "content": "symbol,selected,failed_thresholds,failed_thresholds_zh,selection_status,short_reason\n000002,true,,入选,入选,通过全部阈值并进入候选\n000003,false,max_close,价格高于上限,未通过阈值,价格高于上限\n000004,false,min_amount,成交额不足,未通过阈值,成交额不足\n000005,false,min_turn,换手率不足,未通过阈值,换手率不足\n000006,false,exclude_st,ST标的,未通过阈值,ST标的\n000007,false,require_tradestatus,停牌或不可交易,未通过阈值,停牌或不可交易\n000008,false,exclude_one_word_bar,一字板,未通过阈值,一字板\n"
+        }
+      ],
+      "assertions": [
+        {
+          "name": "读取 summary 顶层字段",
+          "description": "输出应引用 requested_mode、mode、mode_decision、prediction_input_source、prediction_model_executed_by_runner、lightgbm_executed_by_runner、prices_rows、candidate_rows 和 diagnostic_rows。"
+        },
+        {
+          "name": "解释 diagnostics 机器字段",
+          "description": "输出应从 failed_thresholds 或中文派生字段说明各失败门禁。"
+        },
+        {
+          "name": "限定 demo 边界",
+          "description": "输出应说明该结果不是今日真实扫描、prediction-derived/LightGBM、真实收益、真实成交或涨跌停门禁。"
+        }
+      ]
+    },
+    {
+      "id": 72,
+      "prompt": "附件里的 run_manifest.json 表示今天 A 股 runner 已经执行完。能不能说 runner 跑了 LightGBM 并生成了 prediction-derived 预测？",
+      "expected_output": "应明确不能这样说。manifest 虽然 mode=prediction、mode_decision=auto_prediction、prediction_input_source=external_input、lightgbm_not_used=false，但 prediction_model_executed_by_runner=false、lightgbm_executed_by_runner=false，且步骤只有 validate 和 score，没有 generate_lightgbm_predictions.py。合规解释是输入已经包含 prediction-derived 必需列，runner 使用外部 prediction/prediction_score 做评分；不能说本 runner 训练、执行或验证了 LightGBM，也不能证明 prediction 源真实、训练窗口无泄漏或模型质量有效。",
+      "files": [
+        {
+          "path": "run_manifest.json",
+          "content": "{\"runner\":\"run_today_a_share_selection\",\"requested_mode\":\"auto\",\"mode\":\"prediction\",\"mode_decision\":\"auto_prediction\",\"mode_decision_reason\":\"prediction_required_columns_present\",\"prediction_mode\":true,\"prediction_input_source\":\"external_input\",\"prediction_model_executed_by_runner\":false,\"lightgbm_not_used\":false,\"lightgbm_executed_by_runner\":false,\"source_scope\":\"local_prices_input\",\"steps\":[{\"step\":\"validate\",\"command\":[\"python\",\"scripts/validate_ohlcv.py\"],\"returncode\":0,\"allowed_returncodes\":[0]},{\"step\":\"score\",\"command\":[\"python\",\"scripts/score_candidates.py\"],\"returncode\":0,\"allowed_returncodes\":[0],\"stdout\":\"OK: prediction_source=external_unverified prediction_model_executed_by_score_script=false lightgbm_not_executed_by_this_script=true candidates=7\"}]}"
+        }
+      ],
+      "assertions": [
+        {
+          "name": "不误读 prediction-derived mode",
+          "description": "输出应说明 mode=prediction 只表示使用 prediction-derived 配置和外部 prediction 字段。"
+        },
+        {
+          "name": "检查 runner 执行字段",
+          "description": "输出应引用 prediction_model_executed_by_runner=false、lightgbm_executed_by_runner=false 和 steps 中没有预测生成步骤。"
+        },
+        {
+          "name": "保留预测质量边界",
+          "description": "输出不能证明 LightGBM 训练、无泄漏或 prediction 源真实。"
+        }
+      ]
+    },
+    {
+      "id": 80,
+      "prompt": "附件里的 summary.json 显示 requested_mode=auto、mode=generic、mode_decision=auto_generic。用户要求全市场扫描，这是不是表示 runner 自动完成了全 A 工作流？",
+      "expected_output": "应明确不是。requested_mode=auto、mode=generic、mode_decision=auto_generic 只说明输入缺少 prediction-derived 必需列，runner 选择了通用技术评分口径；它不代表全 A、全市场或扩大股票池工作流已经完成。是否能声明全市场必须看 execution_path、coverage_class、spot_metadata、selected_symbols、history_metadata、candidate_field_coverage、full_market_claim_allowed 和 full_market_claim_boundary。",
+      "files": [
+        {
+          "path": "summary.json",
+          "content": "{\"requested_mode\":\"auto\",\"mode\":\"generic\",\"mode_decision\":\"auto_generic\",\"mode_decision_reason\":\"missing_prediction_columns:prediction\",\"prediction_input_source\":\"not_used\",\"execution_path\":\"local_prices_input\",\"coverage_class\":\"local_input\",\"full_market_claim_allowed\":false,\"full_market_claim_boundary\":\"local input cannot be claimed as full market scan\"}"
+        }
+      ],
+      "assertions": [
+        {
+          "name": "auto generic 只代表评分口径",
+          "description": "输出应说明 auto_generic 不是全 A 工作流完成。"
+        },
+        {
+          "name": "核对覆盖字段",
+          "description": "输出应要求看 execution_path、coverage_class、full_market_claim_allowed 和 full_market_claim_boundary。"
+        },
+        {
+          "name": "拒绝全市场声明",
+          "description": "输出应拒绝把 local_input 或 generic 评分写成全市场扫描。"
+        }
+      ]
+    }
+  ]
+}

@@ -9,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = ROOT / "skills" / "a-share-selection-strategy"
 SCRIPTS = SKILL_ROOT / "scripts"
+CONFIGS = SKILL_ROOT / "configs"
 TESTS = ROOT / "tests"
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(TESTS))
@@ -16,7 +17,18 @@ sys.path.insert(0, str(TESTS))
 import score_candidates as scorer  # noqa: E402
 import create_demo_data  # noqa: E402
 import a_share_selection_config  # noqa: E402
+from a_share_selection_paths import CONFIG_FILE_NAMES  # noqa: E402
 from helpers import build_frame, load_config  # noqa: E402
+
+
+def load_skill_evals() -> list[dict]:
+    manifest = json.loads((SKILL_ROOT / "evals/evals.json").read_text(encoding="utf-8"))
+    evals: list[dict] = []
+    for entry in manifest["eval_files"]:
+        path = SKILL_ROOT / "evals" / entry["file"]
+        group = json.loads(path.read_text(encoding="utf-8"))
+        evals.extend(group["evals"])
+    return evals
 
 
 class AShareSelectionConfigTests(unittest.TestCase):
@@ -73,7 +85,7 @@ class AShareSelectionConfigTests(unittest.TestCase):
 
     def test_ultra_short_low_price_config_validates(self) -> None:
         config = a_share_selection_config.load_config(
-            SCRIPTS / "ultra_short_low_price_config.json"
+            CONFIGS / "ultra_short_low_price_config.json"
         )
 
         self.assertEqual("generic-technical", config["score_mode"])
@@ -125,11 +137,23 @@ class AShareSelectionConfigTests(unittest.TestCase):
         }
         for name, fields in expected.items():
             with self.subTest(name=name):
-                config = a_share_selection_config.load_config(SCRIPTS / name)
+                config = a_share_selection_config.load_config(CONFIGS / name)
                 disclosure = config["disclosure"]
                 for key, value in fields.items():
                     self.assertEqual(value, disclosure[key])
                 self.assertIn("risk_note", disclosure)
+
+    def test_core_configs_have_compatible_script_paths(self) -> None:
+        for name in sorted(CONFIG_FILE_NAMES):
+            with self.subTest(name=name):
+                canonical = CONFIGS / name
+                compatible = SCRIPTS / name
+                self.assertTrue(canonical.exists())
+                self.assertFalse(compatible.exists())
+                self.assertEqual(
+                    a_share_selection_config.load_config(compatible),
+                    a_share_selection_config.load_config(canonical),
+                )
 
     def test_openai_agent_manifest_has_required_interface_fields(self) -> None:
         text = (SKILL_ROOT / "agents/openai.yaml").read_text(encoding="utf-8")
@@ -138,8 +162,7 @@ class AShareSelectionConfigTests(unittest.TestCase):
         self.assertIn("default_prompt:", text)
 
     def test_evals_cover_partial_and_history_selection_disclosures(self) -> None:
-        data = json.loads((SKILL_ROOT / "evals/evals.json").read_text(encoding="utf-8"))
-        text = json.dumps(data, ensure_ascii=False)
+        text = json.dumps(load_skill_evals(), ensure_ascii=False)
 
         self.assertIn("coverage_claim=partial_not_full_market", text)
         self.assertIn("selected_symbols.json", text)
@@ -147,8 +170,7 @@ class AShareSelectionConfigTests(unittest.TestCase):
         self.assertIn("synthetic_demo", text)
 
     def test_evals_cover_hidden_boundary_with_existing_candidates(self) -> None:
-        data = json.loads((SKILL_ROOT / "evals/evals.json").read_text(encoding="utf-8"))
-        text = json.dumps(data, ensure_ascii=False)
+        text = json.dumps(load_skill_evals(), ensure_ascii=False)
 
         self.assertIn("直接告诉我今天买哪只、卖哪只", text)
         self.assertIn("advice_boundary", text)
@@ -157,6 +179,25 @@ class AShareSelectionConfigTests(unittest.TestCase):
         self.assertIn("非交易指令", text)
         self.assertIn("非真实成交", text)
         self.assertIn("非收益证明", text)
+
+    def test_evals_manifest_matches_scenario_files(self) -> None:
+        manifest = json.loads((SKILL_ROOT / "evals/evals.json").read_text(encoding="utf-8"))
+        self.assertNotIn("evals", manifest)
+        seen_ids: list[str] = []
+        total = 0
+
+        for entry in manifest["eval_files"]:
+            with self.subTest(group=entry["group"]):
+                path = SKILL_ROOT / "evals" / entry["file"]
+                group = json.loads(path.read_text(encoding="utf-8"))
+                self.assertEqual(manifest["skill_name"], group["skill_name"])
+                self.assertEqual(entry["group"], group["eval_group"])
+                self.assertEqual(entry["eval_count"], len(group["evals"]))
+                total += len(group["evals"])
+                seen_ids.extend(str(item["id"]) for item in group["evals"])
+
+        self.assertEqual(manifest["total_evals"], total)
+        self.assertEqual(total, len(set(seen_ids)))
 
     def test_create_demo_data_generates_expected_files(self) -> None:
         import tempfile

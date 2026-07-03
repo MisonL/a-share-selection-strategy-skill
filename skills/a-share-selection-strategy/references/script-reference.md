@@ -15,10 +15,12 @@
 
 | 文件 | 用途 | 边界 |
 | --- | --- | --- |
-| `example_config.json` | 通用权重、窗口和阈值示例 | 不代表真实市场验证 |
-| `ultra_short_low_price_config.json` | 低价超短通用技术评分 | 不使用也不伪造 prediction-derived/LightGBM |
-| `prediction_profile_config.json` | prediction-derived A 股默认剖面 | 需要真实 `prediction` 或 `prediction_score` 输入 |
-| `hong_kong_generic_config.json` | 港股本地 OHLCV 通用技术评分 | 不证明港交所日历、真实成交或收益 |
+| `../configs/example_config.json` | 通用权重、窗口和阈值示例 | 不代表真实市场验证 |
+| `../configs/ultra_short_low_price_config.json` | 低价超短通用技术评分 | 不使用也不伪造 prediction-derived/LightGBM |
+| `../configs/prediction_profile_config.json` | prediction-derived A 股默认剖面 | 需要真实 `prediction` 或 `prediction_score` 输入 |
+| `../configs/hong_kong_generic_config.json` | 港股本地 OHLCV 通用技术评分 | 不证明港交所日历、真实成交或收益 |
+
+旧命令里的 `../scripts/*.json` 路径仍由 CLI 解析到 `../configs/*.json`，但新文档和默认 runner 都应使用 `../configs/*.json`。
 
 ## 入口分层
 
@@ -91,7 +93,7 @@ Python 代码复用这些脚本时，需要将 `skills/a-share-selection-strateg
 ```bash
 python3 skills/a-share-selection-strategy/scripts/create_demo_data.py --output /tmp/a-share-selection-demo
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/validate_ohlcv.py --input /tmp/a-share-selection-demo/prices.csv
-uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/score_candidates.py --input /tmp/a-share-selection-demo/prices.csv --config skills/a-share-selection-strategy/scripts/example_config.json --output /tmp/a-share-selection-demo/candidates.csv
+uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/score_candidates.py --input /tmp/a-share-selection-demo/prices.csv --config skills/a-share-selection-strategy/configs/example_config.json --output /tmp/a-share-selection-demo/candidates.csv
 ```
 
 今日入口：

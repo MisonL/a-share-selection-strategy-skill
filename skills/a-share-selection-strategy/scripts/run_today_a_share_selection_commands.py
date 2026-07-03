@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-import json
 import sys
 from typing import Any
+
+from a_share_selection_config import load_config
+from a_share_selection_paths import resolve_config_path
 
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -177,7 +179,7 @@ def fetch_yfinance_history_command(
 
 
 def history_market(args: Any) -> str:
-    config = json.loads(selected_config(args).read_text(encoding="utf-8"))
+    config = load_config(selected_config(args))
     market = str(config.get("universe", {}).get("market", "")).strip()
     return market or "US"
 
@@ -253,7 +255,7 @@ def initial_manifest(args: Any) -> dict[str, Any]:
 
 def selected_config(args: Any) -> Path:
     if args.config:
-        return Path(args.config)
+        return resolve_config_path(Path(args.config))
     mode = getattr(args, "resolved_mode", args.mode)
     return args.default_prediction_config if mode == "prediction" else args.default_generic_config
 

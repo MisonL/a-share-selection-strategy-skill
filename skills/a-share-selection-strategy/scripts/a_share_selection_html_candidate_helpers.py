@@ -138,14 +138,18 @@ def candidate_listing_board(row: dict[str, Any]) -> str:
 
 
 def candidate_uses_ticker_as_name(row: dict[str, Any]) -> bool:
-    source_scope = raw_text(row.get("source_scope")).lower()
-    metadata_source = raw_text(row.get("metadata_source")).lower()
-    source_type = raw_text(row.get("source_type")).lower()
+    source_scope = candidate_source_field(row, "source_scope")
+    metadata_source = candidate_source_field(row, "metadata_source")
+    source_type = candidate_source_field(row, "source_type")
     return (
         "yfinance" in source_scope
         or metadata_source == "yfinance"
         or source_type == "yfinance"
     )
+
+
+def candidate_source_field(row: dict[str, Any], key: str) -> str:
+    return raw_text(row.get(key)).strip().lower()
 
 
 def candidate_field(row: dict[str, Any], keys: tuple[str, ...], *, percent: bool = False) -> str:

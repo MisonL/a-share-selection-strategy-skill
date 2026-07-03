@@ -36,6 +36,8 @@ P1 `portfolio_cash_lot_floor`、单信号日定位链路、manifest/artifact val
 
 Python 代码复用这些脚本时，需要将 `skills/a-share-selection-strategy/scripts/` 加入 `PYTHONPATH` 或 `sys.path`。不要把 `from scripts.<name> import ...` 当成稳定 API。
 
+部分内部 helper 的实现位于 `scripts/lib/`，根层同名 `.py` 文件保留为兼容 wrapper。外部调用和旧测试仍应通过根层路径导入；`lib/` 不是用户 CLI 入口。
+
 ## 依赖和离线环境
 
 | 场景 | 依赖 |

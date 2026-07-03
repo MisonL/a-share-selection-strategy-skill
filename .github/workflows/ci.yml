@@ -28,6 +28,6 @@ jobs:
           PY
       - name: Compile scripts
         run: |
-          PYTHONPYCACHEPREFIX=/tmp/a-share-selection-pycache python3 -m py_compile skills/a-share-selection-strategy/scripts/*.py
+          PYTHONPYCACHEPREFIX=/tmp/a-share-selection-pycache python3 -m compileall -q skills/a-share-selection-strategy/scripts
       - name: Run tests
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v

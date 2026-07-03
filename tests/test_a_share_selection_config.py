@@ -18,6 +18,9 @@ sys.path.insert(0, str(TESTS))
 import score_candidates as scorer  # noqa: E402
 import create_demo_data  # noqa: E402
 import a_share_selection_config  # noqa: E402
+from lib import a_share_selection_cli_guard as lib_cli_guard  # noqa: E402
+from lib import a_share_selection_config as lib_config  # noqa: E402
+from lib import a_share_selection_paths as lib_paths  # noqa: E402
 from a_share_selection_paths import CONFIG_FILE_NAMES, resolve_config_path  # noqa: E402
 from helpers import build_frame, load_config  # noqa: E402
 
@@ -161,6 +164,23 @@ class AShareSelectionConfigTests(unittest.TestCase):
             unrelated = Path(tmpdir) / "scripts" / "example_config.json"
 
             self.assertEqual(unrelated, resolve_config_path(unrelated))
+
+    def test_lib_config_imports_paths_without_root_wrapper_dependency(self) -> None:
+        self.assertIs(
+            lib_paths.resolve_config_path,
+            lib_config.resolve_config_path,
+        )
+
+    def test_lib_cli_guard_entries_match_stable_user_cli(self) -> None:
+        self.assertEqual(
+            (
+                "validate_ohlcv.py",
+                "score_candidates.py",
+                "run_today_a_share_selection.py",
+                "run_baostock_walk_forward.py",
+            ),
+            lib_cli_guard.CLI_ENTRIES,
+        )
 
     def test_openai_agent_manifest_has_required_interface_fields(self) -> None:
         text = (SKILL_ROOT / "agents/openai.yaml").read_text(encoding="utf-8")

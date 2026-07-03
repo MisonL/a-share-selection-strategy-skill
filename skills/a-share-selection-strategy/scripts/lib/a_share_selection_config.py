@@ -6,7 +6,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from a_share_selection_paths import resolve_config_path
+try:
+    from .a_share_selection_paths import resolve_config_path
+except ImportError:  # pragma: no cover - direct helper execution path
+    from a_share_selection_paths import resolve_config_path
 
 
 REQUIRED_SECTIONS = [

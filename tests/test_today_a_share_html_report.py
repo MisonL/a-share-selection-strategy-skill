@@ -542,6 +542,109 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn('data-row-name="0700.HK"', complete)
         self.assertNotIn("Name not provided", complete)
 
+    def test_yfinance_symbol_name_source_scope_is_displayed_as_ticker(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            candidates.write_text(
+                "\n".join(
+                    [
+                        (
+                            "rank,symbol,name,listing_board,source_scope,metadata_source,"
+                            "source_type,date,close,total_score,key_reasons,risk_notes"
+                        ),
+                        "1,AAPL,AAPL,,yfinance_us,api,manual,2026-06-17,190.0,0.9,positive momentum,",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "candidate_rows": 1,
+                    "candidates_output": str(candidates),
+                    "candidates_output_written": True,
+                    "input_metadata": {"market": "US"},
+                }
+            )
+            report = render_report(summary, {"steps": []}, language="en")
+
+        complete = report.split('<section id="complete-candidates"', 1)[1]
+        self.assertIn('<strong class="name-cell">AAPL</strong>', complete)
+        self.assertIn('data-row-name="AAPL"', complete)
+        self.assertNotIn("Name not provided", complete)
+        self.assertNotIn('class="name-cell missing"', complete)
+
+    def test_yfinance_symbol_name_source_type_is_trimmed_and_displayed_as_ticker(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            candidates.write_text(
+                "\n".join(
+                    [
+                        (
+                            "rank,symbol,name,listing_board,source_scope,metadata_source,"
+                            "source_type,date,close,total_score,key_reasons,risk_notes"
+                        ),
+                        '1,MSFT,MSFT,,external,api," YFINANCE ",2026-06-17,350.0,0.95,positive momentum,',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "candidate_rows": 1,
+                    "candidates_output": str(candidates),
+                    "candidates_output_written": True,
+                    "input_metadata": {"market": "US"},
+                }
+            )
+            report = render_report(summary, {"steps": []}, language="en")
+
+        complete = report.split('<section id="complete-candidates"', 1)[1]
+        self.assertIn('<strong class="name-cell">MSFT</strong>', complete)
+        self.assertIn('data-row-name="MSFT"', complete)
+        self.assertNotIn("Name not provided", complete)
+        self.assertNotIn('class="name-cell missing"', complete)
+
+    def test_non_yfinance_symbol_name_equal_symbol_is_missing_in_en_and_zh(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            candidates.write_text(
+                "\n".join(
+                    [
+                        (
+                            "rank,symbol,name,listing_board,source_scope,metadata_source,"
+                            "source_type,date,close,total_score,key_reasons,risk_notes"
+                        ),
+                        "1,600000.SH,600000.SH,,fundamental,exchange,manual,2026-06-17,10.0,0.8,positive momentum,",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "candidate_rows": 1,
+                    "candidates_output": str(candidates),
+                    "candidates_output_written": True,
+                }
+            )
+            en_report = render_report(summary, {"steps": []}, language="en")
+            zh_report = render_report(summary, {"steps": []}, language="zh")
+
+        en_complete = en_report.split('<section id="complete-candidates"', 1)[1]
+        zh_complete = zh_report.split('<section id="complete-candidates"', 1)[1]
+        self.assertIn('<strong class="name-cell missing">Name not provided</strong>', en_complete)
+        self.assertIn('<strong class="name-cell missing">名称未提供</strong>', zh_complete)
+        self.assertNotIn('<strong class="name-cell">600000.SH</strong>', en_complete)
+        self.assertNotIn('<strong class="name-cell">600000.SH</strong>', zh_complete)
+
     def test_report_ignores_stale_csvs_when_outputs_were_not_written(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)

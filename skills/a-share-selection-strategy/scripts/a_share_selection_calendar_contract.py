@@ -1,6 +1,9 @@
-"""Shared calendar model names for portfolio reporting."""
+"""Compatibility wrapper for shared calendar contract constants."""
 
-CALENDAR_MODEL = "business_day_closed_interval"
+from __future__ import annotations
+
+from lib.a_share_selection_calendar_contract import *  # noqa: F401,F403
+
 
 if __name__ == "__main__":
     from a_share_selection_cli_guard import fail_not_cli

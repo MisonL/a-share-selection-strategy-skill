@@ -25,7 +25,7 @@ def resolve_config_path(path: Path) -> Path:
 
     if path.exists():
         return path
-    if path.parent.name == "scripts" and path.name in CONFIG_FILE_NAMES:
+    if path.parent.resolve() == SCRIPTS_DIR and path.name in CONFIG_FILE_NAMES:
         return CONFIGS_DIR / path.name
     return path
 

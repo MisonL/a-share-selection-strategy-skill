@@ -66,7 +66,7 @@
 | mode | 触发条件 | 必须披露 |
 | --- | --- | --- |
 | `auto -> generic` | 缺少 prediction-derived 必需列 | `mode_decision_reason`、`prediction_input_source=not_used` |
-| `auto -> prediction` | 输入同时包含 `market` + (`prediction` 或 `prediction_score`) + (`turn` 或 `turnover`) | `prediction_input_source=external_input`、`prediction_model_executed_by_runner=false` |
+| `auto -> prediction` | 输入同时包含 `market=A-share` + (`prediction` 或 `prediction_score`) + (`turn` 或 `turnover`) | `prediction_input_source=external_input`、`prediction_model_executed_by_runner=false` |
 | `prediction` | 用户坚持 prediction-derived 口径 | 缺字段时必须失败，不能自动改 generic |
 | `generic` | 用户明确接受通用技术评分 | 不得写成 prediction-derived 或模型预测结果 |
 

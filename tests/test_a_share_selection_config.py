@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -17,7 +18,7 @@ sys.path.insert(0, str(TESTS))
 import score_candidates as scorer  # noqa: E402
 import create_demo_data  # noqa: E402
 import a_share_selection_config  # noqa: E402
-from a_share_selection_paths import CONFIG_FILE_NAMES  # noqa: E402
+from a_share_selection_paths import CONFIG_FILE_NAMES, resolve_config_path  # noqa: E402
 from helpers import build_frame, load_config  # noqa: E402
 
 
@@ -154,6 +155,12 @@ class AShareSelectionConfigTests(unittest.TestCase):
                     a_share_selection_config.load_config(compatible),
                     a_share_selection_config.load_config(canonical),
                 )
+
+    def test_config_alias_only_applies_to_skill_scripts_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            unrelated = Path(tmpdir) / "scripts" / "example_config.json"
+
+            self.assertEqual(unrelated, resolve_config_path(unrelated))
 
     def test_openai_agent_manifest_has_required_interface_fields(self) -> None:
         text = (SKILL_ROOT / "agents/openai.yaml").read_text(encoding="utf-8")

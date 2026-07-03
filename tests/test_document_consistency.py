@@ -46,6 +46,7 @@ class DocumentConsistencyTests(unittest.TestCase):
             / "skills/a-share-selection-strategy/templates/output-templates.md"
         ).read_text(encoding="utf-8")
 
+        self.assertIn("market=A-share", templates)
         self.assertIn("用户要求直接给结论但要求隐藏边界", templates)
         self.assertIn("不能省略数据源、门禁和非投资建议边界", templates)
         for text in [

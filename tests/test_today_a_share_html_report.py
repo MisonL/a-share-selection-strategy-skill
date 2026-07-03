@@ -440,6 +440,108 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn('data-field-key="industry"', report)
         self.assertIn('data-field-missing="true"', report)
 
+    def test_complete_candidate_table_notice_uses_full_csv_field_coverage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            rows = [
+                (
+                    "rank,symbol,name,listing_board,spot_industry,one_year_pct_chg,"
+                    "date,close,total_score,key_reasons,risk_notes"
+                )
+            ]
+            rows.extend(
+                f"{index},000{index:03d},Name {index},主板,,,"
+                "2026-06-17,10.0,0.82,positive momentum,"
+                for index in range(1, 1001)
+            )
+            rows.append(
+                "1001,001001,Name 1001,主板,软件服务,,"
+                "2026-06-17,10.0,0.82,positive momentum,"
+            )
+            candidates.write_text("\n".join(rows) + "\n", encoding="utf-8")
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "candidate_rows": 1001,
+                    "candidates_output": str(candidates),
+                    "candidates_output_written": True,
+                    "candidate_field_coverage": {
+                        "rows_evaluated": 1001,
+                        "fields": {
+                            "industry": {
+                                "present_rows": 1,
+                                "coverage_ratio": 0.001,
+                                "missing_rows": 1000,
+                            },
+                            "one_year_pct_chg": {
+                                "present_rows": 0,
+                                "coverage_ratio": 0.0,
+                                "missing_rows": 1001,
+                            },
+                            "market_cap": {
+                                "present_rows": 0,
+                                "coverage_ratio": 0.0,
+                                "missing_rows": 1001,
+                            },
+                            "pe_ttm": {
+                                "present_rows": 0,
+                                "coverage_ratio": 0.0,
+                                "missing_rows": 1001,
+                            },
+                            "pb_lf": {
+                                "present_rows": 0,
+                                "coverage_ratio": 0.0,
+                                "missing_rows": 1001,
+                            },
+                        },
+                    },
+                }
+            )
+            report = render_report(summary, {"steps": []}, language="zh")
+
+        complete = report.split('<section id="complete-candidates"', 1)[1]
+        notice = complete.split('<p class="field-notice">', 1)[1].split("</p>", 1)[0]
+        self.assertNotIn("行业", notice)
+        self.assertIn("近一年涨跌幅", notice)
+        self.assertIn("1/1001", complete)
+
+    def test_yfinance_symbol_name_is_displayed_as_ticker_in_candidate_table(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            candidates.write_text(
+                "\n".join(
+                    [
+                        (
+                            "rank,symbol,name,listing_board,source_scope,metadata_source,"
+                            "date,close,total_score,key_reasons,risk_notes"
+                        ),
+                        (
+                            "1,0700.HK,0700.HK,港股主板,yfinance_history_fetch,yfinance,"
+                            "2026-06-17,305.0,0.82,positive momentum,"
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "candidate_rows": 1,
+                    "candidates_output": str(candidates),
+                    "candidates_output_written": True,
+                    "input_metadata": {"market": "HK"},
+                }
+            )
+            report = render_report(summary, {"steps": []}, language="en")
+
+        complete = report.split('<section id="complete-candidates"', 1)[1]
+        self.assertIn('<strong class="name-cell">0700.HK</strong>', complete)
+        self.assertIn('data-row-name="0700.HK"', complete)
+        self.assertNotIn("Name not provided", complete)
+
     def test_report_ignores_stale_csvs_when_outputs_were_not_written(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)

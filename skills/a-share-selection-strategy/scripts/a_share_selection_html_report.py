@@ -133,13 +133,9 @@ def report_sections(
         section(
             "",
             candidates_panel(
-                candidates,
                 all_candidates,
                 all_candidates_truncated,
-                DISPLAY_CANDIDATE_COLUMNS,
                 language,
-                truncated=candidates_truncated,
-                limit=HTML_REPORT_ROWS_LIMIT,
                 csv_path=summary.get("candidates_output", ""),
                 field_coverage=summary.get("candidate_field_coverage"),
                 candle_rows=candle_rows,

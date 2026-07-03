@@ -1216,8 +1216,8 @@ def candidate_preview_row(
 ) -> str:
     symbol = raw_text(row.get("symbol")) or "-"
     name = raw_text(row.get("name")) or symbol
-    display_name = stock_name_or_missing(name, symbol, language)
-    missing_class = " missing" if stock_name_missing(name, symbol) else ""
+    display_name = stock_name_or_missing(row, name, symbol, language)
+    missing_class = " missing" if stock_name_missing(row, name, symbol) else ""
     score = format_numeric(row.get("total_score", ""), 3, "")
     board = candidate_listing_board(row)
     industry = candidate_industry(row)
@@ -1243,8 +1243,8 @@ def candidate_preview_card(
 ) -> str:
     symbol = raw_text(row.get("symbol")) or "-"
     name = raw_text(row.get("name")) or symbol
-    display_name = stock_name_or_missing(name, symbol, language)
-    missing_class = " missing" if stock_name_missing(name, symbol) else ""
+    display_name = stock_name_or_missing(row, name, symbol, language)
+    missing_class = " missing" if stock_name_missing(row, name, symbol) else ""
     score = format_numeric(row.get("total_score", ""), 3, "")
     board = candidate_listing_board(row)
     industry = candidate_industry(row)
@@ -1270,16 +1270,34 @@ def candidate_preview_card(
     )
 
 
-def stock_name_or_missing(name: str, symbol: str, language: str) -> str:
-    if stock_name_missing(name, symbol):
+def stock_name_or_missing(
+    row: dict[str, Any],
+    name: str,
+    symbol: str,
+    language: str,
+) -> str:
+    if stock_name_missing(row, name, symbol):
         return plain_bilingual("Name not provided", "名称未提供", language)
     return name
 
 
-def stock_name_missing(name: str, symbol: str) -> bool:
+def stock_name_missing(row: dict[str, Any], name: str, symbol: str) -> bool:
     normalized_name = str(name).strip()
     normalized_symbol = str(symbol).strip()
-    return not normalized_name or normalized_name == normalized_symbol
+    if not normalized_name:
+        return True
+    return normalized_name == normalized_symbol and not candidate_uses_ticker_as_name(row)
+
+
+def candidate_uses_ticker_as_name(row: dict[str, Any]) -> bool:
+    source_scope = raw_text(row.get("source_scope")).lower()
+    metadata_source = raw_text(row.get("metadata_source")).lower()
+    source_type = raw_text(row.get("source_type")).lower()
+    return (
+        "yfinance" in source_scope
+        or metadata_source == "yfinance"
+        or source_type == "yfinance"
+    )
 
 
 def candidate_industry(row: dict[str, Any]) -> str:
@@ -1360,14 +1378,10 @@ def candidate_risk_text(value: str, language: str) -> str:
 
 
 def candidates_panel(
-    rows: list[dict[str, Any]],
     all_rows: list[dict[str, Any]],
     all_rows_truncated: bool,
-    columns: tuple[str, ...],
     language: str,
     *,
-    truncated: bool,
-    limit: int,
     csv_path: Any,
     field_coverage: dict[str, Any] | None = None,
     candle_rows: dict[str, list[list[Any]]] | None = None,
@@ -1384,7 +1398,6 @@ def candidates_panel(
         empty_html=empty_html,
         empty_key=empty_key,
     )
-    _ = rows, columns, truncated, limit
     return master_detail
 
 

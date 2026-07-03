@@ -21,6 +21,8 @@ def config_path(name: str) -> Path:
 
 
 def resolve_config_path(path: Path) -> Path:
+    """Resolve the historical scripts/*.json CLI alias to the canonical config."""
+
     if path.exists():
         return path
     if path.parent.name == "scripts" and path.name in CONFIG_FILE_NAMES:

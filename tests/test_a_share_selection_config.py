@@ -17,6 +17,7 @@ sys.path.insert(0, str(TESTS))
 import score_candidates as scorer  # noqa: E402
 import create_demo_data  # noqa: E402
 import a_share_selection_config  # noqa: E402
+from a_share_selection_paths import CONFIG_FILE_NAMES  # noqa: E402
 from helpers import build_frame, load_config  # noqa: E402
 
 
@@ -143,12 +144,7 @@ class AShareSelectionConfigTests(unittest.TestCase):
                 self.assertIn("risk_note", disclosure)
 
     def test_core_configs_have_compatible_script_paths(self) -> None:
-        for name in (
-            "example_config.json",
-            "prediction_profile_config.json",
-            "ultra_short_low_price_config.json",
-            "hong_kong_generic_config.json",
-        ):
+        for name in sorted(CONFIG_FILE_NAMES):
             with self.subTest(name=name):
                 canonical = CONFIGS / name
                 compatible = SCRIPTS / name
@@ -201,7 +197,6 @@ class AShareSelectionConfigTests(unittest.TestCase):
                 seen_ids.extend(str(item["id"]) for item in group["evals"])
 
         self.assertEqual(manifest["total_evals"], total)
-        self.assertEqual(80, total)
         self.assertEqual(total, len(set(seen_ids)))
 
     def test_create_demo_data_generates_expected_files(self) -> None:

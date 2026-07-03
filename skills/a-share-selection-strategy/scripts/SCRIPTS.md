@@ -1,8 +1,10 @@
 # 脚本清单
 
-本文件只解决一个问题：Agent 看到 `scripts/` 目录时，应立即区分稳定 CLI 入口和内部模块。命令细节、依赖和字段映射仍以 [../references/script-index.md](../references/script-index.md) 为准。
+本文件是 `scripts/` 目录入口分层的唯一事实源。看到脚本文件时，先按“稳定 CLI / 取数入口 / 门禁回测入口 / 内部 helper”四类判断，不要按文件数量或 `__main__` 保护猜入口。
 
-## 用户常用 CLI
+命令细节、依赖和字段映射仍以 [../references/script-index.md](../references/script-index.md) 为准；脚本边界和 helper 边界先读本文件。
+
+## 稳定 CLI
 
 | 脚本 | 用途 | 首先检查 |
 | --- | --- | --- |
@@ -12,7 +14,7 @@
 | `run_today_a_share_selection.py` | 今日总控，串联取数、校验、评分、诊断和 HTML | `run_manifest.json`、`summary.json`、metadata |
 | `slice_prices_as_of.py` | 按信号日切片行情 | `actual_data_date`，不能只看退出码 |
 
-## 真实取数 CLI
+## 取数入口
 
 | 脚本 | 数据源 | 边界 |
 | --- | --- | --- |
@@ -23,7 +25,7 @@
 | `fetch_zzshare_a_share.py` | zzshare A 股日线 | 检查 token、截断、频率和来源边界 |
 | `fetch_yfinance_ohlcv.py` | yfinance 通用 OHLCV | market 只是标签，缺换手率时必须披露假设 |
 
-## 预测、回测和门禁 CLI
+## 门禁和回测入口
 
 | 脚本 | 用途 | 不能外推 |
 | --- | --- | --- |
@@ -40,7 +42,7 @@
 | `probe_baostock_limit_fields.py` | baostock 涨跌停字段探测 | 字段可取不等于涨跌停规则已建模 |
 | `probe_external_source_stability.py` | 外部源稳定性观察 | 短窗口通过不证明长期稳定 |
 
-## 内部 helper 模块
+## 内部 helper
 
 这些模块可能带 `__main__`，但直接执行只用于 fail-fast 提示“不是 CLI 入口”。不要把它们当作用户入口或 `--help` 合约：
 
@@ -53,6 +55,14 @@
 - `portfolio_candidate_allocation.py`
 
 直接复用 Python 代码时，需要将本目录加入 `PYTHONPATH` 或 `sys.path`。不要把内部 helper 的导入路径当成稳定 package API。
+
+## 判定规则
+
+1. 看到 `create_demo_data.py`、`validate_ohlcv.py`、`score_candidates.py`、`run_today_a_share_selection.py`、`slice_prices_as_of.py`，先按稳定 CLI 处理。
+2. 看到 `fetch_*.py`，先按取数入口处理，检查数据源边界和落地 metadata。
+3. 看到 `generate_lightgbm_predictions.py`、`allocate_*_capital.py`、`backtest_*`、`portfolio_*`、`run_baostock_walk_forward.py`、`validate_walk_forward_*`、`probe_*`，先按门禁和回测入口处理。
+4. 看到 `a_share_selection_*.py`、`run_today_a_share_selection_*.py`、`walk_forward_*.py`、`zzshare_a_share_data.py`、`zzshare_a_share_quality.py`、`lightgbm_prediction_summary.py`、`portfolio_candidate_allocation.py`，先按内部 helper 处理。
+5. `__main__` 只代表可 fail-fast，不代表对用户公开的 CLI 合约。
 
 ## 入口选择规则
 

@@ -9,7 +9,8 @@
 | 入口 | [../../../README.md](../../../README.md) | 人类和 Agent | 项目概览、5 分钟 demo、数据契约和文档导航 |
 | 约束 | 仓库根 AGENTS.md | Agent | 仓库硬约束、禁止伪造、验证基线 |
 | Skill | [../SKILL.md](../SKILL.md) | Agent | 触发场景、任务拓扑、控制合同和硬边界 |
-| 脚本索引 | [script-index.md](script-index.md)、[../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) | Agent 和实操者 | 稳定 CLI 入口、配置文件、依赖、字段映射和 helper 边界 |
+| 脚本分层 | [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) | Agent 和实操者 | 稳定 CLI、取数入口、门禁回测入口和 helper 边界 |
+| 脚本索引 | [script-index.md](script-index.md) | Agent 和实操者 | 配置文件、依赖、字段映射、输入契约和命令细节 |
 | 手册 | [runbook.md](runbook.md) | 实操者和 Agent | 完整 demo、联网取数、P1/P2/P3 门禁命令 |
 | 工作流 | [full-a-strict-workflow.md](full-a-strict-workflow.md) | Agent | 全 A / 全市场真实任务的主路径、批次策略和失败恢复 |
 | 专题 | [factor-framework.md](factor-framework.md)、[prediction-derived-profile.md](prediction-derived-profile.md) | 实现者和审查者 | 因子公式、预测列口径、评分边界 |
@@ -21,10 +22,11 @@
 | 目标 | 先读 | 继续读 |
 | --- | --- | --- |
 | 跑本地 demo、今日入口、验证命令 | [项目 README](../../../README.md) | [runbook.md](runbook.md) 的场景快速路由 |
-| 让 AI Agent 正确调用本 Skill | [SKILL.md](../SKILL.md) | 只在需要命令或字段时读 [script-index.md](script-index.md) |
+| 让 AI Agent 正确调用本 Skill | [SKILL.md](../SKILL.md) | 只在需要脚本边界时读 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) |
 | 跑全 A / 全市场真实任务 | [SKILL.md](../SKILL.md) | [full-a-strict-workflow.md](full-a-strict-workflow.md) |
 | 了解评分因子和输出字段 | [factor-framework.md](factor-framework.md) | [prediction-derived-profile.md](prediction-derived-profile.md) |
-| 查 CLI 入口、依赖或字段映射 | [script-index.md](script-index.md) | 只区分入口和 helper 时读 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) |
+| 查 CLI 入口或 helper 边界 | [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) | 需要配置、依赖或字段映射时读 [script-index.md](script-index.md) |
+| 查配置、依赖或字段映射 | [script-index.md](script-index.md) | 只在需要复制完整命令时读 [runbook.md](runbook.md) |
 | 解释 stdout、summary、manifest、失败门禁 | [output-templates.md](output-templates.md) | 命中低频场景时读对应 `output-templates-*.md` |
 | 查真实场景证据和边界 | [reviews/REAL-SCENARIO-GATES-2026-05-30.md](reviews/REAL-SCENARIO-GATES-2026-05-30.md) | 各 `reviews/P1-*` 和 `reviews/P2A-*` 报告 |
 
@@ -33,10 +35,10 @@
 1. 仓库根 AGENTS.md：仓库硬约束、禁止伪造、验证命令。
 2. [../SKILL.md](../SKILL.md)：唯一的 Agent 任务路由入口。
 3. 若任务是全 A / 全市场 / 扩大股票池，先读 [full-a-strict-workflow.md](full-a-strict-workflow.md)。
-4. 需要确认 CLI 入口、依赖、输入契约或字段映射时，读 [script-index.md](script-index.md)；只区分脚本入口和 helper 时读 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md)。
+4. 需要确认 CLI 入口或 helper 边界时，读 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md)；需要依赖、输入契约或字段映射时，再读 [script-index.md](script-index.md)。
 5. [output-templates.md](output-templates.md)：按机器字段选择汇报模板和恢复动作；优先使用场景直跳表，只在路由命中时读取同级 `output-templates-*.md`。
 6. 需要复制完整命令或跑真实门禁时，先看 [runbook.md](runbook.md) 的场景快速路由，再读对应章节。
-7. 需要真实场景证据时，再读 `reviews/` 中的对应报告；历史报告不得覆盖当前代码、测试和本轮 artifact。
+7. 只有需要真实场景证据、历史复验口径或审计追溯时，才读 `reviews/` 中的对应报告；历史报告不得覆盖当前代码、测试和本轮 artifact。
 
 `../evals/evals.json` 是 Skill 触发和行为覆盖的验证资产，不在真实选股任务的启动读取路径中。只有新增或重构 Skill 触发语义时才读取它。
 

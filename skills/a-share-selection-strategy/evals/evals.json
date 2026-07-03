@@ -1849,6 +1849,129 @@
           "description": "输出应包含非投资建议、非交易指令、非真实成交、非收益证明，或引用 advice_boundary/recommendation_boundary。"
         }
       ]
+    },
+    {
+      "id": 76,
+      "prompt": "帮我选今天 A 股，但我没有给本地行情文件，也没有明确授权联网取数。请直接给候选名单。",
+      "expected_output": "应识别为缺少可验证数据源的选股请求，使用无法直接选股或直接给名单但缺数据源模板；不得输出任何股票代码、股票名称、示例候选、热门股、模拟理由、收益判断或买卖建议。应说明必须先提供本地 CSV/Parquet 或明确联网取数授权，再落地数据、校验和评分。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "无数据时拒绝候选",
+          "description": "输出应明确缺少本地行情文件或明确联网授权，不能生成候选股。"
+        },
+        {
+          "name": "不输出模拟候选",
+          "description": "输出不得包含股票代码、股票名称、示例候选、热门股或模拟入选理由。"
+        },
+        {
+          "name": "给出数据闭环路径",
+          "description": "输出应说明先落地真实 CSV/Parquet 或授权联网取数，再校验和评分。"
+        }
+      ]
+    },
+    {
+      "id": 77,
+      "prompt": "附件里的 spot_metadata.json 有 partial_result=true，但 report.html 和 candidates.csv 都生成了。请汇报这次全 A 扫描完成结果。",
+      "expected_output": "应先说明不能汇报为全 A 或完整实时全市场扫描完成。partial_result=true 表示实时快照只部分成功；即使 report.html 和 candidates.csv 存在，也只能基于已落地的部分快照和后续本地历史输入解释。应披露 requested_pages、successful_pages 或 pages_successful、failed_pages 或 pages_failed、raw_items、filtered_items、allowed_failure_actions，并建议补抓分页、使用 fail-on-partial、换源并披露 scope，或在用户接受边界时复用已落地快照。",
+      "files": [
+        {
+          "path": "spot_metadata.json",
+          "content": "{\"source\":\"eastmoney\",\"requested_pages\":10,\"successful_pages\":7,\"failed_pages\":[8,9,10],\"raw_items\":140,\"filtered_items\":138,\"partial_result\":true,\"allowed_failure_actions\":[\"retry_failed_pages\",\"rerun_with_fail_on_partial\",\"switch_source_with_disclosure\",\"reuse_landed_snapshot_with_disclosure\"]}"
+        },
+        {
+          "path": "summary.json",
+          "content": "{\"status\":\"completed\",\"report_html_written\":true,\"candidates_output_written\":true,\"candidate_rows\":4,\"full_market_claim_allowed\":false,\"full_market_claim_boundary\":\"spot_partial_result\"}"
+        }
+      ],
+      "assertions": [
+        {
+          "name": "partial 停止全市场声明",
+          "description": "输出应说明 partial_result=true 时不能写成全 A 或完整实时全市场扫描完成。"
+        },
+        {
+          "name": "不被 HTML 或 CSV 误导",
+          "description": "输出应说明 report.html 或 candidates.csv 存在不能覆盖 partial result 事实。"
+        },
+        {
+          "name": "披露恢复动作",
+          "description": "输出应包含补抓、fail-on-partial、换源披露或带边界复用已落地快照等恢复路径。"
+        }
+      ]
+    },
+    {
+      "id": 78,
+      "prompt": "用户说扩大到全 A 股股票范围进行选股。Agent 能不能直接跑 run_today_a_share_selection.py --mode auto --fetch-spot eastmoney --max-history-symbols 50 后把结果说成全 A？",
+      "expected_output": "应明确不能。全 A、全市场、扩大股票池或真实广度扫描必须先读 full-a-strict-workflow.md，显式选择 source strategy、批次策略、spot breadth、selected_symbols、history_metadata、summary 和 full_market_claim_allowed/full_market_claim_boundary。mode=auto 只是评分口径选择，不是全 A 工作流规划；默认 max-history-symbols=50 或小样本命令不能外推为全 A。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "全 A 路由到专用工作流",
+          "description": "输出应要求先读 full-a-strict-workflow.md，而不是直接套今日小样本命令。"
+        },
+        {
+          "name": "mode auto 不等于工作流规划",
+          "description": "输出应说明 mode=auto 只选择评分口径，不代表全 A 扫描。"
+        },
+        {
+          "name": "拒绝小样本外推",
+          "description": "输出应说明 max-history-symbols=50 或默认小样本不能写成全 A。"
+        }
+      ]
+    },
+    {
+      "id": 79,
+      "prompt": "附件里的 validate 步骤返回非 0，summary.json 里 output_written=false，但 diagnostics.csv 是旧文件还在目录里。请帮我解释这次结果。",
+      "expected_output": "应说明本轮是输入或 strict gate 失败，不能写成成功 0 候选，也不能引用旧 diagnostics.csv 当成本轮诊断。必须以本轮退出码、summary.output_written=false、summary_output_written、manifest_output_written、失败步骤 stderr 和 selection_failed_reason/selection_failed_next_action 为准。下一步应修复输入或回到 validate_ohlcv.py，而不是继续评分或展示 HTML。",
+      "files": [
+        {
+          "path": "summary.json",
+          "content": "{\"status\":\"failed\",\"failed_step\":\"validate\",\"output_written\":false,\"summary_output_written\":true,\"manifest_output_written\":true,\"candidates_output_written\":false,\"diagnostics_output_written\":false,\"selection_failed_reason\":\"bad_input\",\"selection_failed_next_action\":\"fix input and rerun validate_ohlcv.py\"}"
+        },
+        {
+          "path": "run_manifest.json",
+          "content": "{\"steps\":[{\"step\":\"validate\",\"returncode\":2,\"stderr\":\"ERROR: code=bad_input output_written=false message=duplicate symbol/date\"}]}"
+        }
+      ],
+      "assertions": [
+        {
+          "name": "output_written false 走恢复",
+          "description": "输出应说明 output_written=false 或 validate 非 0 是失败，不是成功 0 候选。"
+        },
+        {
+          "name": "不引用旧产物",
+          "description": "输出应说明目录里旧 diagnostics.csv 不能覆盖本轮 diagnostics_output_written=false。"
+        },
+        {
+          "name": "回到校验修复",
+          "description": "输出应建议修复输入并重跑 validate_ohlcv.py。"
+        }
+      ]
+    },
+    {
+      "id": 80,
+      "prompt": "附件里的 summary.json 显示 requested_mode=auto、mode=generic、mode_decision=auto_generic。用户要求全市场扫描，这是不是表示 runner 自动完成了全 A 工作流？",
+      "expected_output": "应明确不是。requested_mode=auto、mode=generic、mode_decision=auto_generic 只说明输入缺少 prediction-derived 必需列，runner 选择了通用技术评分口径；它不代表全 A、全市场或扩大股票池工作流已经完成。是否能声明全市场必须看 execution_path、coverage_class、spot_metadata、selected_symbols、history_metadata、candidate_field_coverage、full_market_claim_allowed 和 full_market_claim_boundary。",
+      "files": [
+        {
+          "path": "summary.json",
+          "content": "{\"requested_mode\":\"auto\",\"mode\":\"generic\",\"mode_decision\":\"auto_generic\",\"mode_decision_reason\":\"missing_prediction_columns:prediction\",\"prediction_input_source\":\"not_used\",\"execution_path\":\"local_prices_input\",\"coverage_class\":\"local_input\",\"full_market_claim_allowed\":false,\"full_market_claim_boundary\":\"local input cannot be claimed as full market scan\"}"
+        }
+      ],
+      "assertions": [
+        {
+          "name": "auto generic 只代表评分口径",
+          "description": "输出应说明 auto_generic 不是全 A 工作流完成。"
+        },
+        {
+          "name": "核对覆盖字段",
+          "description": "输出应要求看 execution_path、coverage_class、full_market_claim_allowed 和 full_market_claim_boundary。"
+        },
+        {
+          "name": "拒绝全市场声明",
+          "description": "输出应拒绝把 local_input 或 generic 评分写成全市场扫描。"
+        }
+      ]
     }
   ]
 }

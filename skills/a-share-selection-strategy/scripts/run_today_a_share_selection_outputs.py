@@ -47,6 +47,7 @@ def finalize_outputs(
         remove_optional_report(report_path, summary, manifest)
     else:
         write_optional_report(summary, manifest, report_path, requested_language)
+    mark_core_outputs_written(summary, manifest, manifest_path, summary_path)
     write_json(manifest, manifest_path)
     write_json(summary, summary_path)
 
@@ -93,6 +94,22 @@ def record_html_report_error(
     summary["html_report_error"] = message
     manifest["html_report_error_type"] = error_type
     manifest["html_report_error"] = message
+
+
+def mark_core_outputs_written(
+    summary: dict[str, Any],
+    manifest: dict[str, Any],
+    manifest_path: Path,
+    summary_path: Path,
+) -> None:
+    fields = {
+        "manifest_output": str(manifest_path),
+        "manifest_output_written": manifest_path.exists(),
+        "summary_output": str(summary_path),
+        "summary_output_written": summary_path.exists(),
+    }
+    manifest.update(fields)
+    summary.update(fields)
 
 
 def remove_stale_output_path(path: Path) -> None:

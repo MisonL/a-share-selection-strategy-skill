@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import importlib.util
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 import json
@@ -25,8 +26,13 @@ from run_today_a_share_selection_helpers import (  # noqa: E402
     spot_rows,
     tabular_row_count,
 )
+from run_today_a_share_selection_history import parse_history_symbols  # noqa: E402
 from run_today_a_share_selection_outputs import clear_stale_run_outputs  # noqa: E402
 from helpers import build_frame, load_config  # noqa: E402
+
+HAS_PARQUET_ENGINE = any(
+    importlib.util.find_spec(name) for name in ("pyarrow", "fastparquet")
+)
 
 
 class TodayAShareSelectionRunnerTests(unittest.TestCase):
@@ -58,6 +64,14 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
         self.assertEqual(0, code, stderr)
         self.assertIn("runner=run_today_a_share_selection", stdout)
+        self.assertIn("execution_path=local_prices_generic", stdout)
+        self.assertIn("execution_path_reason=prices_input_provided", stdout)
+        self.assertIn("coverage_class=local_input", stdout)
+        self.assertIn("full_market_claim_allowed=false", stdout)
+        self.assertIn(
+            "full_market_claim_boundary=local_prices_input_not_full_market_scan",
+            stdout,
+        )
         self.assertIn("candidate_rows=2", stdout)
         self.assertIn("diagnostic_rows=2", stdout)
         self.assertIn("html_report=", stdout)
@@ -66,11 +80,21 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("lightgbm_executed_by_runner=false", stdout)
         self.assertEqual(["validate", "score"], [step["step"] for step in manifest["steps"]])
         self.assertEqual("auto", manifest["requested_mode"])
+        self.assertEqual("local_prices_generic", manifest["execution_path"])
+        self.assertEqual("prices_input_provided", manifest["execution_path_reason"])
+        self.assertEqual("local_input", manifest["coverage_class"])
+        self.assertFalse(manifest["full_market_claim_allowed"])
+        self.assertEqual(
+            "local_prices_input_not_full_market_scan",
+            manifest["full_market_claim_boundary"],
+        )
         self.assertEqual("generic", manifest["mode"])
         self.assertEqual("auto_generic", manifest["mode_decision"])
         self.assertTrue(manifest["html_report_enabled"])
         self.assertEqual("auto", manifest["html_report_language"])
         self.assertIn(manifest["html_report_initial_language"], {"zh", "en"})
+        self.assertTrue(manifest["summary_output_written"])
+        self.assertTrue(manifest["manifest_output_written"])
         self.assertIn("missing_prediction_columns:prediction", manifest["mode_decision_reason"])
         self.assertEqual(["prediction"], manifest["missing_prediction_column_groups"])
         self.assertEqual(
@@ -84,6 +108,14 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertFalse(manifest["prediction_model_executed_by_runner"])
         self.assertEqual("not_used", manifest["lightgbm_output_source"])
         self.assertEqual("completed", summary["status"])
+        self.assertEqual("local_prices_generic", summary["execution_path"])
+        self.assertEqual("prices_input_provided", summary["execution_path_reason"])
+        self.assertEqual("local_input", summary["coverage_class"])
+        self.assertFalse(summary["full_market_claim_allowed"])
+        self.assertEqual(
+            "local_prices_input_not_full_market_scan",
+            summary["full_market_claim_boundary"],
+        )
         self.assertEqual("auto", summary["requested_mode"])
         self.assertEqual("generic", summary["mode"])
         self.assertEqual("auto_generic", summary["mode_decision"])
@@ -124,17 +156,34 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             manifest["html_report_initial_language"],
             summary["html_report_initial_language"],
         )
-        self.assertIn("A-Share Selection Strategy", report)
-        self.assertIn("AI Agent Result", report)
-        self.assertIn("Watchlist", report)
-        self.assertIn("Review Appendix", report)
+        self.assertIn("A-share Strategy Selection Report", report)
+        self.assertIn("Pipeline counts", report)
+        self.assertIn("Watchlist Top 5 Preview", report)
+        self.assertIn("Use boundary / risk reminder", report)
+        self.assertIn("Complete Candidate Table", report)
+        self.assertIn("Report Appendix", report)
         self.assertIn("not_investment_advice_not_trade_instruction_not_real_fill_not_return_proof", report)
         self.assertIn('data-lang-mode="auto"', report)
         self.assertTrue(
             all(row["advice_boundary"] == summary["advice_boundary"] for row in candidate_rows)
         )
+        self.assertTrue(all(row["execution_path"] == "local_prices_generic" for row in candidate_rows))
+        self.assertTrue(all(row["coverage_class"] == "local_input" for row in candidate_rows))
+        self.assertTrue(
+            all(row["full_market_claim_allowed"] == "False" for row in candidate_rows)
+        )
+        self.assertTrue(
+            all(
+                row["full_market_claim_boundary"]
+                == "local_prices_input_not_full_market_scan"
+                for row in candidate_rows
+            )
+        )
         self.assertTrue(
             all(row["advice_boundary"] == summary["advice_boundary"] for row in diagnostic_rows)
+        )
+        self.assertTrue(
+            all(row["execution_path_reason"] == "prices_input_provided" for row in diagnostic_rows)
         )
         self.assertTrue(
             all(
@@ -203,8 +252,16 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         )
         self.assertFalse(summary["candidates_output_written"])
         self.assertFalse(summary["diagnostics_output_written"])
+        self.assertTrue(summary["summary_output_written"])
+        self.assertTrue(summary["manifest_output_written"])
+        self.assertTrue(manifest["summary_output_written"])
+        self.assertTrue(manifest["manifest_output_written"])
+        self.assertEqual(str(output / "summary.json"), summary["summary_output"])
+        self.assertEqual(str(output / "run_manifest.json"), summary["manifest_output"])
+        self.assertEqual(str(output / "summary.json"), manifest["summary_output"])
+        self.assertEqual(str(output / "run_manifest.json"), manifest["manifest_output"])
         self.assertTrue(summary["html_report_written"])
-        self.assertIn("No usable watchlist was produced", report)
+        self.assertIn("did not produce a usable watchlist", report)
         self.assertIn("This failed run has no usable watchlist", report)
         self.assertIn("prediction-derived profile requires prediction", report)
         self.assertIn("Missing required prediction columns", report)
@@ -684,6 +741,182 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual("zzshare", manifest["history_source"])
         self.assertEqual("zzshare_history_fetch", manifest["source_scope"])
 
+    def test_runner_accepts_yfinance_hk_history_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "yfinance",
+                    "--symbols",
+                    "00700,HK.09988,08001.HK",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--history-timeout-seconds",
+                    "8",
+                    "--mode",
+                    "generic",
+                    "--config",
+                    str(SCRIPTS / "hong_kong_generic_config.json"),
+                    "--no-html-report",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args,
+                manifest,
+                output / "run_manifest.json",
+                yfinance_hk_executor,
+            )
+
+            runner.run_pipeline(context)
+            summary = summary_view(manifest, "completed")
+
+        fetch_step = manifest["steps"][0]
+        self.assertEqual("fetch_history", fetch_step["step"])
+        self.assertIn("fetch_yfinance_ohlcv.py", fetch_step["command"][1])
+        self.assertIn("0700.HK,9988.HK,8001.HK", fetch_step["command"])
+        self.assertIn("--market", fetch_step["command"])
+        self.assertIn("HK", fetch_step["command"])
+        self.assertIn("--timeout-seconds", fetch_step["command"])
+        self.assertIn("8.0", fetch_step["command"])
+        self.assertEqual(
+            ["0700.HK", "9988.HK", "8001.HK"],
+            manifest["history_symbols"],
+        )
+        self.assertEqual("yfinance", manifest["history_source"])
+        self.assertEqual("yfinance_history_fetch", manifest["source_scope"])
+        self.assertEqual("yfinance", summary["input_metadata"]["source"])
+        self.assertEqual("HK", summary["input_metadata"]["market"])
+        self.assertTrue(summary["input_metadata"]["market_label_only"])
+        self.assertEqual("unknown", summary["input_metadata"]["real_market_data"])
+
+    def test_runner_accepts_akshare_hk_daily_history_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "akshare_hk_daily",
+                    "--symbols",
+                    "700,HK.09988,08001.HK",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--history-adjust",
+                    "",
+                    "--mode",
+                    "generic",
+                    "--config",
+                    str(SCRIPTS / "hong_kong_generic_config.json"),
+                    "--no-html-report",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args,
+                manifest,
+                output / "run_manifest.json",
+                akshare_hk_daily_executor,
+            )
+
+            runner.run_pipeline(context)
+            summary = summary_view(manifest, "completed")
+
+        fetch_step = manifest["steps"][0]
+        self.assertEqual("fetch_history", fetch_step["step"])
+        self.assertIn("fetch_akshare_hk_daily.py", fetch_step["command"][1])
+        self.assertIn("00700,09988,08001", fetch_step["command"])
+        self.assertEqual(
+            ["00700", "09988", "08001"],
+            manifest["history_symbols"],
+        )
+        self.assertEqual("akshare_hk_daily", manifest["history_source"])
+        self.assertEqual("akshare_hk_daily_history_fetch", manifest["source_scope"])
+        self.assertEqual("akshare_stock_hk_daily", summary["input_metadata"]["source"])
+        self.assertEqual("HK", summary["input_metadata"]["market"])
+        self.assertEqual("unknown", summary["input_metadata"]["real_market_data"])
+
+    def test_yfinance_hk_symbol_parser_maps_common_hk_forms(self) -> None:
+        args = SimpleNamespace(
+            history_source="yfinance",
+            symbols="00700,HK.09988,08001.HK",
+            history_market="HK",
+        )
+
+        self.assertEqual(
+            ["0700.HK", "9988.HK", "8001.HK"],
+            parse_history_symbols(args),
+        )
+
+    def test_yfinance_hk_symbol_parser_rejects_zero_code(self) -> None:
+        args = SimpleNamespace(
+            history_source="yfinance",
+            symbols="0,00700",
+            history_market="HK",
+        )
+
+        with self.assertRaisesRegex(ValueError, "HK yfinance symbols"):
+            parse_history_symbols(args)
+
+    def test_runner_rejects_yfinance_unsupported_adjust_option(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    tmpdir,
+                    "--history-source",
+                    "yfinance",
+                    "--symbols",
+                    "00700",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--history-adjust",
+                    "qfq",
+                    "--config",
+                    str(SCRIPTS / "hong_kong_generic_config.json"),
+                    "--no-html-report",
+                ]
+            )
+
+        self.assertEqual(2, code)
+        self.assertIn("unsupported yfinance history options would be ignored", stderr)
+        self.assertIn("--history-adjust", stderr)
+
+    def test_runner_rejects_yfinance_unsupported_drop_invalid_rows_option(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    tmpdir,
+                    "--history-source",
+                    "yfinance",
+                    "--symbols",
+                    "00700",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--drop-invalid-history-rows",
+                    "--config",
+                    str(SCRIPTS / "hong_kong_generic_config.json"),
+                    "--no-html-report",
+                ]
+            )
+
+        self.assertEqual(2, code)
+        self.assertIn("unsupported yfinance history options would be ignored", stderr)
+        self.assertIn("--drop-invalid-history-rows", stderr)
+
     def test_runner_rejects_zzshare_only_options_for_other_history_sources(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             code, _stdout, stderr = call_runner(
@@ -811,7 +1044,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             self.assertEqual(0, summary["diagnostic_rows"])
             self.assertNotIn("Zero Prefix", report)
             self.assertNotIn("eastmoney", report)
-            self.assertNotIn("disconnect", report)
+            self.assertNotIn('"error": "disconnect"', report)
 
     def test_invalid_zzshare_history_limit_clears_reused_output_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -940,6 +1173,42 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual("local_prices_input+local_spot_input", manifest["source_scope"])
         self.assertEqual(1, summary["spot_rows"])
         self.assertEqual(1, summary["spot_matched_symbols"])
+
+    def test_runner_uses_spot_name_when_history_name_is_numeric(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=True)
+        frame = frame[frame["symbol"] == "000002"].copy()
+        frame["name"] = "2"
+        frame[["open", "high", "low", "close"]] = frame[
+            ["open", "high", "low", "close"]
+        ] * 0.75
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            spot = root / "spot.csv"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+            spot.write_text(
+                "symbol,name,price,amount\n000002,万科A,8.88,200000000\n",
+                encoding="utf-8",
+            )
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--spot-input",
+                    str(spot),
+                    "--output-dir",
+                    str(output),
+                ]
+            )
+
+            candidate_rows = csv_rows(output / "candidates.csv")
+            report = (output / "report.html").read_text(encoding="utf-8")
+
+        self.assertEqual(0, code, stderr)
+        self.assertEqual("万科A", candidate_rows[0]["name"])
+        self.assertIn("万科A", report)
 
     def test_runner_records_eastmoney_fetch_step_before_score(self) -> None:
         args = runner.build_parser().parse_args(
@@ -1426,6 +1695,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual("yfinance_history_fetch", summary["source_scope"])
         self.assertEqual("local_prices_input", summary["runner_source_scope"])
         self.assertIn("input_partial_result=true", stdout)
+        self.assertIn("input_metadata_file=metadata.json", stdout)
         self.assertIn("source_scope=yfinance_history_fetch", stdout)
         self.assertIn("runner_source_scope=local_prices_input", stdout)
         self.assertIn("input_token_configured=false", stdout)
@@ -1438,14 +1708,75 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("input_failed_symbols=MSFT:timeout", stdout)
         self.assertIn("input_empty_symbols=none", stdout)
         self.assertIn("input_output_written=true", stdout)
-        self.assertIn("input_metadata_output_written=true", stdout)
+
+    def test_local_prices_use_history_metadata_when_metadata_json_missing(self) -> None:
+        frame = build_frame(days=130, include_tradability=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "prices.csv"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+            (root / "history_metadata.json").write_text(
+                json.dumps(
+                    {
+                        "source_type": "external_fetch",
+                        "source": "zzshare",
+                        "source_scope": "zzshare_history_fetch",
+                        "source_claim_boundary": (
+                            "zzshare_external_api_not_broker_order_or_long_term_stability_proof"
+                        ),
+                        "requested_symbols": ["000001", "600000"],
+                        "symbol_count": 2,
+                        "rows": int(len(frame)),
+                        "failed_symbols": [],
+                        "empty_symbols": [],
+                        "possibly_truncated_symbols": [],
+                        "token_configured": False,
+                        "output_written": True,
+                        "metadata_output_written": True,
+                        "real_market_data": True,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            code, stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--output-dir",
+                    str(output),
+                    "--mode",
+                    "generic",
+                    "--no-html-report",
+                ]
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            candidate_rows = csv_rows(output / "candidates.csv")
+            diagnostic_rows = csv_rows(output / "diagnostics.csv")
+
+        self.assertEqual(0, code, stderr)
+        self.assertEqual("zzshare", summary["input_metadata"]["source"])
+        self.assertEqual(
+            "zzshare_history_fetch",
+            summary["input_metadata"]["source_scope"],
+        )
+        self.assertEqual(
+            "history_metadata.json",
+            summary["input_metadata"]["input_metadata_file"],
+        )
+        self.assertEqual("zzshare_history_fetch", summary["source_scope"])
+        self.assertIn("source_scope=zzshare_history_fetch", stdout)
+        self.assertIn("input_metadata_file=history_metadata.json", stdout)
         for row in candidate_rows + diagnostic_rows:
-            self.assertEqual("yfinance_history_fetch", row["source_scope"])
+            self.assertEqual("zzshare_history_fetch", row["source_scope"])
             self.assertEqual("False", row["input_token_configured"])
-            self.assertEqual("True", row["input_partial_result"])
-            self.assertEqual("1", row["input_possibly_truncated_symbol_count"])
-            self.assertEqual("2", row["input_invalid_rows"])
-            self.assertEqual("1", row["input_dropped_invalid_rows"])
+            self.assertEqual("", row["input_partial_result"])
+            self.assertEqual("0", row["input_possibly_truncated_symbol_count"])
+        self.assertIn(
+            "candidate_field_coverage=industry:0/0,one_year_pct_chg:0/0,market_cap:0/0,pe_ttm:0/0,pb_lf:0/0",
+            stdout,
+        )
 
     def test_history_fallback_marks_partial_in_summary_stdout_and_csvs(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1547,14 +1878,41 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 runner.helpers.print_summary(manifest, output)
 
         self.assertEqual(["000001"], manifest["history_symbols"])
+        self.assertEqual("history_fetch_spot_derived_explicit_limit_with_local_spot_generic", manifest["execution_path"])
+        self.assertEqual("derive_symbols_from_spot+explicit_history_limit+spot_input", manifest["execution_path_reason"])
+        self.assertEqual("spot_derived_limited_pool", manifest["coverage_class"])
+        self.assertFalse(manifest["full_market_claim_allowed"])
+        self.assertEqual(
+            "spot_derived_explicit_limit_requires_artifact_review",
+            manifest["full_market_claim_boundary"],
+        )
         self.assertEqual(["000001"], selected["selected_symbols"])
         self.assertEqual(1, selected["filtered_spot_rows"])
         self.assertEqual(1, selected["selected_symbol_count"])
         self.assertEqual(1, selected["max_history_symbols"])
+        self.assertEqual("explicit_user_input", selected["history_symbol_limit_source"])
         self.assertEqual(4, summary["history_selection"]["raw_spot_rows"])
+        self.assertEqual(
+            "history_fetch_spot_derived_explicit_limit_with_local_spot_generic",
+            summary["execution_path"],
+        )
+        self.assertEqual(
+            "derive_symbols_from_spot+explicit_history_limit+spot_input",
+            summary["execution_path_reason"],
+        )
+        self.assertEqual("spot_derived_limited_pool", summary["coverage_class"])
+        self.assertFalse(summary["full_market_claim_allowed"])
+        self.assertEqual(
+            "spot_derived_explicit_limit_requires_artifact_review",
+            summary["full_market_claim_boundary"],
+        )
         self.assertEqual(1, summary["history_selection"]["filtered_spot_rows"])
         self.assertEqual(1, summary["history_selection"]["selected_symbol_count"])
         self.assertEqual(1, summary["history_selection"]["max_history_symbols"])
+        self.assertEqual(
+            "explicit_user_input",
+            summary["history_selection"]["history_symbol_limit_source"],
+        )
         self.assertFalse(summary["history_selection"]["allow_partial_history"])
         self.assertEqual(
             1,
@@ -1563,10 +1921,294 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertTrue(summary["selected_symbols_output_written"])
         self.assertTrue(summary["history_metadata_output_written"])
         self.assertIn("history_symbols=1", stdout.getvalue())
+        self.assertIn(
+            "execution_path=history_fetch_spot_derived_explicit_limit_with_local_spot_generic",
+            stdout.getvalue(),
+        )
+        self.assertIn("coverage_class=spot_derived_limited_pool", stdout.getvalue())
+        self.assertIn("full_market_claim_allowed=false", stdout.getvalue())
+        self.assertIn(
+            "full_market_claim_boundary=spot_derived_explicit_limit_requires_artifact_review",
+            stdout.getvalue(),
+        )
         self.assertIn("raw_spot_rows=4", stdout.getvalue())
         self.assertIn("filtered_spot_rows=1", stdout.getvalue())
         self.assertIn("max_history_symbols=1", stdout.getvalue())
+        self.assertIn(
+            "history_symbol_limit_source=explicit_user_input",
+            stdout.getvalue(),
+        )
         self.assertIn("allow_partial_history=false", stdout.getvalue())
+        self.assertIn("candidate_field_coverage=unknown", stdout.getvalue())
+
+    def test_explicit_history_symbols_do_not_report_spot_sample_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "baostock",
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+
+            runner.run_pipeline(context)
+            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                summary = summary_view(manifest, "completed")
+                runner.helpers.print_summary(manifest, output)
+
+        self.assertEqual("history_fetch_explicit_symbols_generic", manifest["execution_path"])
+        self.assertEqual("explicit_symbols", manifest["execution_path_reason"])
+        self.assertEqual("explicit_symbol_pool", manifest["coverage_class"])
+        self.assertEqual("explicit_symbols_not_full_market_scan", manifest["full_market_claim_boundary"])
+        self.assertEqual(["000001"], selected["symbols"])
+        self.assertEqual(1, selected["selected_symbol_count"])
+        self.assertEqual("explicit_symbols_no_spot_limit", selected["history_symbol_limit_source"])
+        self.assertEqual("explicit_symbols", summary["history_selection"]["source"])
+        self.assertEqual(1, summary["history_selection"]["selected_symbol_count"])
+        self.assertEqual("", summary["history_selection"]["max_history_symbols"])
+        self.assertEqual(
+            "explicit_symbols_no_spot_limit",
+            summary["history_selection"]["history_symbol_limit_source"],
+        )
+        self.assertIn("max_history_symbols=unknown", stdout.getvalue())
+        self.assertIn(
+            "history_symbol_limit_source=explicit_symbols_no_spot_limit",
+            stdout.getvalue(),
+        )
+
+    def test_yfinance_history_market_reads_source_config_not_output_dir_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            stale_config = output / "hong_kong_generic_config.json"
+            stale_config.write_text(
+                json.dumps({"universe": {"market": "US"}}),
+                encoding="utf-8",
+            )
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "yfinance",
+                    "--symbols",
+                    "00700,HK.09988,08001.HK",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--config",
+                    str(SCRIPTS / "hong_kong_generic_config.json"),
+                    "--no-html-report",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args,
+                manifest,
+                output / "run_manifest.json",
+                yfinance_hk_executor,
+            )
+
+            runner.run_pipeline(context)
+
+        fetch_step = manifest["steps"][0]
+        market_index = fetch_step["command"].index("--market")
+        self.assertEqual("HK", fetch_step["command"][market_index + 1])
+
+    def test_explicit_history_symbols_with_limit_report_limited_pool(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "baostock",
+                    "--symbols",
+                    "000001,000002",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--max-history-symbols",
+                    "50",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+
+            runner.run_pipeline(context)
+            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                summary = summary_view(manifest, "completed")
+                runner.helpers.print_summary(manifest, output)
+
+        self.assertEqual(
+            "history_fetch_explicit_symbols_explicit_limit_generic",
+            manifest["execution_path"],
+        )
+        self.assertEqual(
+            "explicit_symbols+explicit_history_limit",
+            manifest["execution_path_reason"],
+        )
+        self.assertEqual("explicit_symbol_limited_pool", manifest["coverage_class"])
+        self.assertEqual(
+            "explicit_symbols_explicit_limit_requires_artifact_review",
+            manifest["full_market_claim_boundary"],
+        )
+        self.assertEqual(["000001", "000002"], selected["symbols"])
+        self.assertEqual(2, summary["history_selection"]["selected_symbol_count"])
+        self.assertEqual("", summary["history_selection"]["max_history_symbols"])
+        self.assertEqual(
+            "explicit_symbols_no_spot_limit",
+            summary["history_selection"]["history_symbol_limit_source"],
+        )
+        self.assertIn(
+            "execution_path=history_fetch_explicit_symbols_explicit_limit_generic",
+            stdout.getvalue(),
+        )
+        self.assertIn("coverage_class=explicit_symbol_limited_pool", stdout.getvalue())
+
+    def test_explicit_default_history_limit_is_not_misclassified_as_spot_sample_cap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            spot = root / "spot.csv"
+            output = root / "run"
+            spot.write_text(
+                "\n".join(
+                    [
+                        "symbol,name,spot_price,spot_amount,spot_pct_chg",
+                        "000001,Alpha,8.2,200000000,1.2",
+                        "000002,Beta,8.0,300000000,9.0",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--spot-input",
+                    str(spot),
+                    "--history-source",
+                    "baostock",
+                    "--derive-symbols-from-spot",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--max-history-symbols",
+                    "50",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+
+            runner.run_pipeline(context)
+            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                summary = summary_view(manifest, "completed")
+                runner.helpers.print_summary(manifest, output)
+
+        self.assertTrue(getattr(args, "max_history_symbols_supplied", False))
+        self.assertEqual(
+            "history_fetch_spot_derived_explicit_limit_with_local_spot_generic",
+            manifest["execution_path"],
+        )
+        self.assertEqual(
+            "derive_symbols_from_spot+explicit_history_limit+spot_input",
+            manifest["execution_path_reason"],
+        )
+        self.assertEqual("spot_derived_limited_pool", manifest["coverage_class"])
+        self.assertEqual(
+            "spot_derived_explicit_limit_requires_artifact_review",
+            manifest["full_market_claim_boundary"],
+        )
+        self.assertEqual("explicit_user_input", selected["history_symbol_limit_source"])
+        self.assertEqual("explicit_user_input", summary["history_selection"]["history_symbol_limit_source"])
+        self.assertEqual(50, summary["history_selection"]["max_history_symbols"])
+        self.assertEqual(
+            "history_fetch_spot_derived_explicit_limit_with_local_spot_generic",
+            summary["execution_path"],
+        )
+        self.assertEqual("spot_derived_limited_pool", summary["coverage_class"])
+        self.assertIn("max_history_symbols=50", stdout.getvalue())
+        self.assertIn(
+            "history_symbol_limit_source=explicit_user_input",
+            stdout.getvalue(),
+        )
+
+    def test_runner_derives_akshare_hk_symbols_from_spot_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            spot = root / "spot.csv"
+            output = root / "run"
+            spot.write_text(
+                "\n".join(
+                    [
+                        "ticker,name,price,amount,pct_chg",
+                        "HK.00700,Tencent,300,300000000,1.1",
+                        "09988.HK,Alibaba,80,400000000,0.8",
+                        "00000,InvalidZero,1,500000000,9.0",
+                        "600001,Ashare,8,600000000,5.0",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--spot-input",
+                    str(spot),
+                    "--history-source",
+                    "akshare_hk_daily",
+                    "--derive-symbols-from-spot",
+                    "--max-history-symbols",
+                    "2",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--mode",
+                    "generic",
+                    "--config",
+                    str(SCRIPTS / "hong_kong_generic_config.json"),
+                    "--no-html-report",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args,
+                manifest,
+                output / "run_manifest.json",
+                akshare_hk_daily_executor,
+            )
+
+            runner.run_pipeline(context)
+            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(["09988", "00700"], manifest["history_symbols"])
+        self.assertEqual(["09988", "00700"], selected["selected_symbols"])
+        self.assertEqual(4, selected["raw_spot_rows"])
+        self.assertEqual(2, selected["filtered_spot_rows"])
+        self.assertEqual(2, selected["selected_symbol_count"])
 
     def test_runner_derives_history_symbols_from_common_spot_code_aliases(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1871,6 +2513,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(3, selected["raw_spot_rows"])
         self.assertEqual(1, selected["filtered_spot_rows"])
 
+    @unittest.skipUnless(HAS_PARQUET_ENGINE, "pyarrow or fastparquet is required")
     def test_runner_does_not_zero_pad_numeric_parquet_spot_symbols(self) -> None:
         pd = __import__("pandas")
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1898,9 +2541,33 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             manifest = runner.initial_manifest(args)
             context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
 
-            with self.assertRaisesRegex(ValueError, "zero history symbols"):
+            with self.assertRaisesRegex(
+                ValueError,
+                (
+                    "zero history symbols.*preflight_stage=derive_symbols.*"
+                    "filtered_spot_rows=0.*raw_spot_rows=1.*"
+                    "selected_symbols_count=0.*max_history_symbols=50.*"
+                    "next_action=expand_spot_universe_or_relax_filters"
+                ),
+            ):
                 runner.run_pipeline(context)
+            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
 
+        self.assertTrue(selected["selection_failed"])
+        self.assertEqual(
+            "spot_snapshot_filtered_to_zero_history_symbols",
+            selected["selection_failed_reason"],
+        )
+        self.assertEqual(
+            "expand_spot_universe_or_relax_filters",
+            selected["next_action"],
+        )
+        self.assertEqual(
+            "expand_spot_universe_or_relax_filters",
+            selected["selection_failed_next_action"],
+        )
+
+    @unittest.skipUnless(HAS_PARQUET_ENGINE, "pyarrow or fastparquet is required")
     def test_runner_counts_parquet_spot_rows_in_summary(self) -> None:
         pd = __import__("pandas")
         frame = build_frame(include_turn=True, include_tradability=True)
@@ -1936,6 +2603,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(0, code, stderr)
         self.assertEqual(2, summary["spot_rows"])
 
+    @unittest.skipUnless(HAS_PARQUET_ENGINE, "pyarrow or fastparquet is required")
     def test_runner_counts_uppercase_parquet_spot_rows_in_summary(self) -> None:
         pd = __import__("pandas")
         frame = build_frame(include_turn=True, include_tradability=True)
@@ -1973,6 +2641,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertTrue(spot_copy_exists)
         self.assertEqual(2, summary["spot_rows"])
 
+    @unittest.skipUnless(HAS_PARQUET_ENGINE, "pyarrow or fastparquet is required")
     def test_runner_preserves_pq_prices_input_extension(self) -> None:
         pd = __import__("pandas")
         frame = build_frame(include_turn=True, include_tradability=True)
@@ -2004,6 +2673,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(len(frame), summary["prices_rows"])
         self.assertIn(str(output / "prices.pq"), manifest["steps"][0]["command"])
 
+    @unittest.skipUnless(HAS_PARQUET_ENGINE, "pyarrow or fastparquet is required")
     def test_runner_normalizes_uppercase_parquet_prices_input_extension(self) -> None:
         pd = __import__("pandas")
         frame = build_frame(include_turn=True, include_tradability=True)
@@ -2076,7 +2746,69 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
 
         self.assertEqual(["000001"], manifest["history_symbols"])
+        self.assertEqual(
+            "history_fetch_spot_derived_explicit_limit_with_local_spot_generic",
+            manifest["execution_path"],
+        )
+        self.assertEqual(
+            "derive_symbols_from_spot+explicit_history_limit+spot_input",
+            manifest["execution_path_reason"],
+        )
         self.assertEqual(["000001"], selected["selected_symbols"])
+        self.assertEqual("explicit_user_input", selected["history_symbol_limit_source"])
+
+    def test_runner_marks_default_spot_derived_history_path_as_sample(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            spot = root / "spot.csv"
+            output = root / "run"
+            spot.write_text(
+                "\n".join(
+                    [
+                        "symbol,name,spot_price,spot_amount,spot_pct_chg",
+                        "000001,Alpha,8.2,200000000,1.2",
+                        "000002,Beta,8.0,300000000,9.0",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--spot-input",
+                    str(spot),
+                    "--history-source",
+                    "baostock",
+                    "--derive-symbols-from-spot",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+
+            runner.run_pipeline(context)
+            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            "history_fetch_spot_derived_sample_with_local_spot_generic",
+            manifest["execution_path"],
+        )
+        self.assertEqual(
+            "derive_symbols_from_spot+default_small_sample_cap+spot_input",
+            manifest["execution_path_reason"],
+        )
+        self.assertEqual("spot_derived_sample", manifest["coverage_class"])
+        self.assertFalse(manifest["full_market_claim_allowed"])
+        self.assertEqual(
+            "default_small_sample_cap_not_full_market",
+            manifest["full_market_claim_boundary"],
+        )
+        self.assertEqual("small_sample_default_cap", selected["history_symbol_limit_source"])
 
 
 
@@ -2174,6 +2906,124 @@ def history_metadata_executor(command: list[str]) -> subprocess.CompletedProcess
             command,
             0,
             "OK: raw_symbols=1 input_symbols=1 candidates=1 effective_empty_result=false\n",
+            "",
+        )
+    return subprocess.CompletedProcess(command, 0, "", "")
+
+
+def yfinance_hk_executor(command: list[str]) -> subprocess.CompletedProcess[str]:
+    script = Path(command[1]).name
+    if script == "fetch_yfinance_ohlcv.py":
+        symbols = command[command.index("--symbols") + 1].split(",")
+        Path(command[command.index("--output") + 1]).write_text(
+            "\n".join(
+                [
+                    "symbol,name,market,date,open,high,low,close,volume",
+                    "0700.HK,0700.HK,HK,2026-01-01,300,310,295,305,100000",
+                    "9988.HK,9988.HK,HK,2026-01-01,80,82,78,81,200000",
+                    "8001.HK,8001.HK,HK,2026-01-01,1.2,1.3,1.1,1.25,300000",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        Path(command[command.index("--metadata-output") + 1]).write_text(
+            json.dumps(
+                {
+                    "source": "yfinance",
+                    "source_scope": "yfinance_history_fetch",
+                    "market": "HK",
+                    "market_label_only": True,
+                    "source_claim_boundary": (
+                        "market_label_not_source_exchange_or_calendar_proof"
+                    ),
+                    "requested_symbols": symbols,
+                    "rows": 3,
+                    "symbol_count": 3,
+                    "failed_symbols": [],
+                    "empty_symbols": [],
+                    "timeout_seconds": 8.0,
+                    "adjustment": "auto_adjust_false_close",
+                    "output_written": True,
+                    "metadata_output_written": True,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    if script == "score_candidates.py":
+        Path(command[command.index("--output") + 1]).write_text(
+            "symbol,total_score\n0700.HK,0.8\n",
+            encoding="utf-8",
+        )
+        Path(command[command.index("--diagnostics-output") + 1]).write_text(
+            "symbol,market,listing_board,selection_status\n"
+            "0700.HK,HK,港股主板,selected\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            "OK: raw_symbols=3 input_symbols=3 candidates=1 effective_empty_result=false\n",
+            "",
+        )
+    return subprocess.CompletedProcess(command, 0, "", "")
+
+
+def akshare_hk_daily_executor(command: list[str]) -> subprocess.CompletedProcess[str]:
+    script = Path(command[1]).name
+    if script == "fetch_akshare_hk_daily.py":
+        symbols = command[command.index("--symbols") + 1].split(",")
+        Path(command[command.index("--output") + 1]).write_text(
+            "\n".join(
+                [
+                    "symbol,name,market,date,open,high,low,close,volume,amount",
+                    "00700,00700,HK,2026-01-01,300,310,295,305,100000,30500000",
+                    "09988,09988,HK,2026-01-01,80,82,78,81,200000,16200000",
+                    "08001,08001,HK,2026-01-01,1.2,1.3,1.1,1.25,300000,375000",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        Path(command[command.index("--metadata-output") + 1]).write_text(
+            json.dumps(
+                {
+                    "source": "akshare_stock_hk_daily",
+                    "source_scope": "akshare_hk_daily_history_fetch",
+                    "source_type": "external_fetch",
+                    "market": "HK",
+                    "source_claim_boundary": (
+                        "akshare_stock_hk_daily_not_exchange_calendar_or_tradability_proof"
+                    ),
+                    "requested_symbols": symbols,
+                    "rows": 3,
+                    "symbol_count": 3,
+                    "failed_symbols": [],
+                    "empty_symbols": [],
+                    "adjust": "",
+                    "output_written": True,
+                    "metadata_output_written": True,
+                    "real_market_data": "unknown",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    if script == "score_candidates.py":
+        Path(command[command.index("--output") + 1]).write_text(
+            "symbol,total_score\n00700,0.8\n",
+            encoding="utf-8",
+        )
+        Path(command[command.index("--diagnostics-output") + 1]).write_text(
+            "symbol,market,listing_board,selection_status\n"
+            "00700,HK,港股主板,selected\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            "OK: raw_symbols=3 input_symbols=3 candidates=1 effective_empty_result=false\n",
             "",
         )
     return subprocess.CompletedProcess(command, 0, "", "")

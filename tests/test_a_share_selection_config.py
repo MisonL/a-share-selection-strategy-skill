@@ -114,6 +114,14 @@ class AShareSelectionConfigTests(unittest.TestCase):
                 "prediction_model_executed_by_score_script": False,
                 "lightgbm_not_used": True,
             },
+            "hong_kong_generic_config.json": {
+                "prediction_policy": "not_used",
+                "prediction_mode": False,
+                "prediction_input_source": "not_used",
+                "prediction_model_executed_by_runner": False,
+                "prediction_model_executed_by_score_script": False,
+                "lightgbm_not_used": True,
+            },
         }
         for name, fields in expected.items():
             with self.subTest(name=name):
@@ -157,8 +165,10 @@ class AShareSelectionConfigTests(unittest.TestCase):
             code = create_demo_data.main(["--output", tmpdir, "--days", "160"])
             self.assertEqual(0, code)
             prices = Path(tmpdir) / "prices.csv"
+            spot = Path(tmpdir) / "spot.csv"
             prediction = Path(tmpdir) / "prices_with_prediction.csv"
             self.assertTrue(prices.exists())
+            self.assertTrue(spot.exists())
             self.assertTrue(prediction.exists())
             self.assertEqual(321, len(prices.read_text(encoding="utf-8").splitlines()))
             self.assertIn("prediction_score", prediction.read_text(encoding="utf-8").splitlines()[0])
@@ -181,8 +191,12 @@ class AShareSelectionConfigTests(unittest.TestCase):
             )
             self.assertEqual(0, code)
             prices = pd.read_csv(Path(tmpdir) / "prices.csv", dtype={"symbol": str})
+            spot = pd.read_csv(Path(tmpdir) / "spot.csv", dtype={"symbol": str})
 
         self.assertEqual(7, prices["symbol"].nunique())
+        self.assertEqual(7, spot["symbol"].nunique())
+        self.assertIn("industry", spot.columns)
+        self.assertEqual("软件服务", spot[spot["symbol"].eq("000002")]["industry"].iloc[0])
         latest = prices.sort_values(["symbol", "date"]).groupby("symbol").tail(1)
         self.assertIn("000003", set(latest[latest["close"] > 10.0]["symbol"]))
         self.assertIn("000004", set(latest[latest["amount"] < 100000000.0]["symbol"]))

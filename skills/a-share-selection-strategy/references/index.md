@@ -7,30 +7,50 @@
 | 层级 | 文件 | 面向读者 | 作用 |
 | --- | --- | --- | --- |
 | 入口 | [../../../README.md](../../../README.md) | 人类和 Agent | 项目概览、5 分钟 demo、数据契约和文档导航 |
-| 约束 | [../../../AGENTS.md](../../../AGENTS.md) | Agent | 仓库硬约束、禁止伪造、验证基线 |
-| Skill | [../SKILL.md](../SKILL.md) | Agent | 触发场景、决策树、脚本路由 |
+| 约束 | 仓库根 AGENTS.md | Agent | 仓库硬约束、禁止伪造、验证基线 |
+| Skill | [../SKILL.md](../SKILL.md) | Agent | 触发场景、任务拓扑、控制合同和硬边界 |
+| 脚本索引 | [script-index.md](script-index.md)、[../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) | Agent 和实操者 | 稳定 CLI 入口、配置文件、依赖、字段映射和 helper 边界 |
 | 手册 | [runbook.md](runbook.md) | 实操者和 Agent | 完整 demo、联网取数、P1/P2/P3 门禁命令 |
+| 工作流 | [full-a-strict-workflow.md](full-a-strict-workflow.md) | Agent | 全 A / 全市场真实任务的主路径、批次策略和失败恢复 |
 | 专题 | [factor-framework.md](factor-framework.md)、[prediction-derived-profile.md](prediction-derived-profile.md) | 实现者和审查者 | 因子公式、预测列口径、评分边界 |
-| 汇报 | [output-templates.md](output-templates.md) | Agent 和 reviewer | 按机器字段选择可复制汇报模板 |
+| 汇报 | [output-templates.md](output-templates.md) 和 `output-templates-*.md` | Agent 和 reviewer | 先按机器字段路由，再按需读取长模板 |
 | 证据 | `reviews/*.md` | reviewer | 历史真实复验、失败边界和不能外推项 |
 
 ## 快速入口
 
 | 目标 | 先读 | 继续读 |
 | --- | --- | --- |
-| 跑本地 demo、今日入口、验证命令 | [项目 README](../../../README.md) | [runbook.md](runbook.md) |
-| 让 AI Agent 正确调用本 Skill | [SKILL.md](../SKILL.md) | [prediction-derived-profile.md](prediction-derived-profile.md) |
+| 跑本地 demo、今日入口、验证命令 | [项目 README](../../../README.md) | [runbook.md](runbook.md) 的场景快速路由 |
+| 让 AI Agent 正确调用本 Skill | [SKILL.md](../SKILL.md) | 只在需要命令或字段时读 [script-index.md](script-index.md) |
+| 跑全 A / 全市场真实任务 | [SKILL.md](../SKILL.md) | [full-a-strict-workflow.md](full-a-strict-workflow.md) |
 | 了解评分因子和输出字段 | [factor-framework.md](factor-framework.md) | [prediction-derived-profile.md](prediction-derived-profile.md) |
-| 解释 stdout、summary、manifest、失败门禁 | [output-templates.md](output-templates.md) | [runbook.md](runbook.md) |
+| 查 CLI 入口、依赖或字段映射 | [script-index.md](script-index.md) | 只区分入口和 helper 时读 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) |
+| 解释 stdout、summary、manifest、失败门禁 | [output-templates.md](output-templates.md) | 命中低频场景时读对应 `output-templates-*.md` |
 | 查真实场景证据和边界 | [reviews/REAL-SCENARIO-GATES-2026-05-30.md](reviews/REAL-SCENARIO-GATES-2026-05-30.md) | 各 `reviews/P1-*` 和 `reviews/P2A-*` 报告 |
 
 ## Agent 读取顺序
 
-1. [../../../AGENTS.md](../../../AGENTS.md)：仓库硬约束、禁止伪造、验证命令。
-2. [../SKILL.md](../SKILL.md)：任务路由、输入契约、CLI 入口、汇报边界。
-3. [output-templates.md](output-templates.md)：按机器字段选择汇报模板。
-4. 需要复制命令或跑真实门禁时，读 [runbook.md](runbook.md)。
-5. 需要真实场景证据时，再读 `reviews/` 中的对应报告。
+1. 仓库根 AGENTS.md：仓库硬约束、禁止伪造、验证命令。
+2. [../SKILL.md](../SKILL.md)：唯一的 Agent 任务路由入口。
+3. 若任务是全 A / 全市场 / 扩大股票池，先读 [full-a-strict-workflow.md](full-a-strict-workflow.md)。
+4. 需要确认 CLI 入口、依赖、输入契约或字段映射时，读 [script-index.md](script-index.md)；只区分脚本入口和 helper 时读 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md)。
+5. [output-templates.md](output-templates.md)：按机器字段选择汇报模板和恢复动作；优先使用场景直跳表，只在路由命中时读取同级 `output-templates-*.md`。
+6. 需要复制完整命令或跑真实门禁时，先看 [runbook.md](runbook.md) 的场景快速路由，再读对应章节。
+7. 需要真实场景证据时，再读 `reviews/` 中的对应报告；历史报告不得覆盖当前代码、测试和本轮 artifact。
+
+`../evals/evals.json` 是 Skill 触发和行为覆盖的验证资产，不在真实选股任务的启动读取路径中。只有新增或重构 Skill 触发语义时才读取它。
+
+## Agent 快速检查表
+
+开始执行前，先回答这 5 个问题：
+
+1. 这是本地评分、定向真实任务、全 A 严格任务，还是 prediction-derived？
+2. 本轮主入口脚本是哪一个？
+3. 本轮最先要看的 artifact 是什么？
+4. 哪个字段一旦失败，就必须先恢复而不是继续汇报？
+5. 本轮结果绝不能被写成什么？
+
+如果这 5 个问题答不出来，不要急着跑命令。
 
 ## 汇报优先级
 
@@ -46,6 +66,10 @@
 
 | 字段 | 含义 | 报告边界 |
 | --- | --- | --- |
+| `execution_path` | 今日 runner 实际走过的任务路径 | 只说明本次执行事实，不等于任务目标已经满足 |
+| `coverage_class` | 本轮覆盖等级，如本地输入、小样本、显式扩池 | `spot_derived_sample` 不能写成全 A 或扩大股票池 |
+| `full_market_claim_allowed` | runner 是否允许自动宣称全市场闭环 | `false` 时必须按边界缩短结论 |
+| `full_market_claim_boundary` | 不能外推为全市场闭环的具体原因 | 必须和候选数一起汇报 |
 | `prediction_input_source` | 今日 runner 是否消费外部 prediction 输入 | `not_used` 不能写成 prediction-derived 结果 |
 | `prediction_model_executed_by_runner` | 今日 runner 是否执行预测模型 | `false` 不能写成 runner 训练或执行模型 |
 | `prediction_model_executed_by_score_script` | `score_candidates.py` 是否执行预测模型 | `false` 只能说明评分消费已有预测列 |

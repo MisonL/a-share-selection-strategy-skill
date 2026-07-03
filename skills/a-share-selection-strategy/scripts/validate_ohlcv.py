@@ -8,6 +8,12 @@ import sys
 from pathlib import Path
 from typing import Iterable
 
+from a_share_selection_symbols import (
+    is_hk_market,
+    is_hk_symbol_text,
+    valid_hk_symbol_text,
+)
+
 
 REQUIRED_COLUMNS = ["symbol", "date", "open", "high", "low", "close", "volume"]
 PRICE_COLUMNS = ["open", "high", "low", "close"]
@@ -132,7 +138,8 @@ def validate_symbols(frame: pd.DataFrame) -> Iterable[str]:
             f"column symbol has {empty_count} empty values"
             f"{error_examples(frame, symbols == '')}"
         )
-    damaged = symbols.str.fullmatch(r"(?:\d{1,5}|\d+\.0+)", na=False)
+    hk_context = hk_symbol_context(frame, symbols)
+    damaged = symbols.str.fullmatch(r"(?:\d{1,5}|\d+\.0+)", na=False) & ~hk_context
     damaged_count = int(damaged.sum())
     if damaged_count:
         yield (
@@ -140,6 +147,14 @@ def validate_symbols(frame: pd.DataFrame) -> Iterable[str]:
             "preserve leading zeros as text"
             f"{error_examples(frame, damaged)}"
         )
+
+
+def hk_symbol_context(frame: pd.DataFrame, symbols: pd.Series) -> pd.Series:
+    symbol_markers = symbols.map(is_hk_symbol_text)
+    if "market" not in frame.columns:
+        return symbol_markers
+    markets = frame["market"].map(is_hk_market)
+    return symbol_markers | markets
 
 
 def validate_numeric_values(frame: pd.DataFrame) -> Iterable[str]:

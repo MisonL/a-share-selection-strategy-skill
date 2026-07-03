@@ -8,9 +8,12 @@ from typing import Any
 from a_share_selection_html_assets import CSS, JS
 from a_share_selection_html_data import (
     HTML_DIAGNOSTIC_ROWS_LIMIT,
+    HTML_MASTER_ROWS_LIMIT,
     HTML_REPORT_ROWS_LIMIT,
+    candidate_candle_rows,
     candidate_rows,
     diagnostic_rows,
+    full_candidate_rows,
 )
 from a_share_selection_html_format import esc, i18n
 from a_share_selection_html_i18n import (
@@ -22,22 +25,20 @@ from a_share_selection_html_sections import (
     DISPLAY_CANDIDATE_COLUMNS,
     DISPLAY_DIAGNOSTIC_COLUMNS,
     boundary_panel,
-    confirmation_title,
     candidates_panel,
     collapsible_details,
     diagnostics_panel,
     evidence_list,
     empty_key_for,
-    hero,
+    insight_drawer,
+    limited_table,
     report_overview,
-    review_appendix_title,
-    review_numbers_panel,
-    review_scoring_panel,
+    appendix_title,
+    run_numbers_panel,
+    scoring_fields_panel,
     section,
     steps_table,
     technical_details,
-    user_result_title,
-    watchlist_title,
     zero_candidates_message,
 )
 from a_share_selection_html_modes import (
@@ -82,14 +83,16 @@ def render_report(
             "<head>",
             '<meta charset="utf-8">',
             '<meta name="viewport" content="width=device-width, initial-scale=1">',
+            '<link rel="icon" href="data:,">',
             title_tag(report_summary, initial_language),
+            f'<meta name="description" content="{esc(report_description(report_summary, initial_language))}">',
             f"<style>{CSS}</style>",
             "</head>",
             "<body>",
-            '<main class="page">',
-            hero(report_summary, initial_language),
+            '<main class="page" data-report-content>',
             *body_sections,
             "</main>",
+            insight_drawer(initial_language),
             f"<script>{JS}</script>",
             "</body>",
             "</html>",
@@ -104,50 +107,89 @@ def report_sections(
     language: str,
 ) -> list[str]:
     candidates, candidates_truncated = candidate_rows(summary)
+    all_candidates, all_candidates_truncated = full_candidate_rows(summary)
     diagnostics, diagnostics_truncated = diagnostic_rows(summary)
+    candle_rows = candidate_candle_rows(summary, all_candidates)
+    empty_key = empty_key_for(summary)
+    empty_html = zero_candidates_message(summary, language)
     return [
-        section(user_result_title(language), report_overview(summary, language, candidates)),
         section(
-            watchlist_title(summary, language),
+            "",
+            report_overview(
+                summary,
+                language,
+                candidates,
+                all_candidates,
+                DISPLAY_CANDIDATE_COLUMNS,
+                truncated=candidates_truncated,
+                limit=HTML_REPORT_ROWS_LIMIT,
+                csv_path=summary.get("candidates_output", ""),
+                empty_key=empty_key,
+                empty_html=empty_html,
+            ),
+            section_id="result-section",
+            extra_class="dashboard-section",
+        ),
+        section(
+            "",
             candidates_panel(
                 candidates,
+                all_candidates,
+                all_candidates_truncated,
                 DISPLAY_CANDIDATE_COLUMNS,
                 language,
                 truncated=candidates_truncated,
                 limit=HTML_REPORT_ROWS_LIMIT,
                 csv_path=summary.get("candidates_output", ""),
-                empty_key=empty_key_for(summary),
-                empty_html=zero_candidates_message(summary, language),
+                field_coverage=summary.get("candidate_field_coverage"),
+                candle_rows=candle_rows,
+                empty_key=empty_key,
+                empty_html=empty_html,
             ),
+            section_id="watchlist-section",
+            extra_class="watchlist-section",
         ),
         section(
-            confirmation_title(language),
+            "",
             boundary_panel(summary, language, candidates),
+            section_id="confirmation-section",
+            extra_class="notice-section",
         ),
         section(
-            review_appendix_title(language),
-            review_appendix(
+            appendix_title(language),
+            report_appendix(
                 summary,
                 manifest,
+                all_candidates,
+                all_candidates_truncated,
                 diagnostics,
                 diagnostics_truncated,
                 language,
             ),
+            section_id="appendix-section",
         ),
     ]
 
 
-def review_appendix(
+def report_appendix(
     summary: dict[str, Any],
     manifest: dict[str, Any],
+    all_candidates: list[dict[str, Any]],
+    all_candidates_truncated: bool,
     diagnostics: list[dict[str, Any]],
     diagnostics_truncated: bool,
     language: str,
 ) -> str:
     return (
-        review_numbers_panel(summary, language)
-        + review_scoring_panel(summary, language)
+        run_numbers_panel(summary, language)
+        + scoring_fields_panel(summary, language)
         + technical_details(summary, language)
+        + candidate_detail_table(
+            summary,
+            all_candidates,
+            all_candidates_truncated,
+            language,
+        )
         + diagnostics_panel(
             summary,
             diagnostics,
@@ -168,6 +210,35 @@ def review_appendix(
             "evidence-detail",
         )
     )
+
+
+def candidate_detail_table(
+    summary: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    candidates_truncated_full: bool,
+    language: str,
+) -> str:
+    title = "Detailed table" if language == "en" else "明细表"
+    hint = (
+        "Cards are for normal reading. This table keeps the original fields for reference."
+        if language == "en"
+        else "卡片用于普通阅读；这张表保留原始字段，供参考。"
+    )
+    label = "Show details" if language == "en" else "展开明细表"
+    content = (
+        f'<div class="detail-table-heading"><strong>{title}</strong><p>{hint}</p></div>'
+        + limited_table(
+            candidates,
+            DISPLAY_CANDIDATE_COLUMNS,
+            language,
+            truncated=candidates_truncated_full,
+            limit=HTML_MASTER_ROWS_LIMIT,
+            csv_path=summary.get("candidates_output", ""),
+            empty_key=empty_key_for(summary),
+            empty_html=zero_candidates_message(summary, language),
+        )
+    )
+    return collapsible_details(label, content, "candidate-detail-table")
 
 
 def html_tag(requested_language: str, initial_language: str) -> str:
@@ -192,6 +263,13 @@ def report_title(summary: dict[str, Any], language: str) -> str:
     title = localized_text(report_title_key(summary), language)
     status_text = localized_text(report_status_key(summary, str(status)), language)
     return f"{title} - {status_text}"
+
+
+def report_description(summary: dict[str, Any], language: str) -> str:
+    title = localized_text(report_title_key(summary), language)
+    if language == "zh":
+        return f"{title}，用于查看候选股票、筛选依据、风险提示和本地生成的静态报告。"
+    return f"{title} for reviewing candidates, screening rationale, risk notes, and the locally generated static report."
 
 if __name__ == "__main__":
     from a_share_selection_cli_guard import fail_not_cli

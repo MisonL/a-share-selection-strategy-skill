@@ -7,6 +7,8 @@ import csv
 from pathlib import Path
 from typing import Any
 
+from a_share_selection_candidate_fields import OPTIONAL_CANDIDATE_FIELD_KEYS
+
 
 def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
     from run_today_a_share_selection_summary import summary_view as build_summary_view
@@ -262,9 +264,17 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
     disclosure = runner_disclosure_stdout(view)
     runner_metadata = runner_metadata_stdout(view, metadata)
     input_csv = input_csv_provenance_stdout(view.get("input_csv_provenance", {}))
+    field_coverage = candidate_field_coverage_stdout(view.get("candidate_field_coverage", {}))
     print(
         "OK: runner=run_today_a_share_selection "
         f"mode={manifest['mode']} steps={len(manifest['steps'])} "
+        f"execution_path={manifest.get('execution_path', 'unresolved')} "
+        f"execution_path_reason={manifest.get('execution_path_reason', 'unknown')} "
+        f"coverage_class={manifest.get('coverage_class', 'unknown')} "
+        "full_market_claim_allowed="
+        f"{str(manifest.get('full_market_claim_allowed', False)).lower()} "
+        "full_market_claim_boundary="
+        f"{manifest.get('full_market_claim_boundary', 'not_evaluated')} "
         f"prediction_mode={str(manifest['prediction_mode']).lower()} "
         f"consumes_prediction_columns={str(manifest.get('consumes_prediction_columns', False)).lower()} "
         f"prediction_input_source={prediction_input_source(manifest)} "
@@ -288,6 +298,7 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
         f"effective_empty_result={str(view.get('effective_empty_result', False)).lower()} "
         f"empty_result_reason={view.get('empty_result_reason', 'none')} "
         f"{disclosure} "
+        f"{field_coverage} "
         f"{paths} html_report={html_report}{html_error}"
     )
 
@@ -295,6 +306,7 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
 def runner_metadata_stdout(view: dict[str, Any], metadata: dict[str, Any]) -> str:
     parts = [
         f"runner_metadata_source={metadata_stdout_value(metadata.get('source_type'))}",
+        f"input_metadata_file={metadata_stdout_value(metadata.get('input_metadata_file'))}",
         f"runner_real_market_data={metadata_stdout_value(metadata.get('real_market_data'))}",
         f"source_scope={metadata_stdout_value(view.get('source_scope'))}",
         f"runner_source_scope={metadata_stdout_value(view.get('runner_source_scope'))}",
@@ -418,9 +430,17 @@ def runner_disclosure_stdout(view: dict[str, Any]) -> str:
     if history:
         parts.extend(
             [
+                "history_selection_failed="
+                f"{metadata_stdout_value(history.get('selection_failed'))}",
+                "history_selection_failed_reason="
+                f"{metadata_stdout_value(history.get('selection_failed_reason'))}",
+                "history_selection_next_action="
+                f"{metadata_stdout_value(history.get('selection_failed_next_action'))}",
                 f"raw_spot_rows={metadata_stdout_value(history.get('raw_spot_rows'))}",
                 f"filtered_spot_rows={metadata_stdout_value(history.get('filtered_spot_rows'))}",
                 f"max_history_symbols={metadata_stdout_value(history.get('max_history_symbols'))}",
+                "history_symbol_limit_source="
+                f"{metadata_stdout_value(history.get('history_symbol_limit_source'))}",
                 "allow_partial_history="
                 f"{metadata_stdout_value(history.get('allow_partial_history'))}",
                 "history_requested_end_date="
@@ -466,6 +486,24 @@ def spot_failed_pages(spot_metadata: dict[str, Any]) -> int | None:
         return len(failed)
     pages_failed = spot_metadata.get("pages_failed")
     return int(pages_failed) if isinstance(pages_failed, int) else None
+
+
+def candidate_field_coverage_stdout(value: Any) -> str:
+    coverage = value if isinstance(value, dict) else {}
+    fields = coverage.get("fields")
+    if not isinstance(fields, dict) or not fields:
+        return "candidate_field_coverage=unknown"
+    ordered = []
+    for key in OPTIONAL_CANDIDATE_FIELD_KEYS:
+        item = fields.get(key, {})
+        if not isinstance(item, dict):
+            continue
+        present = metadata_stdout_value(item.get("present_rows"))
+        total = metadata_stdout_value(coverage.get("rows_evaluated"))
+        ordered.append(f"{key}:{present}/{total}")
+    all_present = metadata_stdout_value(coverage.get("all_fields_present"))
+    joined = ",".join(ordered) if ordered else "unknown"
+    return f"candidate_field_coverage={joined} candidate_all_fields_present={all_present}"
 
 if __name__ == "__main__":
     from a_share_selection_cli_guard import fail_not_cli

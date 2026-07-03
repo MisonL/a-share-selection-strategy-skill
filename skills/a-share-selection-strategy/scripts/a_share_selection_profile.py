@@ -7,6 +7,11 @@ from typing import Any
 import pandas as pd
 
 from a_share_selection_metrics import is_prediction_mode
+from a_share_selection_symbols import (
+    is_hk_market,
+    is_hk_symbol_text,
+    valid_hk_symbol_text,
+)
 
 
 def profile_column_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list[str]:
@@ -65,7 +70,7 @@ def prediction_value_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list
     errors.extend(profile_market_errors(frame, market, prediction_mode=prediction_mode))
     market_frame = prediction_market_frame(frame, market)
     if not market_frame.empty:
-        invalid_symbols = ~market_frame["symbol"].astype(str).str.fullmatch(r"\d{6}")
+        invalid_symbols = invalid_market_symbol_mask(market_frame, market)
         invalid_count = int(invalid_symbols.sum())
         if invalid_count:
             errors.append(symbol_error_message(market, invalid_count, prediction_mode))
@@ -76,6 +81,13 @@ def prediction_value_errors(frame: pd.DataFrame, config: dict[str, Any]) -> list
     if prediction_error:
         errors.append(prediction_error)
     return errors
+
+
+def invalid_market_symbol_mask(frame: pd.DataFrame, market: str) -> pd.Series:
+    symbols = frame["symbol"].astype(str).str.strip()
+    if is_hk_market(market):
+        return ~symbols.map(valid_hk_symbol_text)
+    return ~symbols.str.fullmatch(r"\d{6}")
 
 
 def profile_market_errors(
@@ -121,6 +133,11 @@ def symbol_error_message(
             "prediction-derived A-share symbols must be six digits; "
             f"invalid_symbols={invalid_count}; market labels do not prove "
             "A-share source or calendar"
+        )
+    if is_hk_market(market):
+        return (
+            f"{market} symbols must use 1 to 5 digit HK codes, HK.<code>, "
+            f"or <code>.HK; invalid_symbols={invalid_count}"
         )
     return f"{market} symbols must be six digits; invalid_symbols={invalid_count}"
 

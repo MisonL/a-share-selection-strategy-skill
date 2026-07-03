@@ -59,13 +59,14 @@ QUALITY_COUNT_KEYS = (
 def input_metadata_for_prices(prices_input: str | None) -> dict[str, Any]:
     if not prices_input:
         return {}
-    metadata_path = Path(prices_input).parent / "metadata.json"
+    metadata_path = input_metadata_path(prices_input)
     if not metadata_path.is_file():
         return {}
     data = json.loads(metadata_path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError(f"input metadata must be a JSON object: {metadata_path}")
     metadata = {key: data[key] for key in METADATA_KEYS if key in data}
+    metadata["input_metadata_file"] = metadata_path.name
     if local_input_partial_result(data):
         metadata["input_partial_result"] = True
     if "failed_symbols" in data:
@@ -80,6 +81,17 @@ def input_metadata_for_prices(prices_input: str | None) -> dict[str, Any]:
     if "requested_symbols" in data:
         metadata["input_requested_symbol_count"] = len(list_value(data, "requested_symbols"))
     return metadata
+
+
+def input_metadata_path(prices_input: str) -> Path:
+    root = Path(prices_input).parent
+    primary = root / "metadata.json"
+    if primary.is_file():
+        return primary
+    history = root / "history_metadata.json"
+    if history.is_file():
+        return history
+    return primary
 
 
 def history_metadata_for_output(output_dir: Path) -> dict[str, Any]:
@@ -97,7 +109,7 @@ def history_metadata_for_output(output_dir: Path) -> dict[str, Any]:
         "source_claim_boundary": str(data.get("source_claim_boundary", "")),
         "data_source_note": str(data.get("data_source_note", "")),
         "history_provider": source,
-        "real_market_data": True,
+        "real_market_data": history_real_market_data(data),
         "history_partial_result": history_partial_result(data),
         "history_failed_symbol_count": len(list_value(data, "failed_symbols")),
         "history_empty_symbol_count": len(list_value(data, "empty_symbols")),
@@ -123,11 +135,23 @@ def history_metadata_for_output(output_dir: Path) -> dict[str, Any]:
         metadata["history_request_interval_seconds"] = data["request_interval_seconds"]
     if "timeout_seconds" in data:
         metadata["history_timeout_seconds"] = data["timeout_seconds"]
+    if "market" in data:
+        metadata["market"] = data["market"]
+    if "market_label_only" in data:
+        metadata["market_label_only"] = bool(data["market_label_only"])
     if "limit" in data:
         metadata["history_limit"] = data["limit"]
     if "max_pages" in data:
         metadata["history_max_pages"] = data["max_pages"]
     return metadata
+
+
+def history_real_market_data(data: dict[str, Any]) -> Any:
+    if "real_market_data" in data:
+        return data["real_market_data"]
+    if data.get("market_label_only") is True:
+        return "unknown"
+    return True
 
 
 def list_value(data: dict[str, Any], key: str) -> list[Any]:

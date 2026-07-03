@@ -80,7 +80,7 @@ explosion_score =
 
 候选表建议包含：
 
-- `rank`、`symbol`、`name`、`market`
+- `rank`、`symbol`、`name`、`market`、`listing_board`
 - `total_score`、`trend_score`、`prediction_score`
 - `momentum_score`、`explosion_score`、`risk_score`
 - `ma15`、`signal_tier`、`recommendation`

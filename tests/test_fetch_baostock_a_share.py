@@ -32,7 +32,7 @@ class FetchBaostockAShareTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "bj.430047"):
             fetcher.parse_symbols("bj.430047")
 
-    def test_collect_rows_maps_ohlcv_and_amount(self) -> None:
+    def test_collect_rows_maps_ohlcv_amount_and_name(self) -> None:
         result = FakeResult(
             [
                 [
@@ -52,14 +52,50 @@ class FetchBaostockAShareTests(unittest.TestCase):
                 ]
             ]
         )
-        rows = fetcher.collect_rows(result, "000001")
+        rows = fetcher.collect_rows(result, "000001", "平安银行")
         self.assertEqual("000001", rows[0]["symbol"])
+        self.assertEqual("平安银行", rows[0]["name"])
         self.assertEqual("A-share", rows[0]["market"])
         self.assertEqual("1000", rows[0]["volume"])
         self.assertEqual("10100", rows[0]["amount"])
         self.assertEqual("0.5", rows[0]["turn"])
         self.assertEqual("10.0", rows[0]["preclose"])
         self.assertEqual("1", rows[0]["tradestatus"])
+
+    def test_fetch_symbol_names_uses_baostock_stock_basic(self) -> None:
+        fake = FakeBaostockBasic(
+            {
+                "sz.000001": FakeBasicResult([["sz.000001", "平安银行"]]),
+                "sh.600000": FakeBasicResult([["sh.600000", "浦发银行"]]),
+            }
+        )
+
+        lookup = fetcher.fetch_symbol_names(fake, ["000001", "600000"])
+
+        self.assertEqual(
+            {"000001": "平安银行", "600000": "浦发银行"},
+            lookup["names"],
+        )
+        self.assertEqual("baostock_query_stock_basic", lookup["source"])
+        self.assertEqual([], lookup["failed_symbols"])
+        self.assertEqual([], lookup["missing_symbols"])
+
+    def test_fetch_symbol_names_reports_missing_and_failed_names(self) -> None:
+        fake = FakeBaostockBasic(
+            {
+                "sz.000001": FakeBasicResult([]),
+                "sh.600000": FakeBasicResult([], error_code="100", error_msg="offline"),
+            }
+        )
+
+        lookup = fetcher.fetch_symbol_names(fake, ["000001", "600000"])
+
+        self.assertEqual({}, lookup["names"])
+        self.assertEqual(["000001"], lookup["missing_symbols"])
+        self.assertEqual(
+            [{"symbol": "600000", "error": "offline"}],
+            lookup["failed_symbols"],
+        )
 
     def test_tradability_stats_handles_missing_symbol_column(self) -> None:
         frame = fetcher.pd.DataFrame([{"tradestatus": "0", "isST": "1"}])
@@ -275,6 +311,23 @@ class FetchBaostockAShareTests(unittest.TestCase):
         self.assertIn("empty_symbols=1", errors)
         self.assertIn("symbol_count=1 requested_symbols=2", errors)
 
+    def test_strict_gate_rejects_missing_stock_names(self) -> None:
+        metadata = {
+            "requested_symbols": ["000001", "600000"],
+            "symbol_count": 2,
+            "failed_symbols": [],
+            "empty_symbols": [],
+            "invalid_rows": 0,
+            "dropped_invalid_rows": 0,
+            "name_lookup_failed_symbols": [{"symbol": "000001", "error": "offline"}],
+            "name_lookup_missing_symbols": ["600000"],
+        }
+
+        errors = fetcher.strict_gate_errors(metadata, fail_on_fetch_error=True)
+
+        self.assertIn("name_lookup_failed_symbols=1", errors)
+        self.assertIn("name_lookup_missing_symbols=1", errors)
+
 
 class FakeResult:
     fields = [
@@ -303,6 +356,37 @@ class FakeResult:
 
     def get_row_data(self) -> list[str]:
         return self.rows[self.index]
+
+
+class FakeBasicResult:
+    fields = ["code", "code_name"]
+
+    def __init__(
+        self,
+        rows: list[list[str]],
+        *,
+        error_code: str = "0",
+        error_msg: str = "",
+    ) -> None:
+        self.rows = rows
+        self.error_code = error_code
+        self.error_msg = error_msg
+        self.index = -1
+
+    def next(self) -> bool:
+        self.index += 1
+        return self.index < len(self.rows)
+
+    def get_row_data(self) -> list[str]:
+        return self.rows[self.index]
+
+
+class FakeBaostockBasic:
+    def __init__(self, results: dict[str, FakeBasicResult]) -> None:
+        self.results = results
+
+    def query_stock_basic(self, *, code: str) -> FakeBasicResult:
+        return self.results[code]
 
 
 def valid_row(symbol: str, date: str) -> dict[str, str]:

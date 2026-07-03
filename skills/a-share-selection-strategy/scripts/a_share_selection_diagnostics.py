@@ -15,12 +15,14 @@ from a_share_selection_diagnostic_labels import (
 from a_share_selection_disclosure import prediction_disclosure
 from a_share_selection_metrics import is_prediction_mode
 from a_share_selection_provenance import PROVENANCE_COLUMNS
+from a_share_selection_symbols import listing_board
 
 
 DIAGNOSTIC_COLUMNS = [
     "symbol",
     "name",
     "market",
+    "listing_board",
     "date",
     "close",
     "volume",
@@ -32,6 +34,7 @@ DIAGNOSTIC_COLUMNS = [
     "requested_as_of_date",
     "actual_data_date",
     "as_of_date_observed",
+    "one_year_pct_chg",
     "spot_price",
     "spot_pct_chg",
     "spot_amount",
@@ -204,6 +207,10 @@ def diagnostic_row(
         "symbol": symbol,
         "name": display_name(row, symbol),
         "market": row.get("market", ""),
+        "listing_board": row.get(
+            "listing_board",
+            listing_board(symbol, row.get("market", "")),
+        ),
         "date": row.get("date", ""),
         "close": row.get("close"),
         "volume": row.get("volume"),
@@ -215,6 +222,7 @@ def diagnostic_row(
         "requested_as_of_date": row.get("requested_as_of_date"),
         "actual_data_date": row.get("actual_data_date"),
         "as_of_date_observed": row.get("as_of_date_observed"),
+        "one_year_pct_chg": row.get("one_year_pct_chg"),
         "spot_price": row.get("spot_price"),
         "spot_pct_chg": row.get("spot_pct_chg"),
         "spot_amount": row.get("spot_amount"),

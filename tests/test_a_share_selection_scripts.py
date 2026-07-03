@@ -6,6 +6,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 import json
+from typing import get_type_hints
 from pathlib import Path
 
 import pandas as pd
@@ -19,10 +20,12 @@ sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(TESTS))
 
 import score_candidates as scorer  # noqa: E402
+import a_share_selection_candidate_fields  # noqa: E402
 import a_share_selection_metrics as metrics  # noqa: E402
 from a_share_selection_data import ACCEPTED_DATE_FORMATS, read_table  # noqa: E402
 from a_share_selection_prepare import prepare_frame  # noqa: E402
 from a_share_selection_spot import normalized_spot_view  # noqa: E402
+from a_share_selection_symbols import stock_symbol_key  # noqa: E402
 from a_share_selection_universe import apply_universe_filter  # noqa: E402
 import validate_ohlcv  # noqa: E402
 from helpers import build_frame, load_config, permissive_thresholds  # noqa: E402
@@ -68,6 +71,11 @@ class AShareSelectionScriptTests(unittest.TestCase):
             frame.to_csv(path, index=False)
             loaded = read_table(path)
         self.assertEqual("000002", loaded["symbol"].iloc[0])
+
+    def test_candidate_field_type_hints_resolve_after_lazy_pandas_import(self) -> None:
+        hints = get_type_hints(a_share_selection_candidate_fields.merge_latest_gate_fields)
+        self.assertIn("scored", hints)
+        self.assertIn("input_frame", hints)
 
     def test_validate_rejects_numeric_damaged_symbol(self) -> None:
         frame = build_frame()
@@ -139,8 +147,38 @@ class AShareSelectionScriptTests(unittest.TestCase):
         self.assertEqual(2, summary["scored_symbols"])
         self.assertTrue(candidates["data_window"].str.startswith("2025-").all())
 
+    def test_score_outputs_one_year_pct_change_from_history(self) -> None:
+        config = load_config("example_config.json")
+        config["thresholds"] = permissive_thresholds(260)
+        frame = build_frame(days=260, include_turn=True)
+
+        candidates, summary = scorer.score_candidates(frame, config)
+
+        symbol = str(candidates.iloc[0]["symbol"])
+        source = frame[frame["symbol"].astype(str).eq(symbol)].sort_values("date")
+        expected = (source["close"].iloc[-1] / source["close"].iloc[-253] - 1) * 100
+        diagnostics = pd.DataFrame(summary["threshold_diagnostics"])
+        candidate_value = float(candidates.iloc[0]["one_year_pct_chg"])
+        diagnostic_value = float(
+            diagnostics[diagnostics["symbol"].astype(str).eq(symbol)]["one_year_pct_chg"].iloc[0]
+        )
+
+        self.assertAlmostEqual(expected, candidate_value)
+        self.assertAlmostEqual(expected, diagnostic_value)
+
     def test_parse_dates_exposes_accepted_formats(self) -> None:
         self.assertEqual(("%Y%m%d", "%Y-%m-%d"), ACCEPTED_DATE_FORMATS)
+
+    def test_html_data_symbol_key_normalizes_hk_symbol_aliases(self) -> None:
+        self.assertEqual("00700", stock_symbol_key("HK.00700"))
+        self.assertEqual("00700", stock_symbol_key("00700.HK"))
+        self.assertEqual("00700", stock_symbol_key("0700.HK"))
+        self.assertEqual("00700", stock_symbol_key("700"))
+        self.assertEqual("00700", stock_symbol_key("700.HK"))
+        self.assertEqual("00700", stock_symbol_key("HK.700"))
+        self.assertEqual("300001", stock_symbol_key("sz.300001"))
+        self.assertEqual("430047", stock_symbol_key("bj.430047"))
+        self.assertEqual("835185", stock_symbol_key("835185.BJ"))
 
     def test_slash_dates_are_rejected_instead_of_silently_parsed(self) -> None:
         frame = build_frame()
@@ -432,6 +470,117 @@ class AShareSelectionScriptTests(unittest.TestCase):
             self.assertIn("turnover_assumption=neutral_series_missing_turnover", stdout)
             self.assertIn("generic mode: turn/turnover missing", stderr)
             self.assertIn("no prediction-derived turnover gate is applied", stderr)
+
+    def test_score_outputs_listing_board_for_candidates_and_diagnostics(self) -> None:
+        config = load_config("example_config.json")
+        config["thresholds"] = permissive_thresholds(120)
+        frame = build_frame(include_turn=True)
+        extra = frame[frame["symbol"].eq("000002")].copy()
+        extra["symbol"] = "300001"
+        extra["name"] = "ChiNext"
+        extra["close"] = extra["close"] + 0.2
+        frame = pd.concat([frame, extra], ignore_index=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "prices.csv"
+            config_path = Path(tmpdir) / "config.json"
+            output_path = Path(tmpdir) / "candidates.csv"
+            diagnostics_path = Path(tmpdir) / "diagnostics.csv"
+            frame.to_csv(input_path, index=False)
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = scorer.main(
+                    [
+                        "--input",
+                        str(input_path),
+                        "--config",
+                        str(config_path),
+                        "--output",
+                        str(output_path),
+                        "--diagnostics-output",
+                        str(diagnostics_path),
+                    ]
+                )
+            candidates = pd.read_csv(output_path, dtype={"symbol": str})
+            diagnostics = pd.read_csv(diagnostics_path, dtype={"symbol": str})
+
+        self.assertEqual(0, code, stderr.getvalue())
+        self.assertIn("listing_board", candidates.columns)
+        self.assertIn("listing_board", diagnostics.columns)
+        self.assertEqual(
+            {"000002": "主板", "300001": "创业板", "600001": "主板"},
+            dict(zip(candidates["symbol"], candidates["listing_board"])),
+        )
+        self.assertEqual(
+            {"000002": "主板", "300001": "创业板", "600001": "主板"},
+            dict(zip(diagnostics["symbol"], diagnostics["listing_board"])),
+        )
+
+    def test_hong_kong_generic_config_scores_hk_symbols_and_boards(self) -> None:
+        config = load_config("hong_kong_generic_config.json")
+        config["thresholds"] = permissive_thresholds(120)
+        frame = build_frame(include_turn=True)
+        frame["symbol"] = frame["symbol"].map({"000002": "00700", "600001": "08001"})
+        frame["name"] = frame["symbol"].map({"00700": "Tencent", "08001": "Gem Co"})
+        frame["market"] = "HK"
+
+        candidates, summary = scorer.score_candidates(frame, config)
+
+        self.assertEqual(2, summary["input_symbols"])
+        self.assertEqual(0, summary["market_filtered_symbols"])
+        self.assertEqual(
+            {"00700": "港股主板", "08001": "港股 GEM"},
+            dict(zip(candidates["symbol"], candidates["listing_board"])),
+        )
+
+    def test_hong_kong_spot_aliases_match_plain_hk_symbols(self) -> None:
+        config = load_config("hong_kong_generic_config.json")
+        config["thresholds"] = permissive_thresholds(120)
+        frame = build_frame(include_turn=True)
+        frame["symbol"] = frame["symbol"].map({"000002": "00700", "600001": "08001"})
+        frame["name"] = frame["symbol"].map({"00700": "Tencent", "08001": "Gem Co"})
+        frame["market"] = "HK"
+        spot = pd.DataFrame(
+            [
+                {"symbol": "HK.00700", "industry": "互联网服务"},
+                {"symbol": "08001.HK", "industry": "软件服务"},
+            ]
+        )
+
+        candidates, summary = scorer.score_candidates(frame, config, spot)
+        by_symbol = {
+            row["symbol"]: row["spot_industry"]
+            for _, row in candidates.iterrows()
+        }
+
+        self.assertEqual(2, summary["spot_matched_symbols"])
+        self.assertEqual("互联网服务", by_symbol["00700"])
+        self.assertEqual("软件服务", by_symbol["08001"])
+
+    def test_hong_kong_spot_aliases_match_yfinance_hk_symbols(self) -> None:
+        config = load_config("hong_kong_generic_config.json")
+        config["thresholds"] = permissive_thresholds(120)
+        frame = build_frame(include_turn=True)
+        frame["symbol"] = frame["symbol"].map({"000002": "0700.HK", "600001": "08001.HK"})
+        frame["name"] = frame["symbol"].map({"0700.HK": "Tencent", "08001.HK": "Gem Co"})
+        frame["market"] = "HK"
+        spot = pd.DataFrame(
+            [
+                {"symbol": "HK.00700", "industry": "互联网服务"},
+                {"symbol": "08001.HK", "industry": "软件服务"},
+            ]
+        )
+
+        candidates, summary = scorer.score_candidates(frame, config, spot)
+        by_symbol = {
+            row["symbol"]: row["spot_industry"]
+            for _, row in candidates.iterrows()
+        }
+
+        self.assertEqual(2, summary["spot_matched_symbols"])
+        self.assertEqual("互联网服务", by_symbol["0700.HK"])
+        self.assertEqual("软件服务", by_symbol["08001.HK"])
 
     def test_cli_writes_threshold_diagnostics_csv(self) -> None:
         config = load_config("example_config.json")

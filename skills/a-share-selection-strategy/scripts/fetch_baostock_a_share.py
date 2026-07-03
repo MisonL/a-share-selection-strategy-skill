@@ -99,7 +99,9 @@ def fetch_prices(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any]
     try:
         if login.error_code != "0":
             raise RuntimeError(f"baostock login failed: {login.error_code} {login.error_msg}")
-        for symbol in parse_symbols(args.symbols):
+        symbols = parse_symbols(args.symbols)
+        name_lookup = fetch_symbol_names(bs, symbols)
+        for symbol in symbols:
             code = baostock_code(symbol)
             result = bs.query_history_k_data_plus(
                 code,
@@ -112,13 +114,13 @@ def fetch_prices(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any]
             if result.error_code != "0":
                 failed.append({"symbol": symbol, "error": result.error_msg})
                 continue
-            symbol_rows = collect_rows(result, symbol)
+            symbol_rows = collect_rows(result, symbol, name_lookup["names"].get(symbol, ""))
             rows.extend(symbol_rows)
             symbols_meta.append(symbol_metadata(symbol, code, symbol_rows))
     finally:
         bs.logout()
     frame = pd.DataFrame(rows)
-    metadata = build_metadata(args, frame, symbols_meta, failed)
+    metadata = build_metadata(args, frame, symbols_meta, failed, name_lookup)
     return frame, metadata
 
 
@@ -126,14 +128,45 @@ def parse_symbols(text: str) -> list[str]:
     return parse_six_digit_symbols(text)
 
 
-def collect_rows(result: Any, symbol: str) -> list[dict[str, Any]]:
+def fetch_symbol_names(bs: Any, symbols: list[str]) -> dict[str, Any]:
+    names = {}
+    failed = []
+    missing = []
+    for symbol in symbols:
+        code = baostock_code(symbol)
+        result = bs.query_stock_basic(code=code)
+        if result.error_code != "0":
+            failed.append({"symbol": symbol, "error": result.error_msg})
+            continue
+        name = collect_stock_basic_name(result)
+        if name:
+            names[symbol] = name
+        else:
+            missing.append(symbol)
+    return {
+        "source": "baostock_query_stock_basic",
+        "names": names,
+        "failed_symbols": failed,
+        "missing_symbols": missing,
+    }
+
+
+def collect_stock_basic_name(result: Any) -> str:
+    while result.next():
+        raw = dict(zip(result.fields, result.get_row_data()))
+        return str(raw.get("code_name", "")).strip()
+    return ""
+
+
+def collect_rows(result: Any, symbol: str, name: str = "") -> list[dict[str, Any]]:
     rows = []
+    clean_name = str(name).strip()
     while result.next():
         raw = dict(zip(result.fields, result.get_row_data()))
         rows.append(
             {
                 "symbol": symbol,
-                "name": symbol,
+                "name": clean_name,
                 "market": "A-share",
                 "date": raw["date"],
                 "open": raw["open"],
@@ -168,7 +201,14 @@ def build_metadata(
     frame: pd.DataFrame,
     symbols_meta: list[dict[str, Any]],
     failed: list[dict[str, Any]],
+    name_lookup: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    name_lookup = name_lookup or {
+        "source": "",
+        "names": {},
+        "failed_symbols": [],
+        "missing_symbols": [],
+    }
     return {
         "source": "baostock",
         "requested_symbols": parse_symbols(args.symbols),
@@ -185,6 +225,10 @@ def build_metadata(
         "invalid_symbols": [],
         "invalid_row_examples": [],
         "dropped_invalid_rows": 0,
+        "name_source": name_lookup["source"],
+        "name_lookup_count": len(name_lookup["names"]),
+        "name_lookup_failed_symbols": name_lookup["failed_symbols"],
+        "name_lookup_missing_symbols": name_lookup["missing_symbols"],
         **prefixed_tradability_stats(frame, "raw_"),
         **tradability_stats(frame),
     }
@@ -233,18 +277,25 @@ def apply_quality_policy(
 def invalid_row_details(frame: pd.DataFrame) -> list[dict[str, Any]]:
     if frame.empty:
         return []
+    numeric = frame[NUMERIC_COLUMNS].apply(pd.to_numeric, errors="coerce")
+    invalid_mask = numeric.isna()
+    row_mask = invalid_mask.any(axis=1)
     details = []
-    for index, row in frame.iterrows():
-        invalid_columns = invalid_numeric_columns(row)
-        if invalid_columns:
-            details.append(
-                {
-                    "index": int(index),
-                    "symbol": str(row.get("symbol", "")),
-                    "date": str(row.get("date", "")),
-                    "invalid_columns": invalid_columns,
-                }
-            )
+    for index in frame.index[row_mask]:
+        invalid_columns = [
+            column
+            for column in NUMERIC_COLUMNS
+            if bool(invalid_mask.at[index, column])
+        ]
+        row = frame.loc[index]
+        details.append(
+            {
+                "index": int(index),
+                "symbol": str(row.get("symbol", "")),
+                "date": str(row.get("date", "")),
+                "invalid_columns": invalid_columns,
+            }
+        )
     return details
 
 
@@ -285,6 +336,14 @@ def strict_gate_errors(
         errors.append(f"failed_symbols={len(metadata['failed_symbols'])}")
     if fail_on_fetch_error and metadata["empty_symbols"]:
         errors.append(f"empty_symbols={len(metadata['empty_symbols'])}")
+    if fail_on_fetch_error and metadata.get("name_lookup_failed_symbols"):
+        errors.append(
+            f"name_lookup_failed_symbols={len(metadata['name_lookup_failed_symbols'])}"
+        )
+    if fail_on_fetch_error and metadata.get("name_lookup_missing_symbols"):
+        errors.append(
+            f"name_lookup_missing_symbols={len(metadata['name_lookup_missing_symbols'])}"
+        )
     if fail_on_fetch_error:
         requested = len(metadata["requested_symbols"])
         if metadata["symbol_count"] != requested:
@@ -340,6 +399,9 @@ def print_summary(metadata: dict[str, Any], prefix: str = "OK") -> None:
         f"empty_symbols={len(metadata['empty_symbols'])} "
         f"invalid_rows={metadata['invalid_rows']} "
         f"dropped_invalid_rows={metadata['dropped_invalid_rows']} "
+        f"name_lookup_count={metadata.get('name_lookup_count', 0)} "
+        f"name_lookup_failed_symbols={len(metadata.get('name_lookup_failed_symbols', []))} "
+        f"name_lookup_missing_symbols={len(metadata.get('name_lookup_missing_symbols', []))} "
         f"non_trading_rows={metadata.get('non_trading_rows', 0)} "
         f"tradestatus_missing_rows={metadata.get('tradestatus_missing_rows', 0)} "
         f"start_date={metadata['start_date']} end_date={metadata['end_date']} "

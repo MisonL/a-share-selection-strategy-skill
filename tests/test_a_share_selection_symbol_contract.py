@@ -19,9 +19,11 @@ import score_candidates as scorer  # noqa: E402
 import validate_ohlcv  # noqa: E402
 from a_share_selection_symbols import (  # noqa: E402
     A_SHARE_EXCHANGES,
+    listing_board,
     normalize_symbol_values,
     parse_a_share_symbols,
     parse_six_digit_symbols,
+    valid_hk_symbol_text,
 )
 from helpers import build_frame  # noqa: E402
 
@@ -50,6 +52,34 @@ class AShareSelectionSymbolContractTests(unittest.TestCase):
             normalize_symbol_values(["bj.430047"], allowed_exchanges=A_SHARE_EXCHANGES),
         )
 
+    def test_listing_board_derives_a_share_board_from_symbol_prefix(self) -> None:
+        cases = {
+            "000001": "主板",
+            "600000.SH": "主板",
+            "sz.300001": "创业板",
+            "688001": "科创板",
+            "bj.430047": "北证",
+            "835185.BJ": "北证",
+            "920001": "北证",
+            "00700.HK": "港股主板",
+            "hk.09988": "港股主板",
+            "08001.HK": "港股 GEM",
+            "123456": "未知",
+            "bad": "未知",
+        }
+        for symbol, expected in cases.items():
+            with self.subTest(symbol=symbol):
+                self.assertEqual(expected, listing_board(symbol))
+
+    def test_listing_board_uses_hk_market_for_plain_five_digit_symbol(self) -> None:
+        self.assertEqual("港股主板", listing_board("00700", "HK"))
+        self.assertEqual("港股 GEM", listing_board("08001", "港股"))
+
+    def test_hk_symbol_text_rejects_zero_code(self) -> None:
+        for symbol in ["0", "00000", "HK.", ".HK"]:
+            with self.subTest(symbol=symbol):
+                self.assertFalse(valid_hk_symbol_text(symbol))
+
     def test_validate_rejects_float_numeric_damaged_symbol(self) -> None:
         frame = build_frame()
         frame["symbol"] = "1.0"
@@ -59,6 +89,23 @@ class AShareSelectionSymbolContractTests(unittest.TestCase):
         self.assertIn("preserve leading zeros as text", joined)
         self.assertIn("examples=", joined)
         self.assertIn("symbol=1.0", joined)
+
+    def test_validate_accepts_hk_five_digit_symbols_when_market_is_hk(self) -> None:
+        frame = build_frame()
+        frame["symbol"] = frame["symbol"].map({"000002": "00700", "600001": "08001"})
+        frame["market"] = "HK"
+        errors = validate_ohlcv.validate_frame(frame, min_history_rows=120)
+
+        self.assertNotIn("preserve leading zeros", "; ".join(errors))
+
+    def test_hk_parquet_numeric_symbols_are_not_silently_zero_padded(self) -> None:
+        frame = build_frame()
+        frame["symbol"] = 700
+        frame["market"] = "HK"
+        errors = validate_ohlcv.validate_frame(frame, min_history_rows=120)
+
+        self.assertNotIn("preserve leading zeros", "; ".join(errors))
+        self.assertNotEqual("港股主板", listing_board(700, "A-share"))
 
     def test_score_rejects_float_numeric_damaged_symbol_without_output(self) -> None:
         frame = build_frame()

@@ -16,16 +16,14 @@ import run_today_a_share_selection_helpers as helpers
 from run_today_a_share_selection_commands import (
     fetch_history_command,
     fetch_spot_command,
+    history_market,
     initial_manifest,
     run_config_path,
     score_command,
     selected_config,
     validate_command,
 )
-from run_today_a_share_selection_history import (
-    history_symbols,
-    validate_history_inputs,
-)
+from run_today_a_share_selection_history import history_symbols, validate_history_inputs
 from run_today_a_share_selection_input_metadata import (
     history_metadata_for_output,
     input_metadata_for_prices,
@@ -129,8 +127,11 @@ def run_pipeline(context: RunContext) -> None:
     spot = run_spot_path(context.args)
     context.manifest["input_metadata"] = input_metadata_for_prices(context.args.prices_input)
     context.manifest["run_outputs_initialized"] = True
+    if not context.args.prices_input:
+        context.args.history_market = history_market(context.args)
     validate_preflight_inputs(context.args, spot)
     sync_validated_history_options(context.manifest, context.args)
+    apply_execution_path(context)
     prepare_inputs(context.args, output, prices, spot)
     if context.args.fetch_spot:
         run_step(context, Step("fetch_spot", fetch_spot_command(context.args, spot)))
@@ -166,7 +167,7 @@ def prepare_inputs(
 
 def validate_preflight_inputs(args: argparse.Namespace, spot: Path | None) -> None:
     validate_history_inputs(args, spot)
-    if not args.prices_input and args.history_source == "zzshare":
+    if not args.prices_input and args.history_source in {"zzshare", "yfinance"}:
         normalize_zzshare_history_options(args)
     if args.prices_input and not Path(args.prices_input).exists():
         raise FileNotFoundError(f"prices input not found: {Path(args.prices_input)}")
@@ -214,6 +215,84 @@ def apply_mode_resolution(context: RunContext, resolution: ModeResolution) -> No
             ),
             "lightgbm_executed_by_runner": False,
             "source_scope": source_scope(context.args),
+        }
+    )
+
+
+def apply_execution_path(context: RunContext) -> None:
+    args = context.args
+    mode = getattr(args, "resolved_mode", args.mode)
+    if args.prices_input:
+        path = f"local_prices_{mode}"
+        reason = "prices_input_provided"
+        coverage_class = "local_input"
+        full_market_boundary = "local_prices_input_not_full_market_scan"
+        if args.spot_input:
+            path += "_with_local_spot"
+            reason += "+spot_input"
+        elif args.fetch_spot:
+            path += "_with_fetched_spot"
+            reason += "+fetch_spot"
+    else:
+        if args.derive_symbols_from_spot:
+            max_history_symbols_is_default = not bool(
+                getattr(args, "max_history_symbols_supplied", False)
+            )
+            spot_source_suffix = "_with_local_spot" if args.spot_input else "_with_fetched_spot"
+            spot_source_reason = "+spot_input" if args.spot_input else "+fetch_spot"
+            path = (
+                "history_fetch_spot_derived_sample"
+                if max_history_symbols_is_default
+                else "history_fetch_spot_derived_explicit_limit"
+            )
+            reason = (
+                "derive_symbols_from_spot+default_small_sample_cap"
+                if max_history_symbols_is_default
+                else "derive_symbols_from_spot+explicit_history_limit"
+            )
+            coverage_class = (
+                "spot_derived_sample"
+                if max_history_symbols_is_default
+                else "spot_derived_limited_pool"
+            )
+            full_market_boundary = (
+                "default_small_sample_cap_not_full_market"
+                if max_history_symbols_is_default
+                else "spot_derived_explicit_limit_requires_artifact_review"
+            )
+            path += spot_source_suffix
+            reason += spot_source_reason
+        else:
+            explicit_limit = bool(getattr(args, "max_history_symbols_supplied", False))
+            path = (
+                "history_fetch_explicit_symbols_explicit_limit"
+                if explicit_limit
+                else "history_fetch_explicit_symbols"
+            )
+            reason = (
+                "explicit_symbols+explicit_history_limit"
+                if explicit_limit
+                else "explicit_symbols"
+            )
+            coverage_class = (
+                "explicit_symbol_limited_pool"
+                if explicit_limit
+                else "explicit_symbol_pool"
+            )
+            full_market_boundary = (
+                "explicit_symbols_explicit_limit_requires_artifact_review"
+                if explicit_limit
+                else "explicit_symbols_not_full_market_scan"
+            )
+        path += f"_{mode}"
+    context.manifest.update(
+        {
+            "execution_path": path,
+            "execution_path_reason": reason,
+            "coverage_class": coverage_class,
+            # The runner reports breadth evidence but does not prove full-market closure by itself.
+            "full_market_claim_allowed": False,
+            "full_market_claim_boundary": full_market_boundary,
         }
     )
 

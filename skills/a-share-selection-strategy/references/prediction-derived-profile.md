@@ -1,6 +1,20 @@
 # Prediction-Derived 剖面
 
-本文件保存 prediction-derived A 股默认剖面的细节。`SKILL.md` 只保留入口约束；当用户要求“复刻 prediction-derived 原选股策略”或使用 `skills/a-share-selection-strategy/scripts/prediction_profile_config.json` 时再读取本文件。
+本文件保存 prediction-derived A 股默认剖面的细节。`SKILL.md` 只保留入口约束；当用户要求“复刻 prediction-derived 原选股策略”或使用 `scripts/prediction_profile_config.json` 时再读取本文件。
+
+## 目录
+
+- [读取指南](#读取指南)
+- [必须保留的边界](#必须保留的边界)
+- [字段口径速查](#字段口径速查)
+- [股票池和运行边界](#股票池和运行边界)
+- [数据清洗和失败分类](#数据清洗和失败分类)
+- [技术指标口径](#技术指标口径)
+- [ML Prediction 口径](#ml-prediction-口径)
+- [LightGBM 质量边界](#lightgbm-质量边界)
+- [短线爆发分](#短线爆发分)
+- [评分、过滤和派生视图](#评分过滤和派生视图)
+- [工程派生边界](#工程派生边界)
 
 ## 读取指南
 

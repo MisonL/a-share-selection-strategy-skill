@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import csv
 from dataclasses import dataclass
-import json
 from pathlib import Path
 from typing import Any
+
+from a_share_selection_config import load_config
 
 
 @dataclass(frozen=True)
@@ -45,7 +46,7 @@ def resolve_mode(args: Any) -> ModeResolution:
 
 
 def resolve_config_mode(path: Path) -> ModeResolution:
-    config = json.loads(path.read_text(encoding="utf-8"))
+    config = load_config(path)
     if config_mode(config) == "prediction":
         return ModeResolution(
             "prediction",
@@ -58,7 +59,7 @@ def resolve_config_mode(path: Path) -> ModeResolution:
 def validate_explicit_config_mode(args: Any) -> None:
     if not args.config:
         return
-    resolved = config_mode(json.loads(Path(args.config).read_text(encoding="utf-8")))
+    resolved = config_mode(load_config(Path(args.config)))
     if resolved != args.mode:
         raise ValueError(
             "explicit mode conflicts with config score_mode: "

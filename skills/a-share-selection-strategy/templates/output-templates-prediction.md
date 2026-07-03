@@ -33,7 +33,7 @@
 - 无 config 的 `validate_ohlcv.py` 通过，只证明基础 OHLCV 字段、日期和数值有效。
 - `slice_prices_as_of.py` 退出 0 只说明切片非空并写出，不会补齐 prediction-derived 必需字段。
 - prediction-derived 仍必须包含 `market=A-share`、可追溯的 `prediction` 或 `prediction_score`，以及真实 `turn` 或 `turnover`。
-- `score_candidates.py --config skills/a-share-selection-strategy/scripts/prediction_profile_config.json` 报缺字段、`code=bad_input` 或 `output_written=false` 时，是输入门禁失败，不是成功 0 候选。
+- `score_candidates.py --config skills/a-share-selection-strategy/configs/prediction_profile_config.json` 报缺字段、`code=bad_input` 或 `output_written=false` 时，是输入门禁失败，不是成功 0 候选。
 - 合规路径是补齐 prediction-derived 必需字段后，对切片文件重新运行 profile 校验和评分。
 ```
 

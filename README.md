@@ -13,7 +13,8 @@ skills/
   a-share-selection-strategy/
     SKILL.md
     agents/openai.yaml
-    evals/evals.json
+    configs/
+    evals/
     instructions/
     references/
     templates/
@@ -44,10 +45,10 @@ skills/
 | 候选评分 | `skills/a-share-selection-strategy/scripts/score_candidates.py` |
 | 今日 A 股总控 | `skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py` |
 | 本地 demo 数据 | `skills/a-share-selection-strategy/scripts/create_demo_data.py` |
-| 低价超短剖面 | `skills/a-share-selection-strategy/scripts/ultra_short_low_price_config.json` |
-| 预测列消费剖面 | `skills/a-share-selection-strategy/scripts/prediction_profile_config.json` |
+| 低价超短剖面 | `skills/a-share-selection-strategy/configs/ultra_short_low_price_config.json` |
+| 预测列消费剖面 | `skills/a-share-selection-strategy/configs/prediction_profile_config.json` |
 
-脚本以 CLI 为稳定入口。Python 复用时需自行将 `skills/a-share-selection-strategy/scripts/` 加入 `PYTHONPATH` 或 `sys.path`。
+脚本以 CLI 为稳定入口。配置文件的权威路径在 `skills/a-share-selection-strategy/configs/`；CLI 仍兼容旧命令里传入的 `skills/a-share-selection-strategy/scripts/*.json`，会自动回退到 `configs/`。Python 复用时需自行将 `skills/a-share-selection-strategy/scripts/` 加入 `PYTHONPATH` 或 `sys.path`。
 
 仅说“帮我选今天 A 股”但未提供行情文件或明确联网授权时，不运行 CLI、不输出候选股，先使用“无法直接选股”模板。
 
@@ -63,7 +64,7 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/score_candidates.py \
   --input /tmp/a-share-selection-demo/prices.csv \
-  --config skills/a-share-selection-strategy/scripts/example_config.json \
+  --config skills/a-share-selection-strategy/configs/example_config.json \
   --output /tmp/a-share-selection-demo/candidates.csv
 ```
 
@@ -133,10 +134,9 @@ prediction-derived 输入必须包含：
 ## 验证
 
 ```bash
-python3 -m json.tool skills/a-share-selection-strategy/evals/evals.json >/tmp/a-share-selection-evals.json
-python3 -m json.tool skills/a-share-selection-strategy/scripts/example_config.json >/tmp/a-share-selection-example-config.json
-python3 -m json.tool skills/a-share-selection-strategy/scripts/prediction_profile_config.json >/tmp/a-share-selection-prediction-config.json
-python3 -m json.tool skills/a-share-selection-strategy/scripts/ultra_short_low_price_config.json >/tmp/a-share-selection-ultra-short-config.json
+for file in skills/a-share-selection-strategy/evals/*.json skills/a-share-selection-strategy/configs/*.json; do
+  python3 -m json.tool "$file" >/tmp/"$(basename "$file")"
+done
 uv run --with pyyaml python - <<'PY'
 import yaml
 from pathlib import Path

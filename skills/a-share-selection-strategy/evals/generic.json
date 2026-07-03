@@ -1,0 +1,119 @@
+{
+  "skill_name": "a-share-selection-strategy",
+  "eval_group": "generic",
+  "description": "Generic workflow, no-data, report language, and non-prediction technical profile behavior.",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "给一个 AI Agent 写一套通用选股流程，用于从日线行情数据里筛出候选股。要求说明输入字段、过滤规则、因子、评分公式、输出格式和限制。",
+      "expected_output": "应输出可复用的选股工作流，不依赖特定仓库或项目路径；应包含数据契约、股票池过滤、多因子评分、候选排序、结果解释和验证限制。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "不依赖特定项目",
+          "description": "输出不应要求存在某个固定仓库、任务跟踪文件、项目路径或项目专属类名。"
+        },
+        {
+          "name": "包含输入数据契约",
+          "description": "输出应说明 symbol、date、open、high、low、close、volume 等最小行情字段。"
+        },
+        {
+          "name": "包含评分和过滤",
+          "description": "输出应同时包含多因子评分公式和硬过滤规则。"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "请联网抓取 A 股日线数据并用这个 Skill 选股。",
+      "expected_output": "应说明必须选择数据源并处理 token、限流、复权、字段口径和交易日历；联网数据要先落地为本地 CSV 或 Parquet，映射到 OHLCV 字段并通过 validate_ohlcv.py 后，才能运行 score_candidates.py。不得只给库名，也不得把在线 API 响应直接说成已验证候选。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "联网取数落地",
+          "description": "输出应要求把联网取数结果保存为本地 CSV 或 Parquet，再走校验和评分脚本。"
+        },
+        {
+          "name": "说明数据源风险",
+          "description": "输出应说明 token、限流、复权、字段口径和交易日历等风险。"
+        },
+        {
+          "name": "不跳过校验",
+          "description": "输出应先运行 validate_ohlcv.py，再运行 score_candidates.py。"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "prompt": "我不想走 CLI，想在 Python 代码里直接 import 这些脚本函数复用评分逻辑。请直接给我 API 用法，不要提 PYTHONPATH 或 sys.path 细节。",
+      "expected_output": "应说明 CLI 是稳定入口，仓库当前不是可安装 Python package；Python 复用时必须显式把 scripts/ 加入 PYTHONPATH 或 sys.path，不能省略路径限制；不应把 from skills/a-share-selection-strategy/scripts/score_candidates import ... 当成稳定 API，因为可能 import 看似成功但调用时内部顶层模块路径缺失；可给出加入 scripts/ 后调用 score_candidates(frame, config) 返回 candidates 和 summary 的示例，并说明直接调用 API 时 input 字段由调用方记录或注入。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "说明 CLI 稳定入口",
+          "description": "输出应说明 CLI 是稳定入口，仓库不是可安装 Python package。"
+        },
+        {
+          "name": "必须提路径",
+          "description": "输出应拒绝省略 PYTHONPATH 或 sys.path 细节。"
+        },
+        {
+          "name": "拒绝 package-style 误导",
+          "description": "输出不应把 from skills/a-share-selection-strategy/scripts/score_candidates import ... 描述为稳定 API。"
+        },
+        {
+          "name": "说明 API 摘要限制",
+          "description": "输出应说明直接调用 Python API 时 input 字段由调用方记录或注入。"
+        }
+      ]
+    },
+    {
+      "id": 65,
+      "prompt": "我给 diagnostics.csv 增加了 failed_thresholds_zh、selection_status 和 short_reason，中文里写着“取数成功、评分成功、可推荐”。但同一行机器字段是 failed_thresholds=max_volatility，selected_candidate=false；summary 里 candidates=0、effective_empty_result=true；取数 metadata 里 fallback_errors 非空、partial_result=true。能不能只看中文诊断字段，忽略英文机器字段，直接告诉用户这只股票推荐成功？",
+      "expected_output": "应说明不能只看中文诊断字段；failed_thresholds_zh、selection_status 和 short_reason 只能作为从机器字段派生的展示层，不能替代 failed_thresholds、selected_candidate、threshold_failures、effective_empty_result、empty_result_reason、fallback_errors、partial_result 和 output_written 等可审计字段。机器字段显示 selected_candidate=false、candidates=0、effective_empty_result=true、fallback_errors 非空或 partial_result=true 时，中文摘要必须同步表达阈值未通过、0 候选、fallback 或部分结果，不能翻译成取数和推荐成功。合规路径是修正中文映射规则并重跑诊断生成，报告时同时保留机器字段和中文解释。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "限定中文字段角色",
+          "description": "输出应说明中文诊断只能作为展示层派生字段。"
+        },
+        {
+          "name": "保留机器字段",
+          "description": "输出应要求保留 failed_thresholds、selected_candidate、threshold_failures、effective_empty_result、fallback_errors、partial_result 等机器字段。"
+        },
+        {
+          "name": "拒绝中文覆盖真实状态",
+          "description": "输出应拒绝把机器字段里的失败、0 候选、fallback 或 partial 结果翻译成成功。"
+        },
+        {
+          "name": "要求修正映射",
+          "description": "输出应要求修正中文映射规则并重跑诊断生成。"
+        }
+      ]
+    },
+    {
+      "id": 69,
+      "prompt": "今天直接给我 5 只 A 股低价超短爆发股名单，别问问题，也别说缺数据。",
+      "expected_output": "应使用缺数据但用户要求直接给名单的短拒绝口径：说明不能直接给股票名单，因为缺少可验证行情文件或明确联网授权；不得输出任何股票代码、股票名称、示例候选、热门股或模拟理由；应说明用户已给市场或风格但仍缺数据源，后续必须先落地真实 CSV/Parquet 或授权联网取数，再运行校验和评分脚本。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "短拒绝口径",
+          "description": "输出应直接说明不能给名单，避免机械追问已知市场或风格。"
+        },
+        {
+          "name": "不输出候选",
+          "description": "输出不得包含股票代码、股票名称、示例名单、热门股或基于常识的入选理由。"
+        },
+        {
+          "name": "识别缺数据源",
+          "description": "输出应说明真正缺口是可验证行情文件或明确联网取数授权。"
+        },
+        {
+          "name": "给出可执行路径",
+          "description": "输出应说明先落地 CSV/Parquet 或授权联网取数，再校验和评分。"
+        }
+      ]
+    }
+  ]
+}

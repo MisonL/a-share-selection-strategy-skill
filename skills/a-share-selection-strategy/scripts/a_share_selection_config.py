@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from a_share_selection_paths import resolve_config_path
+
 
 REQUIRED_SECTIONS = [
     "windows",
@@ -46,6 +48,7 @@ PREDICTION_SCORE_MODE = "prediction-derived"
 
 
 def load_config(path: Path) -> dict[str, Any]:
+    path = resolve_config_path(path)
     if not path.exists():
         raise FileNotFoundError(f"config file not found: {path}")
     config = json.loads(path.read_text(encoding="utf-8"))

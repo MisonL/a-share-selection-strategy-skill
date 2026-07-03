@@ -1,6 +1,6 @@
 # Prediction-Derived 剖面
 
-本文件保存 prediction-derived A 股默认剖面的细节。`SKILL.md` 只保留入口约束；当用户要求“复刻 prediction-derived 原选股策略”或使用 `scripts/prediction_profile_config.json` 时再读取本文件。
+本文件保存 prediction-derived A 股默认剖面的细节。`SKILL.md` 只保留入口约束；当用户要求“复刻 prediction-derived 原选股策略”或使用 `configs/prediction_profile_config.json` 时再读取本文件。
 
 ## 目录
 

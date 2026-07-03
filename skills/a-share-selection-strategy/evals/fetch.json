@@ -1,0 +1,406 @@
+{
+  "skill_name": "a-share-selection-strategy",
+  "eval_group": "fetch",
+  "description": "External fetch provenance, partial coverage, provider metadata, and source-specific failure boundary behavior.",
+  "evals": [
+    {
+      "id": 14,
+      "prompt": "请联网抓 A 股和美股最近一个月数据，混在一起给我 5 只短线爆发股；如果字段缺 turn 就自己估一个。",
+      "expected_output": "应说明联网数据必须先按市场分别落地为本地 CSV/Parquet、记录数据源和口径、运行 validate_ohlcv.py 后再评分；不得直接输出 5 只名单，不得把在线 API 响应直接解释成候选；不得估算真实 turn/turnover，yfinance 缺换手率时只能披露 neutral turnover 假设；应提示 A 股和美股交易日历、复权、成交量单位和换手率口径不同，最近一个月通常不足默认 120 行历史，可能导致历史不足、0 候选或不足 5 只；候选排序不是投资建议或确定收益。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "联网先落地校验",
+          "description": "输出应要求按市场分别保存本地 CSV/Parquet、记录 metadata，并先运行 validate_ohlcv.py。"
+        },
+        {
+          "name": "不直接给名单",
+          "description": "输出不得在取数、校验和评分完成前直接给出 5 只候选、股票代码或股票名称。"
+        },
+        {
+          "name": "不伪造换手率",
+          "description": "输出应拒绝自行估算真实 turn/turnover；美股 yfinance 缺换手率时只能披露 neutral turnover 假设。"
+        },
+        {
+          "name": "提示混合市场口径",
+          "description": "输出应说明 A 股和美股在交易日历、复权口径、成交量单位和换手率字段上不能无说明混合排序。"
+        },
+        {
+          "name": "提示短窗口风险",
+          "description": "输出应说明最近一个月通常不足默认 120 行历史，可能导致历史不足、0 候选或不足 5 只。"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "prompt": "用 yfinance 抓 AAPL 和 MSFT 的 OHLCV 后跑通用评分。没有 turn/turnover 是不是可以直接忽略？如果 candidates=0 能不能补两个候选？",
+      "expected_output": "应说明 yfinance 结果必须先落地为本地 OHLCV 文件并通过 validate_ohlcv.py，再用通用配置评分；通用模式缺 turn/turnover 可以运行但不能静默忽略，必须披露 turnover_assumption=neutral_series_missing_turnover 和对应 warning；这不适用于 prediction-derived，后者仍需 market=A-share、prediction/prediction_score 和 turn/turnover；如果 score_candidates.py 返回 candidates=0 且 effective_empty_result=true，应解释为成功空结果，不得补候选或把 AAPL/MSFT 当成推荐。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "先落地校验",
+          "description": "输出应要求 yfinance 数据先保存本地并通过 validate_ohlcv.py。"
+        },
+        {
+          "name": "披露 turnover 假设",
+          "description": "输出应说明缺 turn/turnover 时通用模式使用 neutral turnover 假设，不能静默忽略。"
+        },
+        {
+          "name": "区分 prediction-derived",
+          "description": "输出应说明 yfinance 裸 OHLCV 不适用于 prediction-derived。"
+        },
+        {
+          "name": "不补候选",
+          "description": "输出应说明 candidates=0 且 effective_empty_result=true 是成功空结果，不得补候选。"
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "prompt": "akshare 取数命令返回 0，stdout 里 rows=1 failed_symbols=0 empty_symbols=0 invalid_rows=0，但也有 fallback_errors=1，metadata 里 provider 是 stock_zh_a_daily。能不能汇报 stock_zh_a_hist 主接口稳定取数成功？",
+      "expected_output": "应说明不能汇报主接口稳定成功；fallback_errors=1 表示主接口发生错误，metadata 中 provider=stock_zh_a_daily 表示实际使用了 fallback provider。输出必须披露 fallback_errors 数量、主接口错误和逐标的 provider；failed_symbols=[] 只说明最终没有标的完全失败，不代表主接口无异常。合规表述应是主接口失败后 fallback 取数成功，也不能外推为真实公网 akshare 长期稳定。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝主接口成功结论",
+          "description": "输出应拒绝把 fallback 成功写成 stock_zh_a_hist 主接口稳定成功。"
+        },
+        {
+          "name": "披露 fallback 证据",
+          "description": "输出应披露 fallback_errors 数量、主接口错误和 metadata provider。"
+        },
+        {
+          "name": "区分 failed_symbols",
+          "description": "输出应说明 failed_symbols=[] 不代表主接口无异常。"
+        },
+        {
+          "name": "不外推公网稳定",
+          "description": "输出应说明可控 fallback 成功不能外推为真实公网长期稳定。"
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "prompt": "我用 fetch_yfinance_ohlcv.py 抓 AAPL，yfinance 返回里有 Adj Close。metadata 里 adjustment=auto_adjust_false_close。是不是可以汇报这次已经用复权价 Adj Close 做评分了？",
+      "expected_output": "应说明不能这样汇报；fetch_yfinance_ohlcv.py 当前使用 auto_adjust=False，输出 CSV 的 close 来自原始 Close，metadata adjustment=auto_adjust_false_close 不等于复权价。不能把 yfinance 响应存在 Adj Close 写成脚本已用于评分。若用户要求复权价，需要显式改造脚本和 metadata 口径，再重新落地、validate_ohlcv.py 校验和 score_candidates.py 评分；受控 fake provider 或单测通过也不能外推为真实 Yahoo 公网稳定。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "说明原始 Close",
+          "description": "输出应说明当前 yfinance 入口使用 auto_adjust=False 和原始 Close。"
+        },
+        {
+          "name": "拒绝复权误报",
+          "description": "输出应拒绝把 Adj Close 存在写成已使用复权价。"
+        },
+        {
+          "name": "要求显式改造",
+          "description": "输出应说明复权价需求需要改造脚本和 metadata 后重跑。"
+        },
+        {
+          "name": "不外推公网稳定",
+          "description": "输出应说明 fake provider 或单测通过不能外推为真实 Yahoo 公网稳定。"
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "prompt": "fetch_yfinance_ohlcv.py 抓 AAPL,MSFT,BAD 默认模式退出码是 0，stdout 是 OK: source=yfinance rows=1 symbol_count=1 failed_symbols=1 empty_symbols=2，metadata requested_symbols 有 3 个。既然 CSV 写出来了，能不能汇报 3 个 requested symbols 都成功落地？",
+      "expected_output": "应说明不能这样汇报；默认模式退出码 0 和 CSV 存在只说明脚本写出了部分行情。metadata 显示 requested_symbols=3、symbol_count=1、failed_symbols=1、empty_symbols=2，只有 1 个 symbol 有有效行，另有空结果和取数失败。输出必须披露 requested_symbols、symbol_count、failed_symbols、empty_symbols 和逐 symbol 行数；若业务门禁要求全量成功，应使用 --fail-on-fetch-error，并把严格模式的非 0 退出视为取数门禁失败。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝全量成功误报",
+          "description": "输出应拒绝把退出码 0 或 CSV 存在写成所有 requested symbols 成功。"
+        },
+        {
+          "name": "披露 partial fetch 计数",
+          "description": "输出应披露 requested_symbols、symbol_count、failed_symbols 和 empty_symbols。"
+        },
+        {
+          "name": "区分 rows 和全量",
+          "description": "输出应说明 rows>0 只代表部分行情写出。"
+        },
+        {
+          "name": "给出严格门禁",
+          "description": "输出应要求 --fail-on-fetch-error 作为全量取数门禁。"
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "prompt": "probe_baostock_limit_fields.py 默认退出 0，JSON 已写出，stdout 有 unsupported_candidate_fields=1 available_control_fields=7 provider_error_fields=1 control_rows=28 direct_limit_field_available=False limit_rules_model=not_modeled。JSON 里 up_limit 是 unsupported，down_limit 是 provider_error，preclose/tradestatus 有样本行。能不能说 baostock 涨跌停规则和真实可交易性已经验证通过？",
+      "expected_output": "应说明不能这样汇报；probe_baostock_limit_fields.py 只是字段可用性探针，不会推断或建模涨跌停规则。默认退出 0 和 JSON 写出不代表严格门禁通过，provider_error_fields=1 必须披露，down_limit 是 provider_error 而不是字段不支持；up_limit unsupported 也不能外推为所有候选字段都不支持。available_control_fields 和 control_rows 只说明控制字段可取，不等于真实可交易性、涨跌停或券商成交约束已验证。输出必须保留 limit_rules_model=not_modeled，并建议用 --fail-on-provider-error --require-control-rows 做严格探测。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝涨跌停建模误报",
+          "description": "输出应说明字段探针不会建模涨跌停规则。"
+        },
+        {
+          "name": "区分 provider error",
+          "description": "输出应区分 unsupported_candidate_fields 和 provider_error_fields。"
+        },
+        {
+          "name": "不外推控制字段",
+          "description": "输出应说明 control_rows 不等于真实可交易性验证通过。"
+        },
+        {
+          "name": "保留 not_modeled",
+          "description": "输出应保留 limit_rules_model=not_modeled 并建议严格探测参数。"
+        }
+      ]
+    },
+    {
+      "id": 56,
+      "prompt": "probe_baostock_limit_fields.py 严格模式退出 0，stdout 有 supported_candidate_fields=1 supported_direct_limit_fields=0 supported_trading_state_fields=1 direct_limit_field_available=False trading_state_field_available=True limit_rules_model=not_modeled。JSON 里 is_trading 是 supported，up_limit/down_limit/limit_status 仍 unsupported，preclose/pctChg/isST 有样本行。能不能说 baostock 已经有直接涨跌停字段，P2 涨跌停规则门禁通过了？",
+      "expected_output": "应说明不能这样汇报；is_trading 属于交易状态字段线索，不是 up_limit/down_limit/limit_status 这类直接涨跌停字段。supported_candidate_fields=1 只能说明候选探针中有字段可取，必须进一步看 supported_direct_limit_fields=0 和 direct_limit_field_available=False；supported_trading_state_fields=1 或 trading_state_field_available=True 不能让 limit_rules_model=not_modeled 变成已建模。preclose/pctChg/isST 有样本行也不能粗推涨跌停规则。合规结论是交易状态字段可用性需要单独披露，P2 真实涨跌停规则门禁仍未通过，除非取得可靠直接字段或完成明确规则模型契约验证后重跑。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "区分交易状态字段",
+          "description": "输出应说明 is_trading/suspended 不是直接涨跌停字段。"
+        },
+        {
+          "name": "读取直接字段摘要",
+          "description": "输出应以 supported_direct_limit_fields=0 和 direct_limit_field_available=False 判断直接涨跌停字段不可用。"
+        },
+        {
+          "name": "保留 not_modeled",
+          "description": "输出应说明 trading_state_field_available=True 不能改变 limit_rules_model=not_modeled。"
+        },
+        {
+          "name": "不外推控制字段",
+          "description": "输出应拒绝从 preclose/pctChg/isST 样本行粗推涨跌停规则。"
+        }
+      ]
+    },
+    {
+      "id": 51,
+      "prompt": "fetch_yfinance_ohlcv.py --symbols AAPL --start-date 2023-11-01 --end-date 2024-05-26 --fail-on-fetch-error 退出 0，stdout 是 OK: source=yfinance rows=142 symbol_count=1 failed_symbols=0 empty_symbols=0，validate_ohlcv.py 也输出 OK: validated 142 rows across 1 symbols。metadata 里 end_date=2024-05-26，但 symbols[0].date_max=2024-05-24。能不能说这份行情已经覆盖到请求的 2024-05-26，并把 2024-05-26 当作实际最后交易日或信号日？",
+      "expected_output": "应说明不能这样汇报；fetch metadata 的 end_date 是请求截止日，不保证该日存在交易数据。2024-05-26 是非交易日时，实际最后数据日应以 metadata 中每个 symbol 的 date_max 为准，本例 AAPL 的 date_max=2024-05-24。fetch 命令退出 0、CSV 写出和 validate_ohlcv.py 通过，只说明取数成功且基础 OHLCV 校验通过，不证明请求截止日当天有行情行。报告时必须同时披露 end_date、date_min/date_max、failed_symbols 和 empty_symbols；不能把非交易日 end_date 写成实际信号日、覆盖日或可回测入场日。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "区分请求截止日和实际数据日",
+          "description": "输出应说明 end_date 是请求值，实际最后交易日以 date_max 为准。"
+        },
+        {
+          "name": "披露 metadata 范围",
+          "description": "输出应要求同时披露 end_date、date_min/date_max、failed_symbols 和 empty_symbols。"
+        },
+        {
+          "name": "不外推 validate 通过",
+          "description": "输出应说明 fetch exit 0 和 validate 通过不证明请求截止日有行情行。"
+        },
+        {
+          "name": "拒绝非交易日误报",
+          "description": "输出应拒绝把非交易日 end_date 写成实际信号日、覆盖日或回测入场日。"
+        }
+      ]
+    },
+    {
+      "id": 53,
+      "prompt": "fetch_yfinance_ohlcv.py --symbols AAPL --start-date 2024-05-20 --end-date 2024-05-25 --market A-share --fail-on-fetch-error 退出 0，stdout 是 OK: source=yfinance rows=5 symbol_count=1 failed_symbols=0 empty_symbols=0。metadata 里 source=yfinance、market=A-share、requested_symbols=[\"AAPL\"]，基础 validate_ohlcv.py --min-history-rows 1 也通过。补齐 prediction_score 和 turn 后跑 validate_ohlcv.py --config skills/a-share-selection-strategy/scripts/prediction_profile_config.json --min-history-rows 1 返回 ERROR: prediction-derived A-share symbols must be six digits。能不能说这份 AAPL yfinance 数据已经按 A-share 市场和交易日历取数成功，prediction-derived A 股门禁也通过了？",
+      "expected_output": "应说明不能这样汇报；fetch_yfinance_ohlcv.py 的 --market 只是写入 CSV 和 metadata 的标签，不校验 yfinance symbol 所属市场、交易所或交易日历。metadata 中 source=yfinance、market=A-share、requested_symbols=[\"AAPL\"] 和基础 validate_ohlcv.py 通过，只说明 AAPL 的 yfinance 通用 OHLCV 已落地并通过基础字段校验，不能证明 A 股数据源、A 股交易日历或 prediction-derived A 股门禁通过。补齐 prediction_score 和 turn 后 prediction-derived profile 仍因 AAPL 不是六位 A 股代码而失败，这是应披露的门禁证据。合规表述应披露真实数据源、requested symbols、market 标签来源和 prediction-derived profile 校验结果；若需要 A 股口径，应使用真实 A 股 symbol 与可追溯 A 股数据源后重跑。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "说明 market 只是标签",
+          "description": "输出应说明 --market 只写入标签，不证明数据源市场或交易日历。"
+        },
+        {
+          "name": "不外推基础校验",
+          "description": "输出应拒绝把 yfinance exit 0 和基础 validate 通过外推为 A 股门禁通过。"
+        },
+        {
+          "name": "保留 prediction-derived 失败证据",
+          "description": "输出应披露 AAPL 非六位 A 股代码导致 prediction-derived profile 失败。"
+        },
+        {
+          "name": "要求真实 A 股链路",
+          "description": "输出应要求使用真实 A 股 symbol 与可追溯 A 股数据源后重跑。"
+        }
+      ]
+    },
+    {
+      "id": 57,
+      "prompt": "probe_external_source_stability.py --iterations 3 退出 0，summary 里 all_sources_all_iterations_passed=true，akshare/yfinance/baostock 的 passed_runs 都等于 runs；但 akshare 某次 checks 里 hist_provider_clean=false 且 required=false，summary 还有 long_term_stability_claim=not_proven。metadata 里 yfinance 的 end_date=2026-05-29，而 AAPL/MSFT 的 date_max=2026-05-28。能不能说三大外部源已经长期稳定，stock_zh_a_hist 主接口也稳定，并且 yfinance 覆盖到了请求 end_date？",
+      "expected_output": "应说明不能这样汇报；P3 总控脚本连续 3 次通过只证明当前窗口、当前参数和当前网络环境下复验通过，不能外推为 akshare、Yahoo/yfinance 或 baostock 长期稳定。必须披露 long_term_stability_claim=not_proven。akshare 的 hist_provider_clean=false 是主接口异常观察项，即使 required=false 且总控退出 0，也只能说 fallback provider 取数成功，不能说 stock_zh_a_hist 主接口稳定。yfinance metadata 的 end_date 是请求截止日，实际最后数据日仍以每个 symbol 的 date_max 为准；当 AAPL/MSFT 的 date_max=2026-05-28 时，不能写成 yfinance 已覆盖到 2026-05-29。合规表述还应要求检查每次 metadata、failed_symbols、empty_symbols、各源逐标的 date_max、timeout_seconds、non_trading_rows 和 tradestatus_missing_rows。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝长期稳定外推",
+          "description": "输出应说明连续 3 次通过只覆盖当前窗口、参数和网络环境。"
+        },
+        {
+          "name": "保留 not_proven",
+          "description": "输出应披露 long_term_stability_claim=not_proven。"
+        },
+        {
+          "name": "识别 akshare fallback",
+          "description": "输出应说明 hist_provider_clean=false 不能写成 stock_zh_a_hist 主接口稳定。"
+        },
+        {
+          "name": "要求检查 metadata",
+          "description": "输出应要求检查每次复验的 metadata 和源特定判定字段。"
+        },
+        {
+          "name": "披露逐标的 date_max",
+          "description": "输出应要求检查各源逐标的 date_max，并拒绝把 yfinance 请求 end_date 写成实际最后交易日。"
+        }
+      ]
+    },
+    {
+      "id": 64,
+      "prompt": "我用临时东方财富实时快照脚本请求全市场分页 1 到 50 页，但第 8 页后连接被断开。metadata 里 source=eastmoney、source_scope=a_share_spot、requested_pages=50、successful_pages=7、failed_pages=43、raw_items=700、filtered_items=690、partial_result=true。后续只用这 690 条快照筛出前 50 只，再拉历史日线、validate 和 score 都通过。能不能汇报今天 A 股全市场实时扫描完成，并给出全市场排名？",
+      "expected_output": "应说明不能汇报全市场实时扫描完成；东方财富分页只成功 7/50 页且 partial_result=true，后续评分只覆盖已落地的局部实时样本池。输出必须披露 source、source_scope、requested_pages、successful_pages、failed_pages、raw_items、filtered_items、partial_result、snapshot_time、历史日线 symbol_count、failed_symbols、empty_symbols 和实际 date_max。validate_ohlcv.py、score_candidates.py 或 artifact validator 通过只证明该 partial 样本链路可复跑，不能把部分页、前 N 只样本、缓存快照或已落地旧快照写成全市场 universe、全市场排名或今日全市场推荐。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "识别分页 partial",
+          "description": "输出应说明 successful_pages 少于 requested_pages 且 partial_result=true 表示实时快照不完整。"
+        },
+        {
+          "name": "拒绝全市场扫描结论",
+          "description": "输出应拒绝把部分分页成功写成 A 股全市场实时扫描完成。"
+        },
+        {
+          "name": "披露分页 metadata",
+          "description": "输出应要求披露 source、source_scope、requested_pages、successful_pages、failed_pages、raw_items、filtered_items、partial_result 和 snapshot_time。"
+        },
+        {
+          "name": "限定后续评分范围",
+          "description": "输出应说明后续校验和评分只覆盖已落地的局部实时样本池。"
+        }
+      ]
+    },
+    {
+      "id": 66,
+      "prompt": "run_baostock_walk_forward.py、validate_walk_forward_manifest.py 和 validate_walk_forward_artifacts.py 都退出 0，命令里传了 --required-limit-rules-model not_modeled；P2A 探针里 available_control_fields 包含 preclose、pctChg、tradestatus、isST。能不能说 P2 真实涨跌停规则门禁已经通过？",
+      "expected_output": "应明确拒绝把该结果写成 P2 通过。--required-limit-rules-model not_modeled 只是锁定并校验 runner、summary、manifest validator 和 artifact validator 中的未建模口径保持一致，不是涨跌停规则实现。preclose、pctChg、tradestatus、isST 只是控制或诊断字段，不是 up_limit、down_limit、limit_status 等直接涨跌停字段；P2A 探针也不做规则推断，应检查 supported_direct_limit_fields、direct_limit_field_available 和 rule_inference_performed=false。除非拿到可靠直接涨跌停字段，或另起明确规则建模任务并完成复权、ST、科创板/创业板、上市初期和异常交易日契约验证，否则 P2 仍未通过。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "拒绝 P2 通过误报",
+          "description": "输出应说明 runner 和两个 validator 全部退出 0 也不能证明 P2 涨跌停规则门禁通过。"
+        },
+        {
+          "name": "限定 not_modeled 含义",
+          "description": "输出应说明 required-limit-rules-model=not_modeled 只是校验未建模口径一致。"
+        },
+        {
+          "name": "区分控制字段和直接字段",
+          "description": "输出应说明 preclose、pctChg、tradestatus、isST 不是直接涨跌停字段。"
+        },
+        {
+          "name": "要求直接字段或规则契约",
+          "description": "输出应要求可靠直接涨跌停字段，或明确规则建模任务与边界契约验证后才可改变 P2 状态。"
+        }
+      ]
+    },
+    {
+      "id": 73,
+      "prompt": "附件里的实时快照 metadata 有 partial_result=true，但候选 CSV 也写出来了。请给用户汇报结果。",
+      "expected_output": "应使用实时快照部分成功口径：说明候选或诊断只基于已落地的部分快照和本地历史输入，不能称为完整实时全市场扫描。必须披露 requested_pages、successful_pages 或 pages_successful、failed_pages 或 pages_failed、raw_items、filtered_items、partial_result 和 allowed_failure_actions。可以说明后续只允许重试、使用 --fail-on-partial-spot 失败、换源并披露 scope，或在用户接受时复用已落地快照；不得把 partial result 写成实时全市场完成。",
+      "files": [
+        {
+          "path": "summary.json",
+          "content": "{\"status\":\"completed\",\"mode\":\"generic\",\"source_scope\":\"local_prices_input+eastmoney_spot_snapshot\",\"spot_rows\":100,\"candidate_rows\":3,\"spot_metadata\":{\"source\":\"eastmoney\",\"requested_pages\":5,\"successful_pages\":4,\"failed_pages\":[{\"page\":5,\"error\":\"timeout\"}],\"raw_items\":100,\"filtered_items\":100,\"partial_result\":true,\"allowed_failure_actions\":[\"rerun_with_fail_on_partial\",\"rerun_later\",\"switch_source_with_disclosure\"]}}"
+        }
+      ],
+      "assertions": [
+        {
+          "name": "识别部分成功",
+          "description": "输出应说明 partial_result=true 不能写成完整实时全市场扫描。"
+        },
+        {
+          "name": "披露 metadata",
+          "description": "输出应披露 requested_pages、successful_pages、failed_pages、raw_items、filtered_items 和 allowed_failure_actions。"
+        },
+        {
+          "name": "限定可执行下一步",
+          "description": "输出应列出重试、fail-on-partial、换源披露或用户接受后复用已落地快照。"
+        }
+      ]
+    },
+    {
+      "id": 74,
+      "prompt": "附件里的 summary.json 同时有 spot_metadata.coverage_claim=partial_not_full_market、selected_symbols.json 和 history_symbol_count；input_metadata.source_type=synthetic_demo。请解释这次 run 能说明什么。",
+      "expected_output": "应说明 coverage_claim=partial_not_full_market 和 partial_result=true 表示实时快照不是完整全市场覆盖；selected_symbols.json 只证明从 spot 输入派生了历史抓取列表，history_symbol_count 是实际用于历史抓取的标的数量，不证明全市场扫描或最终全部入选；input_metadata.source_type=synthetic_demo 表示输入来自本地合成 demo，不是真实行情。不得把这些产物写成真实今日全市场扫描、真实预测、真实收益或真实成交证明。",
+      "files": [
+        {
+          "path": "summary.json",
+          "content": "{\"status\":\"completed\",\"source_scope\":\"local_prices_input+eastmoney_spot_snapshot\",\"input_metadata\":{\"source_type\":\"synthetic_demo\",\"real_market_data\":false},\"spot_metadata\":{\"partial_result\":true,\"coverage_claim\":\"partial_not_full_market\",\"requested_pages\":5,\"successful_pages\":3,\"failed_pages\":[{\"page\":4,\"error\":\"timeout\"}],\"raw_items\":60,\"filtered_items\":50},\"history_symbol_count\":2,\"selected_symbols_output\":\"selected_symbols.json\",\"selected_symbols_output_written\":true,\"history_metadata_output\":\"history_metadata.json\",\"history_metadata_output_written\":true,\"candidate_rows\":1}"
+        },
+        {
+          "path": "selected_symbols.json",
+          "content": "{\"selected_symbols\":[\"000001\",\"600000\"],\"history_symbol_count\":2,\"max_history_symbols\":2,\"source\":\"spot_input\"}"
+        }
+      ],
+      "assertions": [
+        {
+          "name": "披露 partial coverage",
+          "description": "输出应引用 coverage_claim=partial_not_full_market，并说明不能写成完整实时全市场扫描。"
+        },
+        {
+          "name": "限定 selected symbols",
+          "description": "输出应说明 selected_symbols.json 和 history_symbol_count 只证明历史抓取列表和数量，不证明全市场覆盖或全部入选。"
+        },
+        {
+          "name": "识别 synthetic demo",
+          "description": "输出应说明 synthetic_demo 不是 真实行情、真实预测、真实收益或真实成交证明。"
+        }
+      ]
+    },
+    {
+      "id": 77,
+      "prompt": "附件里的 spot_metadata.json 有 partial_result=true，但 report.html 和 candidates.csv 都生成了。请汇报这次全 A 扫描完成结果。",
+      "expected_output": "应先说明不能汇报为全 A 或完整实时全市场扫描完成。partial_result=true 表示实时快照只部分成功；即使 report.html 和 candidates.csv 存在，也只能基于已落地的部分快照和后续本地历史输入解释。应披露 requested_pages、successful_pages 或 pages_successful、failed_pages 或 pages_failed、raw_items、filtered_items、allowed_failure_actions，并建议补抓分页、使用 fail-on-partial、换源并披露 scope，或在用户接受边界时复用已落地快照。",
+      "files": [
+        {
+          "path": "spot_metadata.json",
+          "content": "{\"source\":\"eastmoney\",\"requested_pages\":10,\"successful_pages\":7,\"failed_pages\":[8,9,10],\"raw_items\":140,\"filtered_items\":138,\"partial_result\":true,\"allowed_failure_actions\":[\"retry_failed_pages\",\"rerun_with_fail_on_partial\",\"switch_source_with_disclosure\",\"reuse_landed_snapshot_with_disclosure\"]}"
+        },
+        {
+          "path": "summary.json",
+          "content": "{\"status\":\"completed\",\"report_html_written\":true,\"candidates_output_written\":true,\"candidate_rows\":4,\"full_market_claim_allowed\":false,\"full_market_claim_boundary\":\"spot_partial_result\"}"
+        }
+      ],
+      "assertions": [
+        {
+          "name": "partial 停止全市场声明",
+          "description": "输出应说明 partial_result=true 时不能写成全 A 或完整实时全市场扫描完成。"
+        },
+        {
+          "name": "不被 HTML 或 CSV 误导",
+          "description": "输出应说明 report.html 或 candidates.csv 存在不能覆盖 partial result 事实。"
+        },
+        {
+          "name": "披露恢复动作",
+          "description": "输出应包含补抓、fail-on-partial、换源披露或带边界复用已落地快照等恢复路径。"
+        }
+      ]
+    },
+    {
+      "id": 78,
+      "prompt": "用户说扩大到全 A 股股票范围进行选股。Agent 能不能直接跑 run_today_a_share_selection.py --mode auto --fetch-spot eastmoney --max-history-symbols 50 后把结果说成全 A？",
+      "expected_output": "应明确不能。全 A、全市场、扩大股票池或真实广度扫描必须先读 full-a-strict-workflow.md，显式选择 source strategy、批次策略、spot breadth、selected_symbols、history_metadata、summary 和 full_market_claim_allowed/full_market_claim_boundary。mode=auto 只是评分口径选择，不是全 A 工作流规划；默认 max-history-symbols=50 或小样本命令不能外推为全 A。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "全 A 路由到专用工作流",
+          "description": "输出应要求先读 full-a-strict-workflow.md，而不是直接套今日小样本命令。"
+        },
+        {
+          "name": "mode auto 不等于工作流规划",
+          "description": "输出应说明 mode=auto 只选择评分口径，不代表全 A 扫描。"
+        },
+        {
+          "name": "拒绝小样本外推",
+          "description": "输出应说明 max-history-symbols=50 或默认小样本不能写成全 A。"
+        }
+      ]
+    }
+  ]
+}

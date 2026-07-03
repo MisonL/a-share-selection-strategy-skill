@@ -40,7 +40,7 @@
 6. 需要复制完整命令或跑真实门禁时，先看 [../instructions/runbook.md](../instructions/runbook.md) 的场景快速路由，再读对应章节。
 7. 只有需要真实场景证据、历史复验口径或审计追溯时，才读 `../evidence/reviews/` 中的对应报告；历史报告不得覆盖当前代码、测试和本轮 artifact。
 
-`../evals/evals.json` 是 Skill 触发和行为覆盖的验证资产，不在真实选股任务的启动读取路径中。只有新增或重构 Skill 触发语义时才读取它。
+`../evals/evals.json` 是 Skill 触发和行为覆盖 manifest，不在真实选股任务的启动读取路径中。只有新增或重构 Skill 触发语义时才读取它，并按 `eval_files` 只打开相关场景分片：`generic.json`、`prediction.json`、`fetch.json` 或 `gates.json`。
 
 ## Agent 快速检查表
 

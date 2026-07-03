@@ -10,10 +10,11 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = ROOT / "skills" / "a-share-selection-strategy"
 SCRIPTS = SKILL_ROOT / "scripts"
+CONFIGS = SKILL_ROOT / "configs"
 
 
 def load_config(name: str) -> dict:
-    return json.loads((SCRIPTS / name).read_text(encoding="utf-8"))
+    return json.loads((CONFIGS / name).read_text(encoding="utf-8"))
 
 
 def build_frame(

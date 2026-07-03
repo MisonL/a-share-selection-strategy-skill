@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import run_today_a_share_selection_helpers as helpers
+from a_share_selection_paths import config_path
 from run_today_a_share_selection_commands import (
     fetch_history_command,
     fetch_spot_command,
@@ -38,9 +39,8 @@ from run_today_a_share_selection_validation import (
 )
 
 
-SCRIPTS = Path(__file__).resolve().parent
-DEFAULT_GENERIC_CONFIG = SCRIPTS / "ultra_short_low_price_config.json"
-DEFAULT_PREDICTION_CONFIG = SCRIPTS / "prediction_profile_config.json"
+DEFAULT_GENERIC_CONFIG = config_path("ultra_short_low_price_config.json")
+DEFAULT_PREDICTION_CONFIG = config_path("prediction_profile_config.json")
 Executor = Callable[[list[str]], subprocess.CompletedProcess[str]]
 
 

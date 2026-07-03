@@ -100,7 +100,7 @@ def candidate_master_detail(
         f'<div class="master-detail-header"><div><h3>{title}</h3><p>{hint}</p>'
         f"{note_html}</div>"
         f"{candidate_file_chip(csv_path, language)}</div>"
-        f"{candidate_field_notice(rows, language)}"
+        f"{candidate_field_notice(rows, field_coverage, language)}"
         f"{candidate_field_coverage_panel(field_coverage, language)}"
         '<div class="master-detail-grid">'
         f"{candidate_master_table(rows, language)}"
@@ -112,9 +112,13 @@ def candidate_master_detail(
     )
 
 
-def candidate_field_notice(rows: list[dict[str, Any]], language: str) -> str:
-    hidden_en = candidate_hidden_field_labels(rows, "en")
-    hidden_zh = candidate_hidden_field_labels(rows, "zh")
+def candidate_field_notice(
+    rows: list[dict[str, Any]],
+    field_coverage: dict[str, Any] | None,
+    language: str,
+) -> str:
+    hidden_en = candidate_hidden_field_labels(rows, field_coverage, "en")
+    hidden_zh = candidate_hidden_field_labels(rows, field_coverage, "zh")
     if not hidden_en:
         return ""
     text = bilingual(
@@ -304,12 +308,44 @@ def candidate_master_header(column: str, language: str) -> str:
     return bilingual(en, zh, language)
 
 
-def candidate_hidden_field_labels(rows: list[dict[str, Any]], language: str) -> list[str]:
+def candidate_hidden_field_labels(
+    rows: list[dict[str, Any]],
+    field_coverage: dict[str, Any] | None,
+    language: str,
+) -> list[str]:
     return [
         strip_tags(candidate_master_header(column, language))
         for column in OPTIONAL_MASTER_COLUMNS
-        if not candidate_column_has_values(rows, column)
+        if not candidate_optional_column_available(rows, field_coverage, column)
     ]
+
+
+def candidate_optional_column_available(
+    rows: list[dict[str, Any]],
+    field_coverage: dict[str, Any] | None,
+    column: str,
+) -> bool:
+    if field_coverage_optional_present(field_coverage, column):
+        return True
+    return candidate_column_has_values(rows, column)
+
+
+def field_coverage_optional_present(
+    field_coverage: dict[str, Any] | None,
+    column: str,
+) -> bool:
+    if not isinstance(field_coverage, dict):
+        return False
+    fields = field_coverage.get("fields", {})
+    if not isinstance(fields, dict):
+        return False
+    field = fields.get(column, {})
+    if not isinstance(field, dict):
+        return False
+    try:
+        return int(field.get("present_rows", 0) or 0) > 0
+    except (TypeError, ValueError):
+        return False
 
 
 def candidate_column_has_values(rows: list[dict[str, Any]], column: str) -> bool:
@@ -524,7 +560,20 @@ def candidate_stock_name(row: dict[str, Any], symbol: str, language: str) -> str
 
 def candidate_stock_name_missing(row: dict[str, Any], symbol: str) -> bool:
     name = raw_text(row.get("name")).strip()
-    return not name or name == symbol
+    if not name:
+        return True
+    return name == symbol and not candidate_uses_ticker_as_name(row)
+
+
+def candidate_uses_ticker_as_name(row: dict[str, Any]) -> bool:
+    source_scope = raw_text(row.get("source_scope")).lower()
+    metadata_source = raw_text(row.get("metadata_source")).lower()
+    source_type = raw_text(row.get("source_type")).lower()
+    return (
+        "yfinance" in source_scope
+        or metadata_source == "yfinance"
+        or source_type == "yfinance"
+    )
 
 
 def candidate_field_availability(row: dict[str, Any], language: str) -> str:

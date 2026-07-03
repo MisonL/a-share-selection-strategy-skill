@@ -8,6 +8,28 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DocumentConsistencyTests(unittest.TestCase):
+    def test_skill_resources_use_semantic_directories(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        skill = (
+            ROOT / "skills/a-share-selection-strategy/SKILL.md"
+        ).read_text(encoding="utf-8")
+        index = (
+            ROOT / "skills/a-share-selection-strategy/references/index.md"
+        ).read_text(encoding="utf-8")
+
+        for directory in ["instructions/", "templates/", "evidence/"]:
+            self.assertIn(directory, readme)
+        self.assertIn("instructions/runbook.md", skill)
+        self.assertIn("templates/output-templates.md", skill)
+        self.assertIn("references/script-reference.md", skill)
+        self.assertIn("../evidence/reviews/", index)
+
+        docs = readme + skill + index
+        self.assertNotIn("references/runbook.md", docs)
+        self.assertNotIn("references/output-templates.md", docs)
+        self.assertNotIn("references/script-index.md", docs)
+        self.assertNotIn("references/reviews/", docs)
+
     def test_agents_license_statement_matches_repository_license(self) -> None:
         agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -21,7 +43,7 @@ class DocumentConsistencyTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         templates = (
             ROOT
-            / "skills/a-share-selection-strategy/references/output-templates.md"
+            / "skills/a-share-selection-strategy/templates/output-templates.md"
         ).read_text(encoding="utf-8")
 
         self.assertIn("用户要求直接给结论但要求隐藏边界", templates)
@@ -41,7 +63,7 @@ class DocumentConsistencyTests(unittest.TestCase):
             ROOT / "skills/a-share-selection-strategy/SKILL.md"
         ).read_text(encoding="utf-8")
         runbook = (
-            ROOT / "skills/a-share-selection-strategy/references/runbook.md"
+            ROOT / "skills/a-share-selection-strategy/instructions/runbook.md"
         ).read_text(encoding="utf-8")
 
         for document in [readme, skill, runbook]:
@@ -62,11 +84,11 @@ class DocumentConsistencyTests(unittest.TestCase):
             ROOT / "skills/a-share-selection-strategy/references/index.md"
         ).read_text(encoding="utf-8")
         runbook = (
-            ROOT / "skills/a-share-selection-strategy/references/runbook.md"
+            ROOT / "skills/a-share-selection-strategy/instructions/runbook.md"
         ).read_text(encoding="utf-8")
         workflow = (
             ROOT
-            / "skills/a-share-selection-strategy/references/full-a-strict-workflow.md"
+            / "skills/a-share-selection-strategy/instructions/full-a-strict-workflow.md"
         ).read_text(encoding="utf-8")
 
         self.assertIn("## 任务拓扑", skill)
@@ -89,11 +111,11 @@ class DocumentConsistencyTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         templates = (
             ROOT
-            / "skills/a-share-selection-strategy/references/output-templates.md"
+            / "skills/a-share-selection-strategy/templates/output-templates.md"
         ).read_text(encoding="utf-8")
         workflow = (
             ROOT
-            / "skills/a-share-selection-strategy/references/full-a-strict-workflow.md"
+            / "skills/a-share-selection-strategy/instructions/full-a-strict-workflow.md"
         ).read_text(encoding="utf-8")
 
         self.assertIn("## Agent 执行协议", skill)

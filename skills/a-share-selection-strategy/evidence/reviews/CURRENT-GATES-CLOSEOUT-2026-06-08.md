@@ -22,7 +22,7 @@
 
 证据报告:
 
-- `skills/a-share-selection-strategy/references/reviews/P1-PORTFOLIO-CAPACITY-2026-06-08.md`
+- `skills/a-share-selection-strategy/evidence/reviews/P1-PORTFOLIO-CAPACITY-2026-06-08.md`
 
 产物:
 

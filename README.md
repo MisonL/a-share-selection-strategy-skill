@@ -14,7 +14,10 @@ skills/
     SKILL.md
     agents/openai.yaml
     evals/evals.json
+    instructions/
     references/
+    templates/
+    evidence/
     requirements*.txt
     scripts/
 ```
@@ -27,11 +30,11 @@ skills/
 | --- | --- |
 | AI Agent 接手任务 | [skills/a-share-selection-strategy/SKILL.md](skills/a-share-selection-strategy/SKILL.md) |
 | 仓库执行约束 | [AGENTS.md](AGENTS.md) |
-| 完整命令 cookbook | [skills/a-share-selection-strategy/references/runbook.md](skills/a-share-selection-strategy/references/runbook.md) |
+| 完整命令 cookbook | [skills/a-share-selection-strategy/instructions/runbook.md](skills/a-share-selection-strategy/instructions/runbook.md) |
 | 文档索引和历史报告 | [skills/a-share-selection-strategy/references/index.md](skills/a-share-selection-strategy/references/index.md) |
 | 因子、字段、输出口径 | [skills/a-share-selection-strategy/references/factor-framework.md](skills/a-share-selection-strategy/references/factor-framework.md) |
 | 预测列消费边界 | [skills/a-share-selection-strategy/references/prediction-derived-profile.md](skills/a-share-selection-strategy/references/prediction-derived-profile.md) |
-| 汇报模板 | [skills/a-share-selection-strategy/references/output-templates.md](skills/a-share-selection-strategy/references/output-templates.md) |
+| 汇报模板 | [skills/a-share-selection-strategy/templates/output-templates.md](skills/a-share-selection-strategy/templates/output-templates.md) |
 
 ## 核心入口
 
@@ -85,7 +88,7 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 
 总控 CLI 默认同时写出 `report.html`，用于浏览器查看候选、诊断、步骤和证据路径；报告支持中英文切换，默认 `--html-report-language auto` 跟随运行环境。它只是 `summary.json`、`run_manifest.json`、`candidates.csv` 和 `diagnostics.csv` 的展示层，不替代机器字段或退出码。自动化场景可传 `--no-html-report` 关闭。
 
-更多 Parquet、联网取数、历史回测和门禁命令见 [runbook](skills/a-share-selection-strategy/references/runbook.md)。
+更多 Parquet、联网取数、历史回测和门禁命令见 [runbook](skills/a-share-selection-strategy/instructions/runbook.md)。
 
 ## 数据契约
 

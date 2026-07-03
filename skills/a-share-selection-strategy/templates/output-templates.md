@@ -61,7 +61,7 @@
 
 ## 今日入口 mode 和输出检查
 
-`mode=generic/prediction/auto` 只是评分口径选择，不是全 A 工作流选择。只要用户目标是全 A、全市场或扩大股票池，先按 [full-a-strict-workflow.md](full-a-strict-workflow.md) 走完数据路径，再决定最终评分 `mode`。
+`mode=generic/prediction/auto` 只是评分口径选择，不是全 A 工作流选择。只要用户目标是全 A、全市场或扩大股票池，先按 [../instructions/full-a-strict-workflow.md](../instructions/full-a-strict-workflow.md) 走完数据路径，再决定最终评分 `mode`。
 
 | mode | 触发条件 | 必须披露 |
 | --- | --- | --- |

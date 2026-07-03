@@ -2,7 +2,7 @@
 
 本文件是 `scripts/` 目录入口分层的唯一事实源。看到脚本文件时，先按“稳定 CLI / 取数入口 / 门禁回测入口 / 内部 helper”四类判断，不要按文件数量或 `__main__` 保护猜入口。
 
-命令细节、依赖和字段映射仍以 [../references/script-index.md](../references/script-index.md) 为准；脚本边界和 helper 边界先读本文件。
+命令细节、依赖和字段映射仍以 [../references/script-reference.md](../references/script-reference.md) 为准；脚本边界和 helper 边界先读本文件。
 
 ## 稳定 CLI
 
@@ -68,6 +68,6 @@
 
 1. 用户给本地行情文件：优先 `validate_ohlcv.py` 或 `run_today_a_share_selection.py --prices-input`。
 2. 用户要求今日 A 股、小样本真实任务或低价超短：优先 `run_today_a_share_selection.py`。
-3. 用户要求全 A、全市场或扩大股票池：先读 [../references/full-a-strict-workflow.md](../references/full-a-strict-workflow.md)，不要直接套默认小样本命令。
+3. 用户要求全 A、全市场或扩大股票池：先读 [../instructions/full-a-strict-workflow.md](../instructions/full-a-strict-workflow.md)，不要直接套默认小样本命令。
 4. 用户坚持 prediction-derived：必须有真实 `prediction` 或 `prediction_score` 输入，再走 prediction-derived config。
 5. 需要回测、容量或历史门禁：只在评分 artifact 已经闭环后进入预测、回测和门禁 CLI。

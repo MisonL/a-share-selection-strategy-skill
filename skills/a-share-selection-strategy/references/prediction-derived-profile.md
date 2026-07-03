@@ -23,7 +23,7 @@
 | 校验输入是否可按 prediction-derived 评分 | 股票池和运行边界、数据清洗和失败分类 |
 | 解释 `prediction` / `prediction_score` | ML Prediction 口径、LightGBM 质量边界 |
 | 调整或审查评分公式 | 技术指标口径、短线爆发分、评分和派生视图 |
-| 写最终汇报 | 工程派生边界、[output-templates.md](output-templates.md) |
+| 写最终汇报 | 工程派生边界、[../templates/output-templates.md](../templates/output-templates.md) |
 
 ## 必须保留的边界
 

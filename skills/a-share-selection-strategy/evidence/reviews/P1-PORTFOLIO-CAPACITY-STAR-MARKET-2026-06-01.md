@@ -25,7 +25,7 @@
 
 - `new_count=40`
 - `unique=40`
-- 与 `skills/a-share-selection-strategy/references/reviews/REAL-SCENARIO-GATES-2026-05-30.md`、`skills/a-share-selection-strategy/references/reviews/P1-PORTFOLIO-CAPACITY-SZ-MAINBOARD-2026-06-01.md`、`skills/a-share-selection-strategy/references/reviews/P1-PORTFOLIO-CAPACITY-CYB-2026-06-01.md` 中 6 位 symbol，以及已记录问题符号 `600438`、`688981` 的交集为 `[]`
+- 与 `skills/a-share-selection-strategy/evidence/reviews/REAL-SCENARIO-GATES-2026-05-30.md`、`skills/a-share-selection-strategy/evidence/reviews/P1-PORTFOLIO-CAPACITY-SZ-MAINBOARD-2026-06-01.md`、`skills/a-share-selection-strategy/evidence/reviews/P1-PORTFOLIO-CAPACITY-CYB-2026-06-01.md` 中 6 位 symbol，以及已记录问题符号 `600438`、`688981` 的交集为 `[]`
 
 取数边界:
 

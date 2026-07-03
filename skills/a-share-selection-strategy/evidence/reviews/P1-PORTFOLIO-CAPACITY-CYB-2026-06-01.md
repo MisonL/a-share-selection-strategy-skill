@@ -25,7 +25,7 @@
 
 - `new_count=40`
 - `unique=40`
-- 与 `skills/a-share-selection-strategy/references/reviews/REAL-SCENARIO-GATES-2026-05-30.md` 和 `skills/a-share-selection-strategy/references/reviews/P1-PORTFOLIO-CAPACITY-SZ-MAINBOARD-2026-06-01.md` 中 6 位 symbol 的交集为 `[]`
+- 与 `skills/a-share-selection-strategy/evidence/reviews/REAL-SCENARIO-GATES-2026-05-30.md` 和 `skills/a-share-selection-strategy/evidence/reviews/P1-PORTFOLIO-CAPACITY-SZ-MAINBOARD-2026-06-01.md` 中 6 位 symbol 的交集为 `[]`
 
 窗口和约束:
 

@@ -1,6 +1,6 @@
 # 运行手册
 
-本手册收纳可复制命令和门禁解释。根 [README.md](../../../README.md) 只保留入口、数据契约和常用路径；文档地图见 [index.md](index.md)。需要执行完整 demo、联网取数、回测或真实门禁复验时读本文件。
+本手册收纳可复制命令和门禁解释。根 [README.md](../../../README.md) 只保留入口、数据契约和常用路径；文档地图见 [../references/index.md](../references/index.md)。需要执行完整 demo、联网取数、回测或真实门禁复验时读本文件。
 
 如果任务目标是“全 A / 全市场 / 扩大股票池 / 真实广度扫描”，先读 [full-a-strict-workflow.md](full-a-strict-workflow.md)。本文件中的 demo、小样本和单轮命令不能直接等价为全市场主路径。
 

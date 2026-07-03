@@ -1,4 +1,4 @@
-# 脚本索引
+# 脚本参考
 
 本文件收纳配置文件、依赖、数据源字段映射、输入契约和常用命令细节。`SKILL.md` 只保留路由和硬约束；判断脚本职责、稳定入口或 helper 边界时，先读 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md)，不要用 `scripts/` 根目录文件数量或 `__main__` 保护猜入口。
 

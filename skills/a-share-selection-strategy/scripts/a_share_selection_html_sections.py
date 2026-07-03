@@ -10,7 +10,11 @@ from a_share_selection_html_candidate_master import (
     candidate_master_detail,
     candidate_open_banner,
 )
-from a_share_selection_html_candidate_helpers import candidate_listing_board, plain_bilingual
+from a_share_selection_html_candidate_helpers import (
+    candidate_listing_board,
+    candidate_uses_ticker_as_name,
+    plain_bilingual,
+)
 from a_share_selection_html_data import (
     HTML_DIAGNOSTIC_ROWS_LIMIT,
     HTML_REPORT_ROWS_LIMIT,
@@ -542,7 +546,7 @@ def report_overview(
         empty_key=empty_key,
         empty_html=empty_html,
     )
-    open_html = candidate_open_banner(all_candidate_rows, csv_path, language)
+    open_html = candidate_open_banner(all_candidate_rows, language)
     open_slot = f'<div class="candidate-open-slot">{open_html}</div>' if open_html else ""
     return (
         '<div class="overview-shell">'
@@ -1287,17 +1291,6 @@ def stock_name_missing(row: dict[str, Any], name: str, symbol: str) -> bool:
     if not normalized_name:
         return True
     return normalized_name == normalized_symbol and not candidate_uses_ticker_as_name(row)
-
-
-def candidate_uses_ticker_as_name(row: dict[str, Any]) -> bool:
-    source_scope = raw_text(row.get("source_scope")).lower()
-    metadata_source = raw_text(row.get("metadata_source")).lower()
-    source_type = raw_text(row.get("source_type")).lower()
-    return (
-        "yfinance" in source_scope
-        or metadata_source == "yfinance"
-        or source_type == "yfinance"
-    )
 
 
 def candidate_industry(row: dict[str, Any]) -> str:

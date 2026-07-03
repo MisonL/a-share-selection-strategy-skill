@@ -23,6 +23,7 @@ from a_share_selection_html_candidate_helpers import (
     candidate_field,
     candidate_industry,
     candidate_listing_board,
+    candidate_uses_ticker_as_name,
     candidate_level,
     candidate_reason,
     candidate_data_note,
@@ -51,12 +52,11 @@ PB_FIELD_KEYS = candidate_field_aliases("pb_lf")
 OPTIONAL_MASTER_COLUMNS = OPTIONAL_CANDIDATE_FIELD_KEYS
 
 
-def candidate_open_banner(rows: list[dict[str, Any]], csv_path: Any, language: str) -> str:
+def candidate_open_banner(rows: list[dict[str, Any]], language: str) -> str:
     if not rows:
         return ""
     title = bilingual("Complete candidate table entry", "完整候选表入口", language)
     button = candidate_entry_button_text(len(rows), language)
-    _ = csv_path
     body = candidate_entry_body(len(rows), language)
     return (
         '<a class="candidate-open-banner" href="#complete-candidates">'
@@ -563,17 +563,6 @@ def candidate_stock_name_missing(row: dict[str, Any], symbol: str) -> bool:
     if not name:
         return True
     return name == symbol and not candidate_uses_ticker_as_name(row)
-
-
-def candidate_uses_ticker_as_name(row: dict[str, Any]) -> bool:
-    source_scope = raw_text(row.get("source_scope")).lower()
-    metadata_source = raw_text(row.get("metadata_source")).lower()
-    source_type = raw_text(row.get("source_type")).lower()
-    return (
-        "yfinance" in source_scope
-        or metadata_source == "yfinance"
-        or source_type == "yfinance"
-    )
 
 
 def candidate_field_availability(row: dict[str, Any], language: str) -> str:

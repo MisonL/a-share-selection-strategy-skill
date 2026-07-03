@@ -1,4 +1,4 @@
 interface:
   display_name: "A-Share Selection Strategy"
-  short_description: "Design, run, score, explain, and audit verifiable A-share screens"
-  default_prompt: "Use $a-share-selection-strategy to design, run, score, explain, or audit a verifiable A-share selection workflow. Do not output candidates without local market data or explicit fetch authorization; do not fabricate prediction-derived or LightGBM predictions. This is not investment advice."
+  short_description: "Design, run, score, explain, and audit verifiable stock screens, A-share first"
+  default_prompt: "Use $a-share-selection-strategy to design, run, score, explain, or audit a verifiable stock selection workflow. Treat A-share workflows as the default; only use HK or US data when it is already landed and traceable. Do not output candidates without local market data or explicit fetch authorization; do not fabricate prediction-derived or LightGBM predictions. This is not investment advice."

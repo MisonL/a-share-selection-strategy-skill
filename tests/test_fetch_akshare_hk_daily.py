@@ -39,6 +39,7 @@ class FetchAkshareHkDailyTests(unittest.TestCase):
         rows = fetcher.collect_rows(valid_history(), "00700")
 
         self.assertEqual("00700", rows[0]["symbol"])
+        self.assertEqual("腾讯控股", rows[0]["name"])
         self.assertEqual("HK", rows[0]["market"])
         self.assertEqual(1000, rows[0]["volume"])
         self.assertEqual(10100, rows[0]["amount"])
@@ -81,6 +82,7 @@ class FetchAkshareHkDailyTests(unittest.TestCase):
             saved["source_claim_boundary"],
         )
         self.assertEqual("00700", frame["symbol"].iloc[0])
+        self.assertEqual("腾讯控股", frame["name"].iloc[0])
         self.assertEqual("HK", frame["market"].iloc[0])
 
     def test_cli_strict_empty_symbol_returns_metadata_without_prices(self) -> None:
@@ -127,6 +129,7 @@ def valid_history() -> pd.DataFrame:
         [
             {
                 "date": "2026-05-20",
+                "name": "腾讯控股",
                 "open": 10.0,
                 "high": 10.2,
                 "low": 9.9,

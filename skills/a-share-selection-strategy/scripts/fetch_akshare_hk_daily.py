@@ -170,7 +170,7 @@ def collect_rows(frame: pd.DataFrame, symbol: str) -> list[dict[str, Any]]:
 def row_record(row: pd.Series, symbol: str) -> dict[str, Any]:
     return {
         "symbol": symbol,
-        "name": symbol,
+        "name": stock_name(row, symbol),
         "market": "HK",
         "date": row["date"],
         "open": row["open"],
@@ -180,6 +180,14 @@ def row_record(row: pd.Series, symbol: str) -> dict[str, Any]:
         "volume": row["volume"],
         "amount": row["amount"],
     }
+
+
+def stock_name(row: pd.Series, symbol: str) -> str:
+    value = row.get("name", "")
+    if pd.isna(value):
+        return symbol
+    text = str(value).strip()
+    return text or symbol
 
 
 def symbol_metadata(symbol: str, rows: list[dict[str, Any]]) -> dict[str, Any]:

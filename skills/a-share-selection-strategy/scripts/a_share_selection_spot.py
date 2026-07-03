@@ -10,6 +10,7 @@ from a_share_selection_symbols import (
     A_SHARE_EXCHANGES,
     normalize_hk_symbol,
     normalize_symbol_values,
+    stock_symbol_key,
     valid_hk_symbol_text,
 )
 
@@ -22,9 +23,9 @@ def merge_spot_view(
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     if spot is None:
         return pd.DataFrame(columns=spot_columns()), spot_summary(0, 0)
-    input_symbols = normalized_input_symbols(input_frame)
-    view = normalized_spot_view(spot, input_symbols=input_symbols)
-    matched = int(view["symbol"].isin(input_symbols).sum()) if not view.empty else 0
+    input_symbols = preferred_input_symbol_map(input_frame)
+    view = normalized_spot_view(spot, preferred_symbols=input_symbols)
+    matched = int(view["_symbol_key"].isin(input_symbols.keys()).sum()) if not view.empty else 0
     return view, spot_summary(len(view), matched)
 
 
@@ -33,7 +34,10 @@ def merge_latest_spot_fields(scored: pd.DataFrame, spot_view: pd.DataFrame) -> p
         return scored
     result = scored.copy()
     result["symbol"] = result["symbol"].astype(str).str.strip()
-    merged = result.merge(spot_view, on="symbol", how="left", suffixes=("", "_spot"))
+    result["_symbol_key"] = result["symbol"].map(stock_symbol_key)
+    merged = result.merge(spot_view, on="_symbol_key", how="left", suffixes=("", "_spot"))
+    if "symbol_spot" in merged.columns:
+        merged = merged.drop(columns=["symbol_spot"])
     if "name_spot" in merged.columns:
         merged["name"] = merged["name"].where(
             merged["name"].notna()
@@ -42,7 +46,7 @@ def merge_latest_spot_fields(scored: pd.DataFrame, spot_view: pd.DataFrame) -> p
             merged["name_spot"],
         )
         merged = merged.drop(columns=["name_spot"])
-    return merged
+    return merged.drop(columns=["_symbol_key"])
 
 
 def spot_summary(rows: int, matched: int) -> dict[str, Any]:
@@ -55,15 +59,17 @@ def spot_summary(rows: int, matched: int) -> dict[str, Any]:
 
 def normalized_spot_view(
     spot: pd.DataFrame,
-    input_symbols: set[str] | None = None,
+    preferred_symbols: dict[str, str] | None = None,
 ) -> pd.DataFrame:
     source_frame = spot.reset_index(drop=True)
     symbol_values = first_existing_required(source_frame, SYMBOL_COLUMN_ALIASES, "symbol")
+    preferred_symbols = preferred_symbols or {}
     result = pd.DataFrame(
         {
+            "_symbol_key": [stock_symbol_key(value) for value in symbol_values],
             "symbol": normalize_spot_symbol_values(
                 symbol_values,
-                input_symbols=input_symbols or set(),
+                preferred_symbols=preferred_symbols,
             )
         }
     )
@@ -73,47 +79,34 @@ def normalized_spot_view(
     for column in spot_columns():
         if column not in result.columns:
             result[column] = pd.NA
-    return result[["symbol", *spot_columns()]].drop_duplicates(
-        subset=["symbol"], keep="last"
+    return result[["_symbol_key", "symbol", *spot_columns()]].drop_duplicates(
+        subset=["_symbol_key"], keep="last"
     )
 
 
-def normalized_input_symbols(frame: pd.DataFrame) -> set[str]:
-    symbols = set(frame["symbol"].astype(str).str.strip())
-    markets = normalized_market_values(frame)
-    if any(is_hk_market(value) for value in markets):
-        symbols.update(
-            alias
-            for symbol in list(symbols)
-            if (alias := hk_aliases(symbol))
-        )
-    return symbols
+def preferred_input_symbol_map(frame: pd.DataFrame) -> dict[str, str]:
+    if "symbol" not in frame:
+        return {}
+    preferred: dict[str, str] = {}
+    for symbol in frame["symbol"].astype(str).str.strip():
+        key = stock_symbol_key(symbol)
+        if key and key not in preferred:
+            preferred[key] = symbol
+    return preferred
 
 
-def normalized_market_values(frame: pd.DataFrame) -> list[str]:
-    if "market" not in frame:
-        return []
-    return list(frame["market"].astype(str).str.strip().str.lower())
-
-
-def is_hk_market(value: str) -> bool:
-    return value in {"hk", "港股", "hong kong", "hong-kong"}
-
-
-def normalize_spot_symbol_values(values: Any, input_symbols: set[str]) -> list[str]:
+def normalize_spot_symbol_values(values: Any, preferred_symbols: dict[str, str]) -> list[str]:
     base_values = normalize_symbol_values(values, allowed_exchanges=A_SHARE_EXCHANGES)
     return [
-        normalized_spot_symbol(raw, normalized, input_symbols)
+        normalized_spot_symbol(raw, normalized, preferred_symbols.get(stock_symbol_key(raw), ""))
         for raw, normalized in zip(values, base_values)
     ]
 
 
-def normalized_spot_symbol(raw: Any, normalized: str, input_symbols: set[str]) -> str:
-    if normalized in input_symbols:
-        return normalized
+def normalized_spot_symbol(raw: Any, normalized: str, preferred_symbol: str) -> str:
+    if preferred_symbol:
+        return preferred_symbol
     hk = hk_aliases(raw)
-    if hk and hk in input_symbols:
-        return hk
     return hk or normalized
 
 

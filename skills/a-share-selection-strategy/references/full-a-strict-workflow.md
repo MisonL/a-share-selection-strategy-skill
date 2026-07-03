@@ -2,6 +2,19 @@
 
 本文件只服务一个目标：让 AI Agent 在“全 A / 全市场 / 扩大股票池 / 真实扫描”任务里，优先走可复现、少歧义、少误判的路径，而不是把 demo、小样本命令或一次 runner 成功误当成全市场闭环。
 
+## 目录
+
+- [何时使用](#何时使用)
+- [核心判断](#核心判断)
+- [当前推荐拓扑](#当前推荐拓扑)
+- [数据源策略](#数据源策略)
+- [强制规则](#强制规则)
+- [推荐执行顺序](#推荐执行顺序)
+- [当前版本的推荐收口方式](#当前版本的推荐收口方式)
+- [最终报告前的必查清单](#最终报告前的必查清单)
+- [失败恢复路由](#失败恢复路由)
+- [现在不要让 Agent 做的事](#现在不要让-agent-做的事)
+
 ## 何时使用
 
 出现以下任一意图时，先读本文件，再决定命令：
@@ -55,19 +68,19 @@
 
 ## 强制规则
 
-1. 一定显式传 `--max-history-symbols`。  
+1. 一定显式传 `--max-history-symbols`。
    当前默认值是 50，只适合小样本，不适合全 A。
 
-2. 中间轮次默认关闭 HTML。  
+2. 中间轮次默认关闭 HTML。
    第一轮和清洗轮次以 `summary.json`、`history_metadata.json`、`selected_symbols.json` 为准；只在最终收口轮次生成 `report.html`。
 
-3. `zzshare` 的 `--history-limit` 不得大于 1000。  
+3. `zzshare` 的 `--history-limit` 不得大于 1000。
    当前 provider 上限是 1000；更大值会在远端统一失败。
 
-4. 不把一次 runner 成功写成全市场完成。  
+4. 不把一次 runner 成功写成全市场完成。
    必须检查 `selected_symbols.json`、`history_metadata.json`、`summary.json`、`diagnostics.csv` 的覆盖和清洗结果。
 
-5. 当前版本下，`prices-input` 复跑会优先读取同目录的 `metadata.json`，若缺失则回退读取 `history_metadata.json`。  
+5. 当前版本下，`prices-input` 复跑会优先读取同目录的 `metadata.json`，若缺失则回退读取 `history_metadata.json`。
    Agent 不需要再手工复制 `history_metadata.json -> metadata.json`；只需确认同目录至少存在其中一个 provenance 文件。
 
 ## 推荐执行顺序
@@ -151,16 +164,16 @@ uv run --with pandas --with numpy --with zzshare python skills/a-share-selection
 
 第一轮后，把问题分成四类：
 
-1. 参数类：例如 `history-limit` 超上限。  
+1. 参数类：例如 `history-limit` 超上限。
    这种应直接修命令，再重跑，不要继续分析结果。
 
-2. provider 稳定性类：例如 429、timeout、`possibly_truncated_symbols`。  
+2. provider 稳定性类：例如 429、timeout、`possibly_truncated_symbols`。
    这种应降低批次、增加 `request_interval_seconds`、或拆轮次重跑。
 
-3. 数据质量类：例如 `invalid_rows`、`non_trading_rows`、`st_rows`。  
+3. 数据质量类：例如 `invalid_rows`、`non_trading_rows`、`st_rows`。
    这种应形成剔除清单，再重跑历史。
 
-4. 历史长度类：例如 validate 阶段提示若干 symbol 少于最小历史行数。  
+4. 历史长度类：例如 validate 阶段提示若干 symbol 少于最小历史行数。
    这种应形成最终移除清单，再进入最终评分轮。
 
 ## 当前版本的推荐收口方式
@@ -173,7 +186,7 @@ uv run --with pandas --with numpy --with zzshare python skills/a-share-selection
 
 ### 5. 清洗后复跑历史
 
-如果第一轮已经明确哪些 symbol 需要剔除，建议基于清洗后的 symbol 集重新跑一轮历史抓取。  
+如果第一轮已经明确哪些 symbol 需要剔除，建议基于清洗后的 symbol 集重新跑一轮历史抓取。
 当前仓库没有稳定的“从文件读 symbol 列表”CLI 入口，因此可以：
 
 - 用 shell 组装新的 `--symbols` 参数，或

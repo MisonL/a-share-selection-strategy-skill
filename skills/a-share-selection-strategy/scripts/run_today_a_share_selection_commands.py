@@ -177,10 +177,7 @@ def fetch_yfinance_history_command(
 
 
 def history_market(args: Any) -> str:
-    try:
-        config = json.loads(run_config_path(args).read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        config = json.loads(selected_config(args).read_text(encoding="utf-8"))
+    config = json.loads(selected_config(args).read_text(encoding="utf-8"))
     market = str(config.get("universe", {}).get("market", "")).strip()
     return market or "US"
 

@@ -80,6 +80,29 @@ def normalize_symbol_values(
     ]
 
 
+def stock_symbol_key(value: Any) -> str:
+    symbol = str(value).strip().upper().replace("_", ".")
+    if symbol.isdigit() and 1 <= len(symbol) <= 5:
+        return normalized_market_symbol_key(symbol, "HK")
+    if "." not in symbol:
+        return symbol
+    parts = [part for part in symbol.split(".") if part]
+    if len(parts) < 2:
+        return symbol
+    market_prefixes = {"SH", "SZ", "BJ", "HK"}
+    if parts[0] in market_prefixes:
+        return normalized_market_symbol_key(parts[1], parts[0])
+    if parts[-1] in market_prefixes:
+        return normalized_market_symbol_key(parts[0], parts[-1])
+    return symbol
+
+
+def normalized_market_symbol_key(symbol: str, market: str) -> str:
+    if market == "HK" and symbol.isdigit() and 1 <= len(symbol) <= 5:
+        return symbol.zfill(5)
+    return symbol
+
+
 def baostock_code(symbol: str) -> str:
     if symbol.startswith(("6", "9")):
         return f"sh.{symbol}"

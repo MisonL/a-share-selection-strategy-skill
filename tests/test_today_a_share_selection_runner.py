@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import importlib.util
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 import json
@@ -28,6 +29,10 @@ from run_today_a_share_selection_helpers import (  # noqa: E402
 from run_today_a_share_selection_history import parse_history_symbols  # noqa: E402
 from run_today_a_share_selection_outputs import clear_stale_run_outputs  # noqa: E402
 from helpers import build_frame, load_config  # noqa: E402
+
+HAS_PARQUET_ENGINE = any(
+    importlib.util.find_spec(name) for name in ("pyarrow", "fastparquet")
+)
 
 
 class TodayAShareSelectionRunnerTests(unittest.TestCase):
@@ -1983,6 +1988,45 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             stdout.getvalue(),
         )
 
+    def test_yfinance_history_market_reads_source_config_not_output_dir_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            stale_config = output / "hong_kong_generic_config.json"
+            stale_config.write_text(
+                json.dumps({"universe": {"market": "US"}}),
+                encoding="utf-8",
+            )
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "yfinance",
+                    "--symbols",
+                    "00700,HK.09988,08001.HK",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--config",
+                    str(SCRIPTS / "hong_kong_generic_config.json"),
+                    "--no-html-report",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args,
+                manifest,
+                output / "run_manifest.json",
+                yfinance_hk_executor,
+            )
+
+            runner.run_pipeline(context)
+
+        fetch_step = manifest["steps"][0]
+        market_index = fetch_step["command"].index("--market")
+        self.assertEqual("HK", fetch_step["command"][market_index + 1])
+
     def test_explicit_history_symbols_with_limit_report_limited_pool(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
@@ -2469,6 +2513,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(3, selected["raw_spot_rows"])
         self.assertEqual(1, selected["filtered_spot_rows"])
 
+    @unittest.skipUnless(HAS_PARQUET_ENGINE, "pyarrow or fastparquet is required")
     def test_runner_does_not_zero_pad_numeric_parquet_spot_symbols(self) -> None:
         pd = __import__("pandas")
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2522,6 +2567,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             selected["selection_failed_next_action"],
         )
 
+    @unittest.skipUnless(HAS_PARQUET_ENGINE, "pyarrow or fastparquet is required")
     def test_runner_counts_parquet_spot_rows_in_summary(self) -> None:
         pd = __import__("pandas")
         frame = build_frame(include_turn=True, include_tradability=True)
@@ -2557,6 +2603,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(0, code, stderr)
         self.assertEqual(2, summary["spot_rows"])
 
+    @unittest.skipUnless(HAS_PARQUET_ENGINE, "pyarrow or fastparquet is required")
     def test_runner_counts_uppercase_parquet_spot_rows_in_summary(self) -> None:
         pd = __import__("pandas")
         frame = build_frame(include_turn=True, include_tradability=True)
@@ -2594,6 +2641,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertTrue(spot_copy_exists)
         self.assertEqual(2, summary["spot_rows"])
 
+    @unittest.skipUnless(HAS_PARQUET_ENGINE, "pyarrow or fastparquet is required")
     def test_runner_preserves_pq_prices_input_extension(self) -> None:
         pd = __import__("pandas")
         frame = build_frame(include_turn=True, include_tradability=True)
@@ -2625,6 +2673,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(len(frame), summary["prices_rows"])
         self.assertIn(str(output / "prices.pq"), manifest["steps"][0]["command"])
 
+    @unittest.skipUnless(HAS_PARQUET_ENGINE, "pyarrow or fastparquet is required")
     def test_runner_normalizes_uppercase_parquet_prices_input_extension(self) -> None:
         pd = __import__("pandas")
         frame = build_frame(include_turn=True, include_tradability=True)

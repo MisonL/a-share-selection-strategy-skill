@@ -60,6 +60,18 @@ from run_today_a_share_selection_input_metadata import (
 
 STRATEGY_MATCH_HIGH = 0.75
 STRATEGY_MATCH_MEDIUM = 0.55
+HK_MARKET_LABELS = {
+    "hk",
+    "hkex",
+    "hkg",
+    "hong kong",
+    "hong-kong",
+    "h-share",
+    "h share",
+    "港股",
+    "香港",
+}
+A_SHARE_MARKET_LABELS = {"a-share", "a share", "a股", "a股市场"}
 
 
 DISPLAY_CANDIDATE_COLUMNS = (
@@ -115,25 +127,13 @@ DISPLAY_DIAGNOSTIC_COLUMNS = (
 MASTER_DETAIL_PREVIEW_LIMIT = 5
 
 
-def hero(summary: dict[str, Any], language: str) -> str:
-    badges = "".join(hero_badge(label, kind) for label, kind in hero_badges(summary, language))
-    note = bilingual(
-        "Data is written into this HTML. Search, filters, sorting, and details run locally in the browser.",
-        "数据随 HTML 生成，搜索筛选排序均在本地浏览器完成。",
-        language,
-    )
+def hero_copy(title: str, badges: str, note: str) -> str:
     return (
-        '<section class="hero executive-hero">'
-        '<div class="hero-title-row">'
         '<div class="hero-copy">'
-        f"<h1>{bilingual('A-share Strategy Selection Report', 'A 股策略选股报告', language)}</h1>"
+        f"<h1>{title}</h1>"
         f'<div class="hero-badges">{badges}</div>'
         f'<p class="hero-note">{note}</p>'
         "</div>"
-        '<div class="hero-side">'
-        f"{hero_fact_card(summary, language)}"
-        f"{hero_machine_note(summary, language)}"
-        "</div></div></section>"
     )
 
 
@@ -141,7 +141,7 @@ def hero_badges(summary: dict[str, Any], language: str) -> list[tuple[str, str]]
     prediction = bool(summary.get("prediction_mode"))
     return [
         (bilingual("Static HTML", "纯静态 HTML", language), "neutral"),
-        (bilingual("A-share", "A 股", language), "neutral"),
+        (hero_market_label(summary, language), "neutral"),
         (bilingual("Public or user-provided data", "公开或用户提供数据", language), "blue"),
         (bilingual("Not investment advice", "非投资建议", language), "neutral"),
         (
@@ -154,6 +154,46 @@ def hero_badges(summary: dict[str, Any], language: str) -> list[tuple[str, str]]
     ]
 
 
+def hero_title(summary: dict[str, Any], language: str) -> str:
+    market_kind, _ = hero_market_identity(summary)
+    if market_kind == "a-share":
+        return bilingual("A-share Strategy Selection Report", "A 股策略选股报告", language)
+    return bilingual("Strategy Selection Report", "策略选股报告", language)
+
+
+def hero_market_label(summary: dict[str, Any], language: str) -> str:
+    market_kind, market = hero_market_identity(summary)
+    if market_kind == "hk":
+        return bilingual("HK", "港股", language)
+    if market_kind == "a-share":
+        return bilingual("A-share", "A 股", language)
+    return esc(market)
+
+
+def hero_market_identity(summary: dict[str, Any]) -> tuple[str, str]:
+    input_metadata = summary.get("input_metadata", {})
+    market = ""
+    if isinstance(input_metadata, dict):
+        market = str(input_metadata.get("market", "") or "").strip()
+    if market:
+        normalized = market.lower().replace("_", "-")
+        if normalized in HK_MARKET_LABELS:
+            return "hk", market
+        if normalized in A_SHARE_MARKET_LABELS:
+            return "a-share", market
+        return "custom", market
+    if hero_market_from_source_scope(str(summary.get("source_scope", "") or "")) == "HK":
+        return "hk", "HK"
+    return "a-share", "A-share"
+
+
+def hero_market_from_source_scope(source_scope: str) -> str:
+    scopes = {part.strip().lower() for part in source_scope.split("+") if part.strip()}
+    if scopes & {"akshare_hk_daily_history_fetch"}:
+        return "HK"
+    return "HK" if any("_hk_" in scope or scope.startswith("hk_") for scope in scopes) else ""
+
+
 def hero_badge(label: str, kind: str) -> str:
     return f'<span class="hero-badge {esc(kind)}">{label}</span>'
 
@@ -162,11 +202,7 @@ def hero_fact_card(summary: dict[str, Any], language: str) -> str:
     rows = [
         (
             bilingual("Report subject", "报告主题", language),
-            bilingual(
-                "A-share rule-based screening watchlist",
-                "A 股规则筛选观察",
-                language,
-            ),
+            hero_report_subject(summary, language),
         ),
         (
             bilingual("Generated at", "生成时间", language),
@@ -195,6 +231,17 @@ def hero_fact_card(summary: dict[str, Any], language: str) -> str:
     ]
     items = "".join(f"<div><span>{label}</span><strong>{value}</strong></div>" for label, value in rows)
     return f'<aside class="hero-fact-card">{items}</aside>'
+
+
+def hero_report_subject(summary: dict[str, Any], language: str) -> str:
+    market_kind, market = hero_market_identity(summary)
+    if market_kind == "hk":
+        return bilingual("HK rule-based screening watchlist", "港股规则筛选观察", language)
+    if market_kind == "a-share":
+        return bilingual("A-share rule-based screening watchlist", "A 股规则筛选观察", language)
+    en = f"{market} rule-based screening watchlist"
+    zh = f"{market} 规则筛选观察"
+    return bilingual(en, zh, language)
 
 
 def hero_machine_note(summary: dict[str, Any], language: str) -> str:
@@ -469,14 +516,85 @@ def report_overview(
     summary: dict[str, Any],
     language: str,
     candidate_rows: list[dict[str, Any]],
+    all_candidate_rows: list[dict[str, Any]],
+    columns: tuple[str, ...],
+    *,
+    truncated: bool,
+    limit: int,
+    csv_path: Any,
+    empty_key: str,
+    empty_html: str,
 ) -> str:
-    _ = candidate_rows
+    badges = "".join(hero_badge(label, kind) for label, kind in hero_badges(summary, language))
+    title = hero_title(summary, language)
+    note = bilingual(
+        "Data is written into this HTML. Search, filters, sorting, and details run locally in the browser.",
+        "数据随 HTML 生成，搜索筛选排序均在本地浏览器完成。",
+        language,
+    )
+    preview_html = candidate_preview_pane(
+        candidate_rows,
+        columns,
+        language,
+        truncated=truncated,
+        limit=limit,
+        csv_path=csv_path,
+        empty_key=empty_key,
+        empty_html=empty_html,
+    )
+    open_html = candidate_open_banner(all_candidate_rows, csv_path, language)
+    open_slot = f'<div class="candidate-open-slot">{open_html}</div>' if open_html else ""
     return (
-        '<div class="report-overview-grid">'
+        '<div class="overview-shell">'
+        '<div class="overview-lead">'
+        '<div class="overview-title">'
+        f"{hero_copy(title, badges, note)}"
+        "</div>"
+        '<div class="overview-metrics">'
         f"{pipeline_metric_cards(summary, language)}"
+        "</div>"
+        "</div>"
+        '<div class="overview-facts">'
+        f"{hero_fact_card(summary, language)}"
+        f"{hero_machine_note(summary, language)}"
+        "</div>"
+        '<div class="overview-flow">'
         f"{selection_flow_card(summary, language)}"
         "</div>"
+        '<div class="overview-preview">'
+        f"{preview_html}"
+        "</div>"
+        '<div class="overview-open">'
+        f"{open_slot}"
+        "</div></div>"
     )
+
+
+def candidate_preview_pane(
+    rows: list[dict[str, Any]],
+    columns: tuple[str, ...],
+    language: str,
+    *,
+    truncated: bool,
+    limit: int,
+    csv_path: Any,
+    empty_key: str,
+    empty_html: str,
+) -> str:
+    cards = candidate_cards(rows, language)
+    if cards:
+        return f'<div class="watchlist-preview-pane">{cards}</div>'
+    table_html = limited_table(
+        rows,
+        columns,
+        language,
+        truncated=truncated,
+        limit=limit,
+        csv_path=csv_path,
+        empty_key=empty_key,
+        empty_html=empty_html,
+    )
+    return f'<div class="watchlist-preview-pane">{table_html}</div>'
 
 
 def pipeline_metric_cards(summary: dict[str, Any], language: str) -> str:
@@ -961,13 +1079,17 @@ def plain_selection_failure_reason(history: dict[str, Any], language: str) -> st
 
 
 def plain_selection_failure_action(history: dict[str, Any], language: str) -> str:
-    action = str(history.get("selection_failed_next_action", ""))
-    action_text = action or "expand_spot_universe_or_relax_filters"
-    en = (
-        "Expand the spot universe or relax the filters, then rerun. "
-        f"next_action={action_text}"
-    )
-    zh = f"先扩大 spot 股票池或放宽过滤条件，再重新运行。next_action={action_text}"
+    action = str(history.get("selection_failed_next_action", "")).strip()
+    if action == "expand_spot_universe_or_relax_filters":
+        en = "Expand the spot universe or relax the filters, then rerun."
+        zh = "先扩大 spot 股票池或放宽过滤条件，再重新运行。"
+        return bilingual(en, zh, language)
+    if action:
+        en = f"Follow the reported next action, then rerun. next_action={action}"
+        zh = f"按报告给出的下一步处理后重新运行。next_action={action}"
+        return bilingual(en, zh, language)
+    en = "Fix the preflight spot-selection failure, then rerun."
+    zh = "先修复前置 spot 选择失败的问题，再重新运行。"
     return bilingual(en, zh, language)
 
 
@@ -1252,7 +1374,6 @@ def candidates_panel(
     empty_key: str = "empty",
     empty_html: str = "",
 ) -> str:
-    cards = candidate_cards(rows, language)
     master_detail = candidate_master_detail(
         all_rows,
         language,
@@ -1263,31 +1384,8 @@ def candidates_panel(
         empty_html=empty_html,
         empty_key=empty_key,
     )
-    table_html = limited_table(
-        rows,
-        columns,
-        language,
-        truncated=truncated,
-        limit=limit,
-        csv_path=csv_path,
-        empty_key=empty_key,
-        empty_html=empty_html,
-    )
-    if not cards:
-        return (
-            '<div class="watchlist-dashboard empty-watchlist">'
-            f'<div class="watchlist-preview-pane">{table_html}</div>'
-            "</div>"
-            f"{master_detail}"
-        )
-    _ = table_html
-    return (
-        '<div class="watchlist-dashboard">'
-        f'<div class="watchlist-preview-pane">{cards}</div>'
-        f'<div class="candidate-open-slot">{candidate_open_banner(all_rows, csv_path, language)}</div>'
-        "</div>"
-        f"{master_detail}"
-    )
+    _ = rows, columns, truncated, limit
+    return master_detail
 
 
 def boundary_cards(summary: dict[str, Any], language: str) -> str:

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from a_share_selection_html_format import failure_reason, missing_key_disclosure_value
+from a_share_selection_symbols import stock_symbol_key
 
 
 HTML_REPORT_ROWS_LIMIT = 25
@@ -125,27 +126,6 @@ def limited_candle_rows(buckets: dict[str, list[list[Any]]]) -> dict[str, list[l
 
 def candle_sort_key(row: list[Any]) -> str:
     return str(row[0]).replace("-", "")
-
-
-def stock_symbol_key(value: Any) -> str:
-    symbol = str(value).strip().upper().replace("_", ".")
-    if "." not in symbol:
-        return symbol
-    parts = [part for part in symbol.split(".") if part]
-    if len(parts) < 2:
-        return symbol
-    market_prefixes = {"SH", "SZ", "BJ", "HK"}
-    if parts[0] in market_prefixes:
-        return normalized_market_symbol_key(parts[1], parts[0])
-    if parts[-1] in market_prefixes:
-        return normalized_market_symbol_key(parts[0], parts[-1])
-    return symbol
-
-
-def normalized_market_symbol_key(symbol: str, market: str) -> str:
-    if market == "HK" and symbol.isdigit() and 1 <= len(symbol) <= 5:
-        return symbol.zfill(5)
-    return symbol
 
 
 def normalized_candle_date(value: Any) -> str:

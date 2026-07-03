@@ -23,9 +23,9 @@ import score_candidates as scorer  # noqa: E402
 import a_share_selection_candidate_fields  # noqa: E402
 import a_share_selection_metrics as metrics  # noqa: E402
 from a_share_selection_data import ACCEPTED_DATE_FORMATS, read_table  # noqa: E402
-from a_share_selection_html_data import stock_symbol_key  # noqa: E402
 from a_share_selection_prepare import prepare_frame  # noqa: E402
 from a_share_selection_spot import normalized_spot_view  # noqa: E402
+from a_share_selection_symbols import stock_symbol_key  # noqa: E402
 from a_share_selection_universe import apply_universe_filter  # noqa: E402
 import validate_ohlcv  # noqa: E402
 from helpers import build_frame, load_config, permissive_thresholds  # noqa: E402
@@ -173,6 +173,7 @@ class AShareSelectionScriptTests(unittest.TestCase):
         self.assertEqual("00700", stock_symbol_key("HK.00700"))
         self.assertEqual("00700", stock_symbol_key("00700.HK"))
         self.assertEqual("00700", stock_symbol_key("0700.HK"))
+        self.assertEqual("00700", stock_symbol_key("700"))
         self.assertEqual("00700", stock_symbol_key("700.HK"))
         self.assertEqual("00700", stock_symbol_key("HK.700"))
         self.assertEqual("300001", stock_symbol_key("sz.300001"))
@@ -556,6 +557,30 @@ class AShareSelectionScriptTests(unittest.TestCase):
         self.assertEqual(2, summary["spot_matched_symbols"])
         self.assertEqual("互联网服务", by_symbol["00700"])
         self.assertEqual("软件服务", by_symbol["08001"])
+
+    def test_hong_kong_spot_aliases_match_yfinance_hk_symbols(self) -> None:
+        config = load_config("hong_kong_generic_config.json")
+        config["thresholds"] = permissive_thresholds(120)
+        frame = build_frame(include_turn=True)
+        frame["symbol"] = frame["symbol"].map({"000002": "0700.HK", "600001": "08001.HK"})
+        frame["name"] = frame["symbol"].map({"0700.HK": "Tencent", "08001.HK": "Gem Co"})
+        frame["market"] = "HK"
+        spot = pd.DataFrame(
+            [
+                {"symbol": "HK.00700", "industry": "互联网服务"},
+                {"symbol": "08001.HK", "industry": "软件服务"},
+            ]
+        )
+
+        candidates, summary = scorer.score_candidates(frame, config, spot)
+        by_symbol = {
+            row["symbol"]: row["spot_industry"]
+            for _, row in candidates.iterrows()
+        }
+
+        self.assertEqual(2, summary["spot_matched_symbols"])
+        self.assertEqual("互联网服务", by_symbol["0700.HK"])
+        self.assertEqual("软件服务", by_symbol["08001.HK"])
 
     def test_cli_writes_threshold_diagnostics_csv(self) -> None:
         config = load_config("example_config.json")

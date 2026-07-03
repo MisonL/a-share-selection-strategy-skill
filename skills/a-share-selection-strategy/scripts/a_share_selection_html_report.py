@@ -8,6 +8,7 @@ from typing import Any
 from a_share_selection_html_assets import CSS, JS
 from a_share_selection_html_data import (
     HTML_DIAGNOSTIC_ROWS_LIMIT,
+    HTML_MASTER_ROWS_LIMIT,
     HTML_REPORT_ROWS_LIMIT,
     candidate_candle_rows,
     candidate_rows,
@@ -29,7 +30,6 @@ from a_share_selection_html_sections import (
     diagnostics_panel,
     evidence_list,
     empty_key_for,
-    hero,
     insight_drawer,
     limited_table,
     report_overview,
@@ -90,7 +90,6 @@ def render_report(
             "</head>",
             "<body>",
             '<main class="page" data-report-content>',
-            hero(report_summary, initial_language),
             *body_sections,
             "</main>",
             insight_drawer(initial_language),
@@ -111,10 +110,23 @@ def report_sections(
     all_candidates, all_candidates_truncated = full_candidate_rows(summary)
     diagnostics, diagnostics_truncated = diagnostic_rows(summary)
     candle_rows = candidate_candle_rows(summary, all_candidates)
+    empty_key = empty_key_for(summary)
+    empty_html = zero_candidates_message(summary, language)
     return [
         section(
             "",
-            report_overview(summary, language, candidates),
+            report_overview(
+                summary,
+                language,
+                candidates,
+                all_candidates,
+                DISPLAY_CANDIDATE_COLUMNS,
+                truncated=candidates_truncated,
+                limit=HTML_REPORT_ROWS_LIMIT,
+                csv_path=summary.get("candidates_output", ""),
+                empty_key=empty_key,
+                empty_html=empty_html,
+            ),
             section_id="result-section",
             extra_class="dashboard-section",
         ),
@@ -131,8 +143,8 @@ def report_sections(
                 csv_path=summary.get("candidates_output", ""),
                 field_coverage=summary.get("candidate_field_coverage"),
                 candle_rows=candle_rows,
-                empty_key=empty_key_for(summary),
-                empty_html=zero_candidates_message(summary, language),
+                empty_key=empty_key,
+                empty_html=empty_html,
             ),
             section_id="watchlist-section",
             extra_class="watchlist-section",
@@ -148,9 +160,8 @@ def report_sections(
             report_appendix(
                 summary,
                 manifest,
-                candidates,
+                all_candidates,
                 all_candidates_truncated,
-                candidates_truncated,
                 diagnostics,
                 diagnostics_truncated,
                 language,
@@ -163,9 +174,8 @@ def report_sections(
 def report_appendix(
     summary: dict[str, Any],
     manifest: dict[str, Any],
-    candidates: list[dict[str, Any]],
+    all_candidates: list[dict[str, Any]],
     all_candidates_truncated: bool,
-    candidates_truncated: bool,
     diagnostics: list[dict[str, Any]],
     diagnostics_truncated: bool,
     language: str,
@@ -176,9 +186,8 @@ def report_appendix(
         + technical_details(summary, language)
         + candidate_detail_table(
             summary,
-            candidates,
+            all_candidates,
             all_candidates_truncated,
-            candidates_truncated,
             language,
         )
         + diagnostics_panel(
@@ -207,7 +216,6 @@ def candidate_detail_table(
     summary: dict[str, Any],
     candidates: list[dict[str, Any]],
     candidates_truncated_full: bool,
-    truncated: bool,
     language: str,
 ) -> str:
     title = "Detailed table" if language == "en" else "明细表"
@@ -217,21 +225,14 @@ def candidate_detail_table(
         else "卡片用于普通阅读；这张表保留原始字段，供参考。"
     )
     label = "Show details" if language == "en" else "展开明细表"
-    limit_hint = ""
-    if candidates_truncated_full:
-        limit_hint = (
-            "<p>Only the first 25 rows are embedded here to keep the HTML usable. See the CSV for the full result.</p>"
-            if language == "en"
-            else "<p>这里仅嵌入前 25 行以保证 HTML 可用，完整结果请查看 CSV。</p>"
-        )
     content = (
-        f'<div class="detail-table-heading"><strong>{title}</strong><p>{hint}</p>{limit_hint}</div>'
+        f'<div class="detail-table-heading"><strong>{title}</strong><p>{hint}</p></div>'
         + limited_table(
             candidates,
             DISPLAY_CANDIDATE_COLUMNS,
             language,
-            truncated=truncated or candidates_truncated_full,
-            limit=HTML_REPORT_ROWS_LIMIT,
+            truncated=candidates_truncated_full,
+            limit=HTML_MASTER_ROWS_LIMIT,
             csv_path=summary.get("candidates_output", ""),
             empty_key=empty_key_for(summary),
             empty_html=zero_candidates_message(summary, language),

@@ -33,6 +33,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn('<html lang="zh-CN" data-lang="zh" data-lang-mode="auto">', report)
         self.assertIn("A 股策略选股报告", report)
         self.assertIn("A 股选股报告 - 已完成", report)
+        self.assertIn("A 股规则筛选观察", report)
         self.assertIn("流程指标", report)
         self.assertIn("观察池 Top 5 预览", report)
         self.assertIn("使用边界 / 风险提示", report)
@@ -79,6 +80,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn('<html lang="en" data-lang="en" data-lang-mode="en">', report)
         self.assertIn("A-share Strategy Selection Report", report)
         self.assertIn("A-Share Selection Report - Completed", report)
+        self.assertIn("A-share rule-based screening watchlist", report)
         self.assertIn("Pipeline counts", report)
         self.assertIn("Watchlist Top 5 Preview", report)
         self.assertIn("Use boundary / risk reminder", report)
@@ -110,6 +112,91 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("function emptyDetailDataset()", report)
         self.assertIn("function refreshEmptyRowText()", report)
         self.assertIn("if (!selectedRow) {", report)
+
+    def test_report_uses_general_title_for_non_a_share_market(self) -> None:
+        summary = minimal_summary("/tmp", Path("/tmp") / "diagnostics.csv")
+        summary.update(
+            {
+                "input_metadata": {"market": "HK"},
+                "source_scope": "akshare_hk_daily_history_fetch",
+            }
+        )
+        report = render_report(summary, {"steps": []}, language="en")
+
+        self.assertIn("Strategy Selection Report", report)
+        self.assertIn("HK", report)
+        self.assertIn("HK rule-based screening watchlist", report)
+        self.assertNotIn("A-share Strategy Selection Report", report)
+        report_zh = render_report(summary, {"steps": []}, language="zh")
+
+        self.assertIn("策略选股报告", report_zh)
+        self.assertIn("港股", report_zh)
+        self.assertIn("港股规则筛选观察", report_zh)
+        self.assertNotIn("A 股策略选股报告", report_zh)
+
+    def test_report_subject_uses_custom_market_label(self) -> None:
+        summary = minimal_summary("/tmp", Path("/tmp") / "diagnostics.csv")
+        summary.update(
+            {
+                "input_metadata": {"market": "US"},
+                "source_scope": "yfinance_history_fetch",
+            }
+        )
+
+        report = render_report(summary, {"steps": []}, language="en")
+
+        self.assertIn("Strategy Selection Report", report)
+        self.assertIn("US rule-based screening watchlist", report)
+        self.assertNotIn("A-share rule-based screening watchlist", report)
+        report_zh = render_report(summary, {"steps": []}, language="zh")
+
+        self.assertIn("策略选股报告", report_zh)
+        self.assertIn("US 规则筛选观察", report_zh)
+        self.assertNotIn("A 股规则筛选观察", report_zh)
+
+    def test_report_normalizes_common_hk_market_labels(self) -> None:
+        for market in ("HKEX", "HKG", "hong_kong"):
+            with self.subTest(market=market):
+                summary = minimal_summary("/tmp", Path("/tmp") / "diagnostics.csv")
+                summary["input_metadata"] = {"market": market}
+
+                report = render_report(summary, {"steps": []}, language="zh")
+
+                self.assertIn("策略选股报告", report)
+                self.assertIn("港股", report)
+                self.assertIn("港股规则筛选观察", report)
+                self.assertIn(f"<dd>{market}</dd>", report)
+
+    def test_report_infers_hk_from_hk_source_scope_when_market_missing(self) -> None:
+        summary = minimal_summary("/tmp", Path("/tmp") / "diagnostics.csv")
+        summary.update(
+            {
+                "input_metadata": {},
+                "source_scope": "local_prices_input+yfinance_hk_history_fetch",
+            }
+        )
+
+        report = render_report(summary, {"steps": []}, language="en")
+
+        self.assertIn("Strategy Selection Report", report)
+        self.assertIn("HK", report)
+        self.assertIn("HK rule-based screening watchlist", report)
+
+    def test_report_escapes_unknown_market_label(self) -> None:
+        summary = minimal_summary("/tmp", Path("/tmp") / "diagnostics.csv")
+        summary.update(
+            {
+                "input_metadata": {"market": '<img src=x onerror="alert(1)">'},
+                "source_scope": "<script>alert(2)</script>",
+            }
+        )
+
+        report = render_report(summary, {"steps": []}, language="zh")
+
+        self.assertNotIn('<img src=x onerror="alert(1)">', report)
+        self.assertNotIn("<script>alert(2)</script>", report)
+        self.assertIn("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;", report)
+        self.assertIn("&lt;script&gt;alert(2)&lt;/script&gt;", report)
 
     def test_auto_report_preserves_generated_language_on_first_browser_load(self) -> None:
         with report_run(
@@ -175,15 +262,19 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             summary["candidates_output_written"] = True
             report = render_report(summary, {"steps": []}, language="zh")
 
-        self.assertIn("仅展示前 25 行", report)
-        self.assertIn("完整结果：./candidates.csv", report)
+        self.assertNotIn("仅展示前 25 行", report)
+        self.assertNotIn("仅展示前 1000 行", report)
+        self.assertNotIn("完整结果：./candidates.csv", report)
         self.assertIn("Name 25", report)
         self.assertIn("Name 26", report)
         preview = report.split('<section id="complete-candidates"', 1)[0]
         complete = report.split('<section id="complete-candidates"', 1)[1]
         complete_section = complete.split("</section>", 1)[0]
+        appendix_detail = report.split('<details class="report-details candidate-detail-table">', 1)[1]
+        appendix_detail = appendix_detail.split('<details class="report-details pipeline-detail">', 1)[0]
         self.assertNotIn("Name 26", preview)
         self.assertIn("Name 26", complete)
+        self.assertIn("Name 26", appendix_detail)
         self.assertIn("完整候选表", report)
         self.assertIn("data-candidate-master-detail", report)
         self.assertIn("data-candidate-search", report)
@@ -221,10 +312,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             report = render_report(summary, {"steps": []}, language="zh")
 
         complete = report.split('<section id="complete-candidates"', 1)[1]
-        audit = report.split("展开明细表", 1)[1]
         self.assertIn("这里仅嵌入前 1000 行", report)
-        self.assertIn("这里仅嵌入前 25 行以保证 HTML 可用", audit)
-        self.assertNotIn("这里仅嵌入前 1000 行", audit)
         self.assertIn("Name 1000", complete)
         self.assertNotIn("Name 1001", complete)
         self.assertNotIn("Name 1002", complete)
@@ -697,7 +785,14 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             )
             report = render_report(summary, {"steps": []}, language="zh")
 
-        self.assertIn('class="report-overview-grid"', report)
+        self.assertIn('class="overview-shell"', report)
+        self.assertIn('class="overview-lead"', report)
+        self.assertIn('class="overview-title"', report)
+        self.assertIn('class="overview-facts"', report)
+        self.assertIn('class="overview-metrics"', report)
+        self.assertIn('class="overview-flow"', report)
+        self.assertIn('class="overview-preview"', report)
+        self.assertIn('class="overview-open"', report)
         self.assertIn('class="pipeline-metrics"', report)
         self.assertIn('class="selection-flow-card"', report)
         self.assertIn('class="selection-flow"', report)
@@ -721,7 +816,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             report.index('<details class="report-details candidate-detail-table">'),
         )
         self.assertLess(
-            report.index('class="report-overview-grid"'),
+            report.index('class="overview-shell"'),
             report.index('<details class="technical-details">'),
         )
 
@@ -1028,6 +1123,8 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("if (chartHoverIndex === nextHoverIndex)", report)
         self.assertIn("const tooltipWidth = Math.min(210, width - 20);", report)
         self.assertNotIn("stockChartTooltip.offsetWidth", report)
+        self.assertIn("stockChartTooltip.replaceChildren(tooltipDate, tooltipPrices, tooltipVolume)", report)
+        self.assertNotIn("stockChartTooltip.innerHTML", report)
         self.assertIn("const terms = query.split(/\\s+/).filter(Boolean)", report)
         self.assertIn("terms.every(term => haystack.includes(term))", report)
         self.assertIn("detailRisk.textContent = dataset.rowRisk", report)
@@ -1333,7 +1430,15 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             )
             report = render_report(summary, {"steps": []}, language="en")
 
-        self.assertIn('class="hero executive-hero"', report)
+        self.assertNotIn('class="hero executive-hero"', report)
+        self.assertIn('class="overview-shell"', report)
+        self.assertIn('class="overview-lead"', report)
+        self.assertIn('class="overview-title"', report)
+        self.assertIn('class="overview-facts"', report)
+        self.assertIn('class="overview-metrics"', report)
+        self.assertIn('class="overview-flow"', report)
+        self.assertIn('class="overview-preview"', report)
+        self.assertIn('class="overview-open"', report)
         self.assertIn('class="hero-badges"', report)
         self.assertIn('class="pipeline-metrics"', report)
         self.assertIn('<button type="button" class="pipeline-card input"', report)
@@ -1346,17 +1451,38 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn('|Price rows::', report)
         self.assertIn('class="insight-drawer"', report)
         self.assertIn('role="dialog"', report)
-        self.assertIn('class="watchlist-dashboard"', report)
+        self.assertNotIn('class="watchlist-dashboard"', report)
         self.assertIn('class="candidate-open-slot"', report)
         self.assertIn('class="final-notice-grid"', report)
         self.assertIn('class="selection-flow"', report)
         self.assertIn('<button type="button" class="flow-step input"', report)
         self.assertIn("Clickable details", report)
-        self.assertIn(".report-overview-grid", report)
+        self.assertIn(".overview-shell", report)
+        self.assertIn(".overview-lead,.overview-title,.overview-facts,.overview-metrics,.overview-flow,.overview-preview,.overview-open{min-width:0}", report)
+        self.assertIn(".overview-lead{grid-area:lead;display:grid;gap:12px}.overview-facts{grid-area:facts;display:grid;gap:12px}.overview-flow{grid-area:flow}.overview-preview{grid-area:preview}.overview-open{grid-area:open}", report)
         self.assertIn("button.pipeline-card,button.flow-step{font:inherit;color:inherit;cursor:pointer}", report)
+        self.assertIn("--surface-highlight:inset 0 1px 0 rgba(255,255,255,.82)", report)
+        self.assertIn("--hairline:0 0 0 1px rgba(15,23,42,.075)", report)
+        self.assertIn("--hairline-danger:0 0 0 1px rgba(199,53,53,.18)", report)
+        self.assertIn("--control-shadow:var(--hairline-soft),var(--surface-highlight),0 3px 9px rgba(15,23,42,.035)", report)
+        self.assertIn("--shadow:var(--hairline),var(--surface-highlight),0 10px 26px rgba(15,23,42,.06)", report)
+        self.assertIn("--shadow-float:var(--hairline),var(--surface-highlight),0 24px 64px rgba(15,23,42,.22)", report)
+        self.assertIn(".section,.panel-card{background:var(--surface);border:0;border-radius:8px;box-shadow:var(--shadow)}", report)
+        self.assertIn(".hero-badge{display:inline-flex;align-items:center;min-height:30px;border:0;border-radius:6px;background:#fff;color:#26384f;font-weight:800;padding:5px 13px;box-shadow:var(--hairline-soft)}", report)
+        self.assertIn(".hero-machine-note{margin:0;border:0;border-left:4px solid #1b75d0;border-radius:8px;background:#f8fbff;padding:11px 12px;color:#334155;font-size:13px;line-height:1.5;overflow-wrap:anywhere;box-shadow:var(--hairline-blue),var(--surface-highlight),0 8px 18px rgba(15,23,42,.045)}", report)
+        self.assertIn(".pipeline-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;align-items:stretch;border:0;border-radius:8px;background:#fff;overflow:hidden;box-shadow:var(--shadow)}", report)
+        self.assertIn(".selection-flow-card{border:0;border-radius:8px;background:#fff;padding:9px 20px;box-shadow:var(--shadow)}", report)
+        self.assertIn(".selection-flow{display:grid;grid-template-columns:minmax(0,1fr) 36px minmax(0,1fr) 36px minmax(0,1fr) 36px minmax(0,1fr);align-items:center;gap:10px;min-width:0}", report)
+        self.assertIn(".flow-step{display:grid;justify-items:center;min-width:0;border:0;border-radius:8px;background:transparent;color:#1e293b;text-align:center;padding:8px 8px;overflow-wrap:anywhere}", report)
+        self.assertIn(".flow-step span:not(.flow-index){display:block;min-width:0;margin-top:7px;color:#0f172a;font-weight:900;line-height:1.2;overflow-wrap:anywhere}", report)
+        self.assertIn(".flow-step small{display:block;min-width:0;margin-top:1px;color:#64748b;font-size:12px;line-height:1.2;overflow-wrap:anywhere}", report)
+        self.assertIn(".flow-arrow{width:100%;min-width:18px;height:2px;background:#64748b;position:relative}", report)
+        self.assertNotIn("grid-template-columns:repeat(7,max-content)", report)
+        self.assertNotIn(".flow-arrow{width:88px", report)
         self.assertIn(".pipeline-card:hover,.pipeline-card:focus-visible", report)
         self.assertIn(".flow-step:hover,.flow-step:focus-visible", report)
         self.assertIn(".insight-drawer[hidden]{display:none}", report)
+        self.assertIn(".insight-dialog{position:relative;width:min(580px,100%);max-height:min(720px,calc(100vh - 48px));overflow:auto;border:0;border-radius:8px;background:#fff;padding:20px 22px 18px;box-shadow:var(--shadow-float);contain:content}", report)
         self.assertIn(
             'class="insight-close" data-insight-close aria-label="Close" data-i18n-aria-label-en="Close" data-i18n-aria-label-zh="关闭"',
             report,
@@ -1369,7 +1495,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn(".candidate-cards[data-preview-table] th:nth-last-child(2),.candidate-cards[data-preview-table] td:nth-last-child(2){width:88px}", report)
         self.assertIn("@media(max-width:1500px)", report)
         self.assertIn(
-            ".watchlist-dashboard{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(320px,.88fr);gap:12px;align-items:stretch}",
+            ".overview-shell{display:grid;grid-template-columns:minmax(0,1fr) minmax(520px,1fr);grid-template-areas:\"lead facts\" \"preview flow\" \"open open\";gap:12px;align-items:start}",
             report,
         )
         self.assertIn(
@@ -1388,9 +1514,9 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn(".candidate-download-link{min-height:44px}", report)
         self.assertIn(".stock-code{display:block;margin-top:3px;color:#334155;font-size:13px", report)
         self.assertIn(".name-cell.missing,.stock-anchor.missing{color:#64748b}", report)
-        self.assertIn(".stock-dialog{width:min(1120px,100%);max-height:min(92vh,920px);overflow:auto", report)
+        self.assertIn(".stock-dialog{width:min(1120px,100%);max-height:min(92vh,920px);overflow:auto;border:0;border-radius:10px;background:linear-gradient(180deg,#fff 0,#fbfdff 100%);box-shadow:var(--shadow-float);contain:content;scrollbar-gutter:stable}", report)
         self.assertIn(".stock-dialog-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(360px,.95fr);gap:14px;padding:14px;align-items:start}", report)
-        self.assertIn(".stock-tech-summary{border:1px solid #bfdbfe;border-radius:8px;background:#f8fbff;padding:10px 12px", report)
+        self.assertIn(".stock-tech-summary{border:0;border-radius:8px;background:#f8fbff;padding:10px 12px;color:#1e293b;font-size:13px;line-height:1.45;font-weight:750;box-shadow:var(--hairline-blue)}", report)
         self.assertIn(".stock-tech-card[data-status=\"positive\"]", report)
         self.assertIn(".stock-tech-card[data-status=\"attention\"]", report)
         self.assertIn(".stock-tech-card[data-status=\"negative\"]", report)
@@ -1401,6 +1527,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn(".stock-chart-wrap canvas{display:block;width:100%;height:100%;touch-action:none}", report)
         self.assertIn(".candidate-toolbar{display:grid;grid-template-columns:2fr repeat(3,minmax(130px,1fr)) max-content", report)
         self.assertIn(".candidate-toolbar.has-industry{grid-template-columns:2fr repeat(4,minmax(130px,1fr)) max-content}", report)
+        self.assertIn(".candidate-toolbar input,.candidate-toolbar select{width:100%;height:40px;border:0;border-radius:7px;background:#fff;color:var(--ink);font:inherit;padding:7px 10px;box-shadow:var(--control-shadow)}", report)
         self.assertIn(".candidate-toolbar input:focus-visible,.candidate-toolbar select:focus-visible{outline:2px solid #1b75d0;outline-offset:2px", report)
         self.assertIn(".candidate-toolbar button:focus-visible{outline:2px solid #1b75d0;outline-offset:2px", report)
         self.assertIn(".detail-action-button:hover,.detail-action-button:focus-visible{outline:2px solid #1b75d0;outline-offset:2px", report)
@@ -1409,12 +1536,21 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("@media(max-width:1100px)", report)
         self.assertIn("@media(max-width:640px)", report)
         self.assertIn("@media(max-width:520px)", report)
+        self.assertIn(".overview-shell,.final-notice-grid{grid-template-columns:minmax(0,1fr)}", report)
+        self.assertIn(".overview-shell{grid-template-areas:\"lead\" \"facts\" \"flow\" \"preview\" \"open\"}", report)
+        self.assertIn(".hero-copy,.overview-lead,.overview-title,.overview-facts,.overview-metrics,.overview-flow,.overview-preview,.overview-open{min-width:0}", report)
+        self.assertIn(".hero-fact-card{max-width:100%;min-width:0}", report)
+        self.assertIn(".hero-badge{flex:1 1 calc(50% - 8px);justify-content:center;min-width:0;min-height:36px;overflow-wrap:anywhere}", report)
+        self.assertIn(".hero-note{align-items:flex-start;max-width:100%;overflow-wrap:anywhere}", report)
+        self.assertIn(".candidate-toolbar,.candidate-toolbar.has-industry{grid-template-columns:1fr}", report)
+        self.assertIn(".hero-fact-card div{grid-template-columns:minmax(0,1fr);min-width:0;gap:2px;padding:5px 8px 5px 18px}", report)
+        self.assertIn(".hero-fact-card span,.hero-fact-card strong{min-width:0;overflow-wrap:anywhere}", report)
         self.assertIn("overflow-x:auto", report)
         self.assertIn("flex-wrap:wrap", report)
         self.assertIn("min-height:44px", report)
         self.assertIn("white-space:normal", report)
         self.assertIn(".candidate-page-numbers{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}", report)
-        self.assertIn(".candidate-page-number{min-width:44px;min-height:44px", report)
+        self.assertIn(".candidate-page-number{min-width:44px;min-height:44px;border:0;border-radius:7px;background:#fff;color:#1e293b;font:inherit;box-shadow:var(--control-shadow);cursor:pointer}", report)
         self.assertIn("grid-template-columns:repeat(2,minmax(0,1fr))", report)
         self.assertIn("grid-template-columns:repeat(4,minmax(0,1fr))", report)
         self.assertIn(".flow-arrow{display:none}", report)
@@ -1433,7 +1569,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn(".pipeline-copy{grid-template-columns:max-content max-content;grid-template-areas:\"label value\" \"note note\";align-items:center;column-gap:6px;row-gap:3px}", report)
         self.assertIn(".pipeline-card small{grid-area:note;font-size:12px;line-height:1.2}", report)
         self.assertIn(".detail-evidence-card{border-left:0;border-top:1px solid #e7edf4}", report)
-        self.assertIn(".master-table{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fff;contain:content}", report)
+        self.assertIn(".master-table{max-height:420px;overflow:auto;border:0;border-radius:8px;background:#fff;contain:content;box-shadow:var(--hairline-soft)}", report)
         self.assertIn(".candidate-master-detail{margin-top:8px;max-width:100%;overflow:hidden", report)
         self.assertIn(".master-list-panel{min-width:0;max-width:100%;overflow:clip}", report)
         self.assertIn(".master-table:not(.has-wide-table) th:nth-child(1),.master-table:not(.has-wide-table) td:nth-child(1){width:62px}", report)
@@ -1442,7 +1578,16 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn(".detail-head-copy{display:grid;gap:4px;min-width:0}", report)
         self.assertIn(".detail-head-note{color:#64748b;font-size:12px;font-weight:700;line-height:1.35}", report)
         self.assertIn(".candidate-detail-panel{max-height:520px;position:relative;top:auto}", report)
-        self.assertIn(".candidate-detail-panel{align-self:stretch;height:100%;max-height:560px;border:1px solid var(--line);border-radius:8px;background:#fff;min-width:0;overflow:auto;box-shadow:0 8px 18px rgba(15,23,42,.04);contain:content;scrollbar-gutter:stable}", report)
+        self.assertIn(".candidate-detail-panel{align-self:stretch;height:100%;max-height:560px;border:0;border-radius:8px;background:#fff;min-width:0;overflow:auto;box-shadow:var(--shadow);contain:content;scrollbar-gutter:stable}", report)
+        self.assertIn(".candidate-detail-panel{box-shadow:var(--hairline-soft);position:relative;top:auto}", report)
+        self.assertIn(".candidate-master-detail{margin-top:8px;max-width:100%;overflow:hidden;border:0;border-radius:8px;background:#fff;padding:10px;box-shadow:var(--shadow);scroll-margin-top:18px}", report)
+        self.assertIn(".candidate-open-banner{display:grid;grid-template-columns:max-content minmax(0,1fr) max-content;grid-template-areas:\"title body button\" \"foot foot button\";gap:5px 16px;align-items:center;justify-items:start;width:100%;min-height:0;border:0;border-radius:8px;background:linear-gradient(180deg,#fbfffd 0,#f2fbf6 100%);padding:14px 18px;color:#1e293b;text-align:left;text-decoration:none;box-shadow:var(--hairline-green),var(--surface-highlight),0 6px 16px rgba(10,143,99,.07)}", report)
+        self.assertIn(".candidate-open-banner:hover,.candidate-open-banner:focus-visible{outline:2px solid #0a8f63;outline-offset:2px;background:linear-gradient(180deg,#f4fbf7 0,#e9f8f1 100%);box-shadow:inset 0 0 0 2px rgba(10,143,99,.16)}", report)
+        self.assertIn(".watchlist-preview-pane{min-width:0;border:0;border-radius:8px;background:#fff;padding:11px;box-shadow:var(--shadow)}", report)
+        self.assertIn(".field-coverage-chip[data-field-missing=\"true\"]{background:#fffaf2;box-shadow:var(--hairline-warn),var(--surface-highlight),0 3px 10px rgba(217,119,6,.045)}", report)
+        self.assertIn(".stock-action-section{background:#f8fbff;box-shadow:var(--hairline-blue),var(--surface-highlight),0 4px 12px rgba(27,117,208,.045)}", report)
+        self.assertIn(".stock-next-section{background:#fff;box-shadow:var(--hairline-blue),var(--surface-highlight),0 4px 12px rgba(27,117,208,.035)}", report)
+        self.assertIn(".preview-mobile-meta-item{display:grid;gap:2px;min-width:0;border:0;border-radius:8px;background:#fbfdff;padding:8px 9px;color:#334155;font-size:13px;line-height:1.35;overflow-wrap:anywhere;box-shadow:var(--hairline-soft),var(--surface-highlight)}", report)
         self.assertIn(".master-table tr[data-selected=\"true\"]{background:#eaf4ff;box-shadow:inset 0 0 0 2px #6daff0}", report)
         self.assertIn(".candidate-page-numbers{grid-column:1/-1;grid-row:2;justify-content:center}", report)
         self.assertIn(".candidate-pager label{grid-column:2;grid-row:3;display:flex;align-items:center;justify-content:flex-end;gap:6px}", report)
@@ -1459,6 +1604,11 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("let bodyLockCount = 0", report)
         self.assertIn("setBodyLocked(true);", report)
         self.assertIn("setBodyLocked(false);", report)
+        close_drawer_body = report.split("function closeDrawer() {", 1)[1].split("document.removeEventListener('keydown', handleKeydown)", 1)[0]
+        self.assertLess(
+            close_drawer_body.index("setModalContentHidden(false, null);"),
+            close_drawer_body.index("drawer.setAttribute('aria-hidden', 'true');"),
+        )
         self.assertIn("event.key === 'Escape'", report)
         self.assertIn("event.key === 'Tab'", report)
         self.assertIn("function trapFocus(event)", report)
@@ -1471,7 +1621,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("updateTechnicalIndicators(candles);", report)
         self.assertIn("const technical = indicatorsForRows(rows);", report)
         self.assertIn(".flow-step small{display:none}", report)
-        self.assertIn("min-width:0;border:1px solid var(--line);border-radius:8px;background:#fff;padding:11px", report)
+        self.assertIn("min-width:0;border:0;border-radius:8px;background:#fff;padding:11px;box-shadow:var(--shadow)", report)
 
     def test_pipeline_input_metric_uses_stock_count_not_price_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1703,7 +1853,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("external_unverified", report)
         self.assertIn("external_input", report)
         self.assertIn("equal_cash_budget_lot_floor", report)
-        self.assertIn("Showing the first 25 rows only", report)
+        self.assertNotIn("Showing the first 1000 rows only", report)
         preview = report.split('<section id="complete-candidates"', 1)[0]
         complete = report.split('<section id="complete-candidates"', 1)[1]
         self.assertNotIn("Name 26", preview)

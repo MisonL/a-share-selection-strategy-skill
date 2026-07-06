@@ -219,6 +219,134 @@ class DocumentConsistencyTests(unittest.TestCase):
                 if metadata["token_environment_variable"]:
                     self.assertIn(metadata["token_environment_variable"], docs)
 
+    def test_script_entrypoint_registry_covers_root_scripts(self) -> None:
+        root = ROOT / "skills/a-share-selection-strategy"
+        scripts_root = root / "scripts"
+        registry = json.loads(
+            (root / "configs/script_entrypoints.json").read_text(encoding="utf-8")
+        )
+
+        root_scripts = sorted(path.name for path in scripts_root.glob("*.py"))
+        registered_scripts = sorted(registry["entries"])
+
+        self.assertEqual(root_scripts, registered_scripts)
+        self.assertEqual(
+            "script_entrypoint_registry_only_not_runtime_dispatch_or_cli_contract_replacement",
+            registry["claim_boundary"],
+        )
+
+    def test_script_entrypoint_registry_schema_is_strict(self) -> None:
+        root = ROOT / "skills/a-share-selection-strategy"
+        registry = json.loads(
+            (root / "configs/script_entrypoints.json").read_text(encoding="utf-8")
+        )
+        scripts_index = (root / "scripts/SCRIPTS.md").read_text(encoding="utf-8")
+        docs = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in [
+                ROOT / "README.md",
+                root / "SKILL.md",
+                root / "references/index.md",
+                root / "references/script-reference.md",
+                root / "scripts/SCRIPTS.md",
+            ]
+        )
+
+        self.assertEqual({"schema_version", "claim_boundary", "categories", "entries"}, set(registry))
+        self.assertEqual(1, registry["schema_version"])
+        allowed_categories = {"stable_cli", "fetch_cli", "gate_backtest_cli", "internal_helper"}
+        self.assertEqual(allowed_categories, set(registry["categories"]))
+        self.assertIn("script_entrypoints.json", docs)
+        self.assertIn("不做运行时 dispatch", docs)
+
+        expected_entry_keys = {
+            "category",
+            "public_entry",
+            "network_required",
+            "real_gate_boundary",
+            "primary_artifacts",
+        }
+        public_categories = {"stable_cli", "fetch_cli", "gate_backtest_cli"}
+        for script, metadata in registry["entries"].items():
+            with self.subTest(script=script):
+                self.assertEqual(expected_entry_keys, set(metadata))
+                self.assertTrue((root / "scripts" / script).is_file())
+                self.assertEqual(script, Path(script).name)
+                self.assertIn(metadata["category"], allowed_categories)
+                self.assertIsInstance(metadata["public_entry"], bool)
+                self.assertIsInstance(metadata["network_required"], bool)
+                self.assertIsInstance(metadata["primary_artifacts"], list)
+                self.assertIsInstance(metadata["real_gate_boundary"], str)
+                self.assertTrue(metadata["real_gate_boundary"])
+                if metadata["public_entry"]:
+                    self.assertIn(metadata["category"], public_categories)
+                    self.assertIn(script, scripts_index)
+                else:
+                    self.assertEqual("internal_helper", metadata["category"])
+
+    def test_script_entrypoint_registry_keeps_expected_public_surface(self) -> None:
+        root = ROOT / "skills/a-share-selection-strategy"
+        registry = json.loads(
+            (root / "configs/script_entrypoints.json").read_text(encoding="utf-8")
+        )
+        by_category: dict[str, set[str]] = {}
+        for script, metadata in registry["entries"].items():
+            by_category.setdefault(metadata["category"], set()).add(script)
+
+        self.assertEqual(
+            {
+                "create_demo_data.py",
+                "validate_ohlcv.py",
+                "score_candidates.py",
+                "run_today_a_share_selection.py",
+                "slice_prices_as_of.py",
+            },
+            by_category["stable_cli"],
+        )
+        self.assertEqual(
+            {
+                "fetch_eastmoney_a_share_spot.py",
+                "fetch_baostock_a_share.py",
+                "fetch_akshare_a_share.py",
+                "fetch_akshare_hk_daily.py",
+                "fetch_zzshare_a_share.py",
+                "fetch_yfinance_ohlcv.py",
+            },
+            by_category["fetch_cli"],
+        )
+        self.assertIn("a_share_selection_html_sections.py", by_category["internal_helper"])
+        self.assertIn("run_today_a_share_selection_helpers.py", by_category["internal_helper"])
+        self.assertTrue(
+            registry["entries"]["fetch_zzshare_a_share.py"]["network_required"]
+        )
+        self.assertFalse(
+            registry["entries"]["score_candidates.py"]["network_required"]
+        )
+
+    def test_script_docs_keep_html_report_as_display_layer(self) -> None:
+        root = ROOT / "skills/a-share-selection-strategy"
+        scripts_index = (root / "scripts/SCRIPTS.md").read_text(encoding="utf-8")
+        registry = json.loads(
+            (root / "configs/script_entrypoints.json").read_text(encoding="utf-8")
+        )
+
+        for script in [
+            "a_share_selection_html_sections.py",
+            "a_share_selection_html_scripts.py",
+            "a_share_selection_html_candidate_master.py",
+        ]:
+            with self.subTest(script=script):
+                self.assertEqual(
+                    "internal_helper",
+                    registry["entries"][script]["category"],
+                )
+                self.assertFalse(registry["entries"][script]["public_entry"])
+                self.assertIn(script, scripts_index)
+        self.assertIn("HTML 报告模块是当前最大维护热点", scripts_index)
+        self.assertIn("只能继续作为展示层 helper 拆分", scripts_index)
+        self.assertIn("不能把候选事实、门禁判断或机器字段来源移动进 HTML 展示层", scripts_index)
+        self.assertIn("`report.html` 输出契约不变", scripts_index)
+
     def test_runner_docs_cover_symbols_file_plan_and_resume_controls(self) -> None:
         root = ROOT / "skills/a-share-selection-strategy"
         docs = "\n".join(
@@ -271,6 +399,16 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("python3 validate_skill_changes.py", docs)
         self.assertIn("本地仓库门禁", docs)
         self.assertIn("真实行情", docs)
+        readme_text = (ROOT / "README.md").read_text(encoding="utf-8")
+        agents_text = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        runbook_text = (
+            root / "instructions/runbook.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("runbook 验证命令", readme_text)
+        self.assertNotIn("python3 -m json.tool", readme_text)
+        self.assertNotIn("PYTHONPYCACHEPREFIX", readme_text)
+        self.assertIn("validate_skill_changes.py` 的人工展开视图", agents_text)
+        self.assertIn("validate_skill_changes.py` 的人工展开视图", runbook_text)
         self.assertNotIn("/Users/", validator)
         self.assertIn("Path.home()", validator)
         self.assertIn("historical leaked-key probe split", validator)

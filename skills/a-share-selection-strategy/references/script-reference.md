@@ -20,12 +20,15 @@
 | `../configs/prediction_profile_config.json` | prediction-derived A 股默认剖面 | 需要真实 `prediction` 或 `prediction_score` 输入 |
 | `../configs/hong_kong_generic_config.json` | 港股本地 OHLCV 通用技术评分 | 不证明港交所日历、真实成交或收益 |
 | `../configs/data_sources.json` | 数据源能力机器注册表 | 只用于审计和一致性检查，不做运行时自动选源或稳定性证明 |
+| `../configs/script_entrypoints.json` | 脚本入口机器注册表 | 只用于审计根层 `.py` 分类，不做运行时 dispatch 或 CLI 合约替代 |
 
 旧命令里的 `../scripts/*.json` 路径仍由 CLI 解析到 `../configs/*.json`，但新文档和默认 runner 都应使用 `../configs/*.json`。
 
 ## 入口分层
 
 稳定 CLI、取数入口、门禁回测入口和内部 helper 的完整边界见 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md)。本文件只在已经确定入口后提供配置、依赖、字段和命令细节。
+
+`../configs/script_entrypoints.json` 必须覆盖 `scripts/` 根层每个 `.py`，并把它们归入 `stable_cli`、`fetch_cli`、`gate_backtest_cli` 或 `internal_helper`。新增、删除或移动根层脚本时，先更新注册表，再更新 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) 的解释层。
 
 联网取数必须先落地本地文件和 metadata，再进入 `validate_ohlcv.py`、评分和汇报。不得把在线 API 响应直接解释成已验证候选。
 

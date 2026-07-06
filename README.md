@@ -50,6 +50,8 @@ skills/
 
 脚本以 CLI 为稳定入口。配置文件的权威路径在 `skills/a-share-selection-strategy/configs/`；CLI 仍兼容旧命令里传入的 `skills/a-share-selection-strategy/scripts/*.json`，会自动回退到 `configs/`。Python 复用时需自行将 `skills/a-share-selection-strategy/scripts/` 加入 `PYTHONPATH` 或 `sys.path`。
 
+`skills/a-share-selection-strategy/configs/script_entrypoints.json` 是脚本入口机器注册表，只用于本地一致性校验和审计；用户仍按上表和 `skills/a-share-selection-strategy/scripts/SCRIPTS.md` 调用 CLI。
+
 仅说“帮我选今天 A 股”但未提供行情文件或明确联网授权时，不运行 CLI、不输出候选股，先使用“无法直接选股”模板。
 
 ## 快速 demo
@@ -133,33 +135,13 @@ prediction-derived 输入必须包含：
 
 ## 验证
 
-推荐先使用统一本地验证入口:
+本仓库验证命令的权威入口是:
 
 ```bash
 python3 validate_skill_changes.py
 ```
 
-该入口只覆盖本地仓库门禁，不证明真实行情、真实 prediction、券商订单或真实回测门禁通过。若需要拆开执行，对应命令如下:
-
-```bash
-for file in skills/a-share-selection-strategy/evals/*.json skills/a-share-selection-strategy/configs/*.json; do
-  python3 -m json.tool "$file" >/tmp/"$(basename "$file")"
-done
-uv run --with pyyaml python - <<'PY'
-import yaml
-from pathlib import Path
-assert yaml.safe_load(Path("skills/a-share-selection-strategy/agents/openai.yaml").read_text())["interface"]["display_name"]
-PY
-PYTHONPYCACHEPREFIX=/tmp/a-share-selection-pycache python3 -m compileall -q skills/a-share-selection-strategy/scripts
-PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy --with pyarrow python -m unittest discover -s tests -v
-```
-
-Skill 结构校验器来自本机 skill-creator，不随本仓库发布：
-
-```bash
-QUICK_VALIDATE=/path/to/skill-creator/scripts/quick_validate.py
-uv run --with pyyaml python "$QUICK_VALIDATE" skills/a-share-selection-strategy
-```
+该入口只覆盖本地仓库门禁，不证明真实行情、真实 prediction、券商订单或真实回测门禁通过。需要拆开执行或替换本机 `quick_validate.py` 时，使用 [runbook 验证命令](skills/a-share-selection-strategy/instructions/runbook.md#验证命令)。
 
 ## 授权
 

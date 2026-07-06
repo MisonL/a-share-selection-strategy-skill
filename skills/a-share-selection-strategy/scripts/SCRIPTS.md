@@ -4,6 +4,8 @@
 
 配置文件的权威路径在 `../configs/`；旧命令传入的 `scripts/*.json` 会由 CLI 自动回退到 `../configs/`。
 
+脚本入口机器注册表见 `../configs/script_entrypoints.json`。本文件是人类和 Agent 的解释层，注册表是测试校验用事实源；它只用于审计根层 `.py` 是否被归类，不是运行时 dispatcher，也不替代 CLI 合约。
+
 根层 `.py` 路径保持兼容；部分内部 helper 的真实实现已迁入 `lib/`，根层同名文件只做 re-export 和直接执行 fail-fast。用户命令仍使用本文件列出的根层 CLI，不直接调用 `lib/`。
 
 命令细节、依赖和字段映射仍以 [../references/script-reference.md](../references/script-reference.md) 为准；脚本边界和 helper 边界先读本文件。
@@ -61,6 +63,8 @@
 - `a_share_selection_paths.py`
 
 直接复用 Python 代码时，需要将本目录加入 `PYTHONPATH` 或 `sys.path`。不要把内部 helper 的导入路径当成稳定 package API。
+
+HTML 报告模块是当前最大维护热点：`a_share_selection_html_sections.py`、`a_share_selection_html_scripts.py`、`a_share_selection_html_candidate_master.py` 只能继续作为展示层 helper 拆分，不能把候选事实、门禁判断或机器字段来源移动进 HTML 展示层。后续拆分时保留 `run_today_a_share_selection.py` 和 `report.html` 输出契约不变。
 
 ## 判定规则
 

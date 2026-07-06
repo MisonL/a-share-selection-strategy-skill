@@ -11,7 +11,7 @@
 | Skill | [../SKILL.md](../SKILL.md) | Agent | 触发场景、任务拓扑、控制合同和硬边界 |
 | 脚本分层 | [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) | Agent 和实操者 | 稳定 CLI、取数入口、门禁回测入口和 helper 边界 |
 | 脚本参考 | [script-reference.md](script-reference.md) | Agent 和实操者 | 配置文件、依赖、数据源能力边界、字段映射、输入契约和命令细节 |
-| 机器配置 | `../configs/data_sources.json` | Agent 和测试 | 数据源能力注册表；只用于审计和一致性检查，不做运行时自动选源 |
+| 机器配置 | `../configs/data_sources.json`、`../configs/script_entrypoints.json` | Agent 和测试 | 数据源能力和脚本入口注册表；只用于审计和一致性检查，不做运行时自动选源或脚本 dispatch |
 | 手册 | [../instructions/runbook.md](../instructions/runbook.md) | 实操者和 Agent | 完整 demo、联网取数、P1/P2/P3 门禁命令 |
 | 工作流 | [../instructions/full-a-strict-workflow.md](../instructions/full-a-strict-workflow.md) | Agent | 全 A / 全市场真实任务的主路径、批次策略和失败恢复 |
 | 专题 | [factor-framework.md](factor-framework.md)、[prediction-derived-profile.md](prediction-derived-profile.md) | 实现者和审查者 | 因子公式、预测列口径、评分边界 |
@@ -29,6 +29,7 @@
 | 查 CLI 入口或 helper 边界 | [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) | 需要配置、依赖或字段映射时读 [script-reference.md](script-reference.md) |
 | 判断数据源免费边界、字段范围和全 A 适用性 | [script-reference.md](script-reference.md) 的“数据源能力边界” | 全 A 主路径再读 [../instructions/full-a-strict-workflow.md](../instructions/full-a-strict-workflow.md) 的“数据源能力矩阵” |
 | 机器校验数据源能力是否漂移 | `../configs/data_sources.json` | 再对照 [script-reference.md](script-reference.md) 和 [../instructions/full-a-strict-workflow.md](../instructions/full-a-strict-workflow.md) |
+| 机器校验脚本入口分类是否漂移 | `../configs/script_entrypoints.json` | 再对照 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) |
 | 查配置、依赖或字段映射 | [script-reference.md](script-reference.md) | 只在需要复制完整命令时读 [../instructions/runbook.md](../instructions/runbook.md) |
 | 解释 stdout、summary、manifest、失败门禁 | [../templates/output-templates.md](../templates/output-templates.md) | 命中低频场景时读对应 `../templates/output-templates-*.md` |
 | 查真实场景证据和边界 | [../evidence/reviews/REAL-SCENARIO-GATES-2026-05-30.md](../evidence/reviews/REAL-SCENARIO-GATES-2026-05-30.md) | 各 `../evidence/reviews/P1-*` 和 `../evidence/reviews/P2A-*` 报告 |

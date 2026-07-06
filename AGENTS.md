@@ -36,6 +36,8 @@ python3 validate_skill_changes.py
 
 该入口只覆盖本地仓库门禁，不证明真实行情、真实 prediction、券商订单或真实回测门禁通过。若需要拆开执行，对应命令如下:
 
+以下拆分命令是 `validate_skill_changes.py` 的人工展开视图；新增或调整本地门禁时，先更新仓库根验证脚本，再同步本节和 runbook。
+
 ```bash
 for file in skills/a-share-selection-strategy/evals/*.json skills/a-share-selection-strategy/configs/*.json; do
   python3 -m json.tool "$file" >/tmp/"$(basename "$file")"

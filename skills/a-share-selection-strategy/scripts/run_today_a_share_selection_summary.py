@@ -127,11 +127,22 @@ def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:
     failed = [
         step
         for step in manifest["steps"]
-        if step["returncode"] not in step["allowed_returncodes"]
+        if helpers.step_executed(step)
+        and step.get("returncode") not in step.get("allowed_returncodes", [])
     ]
     return {
         "runner": manifest["runner"],
         "status": status,
+        "execution_mode": manifest.get("execution_mode", "execute"),
+        "commands_executed": bool(manifest.get("commands_executed", False)),
+        "plan_only": bool(manifest.get("plan_only", False)),
+        "resume_from": manifest.get("resume_from", ""),
+        "resume_symbol_source": manifest.get("resume_symbol_source", ""),
+        "resume_retry_symbol_count": manifest.get("resume_retry_symbol_count", 0),
+        "resume_sensitive_options_requiring_explicit_input": manifest.get(
+            "resume_sensitive_options_requiring_explicit_input",
+            [],
+        ),
         "execution_path": manifest.get("execution_path", "unresolved"),
         "execution_path_reason": manifest.get("execution_path_reason", ""),
         "coverage_class": manifest.get("coverage_class", "unknown"),
@@ -224,9 +235,9 @@ def row_count_fields(
         "candidate_rows": row_count(paths["candidates"], initialized),
         "diagnostic_rows": row_count(paths["diagnostics"], initialized),
         "spot_output": str(paths["spot"]) if paths["spot"] else "",
-        "spot_output_written": initialized and paths["spot"] is not None and paths["spot"].exists(),
+        "spot_output_written": output_file_written(paths["spot"], initialized),
         "spot_metadata_output": str(paths["spot_metadata"]),
-        "spot_metadata_output_written": initialized and paths["spot_metadata"].exists(),
+        "spot_metadata_output_written": output_file_written(paths["spot_metadata"], initialized),
     }
 
 
@@ -244,23 +255,29 @@ def row_count(path: Path, initialized: bool) -> int:
 def output_path_fields(paths: dict[str, Path], initialized: bool) -> dict[str, Any]:
     return {
         "prices_output": str(paths["prices"]),
-        "prices_output_written": initialized and paths["prices"].exists(),
+        "prices_output_written": output_file_written(paths["prices"], initialized),
         "candidates_output": str(paths["candidates"]),
-        "candidates_output_written": initialized and paths["candidates"].exists(),
+        "candidates_output_written": output_file_written(paths["candidates"], initialized),
         "diagnostics_output": str(paths["diagnostics"]),
-        "diagnostics_output_written": initialized and paths["diagnostics"].exists(),
+        "diagnostics_output_written": output_file_written(paths["diagnostics"], initialized),
         "selected_symbols_output": str(paths["selected_symbols"]),
-        "selected_symbols_output_written": initialized and paths["selected_symbols"].exists(),
+        "selected_symbols_output_written": output_file_written(paths["selected_symbols"], initialized),
         "history_metadata_output": str(paths["history_metadata"]),
-        "history_metadata_output_written": initialized and paths["history_metadata"].exists(),
+        "history_metadata_output_written": output_file_written(paths["history_metadata"], initialized),
         "summary_output": str(paths["summary"]),
-        "summary_output_written": initialized and paths["summary"].exists(),
+        "summary_output_written": output_file_written(paths["summary"], initialized),
         "manifest_output": str(paths["manifest"]),
-        "manifest_output_written": initialized and paths["manifest"].exists(),
+        "manifest_output_written": output_file_written(paths["manifest"], initialized),
     }
 
 
+def output_file_written(path: Path | None, initialized: bool) -> bool:
+    return bool(initialized and path is not None and path.is_file())
+
+
 def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
+    if not manifest.get("run_outputs_initialized"):
+        return {}
     output_dir = Path(manifest["output_dir"])
     selected_path = output_dir / "selected_symbols.json"
     metadata_path = output_dir / "history_metadata.json"
@@ -311,9 +328,9 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
         "history_metadata_symbol_providers": symbol_providers(metadata),
         **date_range,
         "selected_symbols_output": str(selected_path),
-        "selected_symbols_output_written": selected_path.exists(),
+        "selected_symbols_output_written": selected_path.is_file(),
         "history_metadata_output": str(metadata_path),
-        "history_metadata_output_written": metadata_path.exists(),
+        "history_metadata_output_written": metadata_path.is_file(),
     }
     if "adjust" in metadata:
         view["history_adjust"] = metadata["adjust"]
@@ -380,14 +397,14 @@ def history_selection_available(
     metadata_path: Path,
 ) -> bool:
     return (
-        selected_path.exists()
-        or metadata_path.exists()
+        selected_path.is_file()
+        or metadata_path.is_file()
         or bool(manifest.get("history_symbols"))
     )
 
 
 def read_json_if_exists(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
 
 
 def selected_symbol_values(

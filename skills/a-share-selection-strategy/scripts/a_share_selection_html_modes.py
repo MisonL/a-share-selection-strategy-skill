@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from a_share_selection_html_format import bilingual, i18n
+from run_today_a_share_selection_helpers import step_executed
 from run_today_a_share_selection_input_metadata import is_synthetic_demo
 
 
@@ -170,6 +171,8 @@ def scoring_step_failed(summary: dict[str, Any]) -> bool:
     for step in summary.get("_html_steps", []):
         if step.get("step") != "score":
             continue
+        if not step_executed(step):
+            return False
         allowed = step.get("allowed_returncodes", [])
         return step.get("returncode") not in allowed
     return False
@@ -204,6 +207,8 @@ def prediction_scoring_completed(summary: dict[str, Any]) -> bool:
     for step in summary.get("_html_steps", []):
         if step.get("step") != "score":
             continue
+        if not step_executed(step):
+            return False
         allowed = step.get("allowed_returncodes", [])
         return step.get("returncode") in allowed
     return False

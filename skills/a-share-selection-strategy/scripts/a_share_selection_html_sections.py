@@ -1253,8 +1253,12 @@ def advice_alerts(summary: dict[str, Any], language: str) -> list[str]:
 
 def input_metadata_alerts(summary: dict[str, Any], language: str) -> list[str]:
     metadata = summary.get("input_metadata", {})
-    if not isinstance(metadata, dict) or is_synthetic_demo(metadata):
+    if not isinstance(metadata, dict):
         return []
+    if is_synthetic_demo(metadata):
+        en = "Synthetic demo data; not real market data and not a live recommendation."
+        zh = "合成 demo 数据；不是真实行情，也不是实盘推荐。"
+        return [bilingual(en, zh, language)]
     alerts = []
     if local_real_market_unknown(summary, metadata):
         en = "Real market data is unknown; the local file is not proof of real A-share market data."

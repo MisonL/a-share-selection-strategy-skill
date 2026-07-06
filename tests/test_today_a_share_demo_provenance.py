@@ -86,6 +86,7 @@ class TodayAShareDemoProvenanceTests(unittest.TestCase):
         self.assertIn("Complete Candidate Table", report)
         self.assertIn("Synthetic demo data", report)
         self.assertIn("not real market data", report)
+        self.assertIn("not a live recommendation", report)
         self.assertIn("Source type", report)
         self.assertIn("synthetic_demo", report)
         self.assertIn("Real market data", report)
@@ -244,6 +245,7 @@ class TodayAShareDemoProvenanceTests(unittest.TestCase):
         self.assertFalse(summary["real_market_data"])
         self.assertIn("Synthetic demo data", report)
         self.assertIn("not real market data", report)
+        self.assertIn("not a live recommendation", report)
 
 
 def csv_rows(path: Path) -> list[dict[str, str]]:

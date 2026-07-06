@@ -173,6 +173,12 @@ def boundary_for(manifest: dict[str, Any]) -> str:
     )
 
 
+def option_configured(value: Any) -> bool:
+    if value is False:
+        return False
+    return value is not None and value != ""
+
+
 def score_summary(manifest: dict[str, Any]) -> dict[str, Any]:
     for step in reversed(manifest["steps"]):
         if step["step"] == "score":
@@ -246,6 +252,16 @@ def same_existing_path(left: Path, right: Path) -> bool:
         return left.samefile(right)
     except OSError:
         return False
+
+
+def same_path_or_existing_file(left: Path, right: Path) -> bool:
+    if same_existing_path(left, right):
+        return True
+    return left.expanduser().resolve(strict=False) == right.expanduser().resolve(strict=False)
+
+
+def step_executed(step: dict[str, Any]) -> bool:
+    return step.get("executed", True) is not False
 
 
 def print_summary(manifest: dict[str, Any], output: Path) -> None:

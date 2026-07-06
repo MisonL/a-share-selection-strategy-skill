@@ -17,6 +17,7 @@ from a_share_selection_model_contracts import (
     TRADABILITY_MODEL_ENTRY_EXIT,
     TRADABILITY_MODEL_HOLDING_PERIOD,
 )
+from a_share_selection_command_safety import sanitize_command, sanitize_text
 from a_share_selection_paths import SCRIPTS_DIR, config_path
 from a_share_selection_symbols import parse_six_digit_symbols
 from walk_forward_portfolio_commands import ALLOCATION_MODEL_EQUAL, ALLOCATION_MODEL_PORTFOLIO, portfolio_allocate_command
@@ -268,11 +269,11 @@ def run_step(context: RunContext, step: Step) -> None:
 def step_record(step: Step, result: subprocess.CompletedProcess[str]) -> dict[str, Any]:
     return {
         "step": step.name,
-        "command": step.command,
+        "command": sanitize_command(step.command),
         "returncode": result.returncode,
         "allowed_returncodes": list(step.allowed),
-        "stdout": result.stdout,
-        "stderr": result.stderr,
+        "stdout": sanitize_text(result.stdout),
+        "stderr": sanitize_text(result.stderr),
     }
 
 

@@ -119,8 +119,11 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--output-dir",
                 "--mode",
                 "--config",
+                "--plan-only",
+                "--resume-from",
                 "--history-source",
                 "--symbols",
+                "--symbols-file",
                 "--start-date",
                 "--end-date",
                 "--derive-symbols-from-spot",
@@ -202,6 +205,14 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 CALENDAR_MODEL,
                 "pandas.bdate_range",
                 "not an exchange trading calendar",
+            },
+            "prepare_history_retry_symbols.py": {
+                "--selected-symbols",
+                "--history-metadata",
+                "--output",
+                "--symbols-output",
+                "--include-clean-selected",
+                "does not prove full-market completion",
             },
             "summarize_walk_forward_run.py": WALK_FORWARD_MODEL_OPTIONS
             | WALK_FORWARD_CAPACITY_OPTIONS

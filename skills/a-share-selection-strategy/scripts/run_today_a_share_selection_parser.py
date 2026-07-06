@@ -45,6 +45,21 @@ def add_core_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--output-dir", required=True, help="Output run directory.")
     parser.add_argument("--mode", choices=["auto", "generic", "prediction"], default="auto")
     parser.add_argument("--config", help="Override scoring config path.")
+    parser.add_argument(
+        "--plan-only",
+        action="store_true",
+        help=(
+            "Write an auditable execution plan and summary without running fetch, "
+            "validate, or score commands."
+        ),
+    )
+    parser.add_argument(
+        "--resume-from",
+        help=(
+            "Previous run_manifest.json or run directory. The runner rebuilds a "
+            "retry symbol list from prior selected_symbols.json and history_metadata.json."
+        ),
+    )
 
 
 def add_spot_options(parser: argparse.ArgumentParser) -> None:
@@ -77,6 +92,13 @@ def add_history_options(parser: argparse.ArgumentParser) -> None:
             "six-digit symbols; akshare_hk_daily accepts HK codes; yfinance "
             "accepts provider tickers and maps HK codes to Yahoo suffix form "
             "when the config market is HK."
+        ),
+    )
+    parser.add_argument(
+        "--symbols-file",
+        help=(
+            "Text file containing comma-separated or newline-separated symbols for "
+            "history fetch; mutually exclusive with --symbols."
         ),
     )
     parser.add_argument("--start-date", help="History start date.")

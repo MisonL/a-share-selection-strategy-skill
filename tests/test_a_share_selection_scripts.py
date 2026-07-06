@@ -1004,19 +1004,28 @@ class AShareSelectionScriptTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "prices.csv"
             output_path = Path(tmpdir) / "prediction_low_pred.csv"
+            diagnostics_path = Path(tmpdir) / "prediction_low_pred_diagnostics.csv"
             frame.to_csv(input_path, index=False)
             code, stdout, stderr = run_score_cli(
                 input_path,
                 output_path,
                 config_name="prediction_profile_config.json",
+                extra_args=["--diagnostics-output", str(diagnostics_path)],
             )
             self.assertEqual(0, code, stderr)
             self.assertTrue(output_path.exists())
+            self.assertTrue(diagnostics_path.exists())
             self.assertIn("effective_empty_result=true", stdout)
             self.assertIn("empty_result_reason=threshold_filtered_all", stdout)
             self.assertIn("candidates=0", stdout)
             self.assertIn("prediction_source=external_unverified", stdout)
             self.assertIn("prediction_model_executed_by_score_script=false", stdout)
+            diagnostics = pd.read_csv(diagnostics_path, dtype={"symbol": str})
+            self.assertEqual({True}, set(diagnostics["effective_empty_result"]))
+            self.assertEqual(
+                {"threshold_filtered_all"},
+                set(diagnostics["empty_result_reason"]),
+            )
 
 if __name__ == "__main__":
     unittest.main()

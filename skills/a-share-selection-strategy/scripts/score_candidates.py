@@ -29,6 +29,8 @@ OUTPUT_COLUMNS = [
     "prediction_model_executed_by_score_script",
     "lightgbm_not_executed_by_this_script",
     "volume_unit_verification",
+    "effective_empty_result",
+    "empty_result_reason",
     "explosion_score", "risk_score", "total_score", "ma15",
     "low_ma15_flag", "explosion_focus_flag", "low_price_explosion_flag",
     "signal_tier", "recommendation", "advice_boundary", "recommendation_boundary",
@@ -247,10 +249,12 @@ def score_candidates(
         config=config,
     )
     ranked = rank_and_limit(thresholded, config)
+    summary = complete_summary(summary, len(ranked))
     summary["threshold_diagnostics"] = threshold_diagnostics(
         scored=scored,
         ranked=ranked,
         config=config,
+        result_summary=summary,
     )
     return ranked_result(ranked, summary)
 
@@ -269,7 +273,7 @@ def ranked_result(
     ranked: pd.DataFrame,
     summary: dict[str, Any],
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
-    return ensure_output_columns(ranked), complete_summary(summary, len(ranked))
+    return ensure_output_columns(add_result_audit_columns(ranked, summary)), summary
 
 
 def score_groups(
@@ -358,6 +362,16 @@ def ensure_output_columns(frame: pd.DataFrame) -> pd.DataFrame:
         if column not in frame.columns:
             frame[column] = pd.NA
     return frame[OUTPUT_COLUMNS]
+
+
+def add_result_audit_columns(
+    frame: pd.DataFrame,
+    summary: dict[str, Any],
+) -> pd.DataFrame:
+    frame = frame.copy()
+    frame["effective_empty_result"] = bool(summary.get("effective_empty_result", False))
+    frame["empty_result_reason"] = summary.get("empty_result_reason", "none")
+    return frame
 
 
 def write_output(frame: pd.DataFrame, path: Path) -> None:

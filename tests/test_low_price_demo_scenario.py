@@ -71,6 +71,10 @@ class LowPriceDemoScenarioTests(unittest.TestCase):
         self.assertEqual(0, code, stderr)
         self.assertIn("threshold_failures=", stdout)
         self.assertEqual({"000002"}, set(candidates["symbol"]))
+        self.assertEqual({False}, set(candidates["effective_empty_result"]))
+        self.assertEqual({"none"}, set(candidates["empty_result_reason"]))
+        self.assertEqual({False}, set(diagnostics["effective_empty_result"]))
+        self.assertEqual({"none"}, set(diagnostics["empty_result_reason"]))
         failures = failure_map(diagnostics)
         expected_failures = {
             "000003": "max_close",

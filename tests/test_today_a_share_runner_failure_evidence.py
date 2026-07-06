@@ -17,10 +17,23 @@ sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(TESTS))
 
 import run_today_a_share_selection as runner  # noqa: E402
+from run_today_a_share_selection_summary import run_identity  # noqa: E402
 from helpers import build_frame  # noqa: E402
 
 
 class TodayAShareRunnerFailureEvidenceTests(unittest.TestCase):
+    def test_run_identity_defaults_missing_commands_executed_to_false(self) -> None:
+        identity = run_identity(
+            {
+                "runner": "run_today_a_share_selection",
+                "steps": [],
+                "mode": "generic",
+            },
+            "failed",
+        )
+
+        self.assertFalse(identity["commands_executed"])
+
     def test_preflight_error_reports_summary_and_manifest_only(self) -> None:
         frame = build_frame(include_turn=True, include_tradability=True)
         with tempfile.TemporaryDirectory() as tmpdir:

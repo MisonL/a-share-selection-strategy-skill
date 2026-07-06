@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 from typing import Any
 
+from a_share_selection_command_safety import sanitize_text
 from a_share_selection_config import load_config
 from a_share_selection_paths import resolve_config_path
 
@@ -203,19 +204,31 @@ def initial_manifest(args: Any) -> dict[str, Any]:
         "mode_decision_reason": "",
         "prices_input": str(Path(args.prices_input)) if args.prices_input else "",
         "output_dir": str(Path(args.output_dir)),
+        "execution_mode": "plan_only" if getattr(args, "plan_only", False) else "execute",
+        "commands_executed": False,
+        "plan_only": bool(getattr(args, "plan_only", False)),
+        "resume_from": str(Path(args.resume_from)) if getattr(args, "resume_from", None) else "",
+        "resume_symbol_source": getattr(args, "resume_symbol_source", ""),
+        "resume_retry_symbol_count": int(getattr(args, "resume_retry_symbol_count", 0)),
+        "resume_inherited_options": list(getattr(args, "resume_inherited_options", [])),
+        "resume_sensitive_options_requiring_explicit_input": list(
+            getattr(args, "resume_sensitive_options_requiring_explicit_input", [])
+        ),
+        "resume_prior_output_dir": getattr(args, "resume_prior_output_dir", ""),
         "config_path": "",
         "spot_input": str(Path(args.spot_input)) if args.spot_input else "",
         "fetch_spot": args.fetch_spot or "",
         "spot_pages": int(args.spot_pages),
         "history_source": args.history_source or "",
         "symbols": args.symbols or "",
+        "symbols_file": str(Path(args.symbols_file)) if getattr(args, "symbols_file", None) else "",
         "derive_symbols_from_spot": bool(args.derive_symbols_from_spot),
         "max_history_symbols": int(args.max_history_symbols),
         "max_history_symbols_supplied": bool(
             getattr(args, "max_history_symbols_supplied", False)
         ),
         "history_adjust": args.history_adjust or "",
-        "history_http_url": args.history_http_url or "",
+        "history_http_url": sanitize_text(args.history_http_url or ""),
         "history_timeout_seconds": manifest_optional(args.history_timeout_seconds),
         "history_request_interval_seconds": manifest_optional(
             args.history_request_interval_seconds,

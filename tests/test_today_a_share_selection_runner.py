@@ -26,7 +26,10 @@ from run_today_a_share_selection_helpers import (  # noqa: E402
     spot_rows,
     tabular_row_count,
 )
-from run_today_a_share_selection_history import parse_history_symbols  # noqa: E402
+from run_today_a_share_selection_history import (  # noqa: E402
+    parse_history_symbols,
+    read_symbols_file,
+)
 from run_today_a_share_selection_outputs import clear_stale_run_outputs  # noqa: E402
 from helpers import build_frame, load_config  # noqa: E402
 
@@ -397,6 +400,65 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             self.assertFalse(summary["candidates_output_written"])
             self.assertFalse(summary["diagnostics_output_written"])
 
+    def test_cleanup_failure_directory_is_not_reported_as_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "run"
+            output.mkdir()
+            (output / "selected_symbols.json").write_text(
+                json.dumps(
+                    {
+                        "source": "stale_previous_run",
+                        "selected_symbols": ["600000"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (output / "history_metadata.json").write_text(
+                json.dumps(
+                    {
+                        "empty_symbols": ["600000"],
+                        "output_written": True,
+                        "metadata_output_written": True,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (output / "candidates.csv").mkdir()
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "zzshare",
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--history-limit",
+                    "0",
+                    "--no-html-report",
+                ]
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(2, code)
+        self.assertIn("stale run output path is a directory", stderr)
+        self.assertEqual("IsADirectoryError", manifest["run_error_type"])
+        self.assertEqual("IsADirectoryError", manifest["stale_cleanup_error_type"])
+        self.assertFalse(manifest.get("run_outputs_initialized", False))
+        self.assertFalse(summary["candidates_output_written"])
+        self.assertEqual(0, summary["candidate_rows"])
+        self.assertEqual({}, summary["history_selection"])
+        self.assertEqual(0, summary["history_symbol_count"])
+        self.assertNotIn("stale_previous_run", json.dumps(summary))
+        self.assertNotIn("600000", json.dumps(summary["history_selection"]))
+        self.assertTrue(summary["summary_output_written"])
+        self.assertTrue(summary["manifest_output_written"])
+
     def test_auto_runner_uses_prediction_when_prediction_columns_exist(self) -> None:
         frame = build_frame(include_prediction=True, include_turn=True)
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -480,6 +542,32 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             self.assertIn("html_report=disabled", stdout)
             self.assertNotIn(f"html_report={output / 'report.html'}", stdout)
             self.assertFalse((output / "report.html").exists())
+            self.assertFalse(summary["html_report_written"])
+
+            stale_report = output / "report.html"
+            stale_report.write_text("stale report", encoding="utf-8")
+            code, _stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "baostock",
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--no-html-report",
+                ]
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(2, code, stderr)
+            self.assertIn("history fetch options would be ignored", stderr)
+            self.assertFalse(stale_report.exists())
             self.assertFalse(summary["html_report_written"])
 
     def test_html_report_write_failure_does_not_block_success_summary(self) -> None:
@@ -740,6 +828,113 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("4", fetch_step["command"])
         self.assertEqual("zzshare", manifest["history_source"])
         self.assertEqual("zzshare_history_fetch", manifest["source_scope"])
+
+    def test_runner_redacts_sensitive_step_artifacts_in_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "zzshare",
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--history-http-url",
+                    "https://example.test/api?token=placeholder-token-value",
+                    "--no-html-report",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args,
+                manifest,
+                output / "run_manifest.json",
+                sensitive_history_executor,
+            )
+
+            runner.run_pipeline(context)
+            saved = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+
+        text = json.dumps(saved)
+        self.assertEqual(
+            "https://example.test/api?token=%5BREDACTED%5D",
+            saved["history_http_url"],
+        )
+        self.assertIn("[REDACTED]", text)
+        self.assertNotIn("placeholder-token-value", text)
+        self.assertNotIn("placeholder-secret-value", text)
+        self.assertNotIn("placeholder-api-key-value", text)
+
+    def test_runner_redacts_sensitive_generic_failure_message(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+            original_apply_resume_from = runner.apply_resume_from
+            runner.apply_resume_from = sensitive_preflight_failure
+            try:
+                code, _stdout, stderr = call_runner(
+                    [
+                        "--prices-input",
+                        str(prices),
+                        "--output-dir",
+                        str(output),
+                        "--no-html-report",
+                    ]
+                )
+            finally:
+                runner.apply_resume_from = original_apply_resume_from
+            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(2, code)
+        self.assertIn("[REDACTED]", stderr)
+        self.assertNotIn("placeholder-token-value", stderr)
+        self.assertNotIn("placeholder-api-key-value", stderr)
+        self.assertEqual(manifest["run_error"], summary["run_error"])
+        self.assertIn("[REDACTED]", summary["run_error"])
+        self.assertNotIn("placeholder-token-value", summary["run_error"])
+        self.assertNotIn("placeholder-api-key-value", summary["run_error"])
+
+    def test_runner_redacts_sensitive_step_failure_stderr_in_cli_error(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+            original_run_command = runner.run_command
+            runner.run_command = sensitive_failure_executor
+            try:
+                code, _stdout, stderr = call_runner(
+                    [
+                        "--prices-input",
+                        str(prices),
+                        "--output-dir",
+                        str(output),
+                        "--no-html-report",
+                    ]
+                )
+            finally:
+                runner.run_command = original_run_command
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(3, code)
+        self.assertIn("step=validate", stderr)
+        self.assertIn("[REDACTED]", stderr)
+        self.assertNotIn("placeholder-token-value", stderr)
+        self.assertNotIn("placeholder-api-key-value", stderr)
+        failed = summary["failed_step_details"][0]["stderr_first_line"]
+        self.assertIn("[REDACTED]", failed)
+        self.assertNotIn("placeholder-token-value", failed)
+        self.assertNotIn("placeholder-api-key-value", failed)
 
     def test_runner_accepts_yfinance_hk_history_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1386,6 +1581,22 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             self.assertTrue(source.exists())
             self.assertTrue(stale_alias.exists())
 
+    def test_stale_cleanup_preserves_symbols_file_inside_output_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            symbols_file = output / "retry_symbols.txt"
+            symbols_file.write_text("000001\n600000\n", encoding="utf-8")
+            args = SimpleNamespace(
+                prices_input=None,
+                spot_input=None,
+                fetch_spot=None,
+                symbols_file=str(symbols_file),
+            )
+
+            clear_stale_run_outputs(args, output)
+
+            self.assertEqual("000001\n600000\n", symbols_file.read_text(encoding="utf-8"))
+
     def test_runner_builds_history_fetch_before_validate_when_prices_are_omitted(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
@@ -1415,6 +1626,665 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual("baostock_history_fetch", manifest["source_scope"])
         self.assertEqual(["000001", "600000"], manifest["history_symbols"])
         self.assertIn("--fail-on-fetch-error", manifest["steps"][0]["command"])
+
+    def test_runner_accepts_symbols_file_for_history_fetch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output = root / "run"
+            symbols_file = root / "symbols.txt"
+            symbols_file.write_text("000001\n600000\n000001\n", encoding="utf-8")
+            args = parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "baostock",
+                    "--symbols-file",
+                    str(symbols_file),
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                ]
+            )
+            manifest = runner.initial_manifest(args)
+            context = runner.RunContext(
+                args,
+                manifest,
+                output / "run_manifest.json",
+                history_metadata_executor,
+            )
+
+            runner.run_pipeline(context)
+            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+
+        fetch_history = manifest["steps"][0]
+        self.assertEqual(["000001", "600000"], manifest["history_symbols"])
+        self.assertEqual("explicit_symbols_file", selected["source"])
+        self.assertEqual(["000001", "600000"], selected["symbols"])
+        self.assertEqual(str(symbols_file), selected["symbols_file"])
+        self.assertEqual(str(symbols_file), manifest["symbols_file"])
+        self.assertEqual(
+            "history_fetch_explicit_symbols_file_generic",
+            manifest["execution_path"],
+        )
+        self.assertEqual("explicit_symbols_file", manifest["execution_path_reason"])
+        self.assertIn("000001,600000", fetch_history["command"])
+
+    def test_read_symbols_file_rejects_empty_symbol_content(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            symbols_file = Path(tmpdir) / "symbols.txt"
+            symbols_file.write_text(" \n,\n\t\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "symbols file is empty"):
+                read_symbols_file(symbols_file)
+
+    def test_read_symbols_file_normalizes_crlf_newlines(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            symbols_file = Path(tmpdir) / "symbols.txt"
+            symbols_file.write_text("000001\r\n600000\r300001\n", encoding="utf-8")
+
+            text = read_symbols_file(symbols_file)
+
+        self.assertEqual("000001,600000,300001", text)
+        self.assertNotIn("\r", text)
+
+    def test_read_symbols_file_strips_utf8_bom(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            symbols_file = Path(tmpdir) / "symbols.txt"
+            symbols_file.write_text("\ufeff000001\n600000\n", encoding="utf-8")
+
+            text = read_symbols_file(symbols_file)
+
+        self.assertEqual("000001,600000", text)
+        self.assertNotIn("\ufeff", text)
+
+    def test_read_symbols_file_reports_non_utf8_encoding(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            symbols_file = Path(tmpdir) / "symbols.txt"
+            symbols_file.write_text("000001\n600000\n", encoding="utf-16")
+
+            with self.assertRaisesRegex(ValueError, "not valid UTF-8"):
+                read_symbols_file(symbols_file)
+
+    def test_runner_rejects_symbols_and_symbols_file_together(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            symbols_file = root / "symbols.txt"
+            symbols_file.write_text("000001\n", encoding="utf-8")
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    str(root / "run"),
+                    "--history-source",
+                    "baostock",
+                    "--symbols",
+                    "000001",
+                    "--symbols-file",
+                    str(symbols_file),
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--no-html-report",
+                ]
+            )
+
+        self.assertEqual(2, code)
+        self.assertIn("use either --symbols or --symbols-file", stderr)
+
+    def test_runner_rejects_symbols_file_that_collides_with_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "run"
+            output.mkdir()
+            symbols_file = output / "selected_symbols.json"
+            original = "000001\n600000\n"
+            symbols_file.write_text(original, encoding="utf-8")
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "baostock",
+                    "--symbols-file",
+                    str(symbols_file),
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--plan-only",
+                    "--no-html-report",
+                ]
+            )
+
+            self.assertEqual(2, code)
+            self.assertIn("--symbols-file must not point to runner output path", stderr)
+            self.assertEqual(original, symbols_file.read_text(encoding="utf-8"))
+
+    def test_runner_plan_only_writes_steps_without_executing_commands(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+
+            code, stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--output-dir",
+                    str(output),
+                    "--plan-only",
+                    "--no-html-report",
+                ]
+            )
+
+            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(0, code, stderr)
+        self.assertIn("steps=2", stdout)
+        self.assertEqual("planned", summary["status"])
+        self.assertEqual("plan_only", manifest["execution_mode"])
+        self.assertFalse(manifest["commands_executed"])
+        self.assertTrue(manifest["plan_only"])
+        self.assertEqual(["validate", "score"], [step["step"] for step in manifest["steps"]])
+        self.assertTrue(all(step["planned"] for step in manifest["steps"]))
+        self.assertTrue(all(not step["executed"] for step in manifest["steps"]))
+        self.assertTrue(all(step["returncode"] is None for step in manifest["steps"]))
+        self.assertEqual([], summary["failed_steps"])
+        self.assertFalse((output / "candidates.csv").exists())
+        self.assertFalse(summary["candidates_output_written"])
+        self.assertEqual(0, summary["candidate_rows"])
+        self.assertEqual(len(frame), summary["prices_rows"])
+
+    def test_runner_preflight_failure_does_not_mark_commands_executed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "run"
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "baostock",
+                    "--symbols",
+                    "000001",
+                    "--no-html-report",
+                ]
+            )
+
+            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(2, code)
+        self.assertIn("missing required history options", stderr)
+        self.assertFalse(manifest["commands_executed"])
+        self.assertFalse(summary["commands_executed"])
+        self.assertEqual([], manifest["steps"])
+
+    def test_runner_plan_only_fetched_spot_derivation_uses_placeholder(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "run"
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "baostock",
+                    "--fetch-spot",
+                    "eastmoney",
+                    "--derive-symbols-from-spot",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--plan-only",
+                    "--no-html-report",
+                ]
+            )
+
+            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(0, code, stderr)
+        self.assertFalse(manifest["commands_executed"])
+        self.assertEqual(["<derived_from_spot_snapshot>"], manifest["history_symbols"])
+        self.assertEqual(
+            ["fetch_spot", "fetch_history", "validate", "score"],
+            [step["step"] for step in manifest["steps"]],
+        )
+        self.assertIn("<derived_from_spot_snapshot>", manifest["steps"][1]["command"])
+        self.assertFalse((output / "selected_symbols.json").exists())
+        self.assertFalse((output / "history_metadata.json").exists())
+
+    def test_runner_resume_from_uses_prior_retry_symbols(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            previous = root / "previous"
+            output = root / "resume"
+            previous.mkdir()
+            (previous / "run_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "output_dir": str(previous),
+                        "history_source": "baostock",
+                        "start_date": "2025-01-01",
+                        "end_date": "2026-01-01",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (previous / "selected_symbols.json").write_text(
+                json.dumps(
+                    {
+                        "symbols": ["000001", "000002", "600000", "600001"],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (previous / "history_metadata.json").write_text(
+                json.dumps(
+                    {
+                        "failed_symbols": [{"symbol": "000002", "error": "timeout"}],
+                        "empty_symbols": ["600000"],
+                        "possibly_truncated_symbols": ["600001"],
+                        "invalid_symbols": ["600001"],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--resume-from",
+                    str(previous / "run_manifest.json"),
+                    "--plan-only",
+                    "--no-html-report",
+                ]
+            )
+
+            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(0, code, stderr)
+        self.assertEqual("planned", summary["status"])
+        self.assertEqual("prior_history_retry_plan", manifest["resume_symbol_source"])
+        self.assertEqual(2, manifest["resume_retry_symbol_count"])
+        self.assertEqual(["000002", "600000"], manifest["history_symbols"])
+        self.assertEqual("000002,600000", manifest["symbols"])
+        self.assertEqual("baostock", manifest["history_source"])
+        self.assertEqual("2025-01-01", manifest["start_date"])
+        self.assertEqual("2026-01-01", manifest["end_date"])
+        self.assertEqual("resume_retry_symbols", selected["source"])
+        self.assertEqual(["000002", "600000"], selected["symbols"])
+        self.assertEqual(
+            "history_fetch_resume_retry_symbols_generic",
+            manifest["execution_path"],
+        )
+        fetch_history = manifest["steps"][0]
+        self.assertEqual("fetch_history", fetch_history["step"])
+        self.assertIn("000002,600000", fetch_history["command"])
+
+    def test_runner_resume_from_resolves_relative_output_dir_from_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            previous = root / "previous"
+            artifacts = previous / "artifacts"
+            output = root / "resume"
+            artifacts.mkdir(parents=True)
+            (previous / "run_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "output_dir": "artifacts",
+                        "history_source": "baostock",
+                        "start_date": "2025-01-01",
+                        "end_date": "2026-01-01",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (artifacts / "selected_symbols.json").write_text(
+                json.dumps({"symbols": ["000001", "000002"]}) + "\n",
+                encoding="utf-8",
+            )
+            (artifacts / "history_metadata.json").write_text(
+                json.dumps({"failed_symbols": ["000002"]}) + "\n",
+                encoding="utf-8",
+            )
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--resume-from",
+                    str(previous / "run_manifest.json"),
+                    "--plan-only",
+                    "--no-html-report",
+                ]
+            )
+
+            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(0, code, stderr)
+        self.assertEqual(str(artifacts), manifest["resume_prior_output_dir"])
+        self.assertEqual(["000002"], manifest["history_symbols"])
+
+    def test_resume_output_dir_uses_manifest_parent_when_relative_path_matches(self) -> None:
+        manifest_path = Path("/tmp/a-share-pass1/run_manifest.json")
+
+        output = runner.resume_output_dir(
+            {"output_dir": "a-share-pass1"},
+            manifest_path,
+        )
+
+        self.assertEqual(Path("/tmp/a-share-pass1"), output)
+
+    def test_resume_output_dir_uses_manifest_parent_for_nested_relative_suffix(self) -> None:
+        manifest_path = Path("/tmp/runs/pass1/run_manifest.json")
+
+        output = runner.resume_output_dir(
+            {"output_dir": "runs/pass1"},
+            manifest_path,
+        )
+
+        self.assertEqual(Path("/tmp/runs/pass1"), output)
+
+    def test_runner_resume_from_inherits_zzshare_fetch_options(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            previous = root / "previous"
+            output = root / "resume"
+            previous.mkdir()
+            (previous / "run_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "output_dir": str(previous),
+                        "history_source": "zzshare",
+                        "history_adjust": "hfq",
+                        "history_http_url": "https://example.test/api",
+                        "history_timeout_seconds": "8",
+                        "history_request_interval_seconds": "0.2",
+                        "history_limit": "500",
+                        "history_max_pages": "3",
+                        "start_date": "2025-01-01",
+                        "end_date": "2026-01-01",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (previous / "selected_symbols.json").write_text(
+                json.dumps({"symbols": ["000001", "000002"]}) + "\n",
+                encoding="utf-8",
+            )
+            (previous / "history_metadata.json").write_text(
+                json.dumps({"failed_symbols": ["000002"]}) + "\n",
+                encoding="utf-8",
+            )
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--resume-from",
+                    str(previous / "run_manifest.json"),
+                    "--plan-only",
+                    "--no-html-report",
+                ]
+            )
+
+            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(0, code, stderr)
+        self.assertEqual(
+            [
+                "history_source",
+                "start_date",
+                "end_date",
+                "history_adjust",
+                "history_timeout_seconds",
+                "history_request_interval_seconds",
+                "history_limit",
+                "history_max_pages",
+            ],
+            manifest["resume_inherited_options"],
+        )
+        self.assertEqual("zzshare", manifest["history_source"])
+        self.assertEqual("hfq", manifest["history_adjust"])
+        self.assertEqual("", manifest["history_http_url"])
+        self.assertEqual(
+            ["history_http_url"],
+            manifest["resume_sensitive_options_requiring_explicit_input"],
+        )
+        self.assertEqual(8.0, manifest["history_timeout_seconds"])
+        self.assertEqual(0.2, manifest["history_request_interval_seconds"])
+        self.assertEqual(500, manifest["history_limit"])
+        self.assertEqual(3, manifest["history_max_pages"])
+        fetch_history = manifest["steps"][0]["command"]
+        self.assertIn("--adjust", fetch_history)
+        self.assertIn("hfq", fetch_history)
+        self.assertNotIn("--http-url", fetch_history)
+        self.assertNotIn("https://example.test/api", fetch_history)
+
+    def test_runner_resume_from_inherits_yfinance_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            previous = root / "previous"
+            output = root / "resume"
+            previous.mkdir()
+            (previous / "run_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "output_dir": str(previous),
+                        "history_source": "yfinance",
+                        "history_timeout_seconds": "9.5",
+                        "start_date": "2025-01-01",
+                        "end_date": "2026-01-01",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (previous / "selected_symbols.json").write_text(
+                json.dumps({"symbols": ["MSFT", "AAPL"]}) + "\n",
+                encoding="utf-8",
+            )
+            (previous / "history_metadata.json").write_text(
+                json.dumps({"failed_symbols": ["MSFT"]}) + "\n",
+                encoding="utf-8",
+            )
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--resume-from",
+                    str(previous / "run_manifest.json"),
+                    "--plan-only",
+                    "--no-html-report",
+                ]
+            )
+
+            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(0, code, stderr)
+        self.assertEqual(
+            ["history_source", "start_date", "end_date", "history_timeout_seconds"],
+            manifest["resume_inherited_options"],
+        )
+        self.assertEqual("yfinance", manifest["history_source"])
+        self.assertEqual(9.5, manifest["history_timeout_seconds"])
+        fetch_history = manifest["steps"][0]["command"]
+        self.assertIn("fetch_yfinance_ohlcv.py", fetch_history[1])
+        self.assertIn("--timeout-seconds", fetch_history)
+        self.assertIn("9.5", fetch_history)
+
+    def test_runner_resume_from_does_not_inherit_source_specific_options_when_source_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            previous = root / "previous"
+            output = root / "resume"
+            previous.mkdir()
+            (previous / "run_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "output_dir": str(previous),
+                        "history_source": "zzshare",
+                        "history_adjust": "hfq",
+                        "history_http_url": "https://example.test/api",
+                        "history_timeout_seconds": "8",
+                        "history_request_interval_seconds": "0.2",
+                        "history_limit": "500",
+                        "history_max_pages": "3",
+                        "start_date": "2025-01-01",
+                        "end_date": "2026-01-01",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (previous / "selected_symbols.json").write_text(
+                json.dumps({"symbols": ["000001", "000002"]}) + "\n",
+                encoding="utf-8",
+            )
+            (previous / "history_metadata.json").write_text(
+                json.dumps({"failed_symbols": ["000002"]}) + "\n",
+                encoding="utf-8",
+            )
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--resume-from",
+                    str(previous / "run_manifest.json"),
+                    "--history-source",
+                    "baostock",
+                    "--plan-only",
+                    "--no-html-report",
+                ]
+            )
+
+            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(0, code, stderr)
+        self.assertEqual(["start_date", "end_date"], manifest["resume_inherited_options"])
+        self.assertEqual("baostock", manifest["history_source"])
+        self.assertEqual("", manifest["history_adjust"])
+        self.assertEqual("", manifest["history_http_url"])
+        fetch_history = manifest["steps"][0]["command"]
+        self.assertNotIn("--http-url", fetch_history)
+        self.assertNotIn("https://example.test/api", fetch_history)
+
+    def test_runner_resume_from_same_output_dir_reads_artifacts_before_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "run"
+            output.mkdir()
+            manifest_path = output / "run_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "output_dir": str(output),
+                        "history_source": "baostock",
+                        "start_date": "2025-01-01",
+                        "end_date": "2026-01-01",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (output / "selected_symbols.json").write_text(
+                json.dumps({"symbols": ["000001", "000002"]}) + "\n",
+                encoding="utf-8",
+            )
+            (output / "history_metadata.json").write_text(
+                json.dumps({"failed_symbols": ["000002"]}) + "\n",
+                encoding="utf-8",
+            )
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--resume-from",
+                    str(manifest_path),
+                    "--plan-only",
+                    "--no-html-report",
+                ]
+            )
+
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(0, code, stderr)
+        self.assertEqual(["000002"], manifest["history_symbols"])
+        self.assertEqual("000002", manifest["symbols"])
+        self.assertEqual("resume_retry_symbols", selected["source"])
+        self.assertEqual(["000002"], selected["symbols"])
+
+    def test_runner_resume_failure_clears_reused_output_files(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=True)
+        frame[["open", "high", "low", "close"]] = frame[
+            ["open", "high", "low", "close"]
+        ] * 0.75
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            output = root / "run"
+            previous = root / "previous"
+            frame.to_csv(prices, index=False)
+            previous.mkdir()
+            (previous / "run_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "output_dir": str(previous),
+                        "history_source": "baostock",
+                        "start_date": "2025-01-01",
+                        "end_date": "2026-01-01",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            code, _stdout, stderr = call_runner(
+                ["--prices-input", str(prices), "--output-dir", str(output)]
+            )
+            self.assertEqual(0, code, stderr)
+            self.assertTrue((output / "candidates.csv").exists())
+
+            # Prior resume artifacts are intentionally incomplete; the failure
+            # path must clear stale candidate outputs from the reused directory.
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--resume-from",
+                    str(previous / "run_manifest.json"),
+                    "--no-html-report",
+                ]
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(2, code)
+        self.assertIn("resume artifact not found", stderr)
+        self.assertFalse((output / "candidates.csv").exists())
+        self.assertFalse((output / "diagnostics.csv").exists())
+        self.assertEqual("failed", summary["status"])
+        self.assertEqual("FileNotFoundError", summary["run_error_type"])
+        self.assertFalse(summary["candidates_output_written"])
+        self.assertEqual(0, summary["candidate_rows"])
 
     def test_history_fetch_metadata_propagates_to_summary_stdout_and_csvs(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2909,6 +3779,70 @@ def history_metadata_executor(command: list[str]) -> subprocess.CompletedProcess
             "",
         )
     return subprocess.CompletedProcess(command, 0, "", "")
+
+
+def sensitive_history_executor(command: list[str]) -> subprocess.CompletedProcess[str]:
+    script = Path(command[1]).name
+    if script.startswith("fetch_") and "a_share" in script:
+        Path(command[command.index("--output") + 1]).write_text(
+            "symbol,date,close\n000001,2026-01-01,8.0\n",
+            encoding="utf-8",
+        )
+        Path(command[command.index("--metadata-output") + 1]).write_text(
+            json.dumps(
+                {
+                    "source": "zzshare",
+                    "failed_symbols": [],
+                    "empty_symbols": [],
+                    "possibly_truncated_symbols": [],
+                    "output_written": True,
+                    "metadata_output_written": True,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            "OK: ZZSHARE_TOKEN=placeholder-secret-value\n",
+            "warning API_KEY=placeholder-api-key-value\n",
+        )
+    if script == "score_candidates.py":
+        Path(command[command.index("--output") + 1]).write_text(
+            "symbol,total_score\n000001,0.8\n",
+            encoding="utf-8",
+        )
+        Path(command[command.index("--diagnostics-output") + 1]).write_text(
+            "symbol,selection_status\n000001,selected\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            "OK: raw_symbols=1 input_symbols=1 candidates=1 effective_empty_result=false\n",
+            "",
+        )
+    return subprocess.CompletedProcess(command, 0, "", "")
+
+
+def sensitive_failure_executor(command: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(
+        command,
+        1,
+        "",
+        (
+            "ERROR API_KEY=placeholder-api-key-value "
+            "url=https://example.test/path?token=placeholder-token-value\n"
+        ),
+    )
+
+
+def sensitive_preflight_failure(_args: object) -> None:
+    raise ValueError(
+        "API_KEY=placeholder-api-key-value "
+        "url=https://example.test/path?token=placeholder-token-value"
+    )
 
 
 def yfinance_hk_executor(command: list[str]) -> subprocess.CompletedProcess[str]:

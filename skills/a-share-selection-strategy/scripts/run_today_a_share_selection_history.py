@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
+from run_today_a_share_selection_helpers import option_configured
 from a_share_selection_symbols import (
     A_SHARE_EXCHANGES,
     is_hk_market,
@@ -54,10 +56,17 @@ def validate_history_required_inputs(args: Any, spot: Path | None) -> None:
         raise ValueError(
             "prices-input omitted; missing required history options: " + ",".join(missing)
         )
-    if args.symbols and args.derive_symbols_from_spot:
-        raise ValueError("use either --symbols or --derive-symbols-from-spot, not both")
-    if not args.symbols and not args.derive_symbols_from_spot:
-        raise ValueError("prices-input omitted; provide --symbols or --derive-symbols-from-spot")
+    if args.symbols and getattr(args, "symbols_file", None):
+        raise ValueError("use either --symbols or --symbols-file, not both")
+    if explicit_symbol_input_configured(args) and args.derive_symbols_from_spot:
+        raise ValueError(
+            "use explicit symbol input or --derive-symbols-from-spot, not both"
+        )
+    if not explicit_symbol_input_configured(args) and not args.derive_symbols_from_spot:
+        raise ValueError(
+            "prices-input omitted; provide --symbols, --symbols-file, or "
+            "--derive-symbols-from-spot"
+        )
     if args.derive_symbols_from_spot and spot is None:
         raise ValueError("--derive-symbols-from-spot requires --spot-input or --fetch-spot")
     if args.history_source == "yfinance":
@@ -71,12 +80,13 @@ def reject_ignored_history_options(args: Any) -> None:
     for name in [
         "history_source",
         "symbols",
+        "symbols_file",
         "start_date",
         "end_date",
         "history_adjust",
         *ZZSHARE_ONLY_HISTORY_OPTIONS,
     ]:
-        if option_configured(getattr(args, name)):
+        if option_configured(getattr(args, name, None)):
             ignored.append("--" + name.replace("_", "-"))
     for name in ["derive_symbols_from_spot", "allow_partial_history", "drop_invalid_history_rows"]:
         if getattr(args, name):
@@ -115,14 +125,8 @@ def option_flags(args: Any, names: list[str]) -> list[str]:
     return [
         "--" + name.replace("_", "-")
         for name in names
-        if option_configured(getattr(args, name))
+        if option_configured(getattr(args, name, None))
     ]
-
-
-def option_configured(value: Any) -> bool:
-    if value is False:
-        return False
-    return value is not None and value != ""
 
 
 def history_symbols(
@@ -131,17 +135,9 @@ def history_symbols(
     output: Path,
     config: Path,
 ) -> list[str]:
-    if args.symbols:
+    if explicit_symbol_input_configured(args):
         symbols = unique_symbols(parse_history_symbols(args))
-        write_json(
-            {
-                "source": "explicit_symbols",
-                "symbols": symbols,
-                "selected_symbol_count": len(symbols),
-                "history_symbol_limit_source": "explicit_symbols_no_spot_limit",
-            },
-            output / "selected_symbols.json",
-        )
+        write_json(explicit_symbol_metadata(args, symbols), output / "selected_symbols.json")
         return symbols
     if spot is None:
         raise ValueError("--derive-symbols-from-spot requires a spot snapshot")
@@ -149,13 +145,66 @@ def history_symbols(
 
 
 def parse_history_symbols(args: Any) -> list[str]:
+    text = explicit_symbols_text(args)
     if args.history_source == "zzshare":
-        return parse_a_share_symbols(args.symbols)
+        return parse_a_share_symbols(text)
     if args.history_source == AKSHARE_HK_DAILY_SOURCE:
-        return parse_akshare_hk_symbols(args.symbols)
+        return parse_akshare_hk_symbols(text)
     if args.history_source == "yfinance":
-        return parse_yfinance_symbols(args.symbols, getattr(args, "history_market", ""))
-    return parse_six_digit_symbols(args.symbols)
+        return parse_yfinance_symbols(text, getattr(args, "history_market", ""))
+    return parse_six_digit_symbols(text)
+
+
+def explicit_symbol_input_configured(args: Any) -> bool:
+    return option_configured(getattr(args, "symbols", None)) or option_configured(
+        getattr(args, "symbols_file", None)
+    )
+
+
+def explicit_symbols_text(args: Any) -> str:
+    symbols_file = getattr(args, "symbols_file", None)
+    if option_configured(symbols_file):
+        return read_symbols_file(Path(symbols_file))
+    return str(getattr(args, "symbols", "") or "")
+
+
+def read_symbols_file(path: Path) -> str:
+    if not path.exists():
+        raise FileNotFoundError(f"symbols file not found: {path}")
+    if path.is_dir():
+        raise IsADirectoryError(f"symbols file is a directory: {path}")
+    try:
+        raw_text = path.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"symbols file is not valid UTF-8 or UTF-8-BOM: {path}") from exc
+    text = re.sub(r"[\r\n]+", ",", raw_text).rstrip(",")
+    if not any(value.strip() for value in text.split(",")):
+        raise ValueError(f"symbols file is empty or contains no symbols: {path}")
+    return text
+
+
+def explicit_symbol_metadata(args: Any, symbols: list[str]) -> dict[str, Any]:
+    source = explicit_symbol_metadata_source(args)
+    metadata = {
+        "source": source,
+        "symbols": symbols,
+        "selected_symbol_count": len(symbols),
+        "history_symbol_limit_source": "explicit_symbols_no_spot_limit",
+    }
+    if getattr(args, "symbols_file", None):
+        metadata["symbols_file"] = str(Path(args.symbols_file))
+    if getattr(args, "resume_from", None):
+        metadata["resume_from"] = str(Path(args.resume_from))
+        metadata["resume_symbol_source"] = getattr(args, "resume_symbol_source", "")
+    return metadata
+
+
+def explicit_symbol_metadata_source(args: Any) -> str:
+    if getattr(args, "resume_from", None):
+        return "resume_retry_symbols"
+    if getattr(args, "symbols_file", None):
+        return "explicit_symbols_file"
+    return "explicit_symbols"
 
 
 def parse_akshare_hk_symbols(text: str) -> list[str]:

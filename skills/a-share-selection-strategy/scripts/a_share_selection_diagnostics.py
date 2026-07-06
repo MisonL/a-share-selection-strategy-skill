@@ -53,6 +53,8 @@ DIAGNOSTIC_COLUMNS = [
     "prediction_model_executed_by_score_script",
     "lightgbm_not_executed_by_this_script",
     "volume_unit_verification",
+    "effective_empty_result",
+    "empty_result_reason",
     "advice_boundary",
     "recommendation_boundary",
     *PROVENANCE_COLUMNS,
@@ -181,6 +183,7 @@ def threshold_diagnostics(
     scored: pd.DataFrame,
     ranked: pd.DataFrame,
     config: dict[str, Any],
+    result_summary: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     if scored.empty:
         return []
@@ -192,7 +195,7 @@ def threshold_diagnostics(
             name for name, mask in masks.items() if not bool(mask.loc[index])
         ]
         selected = symbol_selected(row, selected_symbols)
-        rows.append(diagnostic_row(row, failed, selected))
+        rows.append(diagnostic_row(row, failed, selected, result_summary))
     return rows
 
 
@@ -200,6 +203,7 @@ def diagnostic_row(
     row: pd.Series,
     failed_thresholds: list[str],
     selected: bool,
+    result_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     symbol = str(row["symbol"])
     passed = not failed_thresholds
@@ -245,6 +249,13 @@ def diagnostic_row(
             "lightgbm_not_executed_by_this_script"
         ),
         "volume_unit_verification": row.get("volume_unit_verification"),
+        "effective_empty_result": bool(
+            (result_summary or {}).get("effective_empty_result", False)
+        ),
+        "empty_result_reason": (result_summary or {}).get(
+            "empty_result_reason",
+            "none",
+        ),
         "advice_boundary": row.get("advice_boundary"),
         "recommendation_boundary": row.get("recommendation_boundary"),
         **{column: row.get(column) for column in PROVENANCE_COLUMNS},

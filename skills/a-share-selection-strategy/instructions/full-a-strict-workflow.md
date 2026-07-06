@@ -19,6 +19,7 @@
 
 出现以下任一意图时，先读本文件，再决定命令：
 
+- 用户只说“选 A 股”“今日 A 股选股”“真实选股”，且没有限定 symbol、板块、本地股票池或本地行情文件
 - “全 A”“全市场”“扩大股票池”“尽量覆盖更多股票”
 - “真实扫描”“真实任务”“不要 demo 数据”
 - “先抓实时快照再筛历史”
@@ -58,13 +59,34 @@
 | 大范围历史 breadth | `zzshare` history | 适合更大 symbol 池 | 422 参数上限、429 限流、截断风险 | 不适合无批次控制地盲跑 |
 | 预测列生成 | 本地 `generate_lightgbm_predictions.py` | 可审计 | 不证明模型质量 | 不替代全市场取数 |
 
+## 数据源能力矩阵
+
+| 数据源 | 当前角色 | 主要字段 | 免费或 token 边界 | 全 A 适用性 |
+| --- | --- | --- | --- | --- |
+| `eastmoney` spot | 全市场广度快照 | `symbol/name/spot_price/spot_pct_chg/spot_amount/spot_industry` | 无 token，但公开网页接口分页可能断连 | 只适合作为 universe 候选池；`partial_result=true` 时全 A 中止 |
+| `zzshare` history | 大范围历史 breadth | OHLCV、`preclose/pctChg/turn/tradestatus/isST/name` | token 只从 `ZZSHARE_TOKEN` 读取；无 token 成功不证明额度或长期稳定 | 首选历史 breadth；必须批次控制并检查截断、失败和空 symbol |
+| `baostock` history | 小范围严格核验 | OHLCV、`preclose/pctChg/turn/tradestatus/isST`、`query_stock_basic` 名称 | 免费登录接口，但逐 symbol 名称和历史请求较多 | 不作为全 A 首轮历史源；适合 clean pool 复核 |
+| `akshare` A 股 | 备选历史源 | OHLCV、`amount/turn` | 开源接口聚合；`stock_zh_a_hist` 失败会 fallback 到 `stock_zh_a_daily` | 只作补充；fallback 成功不能写成主接口稳定 |
+| `akshare_hk_daily` | 港股补充 | 港股 OHLCV、`amount/name` | 开源接口聚合 | 不参与 A 股全市场路径 |
+| `yfinance` | 海外 ticker 补充 | OHLCV | 无 key；market 只是输出标签 | 不适合 A 股全 A；缺 A 股换手率和可交易字段 |
+
 对全 A 场景，默认策略是：
 
 1. `eastmoney` 负责广度快照。
 2. `zzshare` 负责大范围历史抓取。
 3. `baostock` 只用于小范围严格核验、字段探针或对照，不作为全市场默认历史源。
+4. `akshare`、`akshare_hk_daily` 和 `yfinance` 只能作为补充源或跨市场扩展，不替代全 A 主路径。
 
 `baostock` 历史抓取会为每个 symbol 额外调用一次 `query_stock_basic` 补股票名称，并在 strict 模式下把名称查询失败或缺失写入门禁错误。这个设计能避免报告把代码误当股票名称，但全市场 5000+ 标的会显著增加远端请求数；全 A 主路径不要直接用 baostock 做大范围首轮历史 breadth。
+
+全 A 失败恢复优先级：
+
+1. `eastmoney` spot strict 失败或 `partial_result=true`：先重跑 spot 或换入可审计的本地全 A universe 文件，不继续历史抓取后声称全 A。
+2. `zzshare` history 出现 `failed_symbols`、`empty_symbols` 或 `possibly_truncated_symbols`：先降批次、加间隔、缩短窗口或按失败清单复跑。
+3. `baostock` 大批量变慢或名称查询失败：缩回为 clean pool 复核，不把它提升为全 A 首轮历史源。
+4. `akshare` fallback 或 yfinance 空结果：只记录为外部源观察，不提升为主路径成功证据。
+
+数据源能力的机器可读注册表是 `configs/data_sources.json`。它只用于审计和文档一致性检查，不代表 runner 会自动选源、自动 fallback 或证明长期稳定。
 
 ## 强制规则
 
@@ -178,19 +200,63 @@ uv run --with pandas --with numpy --with zzshare python skills/a-share-selection
 
 ## 当前版本的推荐收口方式
 
-当前 runner 还没有“全 A 一键清洗续跑模式”。因此 Agent 应预期至少两轮：
+当前 runner 支持 `--symbols-file`、`--plan-only` 和 `--resume-from`，但它们是显式控制项，不是“全 A 一键自动闭环”。因此 Agent 应预期至少两轮：
 
 1. 第一轮：拿覆盖、失败分类、清洗依据。
-2. 第二轮：基于清洗后的 symbol 集重抓历史。
+2. 第二轮：基于 `--symbols-file` 或 `--resume-from` 重抓需要恢复的 symbol 集。
 3. 最终轮：基于 clean `prices.csv` 做 `prices-input` 评分和 HTML。
 
 ### 5. 清洗后复跑历史
 
-如果第一轮已经明确哪些 symbol 需要剔除，建议基于清洗后的 symbol 集重新跑一轮历史抓取。
-当前仓库没有稳定的“从文件读 symbol 列表”CLI 入口，因此可以：
+如果第一轮已经明确哪些 symbol 需要剔除或重试，建议基于清洗后的 symbol 集重新跑一轮历史抓取。长列表优先使用 `--symbols-file`，不要把几千个 symbol 直接塞进 shell 命令行。
 
-- 用 shell 组装新的 `--symbols` 参数，或
-- 复用上轮筛出的 symbol 清单，在外层生成新的 comma-separated 列表
+推荐用 `prepare_history_retry_symbols.py` 从 `selected_symbols.json` 和 `history_metadata.json` 生成 retry plan，收集失败、空结果、截断 symbol 作为 retry list；默认排除 invalid/non-trading/ST 等数据质量不合格的 symbol。只有显式传 `--include-clean-selected` 时，才追加本轮干净的 selected symbol。不要手工重敲大列表；必须保留清洗规则和剔除数量，方便复核。
+
+```bash
+python3 skills/a-share-selection-strategy/scripts/prepare_history_retry_symbols.py \
+  --selected-symbols "$RUN/selected_symbols.json" \
+  --history-metadata "$RUN/history_metadata.json" \
+  --output "$RUN/retry_plan.json" \
+  --symbols-output "$RUN/retry_symbols.txt"
+```
+
+`retry_plan.json.claim_boundary` 必须保持 `retry_plan_only_not_full_market_completion_or_history_fetch_success`；它只是恢复计划，不是历史抓取成功证明。
+`retry_plan.json.unexpected_metadata_symbols` 非空时，说明 `history_metadata.json` 含有不在 `selected_symbols.json` 里的 symbol，默认不会纳入恢复清单；必须先排查是否混入旧 artifact。
+
+可先用计划模式审计第二轮命令，不触发实际取数：
+
+```bash
+uv run --with pandas --with numpy --with zzshare python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py \
+  --output-dir "$RUN/pass2-plan" \
+  --mode auto \
+  --symbols-file "$RUN/retry_symbols.txt" \
+  --history-source zzshare \
+  --start-date "$START_DATE" \
+  --end-date "$END_DATE" \
+  --history-request-interval-seconds 0.5 \
+  --history-limit 1000 \
+  --history-max-pages 2 \
+  --plan-only \
+  --no-html-report
+```
+
+如果只是重跑上一轮失败、空结果或截断 symbol，也可以直接从上一轮 manifest 恢复：
+
+```bash
+uv run --with pandas --with numpy --with zzshare python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py \
+  --output-dir "$RUN/pass2-retry" \
+  --resume-from "$RUN/pass1/run_manifest.json" \
+  --history-request-interval-seconds 0.5 \
+  --history-limit 1000 \
+  --history-max-pages 2 \
+  --no-html-report
+```
+
+`--plan-only` 会写入 `run_manifest.json`、`summary.json`、配置副本和审计所需输入快照，但不会执行 fetch、validate 或 score，也不会产出本轮 `candidates.csv`、`diagnostics.csv` 或真实 `history_metadata.json`。
+
+`--resume-from` 写入的 `selected_symbols.json.source=resume_retry_symbols` 只表示本轮来自恢复清单；仍需重新检查 `history_metadata.json` 和 `summary.json`，不能跳过门禁。它会继承上一轮未被本轮显式覆盖的历史源和日期；`history_adjust`、超时、间隔、limit 和 max-pages 只在本轮历史源与上一轮一致时继承，并在 manifest 中记录 `resume_inherited_options`。zzshare 自定义 URL 可能包含 signed query 或内部地址，runner 不会从上一轮 manifest 自动继承 `history_http_url`；需要复用时必须在本轮显式传 `--history-http-url`，manifest 会用 `resume_sensitive_options_requiring_explicit_input` 提醒。如果上一轮 manifest 的 `output_dir` 是相对路径，会先判断该路径是否已经指向 manifest 所在目录，否则按该 manifest 所在目录解析。
+
+如果上一轮 `history_metadata.json` 中没有 `failed_symbols`、`empty_symbols` 或 `possibly_truncated_symbols`，`--resume-from` 不会构造恢复清单，而应失败并提示没有可重试 symbol；不要把它当成“从上一轮全量继续跑”的通用 resume。
 
 这一步的目标是拿到：
 

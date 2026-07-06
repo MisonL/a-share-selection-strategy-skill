@@ -40,6 +40,7 @@
 | `portfolio_equity_curve.py` | 等权或 sizing 资金曲线 | 默认只按 complete trades 计算 |
 | `portfolio_overlap_report.py` | 并发持仓、重叠和容量门禁 | 工作日日历不是交易所日历 |
 | `run_baostock_walk_forward.py` | baostock walk-forward 总控 | `--offline-plan` 不执行真实门禁 |
+| `prepare_history_retry_symbols.py` | 从 `selected_symbols.json` 和 `history_metadata.json` 生成历史抓取重试清单 | 只生成 recovery plan，不证明全 A 完成 |
 | `summarize_walk_forward_run.py` | 汇总 walk-forward artifact | 未传 required model 参数时不能声称模型口径已验证 |
 | `validate_walk_forward_manifest.py` | 校验 runner manifest | 不替代 artifact 内容复验 |
 | `validate_walk_forward_artifacts.py` | 校验 walk-forward artifact 内容 | `capacity_gate_pass=false` 仍是容量门禁失败 |
@@ -71,8 +72,9 @@
 
 ## 入口选择规则
 
-1. 用户给本地行情文件：优先 `validate_ohlcv.py` 或 `run_today_a_share_selection.py --prices-input`。
-2. 用户要求今日 A 股、小样本真实任务或低价超短：优先 `run_today_a_share_selection.py`。
-3. 用户要求全 A、全市场或扩大股票池：先读 [../instructions/full-a-strict-workflow.md](../instructions/full-a-strict-workflow.md)，不要直接套默认小样本命令。
-4. 用户坚持 prediction-derived：必须有真实 `prediction` 或 `prediction_score` 输入，再走 prediction-derived config。
-5. 需要回测、容量或历史门禁：只在评分 artifact 已经闭环后进入预测、回测和门禁 CLI。
+1. 用户给本地行情文件：只需要评分时优先 `validate_ohlcv.py` 后接 `score_candidates.py`；需要 `run_manifest.json`、`summary.json`、spot 合并或 HTML 时再用 `run_today_a_share_selection.py --prices-input`。
+2. 用户要求小样本真实任务、明确 symbol 或明确本地股票池的低价超短：优先 `run_today_a_share_selection.py`；长列表用 `--symbols-file`，只审计命令用 `--plan-only`。
+3. 用户要求今日 A 股、真实 A 股选股、全 A、全市场或扩大股票池，且没有限定 symbol 或本地股票池：先读 [../instructions/full-a-strict-workflow.md](../instructions/full-a-strict-workflow.md)，不要直接套默认小样本命令。
+4. 需要恢复上一轮失败、空结果或截断 symbol：优先 `run_today_a_share_selection.py --resume-from <run_manifest.json>`，它生成 `resume_retry_symbols`，不证明全市场完成。
+5. 用户坚持 prediction-derived：必须有真实 `prediction` 或 `prediction_score` 输入，再走 prediction-derived config。
+6. 需要回测、容量或历史门禁：只在评分 artifact 已经闭环后进入预测、回测和门禁 CLI。

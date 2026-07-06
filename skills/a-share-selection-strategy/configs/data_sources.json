@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "claim_boundary": "capability_registry_only_not_runtime_source_selection_or_stability_proof",
+  "sources": {
+    "eastmoney_spot": {
+      "entry": "fetch_eastmoney_a_share_spot.py",
+      "service": "eastmoney_public_spot",
+      "role": "full_market_universe_snapshot",
+      "requires_token": false,
+      "token_environment_variable": "",
+      "primary_fields": [
+        "symbol",
+        "name",
+        "spot_price",
+        "spot_pct_chg",
+        "spot_amount",
+        "spot_industry"
+      ],
+      "full_a_role": "universe_candidate_pool",
+      "full_a_stop_conditions": [
+        "partial_result=true",
+        "output_written=false"
+      ],
+      "cannot_prove": [
+        "historical_ohlcv",
+        "pagination_completeness_when_partial",
+        "long_term_stability"
+      ]
+    },
+    "zzshare_history": {
+      "entry": "fetch_zzshare_a_share.py",
+      "service": "zzshare_daily_fields_all",
+      "role": "large_breadth_a_share_history",
+      "requires_token": false,
+      "token_environment_variable": "ZZSHARE_TOKEN",
+      "primary_fields": [
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "amount",
+        "preclose",
+        "pctChg",
+        "turn",
+        "tradestatus",
+        "isST",
+        "name"
+      ],
+      "full_a_role": "preferred_history_breadth_after_universe",
+      "full_a_stop_conditions": [
+        "failed_symbols_nonempty",
+        "empty_symbols_nonempty",
+        "possibly_truncated_symbols_nonempty"
+      ],
+      "cannot_prove": [
+        "unlimited_free_quota",
+        "long_term_stability",
+        "broker_order_or_fill"
+      ]
+    },
+    "baostock_history": {
+      "entry": "fetch_baostock_a_share.py",
+      "service": "baostock",
+      "role": "strict_small_pool_history_validation",
+      "requires_token": false,
+      "token_environment_variable": "",
+      "primary_fields": [
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "amount",
+        "preclose",
+        "pctChg",
+        "turn",
+        "tradestatus",
+        "isST",
+        "name"
+      ],
+      "full_a_role": "clean_pool_review_not_first_round_breadth",
+      "full_a_stop_conditions": [
+        "failed_symbols_nonempty",
+        "empty_symbols_nonempty",
+        "name_lookup_failed_symbols_nonempty"
+      ],
+      "cannot_prove": [
+        "full_a_first_round_throughput",
+        "limit_up_down_rules",
+        "broker_order_or_fill"
+      ]
+    },
+    "akshare_a_share": {
+      "entry": "fetch_akshare_a_share.py",
+      "service": "akshare",
+      "role": "supplemental_a_share_history",
+      "requires_token": false,
+      "token_environment_variable": "",
+      "primary_fields": [
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "amount",
+        "turn"
+      ],
+      "full_a_role": "supplemental_cross_check_only",
+      "full_a_stop_conditions": [
+        "failed_symbols_nonempty",
+        "empty_symbols_nonempty",
+        "fallback_errors_nonempty"
+      ],
+      "cannot_prove": [
+        "stock_zh_a_hist_stability_when_fallback_used",
+        "long_term_stability",
+        "broker_order_or_fill"
+      ]
+    },
+    "akshare_hk_daily": {
+      "entry": "fetch_akshare_hk_daily.py",
+      "service": "akshare_hk_daily",
+      "role": "hong_kong_history_dataset",
+      "requires_token": false,
+      "token_environment_variable": "",
+      "primary_fields": [
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "amount",
+        "name"
+      ],
+      "full_a_role": "not_a_share_full_market_path",
+      "full_a_stop_conditions": [],
+      "cannot_prove": [
+        "a_share_full_market_coverage",
+        "hkex_complete_calendar",
+        "real_tradability"
+      ]
+    },
+    "yfinance": {
+      "entry": "fetch_yfinance_ohlcv.py",
+      "service": "yfinance_yahoo",
+      "role": "overseas_ticker_history",
+      "requires_token": false,
+      "token_environment_variable": "",
+      "primary_fields": [
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume"
+      ],
+      "full_a_role": "not_a_share_full_market_path",
+      "full_a_stop_conditions": [],
+      "cannot_prove": [
+        "a_share_turnover",
+        "a_share_tradability_fields",
+        "exchange_or_calendar_proof"
+      ]
+    }
+  }
+}

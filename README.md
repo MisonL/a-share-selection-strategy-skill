@@ -133,6 +133,14 @@ prediction-derived 输入必须包含：
 
 ## 验证
 
+推荐先使用统一本地验证入口:
+
+```bash
+python3 validate_skill_changes.py
+```
+
+该入口只覆盖本地仓库门禁，不证明真实行情、真实 prediction、券商订单或真实回测门禁通过。若需要拆开执行，对应命令如下:
+
 ```bash
 for file in skills/a-share-selection-strategy/evals/*.json skills/a-share-selection-strategy/configs/*.json; do
   python3 -m json.tool "$file" >/tmp/"$(basename "$file")"

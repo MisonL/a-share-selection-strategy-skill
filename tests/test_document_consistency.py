@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+import re
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -94,14 +98,206 @@ class DocumentConsistencyTests(unittest.TestCase):
 
         self.assertIn("## 任务拓扑", skill)
         self.assertIn("全 A 严格任务", skill)
+        self.assertIn("今日 A 股选股", skill)
+        self.assertIn("默认按全 A 严格任务判断", skill)
         self.assertIn("full-a-strict-workflow.md", skill)
         self.assertIn("跑全 A / 全市场真实任务", index)
-        self.assertIn("如果任务目标是“全 A / 全市场 / 扩大股票池 / 真实广度扫描”", runbook)
+        self.assertIn("今日 A 股选股 / 真实 A 股选股 / 全 A", runbook)
+        self.assertIn("用户没有限定 symbol、板块、本地股票池或本地行情文件", runbook)
         self.assertIn("## 当前推荐拓扑", workflow)
+        self.assertIn("用户只说“选 A 股”", workflow)
         self.assertIn("eastmoney", workflow)
         self.assertIn("zzshare", workflow)
+        self.assertIn("## 数据源能力矩阵", workflow)
+        self.assertIn("`ZZSHARE_TOKEN`", workflow)
+        self.assertIn("akshare", workflow)
+        self.assertIn("fallback 成功不能写成主接口稳定", workflow)
         self.assertIn("query_stock_basic", workflow)
         self.assertIn("全市场 5000+ 标的会显著增加远端请求数", workflow)
+
+    def test_docs_lock_data_source_capability_boundaries(self) -> None:
+        index = (
+            ROOT / "skills/a-share-selection-strategy/references/index.md"
+        ).read_text(encoding="utf-8")
+        runbook = (
+            ROOT / "skills/a-share-selection-strategy/instructions/runbook.md"
+        ).read_text(encoding="utf-8")
+        script_reference = (
+            ROOT / "skills/a-share-selection-strategy/references/script-reference.md"
+        ).read_text(encoding="utf-8")
+        data_sources = (
+            ROOT / "skills/a-share-selection-strategy/configs/data_sources.json"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("数据源能力边界", index)
+        self.assertIn("数据源免费边界", index)
+        self.assertIn("数据源能力矩阵", index)
+        self.assertIn("data_sources.json", index)
+        self.assertIn("data_sources.json", script_reference)
+        self.assertIn("## 数据源能力边界", script_reference)
+        self.assertIn("fetch_eastmoney_a_share_spot.py", script_reference)
+        self.assertIn("fetch_zzshare_a_share.py", script_reference)
+        self.assertIn("ZZSHARE_TOKEN", script_reference)
+        self.assertIn("不要把 token 放进 CLI 参数", script_reference)
+        self.assertIn("ZZSHARE_TOKEN", data_sources)
+        self.assertIn("capability_registry_only", data_sources)
+        self.assertIn("最小单轮探针的解释规则", runbook)
+        self.assertIn("fallback_errors", runbook)
+        self.assertIn("market_label_only=true", runbook)
+        self.assertIn("long_term_stability_claim", runbook)
+
+    def test_data_source_registry_entries_are_documented(self) -> None:
+        root = ROOT / "skills/a-share-selection-strategy"
+        registry = json.loads((root / "configs/data_sources.json").read_text(encoding="utf-8"))
+        script_reference = (root / "references/script-reference.md").read_text(encoding="utf-8")
+        workflow = (root / "instructions/full-a-strict-workflow.md").read_text(encoding="utf-8")
+        scripts_index = (root / "scripts/SCRIPTS.md").read_text(encoding="utf-8")
+
+        self.assertEqual(
+            "capability_registry_only_not_runtime_source_selection_or_stability_proof",
+            registry["claim_boundary"],
+        )
+        for source, metadata in registry["sources"].items():
+            with self.subTest(source=source):
+                entry = metadata["entry"]
+                self.assertIn(entry, script_reference)
+                self.assertIn(entry, scripts_index)
+                self.assertTrue(metadata["full_a_role"])
+                self.assertIn(entry.split("_", 1)[0], script_reference + workflow)
+                for field in metadata["primary_fields"]:
+                    self.assertIsInstance(field, str)
+                    self.assertTrue(field)
+                for limitation in metadata["cannot_prove"]:
+                    self.assertIsInstance(limitation, str)
+                    self.assertTrue(limitation)
+
+    def test_data_source_registry_schema_is_strict(self) -> None:
+        root = ROOT / "skills/a-share-selection-strategy"
+        registry = json.loads((root / "configs/data_sources.json").read_text(encoding="utf-8"))
+        docs = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in [
+                root / "instructions/full-a-strict-workflow.md",
+                root / "instructions/runbook.md",
+                root / "references/index.md",
+                root / "references/script-reference.md",
+            ]
+        )
+
+        self.assertEqual({"schema_version", "claim_boundary", "sources"}, set(registry))
+        self.assertEqual(1, registry["schema_version"])
+        self.assertIsInstance(registry["sources"], dict)
+        self.assertTrue(registry["sources"])
+        expected_metadata_keys = {
+            "entry",
+            "service",
+            "role",
+            "requires_token",
+            "token_environment_variable",
+            "primary_fields",
+            "full_a_role",
+            "full_a_stop_conditions",
+            "cannot_prove",
+        }
+        source_key_pattern = re.compile(r"^[a-z][a-z0-9_]*$")
+
+        for source, metadata in registry["sources"].items():
+            with self.subTest(source=source):
+                self.assertRegex(source, source_key_pattern)
+                self.assertEqual(expected_metadata_keys, set(metadata))
+                entry = metadata["entry"]
+                self.assertTrue((root / "scripts" / entry).is_file())
+                self.assertEqual(entry, Path(entry).name)
+                self.assertIsInstance(metadata["requires_token"], bool)
+                self.assertIsInstance(metadata["token_environment_variable"], str)
+                self.assertIsInstance(metadata["primary_fields"], list)
+                self.assertIsInstance(metadata["full_a_stop_conditions"], list)
+                self.assertIsInstance(metadata["cannot_prove"], list)
+                for key in ["service", "role", "full_a_role"]:
+                    self.assertIsInstance(metadata[key], str)
+                    self.assertTrue(metadata[key])
+                if metadata["token_environment_variable"]:
+                    self.assertIn(metadata["token_environment_variable"], docs)
+
+    def test_runner_docs_cover_symbols_file_plan_and_resume_controls(self) -> None:
+        root = ROOT / "skills/a-share-selection-strategy"
+        docs = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in [
+                root / "SKILL.md",
+                root / "instructions/full-a-strict-workflow.md",
+                root / "instructions/runbook.md",
+                root / "references/script-reference.md",
+                root / "scripts/SCRIPTS.md",
+            ]
+        )
+        for text in ["--symbols-file", "--plan-only", "--resume-from"]:
+            self.assertIn(text, docs)
+        self.assertIn("plan_only", docs)
+        self.assertIn("resume_retry_symbols", docs)
+        self.assertIn("explicit_symbols_file", docs)
+        self.assertIn("没有可重试 symbol", docs)
+        self.assertIn("审计所需输入快照", docs)
+        self.assertIn("resume_inherited_options", docs)
+        self.assertIn("resume_sensitive_options_requiring_explicit_input", docs)
+        self.assertIn("需要复用时必须本轮显式传 `--history-http-url`", docs)
+        self.assertIn("历史源与上一轮一致", docs)
+        self.assertIn("manifest 所在目录", docs)
+
+    def test_unified_validation_entry_is_documented(self) -> None:
+        root = ROOT / "skills/a-share-selection-strategy"
+        closeout = root / "evidence/reviews/SKILL-SYSTEM-CLOSEOUT-2026-07-04.md"
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        validator = (ROOT / "validate_skill_changes.py").read_text(encoding="utf-8")
+        closeout_text = closeout.read_text(encoding="utf-8")
+        docs = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in [
+                ROOT / "README.md",
+                ROOT / "AGENTS.md",
+                root / "instructions/runbook.md",
+                closeout,
+            ]
+        )
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "validate_skill_changes.py"), "--list"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("python3 validate_skill_changes.py", docs)
+        self.assertIn("本地仓库门禁", docs)
+        self.assertIn("真实行情", docs)
+        self.assertNotIn("/Users/", validator)
+        self.assertIn("Path.home()", validator)
+        self.assertIn("historical leaked-key probe split", validator)
+        self.assertIn('ROOT / ".github"', validator)
+        self.assertIn("Local validation gates:", result.stdout)
+        self.assertIn("full unittest suite", result.stdout)
+        self.assertIn("text whitespace and conflict marker scan", result.stdout)
+        self.assertIn("External gates not run", result.stdout)
+        self.assertIn(
+            "SKILL-SYSTEM-CLOSEOUT-2026-07-04.md",
+            (root / "references/index.md").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "python3 validate_skill_changes.py --skip-skill-validate --skip-tests",
+            workflow,
+        )
+        self.assertIn("Run repo health checks", workflow)
+        for path in [
+            "configs/data_sources.json",
+            "evidence/reviews/SKILL-SYSTEM-CLOSEOUT-2026-07-04.md",
+            "a_share_selection_command_safety.py",
+            "prepare_history_retry_symbols.py",
+            "tests/test_recovery_and_safety_helpers.py",
+            "validate_skill_changes.py",
+        ]:
+            with self.subTest(path=path):
+                self.assertIn(path, closeout_text)
 
     def test_skill_docs_define_agent_execution_and_recovery_protocol(self) -> None:
         skill = (
@@ -129,6 +325,8 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("candidate_field_coverage", skill)
         self.assertIn("selection_failed_reason", templates)
         self.assertIn("## 失败恢复路由", workflow)
+        self.assertIn("prepare_history_retry_symbols.py", workflow)
+        self.assertIn("retry_plan_only_not_full_market_completion", workflow)
         self.assertIn("不要只给页面链接或只报最终候选数", workflow)
         self.assertIn("metadata.json`，若缺失则回退读取 `history_metadata.json`", workflow)
         self.assertNotIn("cp \"$RUN/clean/history_metadata.json\" \"$RUN/clean/metadata.json\"", workflow)
@@ -156,7 +354,9 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("execution_path", runner)
         self.assertIn("history_fetch_spot_derived_sample", runner)
         self.assertIn("history_fetch_spot_derived_explicit_limit", runner)
-        self.assertIn("history_fetch_explicit_symbols", runner)
+        self.assertIn("explicit_symbols", runner)
+        self.assertIn("explicit_symbols_file", runner)
+        self.assertIn("resume_retry_symbols", runner)
         self.assertIn("local_prices_", runner)
         self.assertIn("coverage_class", runner)
         self.assertIn("full_market_claim_allowed", runner)

@@ -1,6 +1,6 @@
 # 脚本参考
 
-本文件收纳配置文件、依赖、数据源字段映射、输入契约和常用命令细节。`SKILL.md` 只保留路由和硬约束；判断脚本职责、稳定入口或 helper 边界时，先读 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md)，不要用 `scripts/` 根目录文件数量或 `__main__` 保护猜入口。
+本文件收纳配置文件、依赖、数据源能力边界、数据源字段映射、输入契约和常用命令细节。`SKILL.md` 只保留路由和硬约束；判断脚本职责、稳定入口或 helper 边界时，先读 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md)，不要用 `scripts/` 根目录文件数量或 `__main__` 保护猜入口。
 
 ## 目录
 
@@ -19,6 +19,7 @@
 | `../configs/ultra_short_low_price_config.json` | 低价超短通用技术评分 | 不使用也不伪造 prediction-derived/LightGBM |
 | `../configs/prediction_profile_config.json` | prediction-derived A 股默认剖面 | 需要真实 `prediction` 或 `prediction_score` 输入 |
 | `../configs/hong_kong_generic_config.json` | 港股本地 OHLCV 通用技术评分 | 不证明港交所日历、真实成交或收益 |
+| `../configs/data_sources.json` | 数据源能力机器注册表 | 只用于审计和一致性检查，不做运行时自动选源或稳定性证明 |
 
 旧命令里的 `../scripts/*.json` 路径仍由 CLI 解析到 `../configs/*.json`，但新文档和默认 runner 都应使用 `../configs/*.json`。
 
@@ -51,6 +52,21 @@ Python 代码复用这些脚本时，需要将 `skills/a-share-selection-strateg
 | 海外 OHLCV 取数 | `yfinance` |
 
 完全离线运行时，必须使用已经安装好依赖的解释器、虚拟环境、wheelhouse 或已有包缓存。若 `uv run --with ...` 因无法解析依赖失败，应显式报告环境问题；不得用 mock 数据、跳过依赖或把未运行的脚本说成验证通过。
+
+## 数据源能力边界
+
+| 入口 | 服务 | 数据范围 | 适合用途 | 不能证明 |
+| --- | --- | --- | --- | --- |
+| `fetch_eastmoney_a_share_spot.py` | 东方财富公开 spot 接口 | A 股实时快照展示字段 | 全 A universe 候选池、当日展示字段 | 历史 OHLCV、分页完整性、长期稳定性 |
+| `fetch_zzshare_a_share.py` | zzshare `daily(fields=all)` | A 股日线、换手、停牌/ST 相关字段 | 大范围历史 breadth、spot 派生 symbol 池历史抓取 | 无 token 长期额度、无截断、券商订单或成交能力 |
+| `fetch_baostock_a_share.py` | baostock | A 股日线、`tradestatus/isST`、名称查询 | 小范围严格字段核验、walk-forward 门禁 | 全 A 首轮高吞吐抓取、直接涨跌停字段 |
+| `fetch_akshare_a_share.py` | akshare | A 股日线、成交额、换手 | A 股历史补充或交叉观察 | `stock_zh_a_hist` 主接口稳定；fallback 不能当主源成功 |
+| `fetch_akshare_hk_daily.py` | akshare 港股日线 | 港股 OHLCV、成交额、名称 | 港股已落地数据集审查 | A 股全市场覆盖、港交所完整日历或可交易性 |
+| `fetch_yfinance_ohlcv.py` | yfinance/Yahoo | 通用 ticker OHLCV | 美股/海外 ticker 补充 | A 股换手率、A 股可交易字段、exchange/calendar proof |
+
+`ZZSHARE_TOKEN` 是唯一允许的 zzshare token 输入位置。不要把 token 放进 CLI 参数、config 或文档示例；runner 会记录 step command，命令行 token 会泄漏到 `run_manifest.json`。
+
+`../configs/data_sources.json` 应与本节表格和 [../instructions/full-a-strict-workflow.md](../instructions/full-a-strict-workflow.md) 的数据源能力矩阵保持一致；它不是调度器，不会绕过显式 CLI 参数或全 A 严格工作流。
 
 ## 输入数据契约
 
@@ -120,3 +136,23 @@ uv run --with pandas --with numpy --with baostock python skills/a-share-selectio
   --end-date 2026-05-29 \
   --fail-on-skipped
 ```
+
+长 symbol 列表和恢复任务：
+
+```bash
+uv run --with pandas --with numpy --with baostock python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py \
+  --output-dir /tmp/a-share-selection-plan \
+  --mode auto \
+  --history-source baostock \
+  --symbols-file /path/to/symbols.txt \
+  --start-date 2025-01-01 \
+  --end-date 2026-05-29 \
+  --plan-only \
+  --no-html-report
+uv run --with pandas --with numpy --with baostock python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py \
+  --output-dir /tmp/a-share-selection-retry \
+  --resume-from /tmp/a-share-selection-pass1/run_manifest.json \
+  --no-html-report
+```
+
+`--symbols-file` 会在 manifest 中形成 `execution_path_reason=explicit_symbols_file`；`--plan-only` 只写计划 step 和审计输入快照，`commands_executed=false`；`--resume-from` 只生成 `resume_retry_symbols`，并在 `resume_inherited_options` 记录从上一轮继承的非敏感历史抓取参数，仍需重新检查新一轮 `history_metadata.json`。`history_http_url` 不从上一轮 manifest 自动继承；需要复用自定义 URL 时本轮显式传 `--history-http-url`，manifest 会用 `resume_sensitive_options_requiring_explicit_input` 提醒。

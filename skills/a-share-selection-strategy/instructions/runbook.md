@@ -2,7 +2,7 @@
 
 本手册收纳可复制命令和门禁解释。根 [README.md](../../../README.md) 只保留入口、数据契约和常用路径；文档地图见 [../references/index.md](../references/index.md)。需要执行完整 demo、联网取数、回测或真实门禁复验时读本文件。
 
-如果任务目标是“全 A / 全市场 / 扩大股票池 / 真实广度扫描”，先读 [full-a-strict-workflow.md](full-a-strict-workflow.md)。本文件中的 demo、小样本和单轮命令不能直接等价为全市场主路径。
+如果任务目标是“今日 A 股选股 / 真实 A 股选股 / 全 A / 全市场 / 扩大股票池 / 真实广度扫描”，且用户没有限定 symbol、板块、本地股票池或本地行情文件，先读 [full-a-strict-workflow.md](full-a-strict-workflow.md)。本文件中的 demo、小样本和单轮命令不能直接等价为全市场主路径。
 
 ## 场景快速路由
 
@@ -336,6 +336,14 @@ zzshare 入口默认使用 `daily(fields=all)`，并把 `source_scope=zzshare_hi
 
 `run_today_a_share_selection.py --history-source zzshare` 会透传 `--history-http-url`、`--history-timeout-seconds`、`--history-request-interval-seconds`、`--history-limit` 和 `--history-max-pages` 到 zzshare fetcher，并固定使用 `fields=all`。zzshare token 只能通过 `ZZSHARE_TOKEN` 环境变量提供；不要把 token 放进 runner CLI 参数，因为 runner 会把 step command 写入 `run_manifest.json`。
 
+长 symbol 列表、预演和恢复：
+
+- `--symbols-file /path/to/symbols.txt` 支持逗号或换行分隔；`run_manifest.json.execution_path_reason=explicit_symbols_file`，仍是显式股票池。
+- `--plan-only` 只写计划和审计所需输入快照，`run_manifest.json.commands_executed=false`、`steps[].executed=false`；它不能证明取数、校验或评分成功。
+- `--resume-from /path/to/run_manifest.json` 从上一轮 `selected_symbols.json` 和 `history_metadata.json` 生成 `resume_retry_symbols`；只覆盖失败、空结果或截断 symbol 的恢复，不等于全市场完成。
+- `--resume-from` 会继承上一轮 `history_source/start_date/end_date` 中本轮未显式设置的值；`history_adjust/history_timeout_seconds/history_request_interval_seconds/history_limit/history_max_pages` 只在本轮历史源与上一轮一致时继承，并写入 `resume_inherited_options`。`history_http_url` 可能包含 signed query 或内部地址，不从上一轮 manifest 自动继承；需要复用时必须本轮显式传 `--history-http-url`，manifest 会用 `resume_sensitive_options_requiring_explicit_input` 提醒。若上一轮 manifest 里的 `output_dir` 是相对路径，会先判断该路径是否已经指向 manifest 所在目录，否则按该 `run_manifest.json` 所在目录解析。
+- 如果上一轮没有失败、空结果或截断 symbol，`--resume-from` 应失败并提示没有可重试 symbol；不要用它替代显式 `--symbols-file` 全量复跑。
+
 ### yfinance 通用 OHLCV
 
 ```bash
@@ -412,6 +420,15 @@ uv run --with pandas --with numpy --with akshare --with yfinance --with baostock
 ```
 
 读取 `summary.json` 时必须检查 `summary.sources.*.all_passed`、逐次 `metadata`、`checks` 和 `long_term_stability_claim=not_proven`。连续复验通过只说明当前窗口、参数和网络环境下通过，不能写成公网数据源长期稳定。
+
+最小单轮探针的解释规则：
+
+- `passed=true` 只说明该 symbol、该窗口、当前网络和当前参数可用。
+- `akshare` 出现 `fallback_errors` 时，即使 rows 大于 0，也不能写成 `stock_zh_a_hist` 主接口稳定。
+- `zzshare.token_configured=false` 且成功时，只能说明无 token 小样本可用，不能证明大批量额度或长期稳定。
+- `yfinance.market_label_only=true` 时，`market` 只是输出标签，不能当作交易所、日历或真实市场归属证明。
+- `baostock` 通过小样本门禁时，仍不代表适合全 A 首轮历史抓取；全 A clean pool 复核才优先考虑它。
+- 任何源的 `long_term_stability_claim` 都必须保持 `not_proven`，除非有独立长期监控和明确验收窗口。
 
 ## P1 组合容量门禁
 
@@ -515,6 +532,14 @@ uv run --with pandas python skills/a-share-selection-strategy/scripts/summarize_
 `allocate_candidate_capital.py` 的 stdout 必须披露 `cash_budget`、`lot_size`、`capital_model` 和 `claim_boundary=local_sizing_not_broker_order`。这些字段只证明本地 sizing 计算可追溯，不能解释为真实成交、券商订单或真实现金容量证明。严格回测汇总应对 `portfolio_equity_curve.py` 显式使用 `--fail-on-incomplete`，否则默认只基于 complete trades 生成权益曲线。
 
 ## 验证命令
+
+推荐先使用统一本地验证入口:
+
+```bash
+python3 validate_skill_changes.py
+```
+
+该入口只覆盖本地仓库门禁，不证明真实行情、真实 prediction、券商订单或真实回测门禁通过。若需要拆开执行，对应命令如下:
 
 ```bash
 for file in skills/a-share-selection-strategy/evals/*.json skills/a-share-selection-strategy/configs/*.json; do

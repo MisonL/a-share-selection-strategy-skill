@@ -31,3 +31,5 @@ jobs:
           PYTHONPYCACHEPREFIX=/tmp/a-share-selection-pycache python3 -m compileall -q skills/a-share-selection-strategy/scripts
       - name: Run tests
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+      - name: Run repo health checks
+        run: python3 validate_skill_changes.py --skip-skill-validate --skip-tests

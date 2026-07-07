@@ -144,6 +144,9 @@ def check_yaml_agent_manifest() -> None:
         "        if not isinstance(value, str) or not value.strip():\n"
         "            raise RuntimeError(f'{manifest}: missing interface.{key}')\n"
     )
+    if python_module_available("yaml"):
+        run_command([sys.executable, "-c", code])
+        return
     run_command([uv_command(), "run", "--with", "pyyaml", "python", "-c", code])
 
 
@@ -303,6 +306,19 @@ def uv_command() -> str:
             return str(candidate)
     raise FileNotFoundError(
         "uv executable not found; install uv or add it to PATH before running validation"
+    )
+
+
+def python_module_available(module: str) -> bool:
+    return (
+        subprocess.run(
+            [sys.executable, "-c", f"import {module}"],
+            cwd=ROOT,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        ).returncode
+        == 0
     )
 
 

@@ -550,7 +550,20 @@ done
 uv run --with pyyaml python - <<'PY'
 import yaml
 from pathlib import Path
-assert yaml.safe_load(Path("skills/a-share-selection-strategy/agents/openai.yaml").read_text())["interface"]["display_name"]
+manifests = sorted(Path("skills/a-share-selection-strategy/agents").glob("*.yaml"))
+if not manifests:
+    raise RuntimeError("no YAML agent manifest files found")
+for manifest in manifests:
+    data = yaml.safe_load(manifest.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise RuntimeError(f"{manifest}: expected mapping root")
+    interface = data.get("interface")
+    if not isinstance(interface, dict):
+        raise RuntimeError(f"{manifest}: missing interface mapping")
+    for key in ["display_name", "short_description", "default_prompt"]:
+        value = interface.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise RuntimeError(f"{manifest}: missing interface.{key}")
 PY
 PYTHONPYCACHEPREFIX=/tmp/a-share-selection-pycache python3 -m compileall -q skills/a-share-selection-strategy/scripts
 PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy --with pyarrow python -m unittest discover -s tests -v

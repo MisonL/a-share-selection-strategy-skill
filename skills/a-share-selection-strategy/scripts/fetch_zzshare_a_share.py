@@ -9,7 +9,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from zzshare_a_share_data import (
+from lib.fetch.zzshare_a_share_data import (
     CLAIM_BOUNDARY,
     DEFAULT_FIELDS,
     DEFAULT_HTTP_URL,
@@ -21,7 +21,7 @@ from zzshare_a_share_data import (
     ts_code,
     zzshare_date,
 )
-from zzshare_a_share_quality import (
+from lib.fetch.zzshare_a_share_quality import (
     apply_quality_policy,
     output_status,
     remove_output,
@@ -54,7 +54,9 @@ def main(argv: list[str] | None = None) -> int:
             metadata,
             drop_invalid_rows=args.drop_invalid_rows,
         )
-        metadata = output_status(metadata, output_written=True, metadata_output_written=True)
+        metadata = output_status(
+            metadata, output_written=True, metadata_output_written=True
+        )
         write_outputs(frame, metadata, output, metadata_output)
     except Exception as exc:  # noqa: BLE001
         remove_output(output)
@@ -74,9 +76,13 @@ def finish(
     output: Path,
     metadata_output: Path,
 ) -> int:
-    strict_errors = strict_gate_errors(metadata, fail_on_fetch_error=args.fail_on_fetch_error)
+    strict_errors = strict_gate_errors(
+        metadata, fail_on_fetch_error=args.fail_on_fetch_error
+    )
     if strict_errors:
-        metadata = output_status(metadata, output_written=False, metadata_output_written=True)
+        metadata = output_status(
+            metadata, output_written=False, metadata_output_written=True
+        )
         remove_output(output)
         write_metadata(metadata, metadata_output)
         print_summary(metadata, prefix="ERROR_SUMMARY")
@@ -111,11 +117,15 @@ def parser_description() -> str:
 
 
 def add_required_options(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--symbols", required=True, help="Comma-separated six-digit symbols.")
+    parser.add_argument(
+        "--symbols", required=True, help="Comma-separated six-digit symbols."
+    )
     parser.add_argument("--start-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
     parser.add_argument("--end-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
     parser.add_argument("--output", required=True, help="Output CSV path.")
-    parser.add_argument("--metadata-output", required=True, help="Output metadata JSON path.")
+    parser.add_argument(
+        "--metadata-output", required=True, help="Output metadata JSON path."
+    )
 
 
 def add_connection_options(parser: argparse.ArgumentParser) -> None:

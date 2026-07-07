@@ -10,15 +10,26 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from walk_forward_metadata_checks import metadata_gate_errors
+from lib.walk_forward.metadata_checks import metadata_gate_errors
 
 
 DATE_DIR = re.compile(r"\d{4}-\d{2}-\d{2}")
 METADATA_FIELDS = (
-    "source", "start_date", "end_date", "adjustflag", "rows", "raw_rows",
-    "symbol_count", "failed_symbols", "empty_symbols", "invalid_rows",
-    "dropped_invalid_rows", "raw_non_trading_rows", "non_trading_rows",
-    "raw_tradestatus_missing_rows", "tradestatus_missing_rows",
+    "source",
+    "start_date",
+    "end_date",
+    "adjustflag",
+    "rows",
+    "raw_rows",
+    "symbol_count",
+    "failed_symbols",
+    "empty_symbols",
+    "invalid_rows",
+    "dropped_invalid_rows",
+    "raw_non_trading_rows",
+    "non_trading_rows",
+    "raw_tradestatus_missing_rows",
+    "tradestatus_missing_rows",
 )
 
 
@@ -50,10 +61,16 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Summarize a walk-forward run directory.")
-    parser.add_argument("--run-dir", required=True, help="Run directory containing metadata.json.")
+    parser = argparse.ArgumentParser(
+        description="Summarize a walk-forward run directory."
+    )
+    parser.add_argument(
+        "--run-dir", required=True, help="Run directory containing metadata.json."
+    )
     parser.add_argument("--output", required=True, help="Output summary JSON path.")
-    parser.add_argument("--signal-dates", nargs="*", help="Expected YYYY-MM-DD signal dates.")
+    parser.add_argument(
+        "--signal-dates", nargs="*", help="Expected YYYY-MM-DD signal dates."
+    )
     parser.add_argument("--expected-symbol-count", type=int)
     parser.add_argument("--required-tradability-model")
     parser.add_argument("--required-limit-rules-model")
@@ -75,7 +92,7 @@ def ensure_runtime_dependencies() -> None:
     if "pd" in globals():
         return
     import pandas as pandas_module
-    import a_share_selection_data as data_module
+    import lib.selection_core.a_share_selection_data as data_module
 
     globals().update(
         {
@@ -88,13 +105,17 @@ def ensure_runtime_dependencies() -> None:
 def build_run_summary(run_dir: Path, options: argparse.Namespace) -> dict[str, Any]:
     ensure_runtime_dependencies()
     metadata = load_json(run_dir / "metadata.json")
-    signals = [signal_summary(path) for path in signal_dirs(run_dir, options.signal_dates)]
+    signals = [
+        signal_summary(path) for path in signal_dirs(run_dir, options.signal_dates)
+    ]
     equity = equity_summary(run_dir / "prediction_equity_curve.csv")
     portfolio = portfolio_summary(run_dir / "prediction_overlap_summary.json", options)
     summary = {
         "run_dir": str(run_dir),
         "metadata": metadata_view(metadata),
-        "allocation": load_json(run_dir / "prediction_allocation_summary.json") if (run_dir / "prediction_allocation_summary.json").exists() else None,
+        "allocation": load_json(run_dir / "prediction_allocation_summary.json")
+        if (run_dir / "prediction_allocation_summary.json").exists()
+        else None,
         "signals": signals,
         "equity": equity,
         "portfolio": portfolio,
@@ -150,7 +171,9 @@ def signal_dirs(run_dir: Path, signal_dates: list[str] | None) -> list[Path]:
         raise ValueError("no signal date directories found")
     missing = [path.name for path in paths if not path.is_dir()]
     if missing:
-        raise FileNotFoundError(f"missing signal date directories: {', '.join(missing)}")
+        raise FileNotFoundError(
+            f"missing signal date directories: {', '.join(missing)}"
+        )
     return paths
 
 
@@ -201,7 +224,9 @@ def equity_summary(path: Path) -> dict[str, Any]:
     return {
         "periods": int(len(frame)),
         "positions": int(pd.to_numeric(frame["positions"], errors="raise").sum()),
-        "incomplete_trades": int(pd.to_numeric(frame["incomplete_trades"], errors="raise").sum()),
+        "incomplete_trades": int(
+            pd.to_numeric(frame["incomplete_trades"], errors="raise").sum()
+        ),
         "final_equity": final_equity,
         "total_return": final_equity - 1.0,
         "max_drawdown": float(pd.to_numeric(frame["drawdown"], errors="raise").min()),
@@ -227,7 +252,9 @@ def quality_errors(
     for signal in summary["signals"]:
         errors.extend(signal_errors(signal, options))
     if summary["equity"]["incomplete_trades"]:
-        errors.append(f"equity_incomplete_trades={summary['equity']['incomplete_trades']}")
+        errors.append(
+            f"equity_incomplete_trades={summary['equity']['incomplete_trades']}"
+        )
     violations = summary["portfolio"]["violations"]
     if options.expect_portfolio_violations and not violations:
         errors.append("expected_portfolio_violations_missing")
@@ -254,7 +281,9 @@ def signal_errors(signal: dict[str, Any], options: argparse.Namespace) -> list[s
     if signal["raw_symbols"] != signal["predicted_symbols"]:
         errors.append(f"{signal['signal_date']}_prediction_symbol_mismatch")
     if signal["skipped_symbols"]:
-        errors.append(f"{signal['signal_date']}_skipped_symbols={signal['skipped_symbols']}")
+        errors.append(
+            f"{signal['signal_date']}_skipped_symbols={signal['skipped_symbols']}"
+        )
     if signal["candidates"] <= 0:
         errors.append(f"{signal['signal_date']}_empty_candidates")
     if signal["completed_trades"] <= 0:
@@ -270,7 +299,9 @@ def signal_errors(signal: dict[str, Any], options: argparse.Namespace) -> list[s
             f"candidates={signal['candidates']}"
         )
     if signal["incomplete_trades"]:
-        errors.append(f"{signal['signal_date']}_incomplete_trades={signal['incomplete_trades']}")
+        errors.append(
+            f"{signal['signal_date']}_incomplete_trades={signal['incomplete_trades']}"
+        )
     errors.extend(model_errors(signal, options))
     return errors
 
@@ -280,20 +311,28 @@ def model_errors(signal: dict[str, Any], options: argparse.Namespace) -> list[st
     if options.required_tradability_model:
         models = signal["tradability_models"]
         if models != [options.required_tradability_model]:
-            errors.append(f"{signal['signal_date']}_tradability_models={','.join(models)}")
+            errors.append(
+                f"{signal['signal_date']}_tradability_models={','.join(models)}"
+            )
     if options.required_limit_rules_model:
         models = signal["limit_rules_models"]
         if models != [options.required_limit_rules_model]:
-            errors.append(f"{signal['signal_date']}_limit_rules_models={','.join(models)}")
+            errors.append(
+                f"{signal['signal_date']}_limit_rules_models={','.join(models)}"
+            )
     return errors
 
 
-def portfolio_violations(summary: dict[str, Any], gate: argparse.Namespace) -> list[str]:
+def portfolio_violations(
+    summary: dict[str, Any], gate: argparse.Namespace
+) -> list[str]:
     violations = []
     if gate.max_open_positions is not None:
         if int(summary["max_open_positions"]) > gate.max_open_positions:
             limit = gate.max_open_positions
-            violations.append(f"max_open_positions={summary['max_open_positions']} limit={limit}")
+            violations.append(
+                f"max_open_positions={summary['max_open_positions']} limit={limit}"
+            )
     add_float_violation(
         violations, summary, key="max_gross_weight", limit=gate.max_gross_weight
     )
@@ -304,7 +343,9 @@ def portfolio_violations(summary: dict[str, Any], gate: argparse.Namespace) -> l
         violations, summary, key="max_cash_reserved", limit=gate.max_cash_reserved
     )
     if gate.fail_on_symbol_overlap and int(summary.get("same_symbol_overlap_rows", 0)):
-        violations.append(f"same_symbol_overlap_rows={summary['same_symbol_overlap_rows']}")
+        violations.append(
+            f"same_symbol_overlap_rows={summary['same_symbol_overlap_rows']}"
+        )
     return violations
 
 

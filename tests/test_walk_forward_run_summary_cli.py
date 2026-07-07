@@ -17,7 +17,7 @@ SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import summarize_walk_forward_run as run_summary  # noqa: E402
-from a_share_selection_model_contracts import (  # noqa: E402
+from lib.selection_core.a_share_selection_model_contracts import (  # noqa: E402
     LIMIT_RULES_MODEL_NOT_MODELED,
     TRADABILITY_MODEL_ENTRY_EXIT,
 )
@@ -59,7 +59,9 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
         self.assertIn("capacity_gate_status=expected_violation_not_pass", stdout)
         self.assertIn("expected_portfolio_violations=True", stdout)
         self.assertIn("model_gates_checked=True", stdout)
-        self.assertIn("verdict=known_portfolio_violation_reproduced_not_capacity_pass", stdout)
+        self.assertIn(
+            "verdict=known_portfolio_violation_reproduced_not_capacity_pass", stdout
+        )
         self.assertIn("claim_boundary=summary_not_external_gate", stdout)
         self.assertEqual("", stderr)
         self.assertEqual([], data["quality_errors"])
@@ -82,7 +84,9 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
             root = build_run(Path(tmpdir), portfolio_violates=False)
             output = Path(tmpdir) / "summary.json"
 
-            code, stdout, stderr = call_cli(root, output, ["--expected-symbol-count", "2"])
+            code, stdout, stderr = call_cli(
+                root, output, ["--expected-symbol-count", "2"]
+            )
 
             data = json.loads(output.read_text(encoding="utf-8"))
         self.assertEqual(0, code)
@@ -127,7 +131,9 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
             root = build_run(Path(tmpdir), skipped_symbols=1)
             output = Path(tmpdir) / "summary.json"
 
-            code, stdout, stderr = call_cli(root, output, ["--expected-symbol-count", "2"])
+            code, stdout, stderr = call_cli(
+                root, output, ["--expected-symbol-count", "2"]
+            )
 
             data = json.loads(output.read_text(encoding="utf-8"))
         self.assertEqual(3, code)
@@ -145,7 +151,9 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
             rows.to_csv(backtest, index=False)
             output = Path(tmpdir) / "summary.json"
 
-            code, stdout, stderr = call_cli(root, output, ["--expected-symbol-count", "2"])
+            code, stdout, stderr = call_cli(
+                root, output, ["--expected-symbol-count", "2"]
+            )
             data = json.loads(output.read_text(encoding="utf-8"))
 
         self.assertEqual(3, code)
@@ -203,7 +211,9 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
             )
             output = Path(tmpdir) / "summary.json"
 
-            code, _stdout, stderr = call_cli(root, output, ["--expected-symbol-count", "2"])
+            code, _stdout, stderr = call_cli(
+                root, output, ["--expected-symbol-count", "2"]
+            )
 
         self.assertEqual(3, code)
         self.assertIn("metadata_invalid_rows=10", stderr)
@@ -237,7 +247,9 @@ def call_cli(root: Path, output: Path, extra_args: list[str]) -> tuple[int, str,
     stdout = StringIO()
     stderr = StringIO()
     with redirect_stdout(stdout), redirect_stderr(stderr):
-        code = run_summary.main(["--run-dir", str(root), "--output", str(output), *extra_args])
+        code = run_summary.main(
+            ["--run-dir", str(root), "--output", str(output), *extra_args]
+        )
     return code, stdout.getvalue(), stderr.getvalue()
 
 
@@ -274,7 +286,9 @@ def build_run(
     )
     write_signal_dir(root / signal_parent / "2026-05-12", skipped_symbols)
     write_equity(root / "prediction_equity_curve.csv")
-    write_json(root / "prediction_overlap_summary.json", overlap_summary(portfolio_violates))
+    write_json(
+        root / "prediction_overlap_summary.json", overlap_summary(portfolio_violates)
+    )
     return root
 
 
@@ -282,7 +296,11 @@ def write_signal_dir(path: Path, skipped_symbols: int) -> None:
     path.mkdir(parents=True, exist_ok=True)
     write_json(
         path / "prediction_summary.json",
-        {"raw_symbols": 2, "predicted_symbols": 2 - skipped_symbols, "skipped_symbols": skipped_symbols},
+        {
+            "raw_symbols": 2,
+            "predicted_symbols": 2 - skipped_symbols,
+            "skipped_symbols": skipped_symbols,
+        },
     )
     pd.DataFrame([{"symbol": "000001"}, {"symbol": "000002"}]).to_csv(
         path / "prediction_candidates.csv",

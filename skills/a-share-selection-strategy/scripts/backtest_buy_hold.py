@@ -30,9 +30,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--prices", required=True, help="Path to OHLCV CSV/Parquet.")
     parser.add_argument("--candidates", required=True, help="Path to candidates CSV.")
     parser.add_argument("--output", required=True, help="Path to output CSV.")
-    parser.add_argument("--hold-days", "--holding-days", dest="hold_days", type=int, default=5)
-    parser.add_argument("--cost-bps", type=float, default=0.0, help="Round-trip cost in basis points.")
-    parser.add_argument("--slippage-bps", type=float, default=0.0, help="Round-trip slippage in basis points.")
+    parser.add_argument(
+        "--hold-days", "--holding-days", dest="hold_days", type=int, default=5
+    )
+    parser.add_argument(
+        "--cost-bps", type=float, default=0.0, help="Round-trip cost in basis points."
+    )
+    parser.add_argument(
+        "--slippage-bps",
+        type=float,
+        default=0.0,
+        help="Round-trip slippage in basis points.",
+    )
     parser.add_argument("--require-tradable-bars", action="store_true")
     parser.add_argument(
         "--require-tradable-holding-period",
@@ -83,11 +92,11 @@ def ensure_runtime_dependencies() -> None:
     if "pd" in globals():
         return
     import pandas as pandas_module
-    import a_share_selection_backtest_rows as row_module
-    import a_share_selection_capital as capital_module
-    import a_share_selection_data as data_module
-    import a_share_selection_tradability as tradability_module
-    import validate_ohlcv as validator_module
+    import lib.selection_core.a_share_selection_backtest_rows as row_module
+    import lib.selection_core.a_share_selection_capital as capital_module
+    import lib.selection_core.a_share_selection_data as data_module
+    import lib.selection_core.a_share_selection_tradability as tradability_module
+    import lib.a_share_selection_validation as validation_module
 
     globals().update(
         {
@@ -100,7 +109,7 @@ def ensure_runtime_dependencies() -> None:
             "parse_dates": data_module.parse_dates,
             "read_table": data_module.read_table,
             "tradability_failure_reason": tradability_module.tradability_failure_reason,
-            "validate_frame": validator_module.validate_frame,
+            "validate_frame": validation_module.validate_frame,
         }
     )
 
@@ -137,8 +146,7 @@ def run_backtest(
         require_holding_period_tradable=require_holding_period_tradable,
     )
     rows = [
-        evaluate_candidate(row, prepared, options)
-        for _, row in candidates.iterrows()
+        evaluate_candidate(row, prepared, options) for _, row in candidates.iterrows()
     ]
     result = add_candidate_capital_fields(pd.DataFrame(rows), candidates)
     return result, build_summary(
@@ -159,7 +167,9 @@ def validate_candidates(candidates: pd.DataFrame) -> None:
         raise ValueError("candidates data is empty")
 
 
-def validate_expected_signal_date(candidates: pd.DataFrame, expected: str | None) -> None:
+def validate_expected_signal_date(
+    candidates: pd.DataFrame, expected: str | None
+) -> None:
     if expected is None:
         return
     expected_date = parse_dates(pd.Series([expected])).iloc[0]

@@ -2,6 +2,20 @@
 
 from __future__ import annotations
 
+if __name__ == "__main__":
+    import sys
+    from pathlib import Path
+
+    _SCRIPT_PATH = Path(__file__).resolve()
+    _SCRIPTS_DIR = next(
+        parent for parent in _SCRIPT_PATH.parents if parent.name == "scripts"
+    )
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+    from lib.a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)
+
+
 import json
 from pathlib import Path
 from typing import Any
@@ -66,7 +80,9 @@ def validate_config(config: dict[str, Any]) -> None:
     require_keys(config["windows"], window_keys(config), "windows")
     require_keys(config["weights"], BASE_WEIGHT_KEYS, "weights")
     require_one_of(config["weights"], ["prediction_score", "trend_score"], "weights")
-    require_keys(config["explosion_weights"], EXPLOSION_WEIGHT_KEYS, "explosion_weights")
+    require_keys(
+        config["explosion_weights"], EXPLOSION_WEIGHT_KEYS, "explosion_weights"
+    )
     require_keys(config["thresholds"], BASE_THRESHOLD_KEYS, "thresholds")
     require_one_of(
         config["thresholds"],
@@ -116,8 +132,3 @@ def require_one_of(section: dict[str, Any], keys: list[str], name: str) -> None:
 def reject_key(section: dict[str, Any], key: str, name: str) -> None:
     if key in section:
         raise ValueError(f"config {name} must not include {key}")
-
-if __name__ == "__main__":
-    from a_share_selection_cli_guard import fail_not_cli
-
-    fail_not_cli(__file__)

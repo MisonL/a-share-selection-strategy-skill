@@ -101,7 +101,9 @@ class AShareSelectionConfigTests(unittest.TestCase):
         self.assertTrue(config["thresholds"]["exclude_one_word_bar"])
         self.assertEqual("not_used", config["disclosure"]["prediction_input_source"])
         self.assertFalse(config["disclosure"]["prediction_model_executed_by_runner"])
-        self.assertFalse(config["disclosure"]["prediction_model_executed_by_score_script"])
+        self.assertFalse(
+            config["disclosure"]["prediction_model_executed_by_score_script"]
+        )
         self.assertTrue(config["disclosure"]["lightgbm_not_used"])
 
     def test_core_configs_carry_disclosure_boundaries(self) -> None:
@@ -171,16 +173,18 @@ class AShareSelectionConfigTests(unittest.TestCase):
             lib_config.resolve_config_path,
         )
 
-    def test_lib_cli_guard_entries_match_stable_user_cli(self) -> None:
-        self.assertEqual(
-            (
-                "validate_ohlcv.py",
-                "score_candidates.py",
-                "run_today_a_share_selection.py",
-                "run_baostock_walk_forward.py",
-            ),
-            lib_cli_guard.CLI_ENTRIES,
+    def test_lib_cli_guard_entries_match_public_entry_registry(self) -> None:
+        registry = json.loads(
+            (CONFIGS / "script_entrypoints.json").read_text(encoding="utf-8")
         )
+        expected = tuple(
+            sorted(
+                script
+                for script, metadata in registry["entries"].items()
+                if metadata["public_entry"]
+            )
+        )
+        self.assertEqual(expected, lib_cli_guard.CLI_ENTRIES)
 
     def test_openai_agent_manifest_has_required_interface_fields(self) -> None:
         text = (SKILL_ROOT / "agents/openai.yaml").read_text(encoding="utf-8")
@@ -208,7 +212,9 @@ class AShareSelectionConfigTests(unittest.TestCase):
         self.assertIn("非收益证明", text)
 
     def test_evals_manifest_matches_scenario_files(self) -> None:
-        manifest = json.loads((SKILL_ROOT / "evals/evals.json").read_text(encoding="utf-8"))
+        manifest = json.loads(
+            (SKILL_ROOT / "evals/evals.json").read_text(encoding="utf-8")
+        )
         self.assertNotIn("evals", manifest)
         seen_ids: list[str] = []
         total = 0
@@ -239,7 +245,10 @@ class AShareSelectionConfigTests(unittest.TestCase):
             self.assertTrue(spot.exists())
             self.assertTrue(prediction.exists())
             self.assertEqual(321, len(prices.read_text(encoding="utf-8").splitlines()))
-            self.assertIn("prediction_score", prediction.read_text(encoding="utf-8").splitlines()[0])
+            self.assertIn(
+                "prediction_score",
+                prediction.read_text(encoding="utf-8").splitlines()[0],
+            )
 
     def test_create_demo_data_low_price_scenario_generates_gate_examples(self) -> None:
         import tempfile
@@ -264,12 +273,16 @@ class AShareSelectionConfigTests(unittest.TestCase):
         self.assertEqual(7, prices["symbol"].nunique())
         self.assertEqual(7, spot["symbol"].nunique())
         self.assertIn("industry", spot.columns)
-        self.assertEqual("软件服务", spot[spot["symbol"].eq("000002")]["industry"].iloc[0])
+        self.assertEqual(
+            "软件服务", spot[spot["symbol"].eq("000002")]["industry"].iloc[0]
+        )
         latest = prices.sort_values(["symbol", "date"]).groupby("symbol").tail(1)
         self.assertIn("000003", set(latest[latest["close"] > 10.0]["symbol"]))
         self.assertIn("000004", set(latest[latest["amount"] < 100000000.0]["symbol"]))
         self.assertIn("000005", set(latest[latest["turn"] < 1.0]["symbol"]))
-        self.assertEqual("1", str(latest[latest["symbol"].eq("000006")]["isST"].iloc[0]))
+        self.assertEqual(
+            "1", str(latest[latest["symbol"].eq("000006")]["isST"].iloc[0])
+        )
         self.assertEqual(
             "0",
             str(latest[latest["symbol"].eq("000007")]["tradestatus"].iloc[0]),

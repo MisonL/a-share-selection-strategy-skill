@@ -16,7 +16,7 @@ SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import run_baostock_walk_forward as runner  # noqa: E402
-from a_share_selection_model_contracts import (  # noqa: E402
+from lib.selection_core.a_share_selection_model_contracts import (  # noqa: E402
     LIMIT_RULES_MODEL_NOT_MODELED,
     TRADABILITY_MODEL_HOLDING_PERIOD,
 )
@@ -53,7 +53,9 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
                         "--offline-plan",
                     ]
                 )
-            data = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            data = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
 
         self.assertEqual(0, code)
         first_line = stdout.getvalue().splitlines()[0]
@@ -122,7 +124,9 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
                     "--offline-plan",
                 ]
             )
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
             config_path = output / "prediction_profile_config.json"
             config = json.loads(config_path.read_text(encoding="utf-8"))
             commands = {item["step"]: item["command"] for item in manifest["steps"]}
@@ -195,7 +199,16 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
             data = json.loads(context.manifest_path.read_text(encoding="utf-8"))
 
         self.assertEqual("2026-05-12:score", raised.exception.step)
-        self.assertEqual(["fetch", "2026-05-12:slice", "2026-05-12:predict", "2026-05-12:validate", "2026-05-12:score"], [item["step"] for item in data["steps"]])
+        self.assertEqual(
+            [
+                "fetch",
+                "2026-05-12:slice",
+                "2026-05-12:predict",
+                "2026-05-12:validate",
+                "2026-05-12:score",
+            ],
+            [item["step"] for item in data["steps"]],
+        )
         self.assertEqual(3, data["steps"][-1]["returncode"])
 
     def test_commands_include_current_p1_gate_flags(self) -> None:
@@ -220,7 +233,9 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
         self.assertIn("--require-tradable-bars", commands["2026-05-12:backtest"])
         self.assertIn("--expected-signal-date", commands["2026-05-12:backtest"])
         self.assertIn("2026-05-12", commands["2026-05-12:backtest"])
-        self.assertNotIn("--require-tradable-holding-period", commands["2026-05-12:backtest"])
+        self.assertNotIn(
+            "--require-tradable-holding-period", commands["2026-05-12:backtest"]
+        )
         self.assertIn("--fail-on-incomplete", commands["2026-05-12:backtest"])
         self.assertIn("--require-capital-fields", commands["portfolio_overlap"])
         self.assertIn("--fail-on-symbol-overlap", commands["portfolio_overlap"])
@@ -273,13 +288,19 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
             runner.run_pipeline(context)
             commands = {item["step"]: item["command"] for item in manifest["steps"]}
 
-        self.assertEqual(TRADABILITY_MODEL_HOLDING_PERIOD, manifest["tradability_model"])
-        self.assertIn("--require-tradable-holding-period", commands["2026-05-12:backtest"])
+        self.assertEqual(
+            TRADABILITY_MODEL_HOLDING_PERIOD, manifest["tradability_model"]
+        )
+        self.assertIn(
+            "--require-tradable-holding-period", commands["2026-05-12:backtest"]
+        )
         self.assertIn(TRADABILITY_MODEL_HOLDING_PERIOD, commands["summary"])
 
     def test_drop_invalid_rows_marks_summary_allowance_explicitly(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            args = args_for(Path(tmpdir), signal_dates=["2026-05-12"], drop_invalid_rows=True)
+            args = args_for(
+                Path(tmpdir), signal_dates=["2026-05-12"], drop_invalid_rows=True
+            )
             executor = FakeExecutor({})
             manifest = runner.initial_manifest(args)
             context = runner.RunContext(
@@ -319,7 +340,9 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
         self.assertIn(str(config_path), commands["2026-05-12:validate"])
         self.assertIn(str(config_path), commands["2026-05-12:score"])
 
-    def test_portfolio_allocation_model_runs_global_allocate_before_backtests(self) -> None:
+    def test_portfolio_allocation_model_runs_global_allocate_before_backtests(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             args = args_for(
                 Path(tmpdir),
@@ -340,13 +363,21 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
             commands = {item["step"]: item["command"] for item in manifest["steps"]}
 
         self.assertNotIn("2026-05-12:allocate", steps)
-        self.assertLess(steps.index("portfolio_allocate"), steps.index("2026-05-12:backtest"))
-        self.assertLess(steps.index("portfolio_allocate"), steps.index("2026-05-20:backtest"))
-        self.assertIn("allocate_portfolio_candidate_capital.py", commands["portfolio_allocate"][1])
+        self.assertLess(
+            steps.index("portfolio_allocate"), steps.index("2026-05-12:backtest")
+        )
+        self.assertLess(
+            steps.index("portfolio_allocate"), steps.index("2026-05-20:backtest")
+        )
+        self.assertIn(
+            "allocate_portfolio_candidate_capital.py", commands["portfolio_allocate"][1]
+        )
         self.assertIn("--expected-signal-dates", commands["portfolio_allocate"])
         self.assertIn("2026-05-12", commands["portfolio_allocate"])
         self.assertIn("2026-05-20", commands["portfolio_allocate"])
-        self.assertIn("prediction_raw_candidates.csv", " ".join(commands["2026-05-12:score"]))
+        self.assertIn(
+            "prediction_raw_candidates.csv", " ".join(commands["2026-05-12:score"])
+        )
         self.assertEqual("portfolio_cash_lot_floor", manifest["allocation_model"])
 
 
@@ -361,7 +392,9 @@ class FakeExecutor:
         code = self.returncodes.get(step, 0)
         if step == "summary" and code == 0:
             write_fake_run_summary(command)
-        return subprocess.CompletedProcess(command, code, stdout=f"{step} stdout", stderr=f"{step} stderr")
+        return subprocess.CompletedProcess(
+            command, code, stdout=f"{step} stdout", stderr=f"{step} stderr"
+        )
 
 
 def infer_step(command: list[str]) -> str:

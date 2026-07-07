@@ -9,33 +9,69 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from a_share_selection_provenance import (
+from lib.selection_core.a_share_selection_provenance import (
     PROVENANCE_COLUMNS,
     add_provenance_to_frame,
     aggregate_input_provenance,
 )
-from a_share_selection_symbols import listing_board_values
+from lib.selection_core.a_share_selection_symbols import listing_board_values
 
 
 OUTPUT_COLUMNS = [
-    "rank", "symbol", "name", "market", "listing_board", "date", "close", "volume", "turn", "amount",
-    "tradestatus", "isST", "one_word_bar",
-    "requested_as_of_date", "actual_data_date", "as_of_date_observed",
-    "one_year_pct_chg", "spot_price", "spot_pct_chg", "spot_amount", "spot_industry",
-    "rsi", "volatility", "macd", "macd_status", "momentum_score", "trend_score",
-    "prediction_score", "prediction_source", "prediction_input_source",
-    "prediction_model", "prediction_horizon_days", "prediction_scope",
+    "rank",
+    "symbol",
+    "name",
+    "market",
+    "listing_board",
+    "date",
+    "close",
+    "volume",
+    "turn",
+    "amount",
+    "tradestatus",
+    "isST",
+    "one_word_bar",
+    "requested_as_of_date",
+    "actual_data_date",
+    "as_of_date_observed",
+    "one_year_pct_chg",
+    "spot_price",
+    "spot_pct_chg",
+    "spot_amount",
+    "spot_industry",
+    "rsi",
+    "volatility",
+    "macd",
+    "macd_status",
+    "momentum_score",
+    "trend_score",
+    "prediction_score",
+    "prediction_source",
+    "prediction_input_source",
+    "prediction_model",
+    "prediction_horizon_days",
+    "prediction_scope",
     "prediction_model_quality_scope",
     "prediction_model_executed_by_score_script",
     "lightgbm_not_executed_by_this_script",
     "volume_unit_verification",
     "effective_empty_result",
     "empty_result_reason",
-    "explosion_score", "risk_score", "total_score", "ma15",
-    "low_ma15_flag", "explosion_focus_flag", "low_price_explosion_flag",
-    "signal_tier", "recommendation", "advice_boundary", "recommendation_boundary",
+    "explosion_score",
+    "risk_score",
+    "total_score",
+    "ma15",
+    "low_ma15_flag",
+    "explosion_focus_flag",
+    "low_price_explosion_flag",
+    "signal_tier",
+    "recommendation",
+    "advice_boundary",
+    "recommendation_boundary",
     *PROVENANCE_COLUMNS,
-    "key_reasons", "risk_notes", "data_window",
+    "key_reasons",
+    "risk_notes",
+    "data_window",
 ]
 
 
@@ -82,7 +118,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     output_path = Path(args.output)
-    diagnostics_path = Path(args.diagnostics_output) if args.diagnostics_output else None
+    diagnostics_path = (
+        Path(args.diagnostics_output) if args.diagnostics_output else None
+    )
     try:
         require_csv_output_suffix(output_path, "candidate output")
         if diagnostics_path is not None:
@@ -90,7 +128,9 @@ def main(argv: list[str] | None = None) -> int:
         ensure_runtime_dependencies()
         config = load_config(Path(args.config))
         spot = read_table(Path(args.spot_input)) if args.spot_input else None
-        candidates, summary = score_candidates(read_table(Path(args.input)), config, spot)
+        candidates, summary = score_candidates(
+            read_table(Path(args.input)), config, spot
+        )
         summary["input"] = Path(args.input).name
         if args.spot_input:
             summary["spot_input"] = Path(args.spot_input).name
@@ -155,18 +195,18 @@ def ensure_runtime_dependencies() -> None:
         return
 
     import pandas as pandas_module
-    import a_share_selection_candidate_fields as gate_fields_module
-    import a_share_selection_config as config_module
-    import a_share_selection_data as data_module
-    import a_share_selection_disclosure as disclosure_module
-    import a_share_selection_diagnostics as diagnostics_module
-    import a_share_selection_metrics as metrics_module
-    import a_share_selection_prepare as prepare_module
-    import a_share_selection_profile as profile_module
-    import a_share_selection_score_summary as summary_module
-    import a_share_selection_spot as spot_module
-    import a_share_selection_universe as universe_module
-    import validate_ohlcv as validator_module
+    import lib.a_share_selection_config as config_module
+    import lib.selection_core.a_share_selection_candidate_fields as gate_fields_module
+    import lib.selection_core.a_share_selection_data as data_module
+    import lib.selection_core.a_share_selection_disclosure as disclosure_module
+    import lib.selection_core.a_share_selection_diagnostics as diagnostics_module
+    import lib.selection_core.a_share_selection_metrics as metrics_module
+    import lib.selection_core.a_share_selection_prepare as prepare_module
+    import lib.selection_core.a_share_selection_profile as profile_module
+    import lib.selection_core.a_share_selection_score_summary as summary_module
+    import lib.selection_core.a_share_selection_spot as spot_module
+    import lib.selection_core.a_share_selection_universe as universe_module
+    import lib.a_share_selection_validation as validation_module
 
     globals().update(
         {
@@ -198,7 +238,7 @@ def ensure_runtime_dependencies() -> None:
             "merge_latest_spot_fields": spot_module.merge_latest_spot_fields,
             "merge_spot_view": spot_module.merge_spot_view,
             "apply_universe_filter": universe_module.apply_universe_filter,
-            "validate_frame": validator_module.validate_frame,
+            "validate_frame": validation_module.validate_frame,
         }
     )
 
@@ -338,7 +378,9 @@ def rank_and_limit(frame: pd.DataFrame, config: dict[str, Any]) -> pd.DataFrame:
     if not is_prediction_mode(config):
         sort_columns.extend(["explosion_score", "momentum_score"])
         ascending.extend([False, False])
-    ranked = ranked.sort_values(sort_columns, ascending=ascending).reset_index(drop=True)
+    ranked = ranked.sort_values(sort_columns, ascending=ascending).reset_index(
+        drop=True
+    )
     max_candidates = int(config.get("output", {}).get("max_candidates", 50))
     if max_candidates > 0:
         ranked = ranked.head(max_candidates)

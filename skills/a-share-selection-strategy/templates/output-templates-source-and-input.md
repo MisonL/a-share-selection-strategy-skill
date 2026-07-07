@@ -153,7 +153,7 @@
 - 本仓库 CLI 是稳定入口，当前不是可安装 Python package。
 - 复用脚本函数前，必须把仓库的 `skills/a-share-selection-strategy/scripts/` 加入 `PYTHONPATH` 或 `sys.path`。
 - 不要把 `from skills/a-share-selection-strategy/scripts/score_candidates import ...` 当成稳定 API；它可能在 import 阶段成功，但调用时因内部顶层模块路径缺失而失败。
-- `python3 -S skills/a-share-selection-strategy/scripts/<name>.py --help` 依赖轻量化门禁只覆盖带 `argparse`、`main()` 或 `__main__` 的 CLI 入口；`a_share_selection_*.py`、`lightgbm_prediction_summary.py` 等 helper/import 模块没有帮助界面承诺，顶层 pandas/numpy import 失败不应写成用户入口缺口。
+- `python3 -S skills/a-share-selection-strategy/scripts/<name>.py --help` 依赖轻量化门禁只覆盖带 `argparse`、`main()` 或 `__main__` 的 CLI 入口；`scripts/lib/*` 下的 helper/import 模块没有帮助界面承诺，顶层 pandas/numpy import 失败不应写成用户入口缺口。
 - 使用 `skills/a-share-selection-strategy/scripts/*.py` 全量扫描时，必须先把真实 CLI 入口和 helper/import 模块分开；不能用 glob 扫描里的 helper 失败覆盖真实 CLI 入口的逐项验证结果。
 - 直接调用 Python API 时，`input` 字段由调用方记录或注入，不能把 API 调用摘要说成完整 CLI 门禁。
 ```

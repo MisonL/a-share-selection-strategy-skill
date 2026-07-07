@@ -50,7 +50,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--input", required=True, help="Path to CSV or Parquet file.")
     parser.add_argument("--output", required=True, help="Path to output CSV file.")
-    parser.add_argument("--horizon", type=int, default=5, help="Forward return horizon.")
+    parser.add_argument(
+        "--horizon", type=int, default=5, help="Forward return horizon."
+    )
     parser.add_argument("--train-ratio", type=float, default=0.8)
     parser.add_argument("--min-history-rows", type=int, default=150)
     parser.add_argument("--summary-output", help="Optional JSON summary output path.")
@@ -113,10 +115,10 @@ def ensure_runtime_dependencies() -> None:
         return
     import numpy as numpy_module
     import pandas as pandas_module
-    import lightgbm_prediction_summary as summary_module
-    import a_share_selection_data as data_module
-    import a_share_selection_metrics as metrics_module
-    import validate_ohlcv as validator_module
+    import lib.selection_core.a_share_selection_data as data_module
+    import lib.selection_core.a_share_selection_metrics as metrics_module
+    import lib.a_share_selection_validation as validation_module
+    import lib.gates.lightgbm_prediction_summary as summary_module
 
     globals().update(
         {
@@ -130,7 +132,7 @@ def ensure_runtime_dependencies() -> None:
             "write_json_summary": summary_module.write_json_summary,
             "calculate_macd": metrics_module.calculate_macd,
             "calculate_rsi": metrics_module.calculate_rsi,
-            "validate_frame": validator_module.validate_frame,
+            "validate_frame": validation_module.validate_frame,
         }
     )
 
@@ -160,7 +162,9 @@ def generate_predictions(
             symbol_summaries.append(skipped_summary(group, reason))
             continue
         try:
-            output, symbol_summary = predict_symbol(group, horizon, train_ratio, model_deps)
+            output, symbol_summary = predict_symbol(
+                group, horizon, train_ratio, model_deps
+            )
             outputs.append(output)
             symbol_summaries.append(symbol_summary)
         except Exception as exc:  # noqa: BLE001
@@ -173,8 +177,7 @@ def generate_predictions(
         )
         reason_detail = f"; skipped_reasons={reason_text}" if reason_text else ""
         raise ValueError(
-            f"no symbols predicted; skipped_symbols={','.join(skipped)}"
-            f"{reason_detail}"
+            f"no symbols predicted; skipped_symbols={','.join(skipped)}{reason_detail}"
         )
     result = pd.concat(outputs, ignore_index=True)
     return result, build_summary(
@@ -252,7 +255,9 @@ def as_of_boundary(frame: pd.DataFrame, as_of_date: str) -> dict[str, Any]:
     }
 
 
-def annotate_as_of_boundary(frame: pd.DataFrame, boundary: dict[str, Any]) -> pd.DataFrame:
+def annotate_as_of_boundary(
+    frame: pd.DataFrame, boundary: dict[str, Any]
+) -> pd.DataFrame:
     result = frame.copy()
     for key, value in boundary.items():
         result[key] = value
@@ -279,7 +284,9 @@ def predict_symbol(
     x_train = scaled_frame(scaler.fit_transform(train[FEATURE_COLUMNS]), train.index)
     model = model_deps["classifier"](**MODEL_PARAMS)
     model.fit(x_train, target_label.astype(int))
-    holdout = holdout_summary(trainable, train_size, target_threshold, scaler, model, group)
+    holdout = holdout_summary(
+        trainable, train_size, target_threshold, scaler, model, group
+    )
     latest = features.dropna(subset=FEATURE_COLUMNS).iloc[[-1]]
     x_latest = scaled_frame(scaler.transform(latest[FEATURE_COLUMNS]), latest.index)
     probability = float(model.predict_proba(x_latest)[0][1])
@@ -327,7 +334,9 @@ def base_holdout_summary(
         "holdout_date_min": "",
         "holdout_date_max": "",
         "holdout_positive_labels": int(labels.sum()) if len(labels) else 0,
-        "holdout_negative_labels": int(len(labels) - labels.sum()) if len(labels) else 0,
+        "holdout_negative_labels": int(len(labels) - labels.sum())
+        if len(labels)
+        else 0,
     }
     if len(holdout):
         dates = parse_dates(group.loc[holdout.index, "date"])
@@ -403,7 +412,9 @@ def turnover_series(data: pd.DataFrame) -> pd.Series:
     raise ValueError("LightGBM prediction requires turn or turnover column")
 
 
-def with_prediction(group: pd.DataFrame, probability: float, horizon: int) -> pd.DataFrame:
+def with_prediction(
+    group: pd.DataFrame, probability: float, horizon: int
+) -> pd.DataFrame:
     output = group.copy()
     output["prediction_score"] = min(max(probability, 0.0), 1.0)
     output["prediction_horizon_days"] = int(horizon)

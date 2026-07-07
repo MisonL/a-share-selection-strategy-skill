@@ -4,10 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
-from walk_forward_artifact_checks import build_artifact_report, write_json
+from typing import Any
+
+from lib.walk_forward.artifact_checks import build_artifact_report
 
 
 VALIDATOR = "validate_walk_forward_artifacts"
@@ -20,11 +23,15 @@ def main(argv: list[str] | None = None) -> int:
         report = build_artifact_report(Path(args.run_dir), args, VALIDATOR)
         write_json(report, output)
     except Exception as exc:  # noqa: BLE001
-        print(f"ERROR: code=bad_input output_written=false message={exc}", file=sys.stderr)
+        print(
+            f"ERROR: code=bad_input output_written=false message={exc}", file=sys.stderr
+        )
         return 2
     if report["errors"]:
         print_summary(report, output, prefix="ERROR_SUMMARY")
-        print("ERROR: strict gate failed; " + "; ".join(report["errors"]), file=sys.stderr)
+        print(
+            "ERROR: strict gate failed; " + "; ".join(report["errors"]), file=sys.stderr
+        )
         return 3
     print_summary(report, output)
     return 0
@@ -51,7 +58,9 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Expected known violation count; known violations only, not a capacity pass.",
     )
-    parser.add_argument("--required-allocation-model", default="equal_cash_budget_lot_floor")
+    parser.add_argument(
+        "--required-allocation-model", default="equal_cash_budget_lot_floor"
+    )
     parser.add_argument("--required-tradability-model", required=True)
     parser.add_argument("--required-limit-rules-model", required=True)
     parser.add_argument("--manifest-validation")
@@ -77,6 +86,13 @@ def print_summary(report: dict[str, object], output: Path, prefix: str = "OK") -
         f"errors={len(report['errors'])} verdict={report['verdict']} "
         f"claim_boundary=artifact_validation_not_external_gate "
         f"output={output}"
+    )
+
+
+def write_json(data: dict[str, Any], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8"
     )
 
 

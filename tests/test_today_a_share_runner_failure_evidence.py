@@ -17,7 +17,7 @@ sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(TESTS))
 
 import run_today_a_share_selection as runner  # noqa: E402
-from run_today_a_share_selection_summary import run_identity  # noqa: E402
+from lib.runner.run_today_a_share_selection_summary import run_identity  # noqa: E402
 from helpers import build_frame  # noqa: E402
 
 
@@ -59,7 +59,9 @@ class TodayAShareRunnerFailureEvidenceTests(unittest.TestCase):
                 ]
             )
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
             report = (output / "report.html").read_text(encoding="utf-8")
 
         self.assertEqual(2, code)

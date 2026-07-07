@@ -13,13 +13,13 @@ SKILL_ROOT = ROOT / "skills" / "a-share-selection-strategy"
 SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from a_share_selection_command_safety import (  # noqa: E402
+from lib.selection_core.a_share_selection_command_safety import (  # noqa: E402
     SENSITIVE_FLAG_NAMES,
     sanitize_command,
     sanitize_text,
 )
 from prepare_history_retry_symbols import build_retry_plan  # noqa: E402
-from run_today_a_share_selection_parser import build_parser  # noqa: E402
+from lib.runner.run_today_a_share_selection_parser import build_parser  # noqa: E402
 
 
 class RecoveryAndSafetyHelperTests(unittest.TestCase):
@@ -128,9 +128,7 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
 
     def test_sanitize_text_redacts_wrapped_authorization_values(self) -> None:
         sanitized = sanitize_text(
-            "Authorization: Bearer placeholder-token\n"
-            "  continuation-secret\n"
-            "status=401"
+            "Authorization: Bearer placeholder-token\n  continuation-secret\nstatus=401"
         )
 
         self.assertIn("Authorization: Bearer [REDACTED]\nstatus=401", sanitized)
@@ -269,7 +267,9 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
         self.assertIn("API_KEY=[REDACTED]", sanitized)
         self.assertIn("TOKEN=[REDACTED]", sanitized)
         self.assertIn("Authorization: Bearer [REDACTED]", sanitized)
-        self.assertIn("https://[REDACTED]@example.test/path?secret=%5BREDACTED%5D", sanitized)
+        self.assertIn(
+            "https://[REDACTED]@example.test/path?secret=%5BREDACTED%5D", sanitized
+        )
         self.assertNotIn("placeholder-api-key", sanitized)
         self.assertNotIn("placeholder-token", sanitized)
         self.assertNotIn("placeholder-bearer", sanitized)
@@ -285,7 +285,14 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
 
     def test_runner_sensitive_flags_are_registered_for_redaction(self) -> None:
         parser = build_parser()
-        sensitive_terms = ("token", "api-key", "api_key", "secret", "password", "bearer")
+        sensitive_terms = (
+            "token",
+            "api-key",
+            "api_key",
+            "secret",
+            "password",
+            "bearer",
+        )
         sensitive_flags = sorted(
             option
             for action in parser._actions
@@ -295,7 +302,11 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
 
         self.assertEqual(
             [],
-            [flag for flag in sensitive_flags if flag.lower() not in SENSITIVE_FLAG_NAMES],
+            [
+                flag
+                for flag in sensitive_flags
+                if flag.lower() not in SENSITIVE_FLAG_NAMES
+            ],
         )
 
     def test_build_retry_plan_uses_failed_empty_and_truncated_symbols(self) -> None:
@@ -444,7 +455,9 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
         self.assertTrue(plan["include_clean_selected"])
         self.assertEqual("000002,000001,600000\n", text)
 
-    def test_prepare_history_retry_symbols_cli_rejects_output_input_collision(self) -> None:
+    def test_prepare_history_retry_symbols_cli_rejects_output_input_collision(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             selected = root / "selected_symbols.json"
@@ -500,7 +513,9 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
             sources["yfinance"]["full_a_role"],
         )
 
-    def test_data_source_registry_primary_fields_have_code_or_doc_evidence(self) -> None:
+    def test_data_source_registry_primary_fields_have_code_or_doc_evidence(
+        self,
+    ) -> None:
         registry = json.loads(
             (SKILL_ROOT / "configs/data_sources.json").read_text(encoding="utf-8")
         )

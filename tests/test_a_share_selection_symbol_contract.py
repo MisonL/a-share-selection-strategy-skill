@@ -17,7 +17,7 @@ sys.path.insert(0, str(TESTS))
 
 import score_candidates as scorer  # noqa: E402
 import validate_ohlcv  # noqa: E402
-from a_share_selection_symbols import (  # noqa: E402
+from lib.selection_core.a_share_selection_symbols import (  # noqa: E402
     A_SHARE_EXCHANGES,
     listing_board,
     normalize_symbol_values,
@@ -45,7 +45,9 @@ class AShareSelectionSymbolContractTests(unittest.TestCase):
             parse_a_share_symbols("sz.000001,600000.SH,bj.430047,835185.BJ"),
         )
 
-    def test_normalize_symbol_values_only_strips_bj_when_explicitly_allowed(self) -> None:
+    def test_normalize_symbol_values_only_strips_bj_when_explicitly_allowed(
+        self,
+    ) -> None:
         self.assertEqual(["bj.430047"], normalize_symbol_values(["bj.430047"]))
         self.assertEqual(
             ["430047"],

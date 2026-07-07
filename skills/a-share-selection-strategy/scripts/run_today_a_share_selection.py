@@ -13,11 +13,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import run_today_a_share_selection_helpers as helpers
-from a_share_selection_command_safety import sanitize_command, sanitize_text
-from a_share_selection_paths import config_path
+import lib.runner.run_today_a_share_selection_helpers as helpers
+from lib.a_share_selection_paths import config_path
+from lib.selection_core.a_share_selection_command_safety import (
+    sanitize_command,
+    sanitize_text,
+)
 from prepare_history_retry_symbols import build_retry_plan
-from run_today_a_share_selection_commands import (
+from lib.runner.run_today_a_share_selection_commands import (
     fetch_history_command,
     fetch_spot_command,
     history_market,
@@ -27,16 +30,22 @@ from run_today_a_share_selection_commands import (
     selected_config,
     validate_command,
 )
-from run_today_a_share_selection_history import history_symbols, validate_history_inputs
-from run_today_a_share_selection_input_metadata import (
+from lib.runner.run_today_a_share_selection_history import (
+    history_symbols,
+    validate_history_inputs,
+)
+from lib.runner.run_today_a_share_selection_input_metadata import (
     history_metadata_for_output,
     input_metadata_for_prices,
 )
-from run_today_a_share_selection_modes import ModeResolution, resolve_mode
-from run_today_a_share_selection_outputs import clear_stale_run_outputs, finalize_outputs
-from run_today_a_share_selection_parser import build_parser
-from run_today_a_share_selection_provenance import annotate_run_csv_outputs
-from run_today_a_share_selection_validation import (
+from lib.runner.run_today_a_share_selection_modes import ModeResolution, resolve_mode
+from lib.runner.run_today_a_share_selection_outputs import (
+    clear_stale_run_outputs,
+    finalize_outputs,
+)
+from lib.runner.run_today_a_share_selection_parser import build_parser
+from lib.runner.run_today_a_share_selection_provenance import annotate_run_csv_outputs
+from lib.runner.run_today_a_share_selection_validation import (
     normalize_zzshare_history_options,
     sync_validated_history_options,
 )
@@ -153,26 +162,37 @@ def run_pipeline(context: RunContext) -> None:
     candidates = output / "candidates.csv"
     diagnostics = output / "diagnostics.csv"
     spot = run_spot_path(context.args)
-    context.manifest["input_metadata"] = input_metadata_for_prices(context.args.prices_input)
+    context.manifest["input_metadata"] = input_metadata_for_prices(
+        context.args.prices_input
+    )
     context.manifest["run_outputs_initialized"] = True
     if not context.args.prices_input:
         context.args.history_market = history_market(context.args)
     validate_preflight_inputs(context.args, spot)
     sync_validated_history_options(context.manifest, context.args)
     apply_execution_path(context)
-    validate_symbols_file_output_collision(context.args, output, prices, candidates, diagnostics, spot)
+    validate_symbols_file_output_collision(
+        context.args, output, prices, candidates, diagnostics, spot
+    )
     prepare_inputs(context.args, output, prices, spot)
     if context.args.fetch_spot:
         run_step(context, Step("fetch_spot", fetch_spot_command(context.args, spot)))
     if not context.args.prices_input:
-        symbols = history_symbols(context.args, spot, output, run_config_path(context.args))
+        symbols = history_symbols(
+            context.args, spot, output, run_config_path(context.args)
+        )
         context.manifest["history_symbols"] = symbols
         run_step(
             context,
             Step("fetch_history", fetch_history_command(context.args, prices, symbols)),
         )
     run_step(context, Step("validate", validate_command(context.args, prices)))
-    run_step(context, Step("score", score_command(context.args, prices, candidates, diagnostics, spot)))
+    run_step(
+        context,
+        Step(
+            "score", score_command(context.args, prices, candidates, diagnostics, spot)
+        ),
+    )
     annotate_run_csv_outputs(context.manifest, candidates, diagnostics)
 
 
@@ -183,7 +203,9 @@ def run_plan(context: RunContext) -> None:
     candidates = output / "candidates.csv"
     diagnostics = output / "diagnostics.csv"
     spot = run_spot_path(context.args)
-    context.manifest["input_metadata"] = input_metadata_for_prices(context.args.prices_input)
+    context.manifest["input_metadata"] = input_metadata_for_prices(
+        context.args.prices_input
+    )
     context.manifest["run_outputs_initialized"] = True
     context.manifest["execution_mode"] = "plan_only"
     context.manifest["commands_executed"] = False
@@ -192,7 +214,9 @@ def run_plan(context: RunContext) -> None:
     validate_preflight_inputs(context.args, spot)
     sync_validated_history_options(context.manifest, context.args)
     apply_execution_path(context)
-    validate_symbols_file_output_collision(context.args, output, prices, candidates, diagnostics, spot)
+    validate_symbols_file_output_collision(
+        context.args, output, prices, candidates, diagnostics, spot
+    )
     prepare_inputs(context.args, output, prices, spot)
     if context.args.fetch_spot:
         plan_step(context, Step("fetch_spot", fetch_spot_command(context.args, spot)))
@@ -206,7 +230,9 @@ def run_plan(context: RunContext) -> None:
     plan_step(context, Step("validate", validate_command(context.args, prices)))
     plan_step(
         context,
-        Step("score", score_command(context.args, prices, candidates, diagnostics, spot)),
+        Step(
+            "score", score_command(context.args, prices, candidates, diagnostics, spot)
+        ),
     )
 
 
@@ -266,10 +292,14 @@ def validate_symbols_file_output_collision(
         blocked.append(spot)
     for path in blocked:
         if helpers.same_path_or_existing_file(path, source):
-            raise ValueError(f"--symbols-file must not point to runner output path: {source}")
+            raise ValueError(
+                f"--symbols-file must not point to runner output path: {source}"
+            )
 
 
-def validate_symbols_file_static_output_collision(args: argparse.Namespace, output: Path) -> None:
+def validate_symbols_file_static_output_collision(
+    args: argparse.Namespace, output: Path
+) -> None:
     symbols_file = getattr(args, "symbols_file", None)
     if not symbols_file:
         return
@@ -297,7 +327,9 @@ def validate_symbols_file_static_output_collision(args: argparse.Namespace, outp
             blocked.append(output / Path(config).name)
     for path in blocked:
         if helpers.same_path_or_existing_file(path, source):
-            raise ValueError(f"--symbols-file must not point to runner output path: {source}")
+            raise ValueError(
+                f"--symbols-file must not point to runner output path: {source}"
+            )
 
 
 def validate_preflight_inputs(args: argparse.Namespace, spot: Path | None) -> None:
@@ -319,7 +351,9 @@ def run_prices_path(args: argparse.Namespace) -> Path:
 def run_spot_path(args: argparse.Namespace) -> Path | None:
     if not args.spot_input and not args.fetch_spot:
         return None
-    return Path(args.output_dir) / f"spot{helpers.tabular_suffix(args.spot_input or '')}"
+    return (
+        Path(args.output_dir) / f"spot{helpers.tabular_suffix(args.spot_input or '')}"
+    )
 
 
 def apply_mode_resolution(context: RunContext, resolution: ModeResolution) -> None:
@@ -334,7 +368,9 @@ def apply_mode_resolution(context: RunContext, resolution: ModeResolution) -> No
             "missing_prediction_column_groups": list(
                 resolution.missing_prediction_column_groups
             ),
-            "missing_prediction_requirement": missing_prediction_requirement(resolution),
+            "missing_prediction_requirement": missing_prediction_requirement(
+                resolution
+            ),
             "config_path": str(Path(context.args.output_dir) / config.name),
             "prediction_mode": consumes_prediction,
             "consumes_prediction_columns": False,
@@ -373,7 +409,9 @@ def apply_execution_path(context: RunContext) -> None:
             max_history_symbols_is_default = not bool(
                 getattr(args, "max_history_symbols_supplied", False)
             )
-            spot_source_suffix = "_with_local_spot" if args.spot_input else "_with_fetched_spot"
+            spot_source_suffix = (
+                "_with_local_spot" if args.spot_input else "_with_fetched_spot"
+            )
             spot_source_reason = "+spot_input" if args.spot_input else "+fetch_spot"
             path = (
                 "history_fetch_spot_derived_sample"
@@ -443,7 +481,11 @@ def explicit_history_input_label(args: argparse.Namespace) -> str:
 
 def source_scope(args: argparse.Namespace) -> str:
     scopes = []
-    history = f"{args.history_source}_history_fetch" if args.history_source else "history_fetch"
+    history = (
+        f"{args.history_source}_history_fetch"
+        if args.history_source
+        else "history_fetch"
+    )
     scopes.append("local_prices_input" if args.prices_input else history)
     if args.spot_input:
         scopes.append("local_spot_input")
@@ -504,7 +546,11 @@ def apply_resume_from(args: argparse.Namespace) -> None:
         return
     if args.prices_input:
         raise ValueError("--resume-from cannot be combined with --prices-input")
-    if args.symbols or getattr(args, "symbols_file", None) or args.derive_symbols_from_spot:
+    if (
+        args.symbols
+        or getattr(args, "symbols_file", None)
+        or args.derive_symbols_from_spot
+    ):
         raise ValueError(
             "--resume-from cannot be combined with --symbols, --symbols-file, "
             "or --derive-symbols-from-spot"
@@ -556,7 +602,7 @@ def resume_output_dir(manifest: dict[str, Any], manifest_path: Path) -> Path:
 def path_has_suffix(path: Path, suffix: Path) -> bool:
     path_parts = path.parts
     suffix_parts = suffix.parts
-    return bool(suffix_parts) and path_parts[-len(suffix_parts):] == suffix_parts
+    return bool(suffix_parts) and path_parts[-len(suffix_parts) :] == suffix_parts
 
 
 def retry_symbols_from_prior_run(output: Path) -> list[str]:
@@ -593,7 +639,9 @@ def apply_resume_defaults(args: argparse.Namespace, manifest: dict[str, Any]) ->
     if current_source in {"akshare", "akshare_hk_daily", "baostock", "zzshare"}:
         inherit_resume_option(args, manifest, inherited, "history_adjust")
     if current_source == "zzshare":
-        note_sensitive_resume_option(args, manifest, sensitive_options, "history_http_url")
+        note_sensitive_resume_option(
+            args, manifest, sensitive_options, "history_http_url"
+        )
         for name in [
             "history_timeout_seconds",
             "history_request_interval_seconds",

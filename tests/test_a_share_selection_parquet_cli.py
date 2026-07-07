@@ -20,7 +20,7 @@ sys.path.insert(0, str(TESTS))
 
 import score_candidates as scorer  # noqa: E402
 import validate_ohlcv  # noqa: E402
-from a_share_selection_data import read_table  # noqa: E402
+from lib.selection_core.a_share_selection_data import read_table  # noqa: E402
 from helpers import build_frame  # noqa: E402
 
 
@@ -89,7 +89,9 @@ class AShareSelectionOutputContractTests(unittest.TestCase):
         self.assertIn("output_not_written=true", stderr)
         self.assertIn("candidate output supports CSV only", stderr)
 
-    def test_score_rejects_non_csv_diagnostics_suffix_before_writing_csv_text(self) -> None:
+    def test_score_rejects_non_csv_diagnostics_suffix_before_writing_csv_text(
+        self,
+    ) -> None:
         frame = build_frame(include_turn=False)
         with tempfile.TemporaryDirectory() as tmpdir:
             base = Path(tmpdir)

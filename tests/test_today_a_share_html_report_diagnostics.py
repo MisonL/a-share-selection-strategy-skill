@@ -13,7 +13,7 @@ TESTS = ROOT / "tests"
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(TESTS))
 
-from a_share_selection_html_report import render_report  # noqa: E402
+from lib.report_html.a_share_selection_html_report import render_report  # noqa: E402
 from html_report_helpers import minimal_summary  # noqa: E402
 
 
@@ -37,7 +37,7 @@ class TodayAShareHtmlReportDiagnosticsTests(unittest.TestCase):
         self.assertIn("价格高于上限", report)
         self.assertIn("Price is above the configured limit", report)
         self.assertNotIn(">失败门禁中文<", report)
-        self.assertNotIn("title=\"{&quot;en&quot;", report)
+        self.assertNotIn('title="{&quot;en&quot;', report)
 
     def test_diagnostic_reason_prefers_machine_threshold_key(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -82,7 +82,9 @@ class TodayAShareHtmlReportDiagnosticsTests(unittest.TestCase):
             report = render_report(summary, {"steps": []}, language="zh")
 
         self.assertIn("综合评分不足；动量不足；RSI过低；RSI过热；波动率过高", report)
-        self.assertIn("成交量不足；成交额不足；换手率不足；价格低于下限；价格高于上限", report)
+        self.assertIn(
+            "成交量不足；成交额不足；换手率不足；价格低于下限；价格高于上限", report
+        )
         self.assertIn("ST标的；停牌或不可交易；一字板；预测分不足；趋势分不足", report)
         self.assertIn("Total score is below the configured limit", report)
         self.assertIn("Trend score is below the configured limit", report)
@@ -148,7 +150,9 @@ class TodayAShareHtmlReportDiagnosticsTests(unittest.TestCase):
         self.assertIn("通过阈值但未入选", report)
         self.assertNotIn(">通过阈值但未入选<", report)
 
-    def test_auto_generic_reports_actual_missing_prediction_contract_groups(self) -> None:
+    def test_auto_generic_reports_actual_missing_prediction_contract_groups(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             summary = minimal_summary(tmpdir, Path(tmpdir) / "diagnostics.csv")
             summary.update(
@@ -161,9 +165,14 @@ class TodayAShareHtmlReportDiagnosticsTests(unittest.TestCase):
             report = render_report(summary, {"steps": []}, language="zh")
 
         self.assertIn("输入缺少预测评分契约字段组：market, turnover", report)
-        self.assertIn("Input is missing required prediction contract groups: market, turnover", report)
+        self.assertIn(
+            "Input is missing required prediction contract groups: market, turnover",
+            report,
+        )
         self.assertNotIn("输入没有预测列，auto 因此使用技术门禁。", report)
-        self.assertNotIn("Input has no prediction column, so auto mode used technical gates.", report)
+        self.assertNotIn(
+            "Input has no prediction column, so auto mode used technical gates.", report
+        )
 
 
 if __name__ == "__main__":

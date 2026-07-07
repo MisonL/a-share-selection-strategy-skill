@@ -13,9 +13,11 @@ TESTS = ROOT / "tests"
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(TESTS))
 
-import run_today_a_share_selection_helpers as helpers  # noqa: E402
-from a_share_selection_html_report import render_report  # noqa: E402
-from run_today_a_share_selection_input_metadata import input_metadata_for_prices  # noqa: E402
+import lib.runner.run_today_a_share_selection_helpers as helpers  # noqa: E402
+from lib.report_html.a_share_selection_html_report import render_report  # noqa: E402
+from lib.runner.run_today_a_share_selection_input_metadata import (
+    input_metadata_for_prices,
+)  # noqa: E402
 from test_today_a_share_html_report import visible_before_technical_details  # noqa: E402
 from test_today_a_share_history_end_date import minimal_history_manifest  # noqa: E402
 
@@ -54,7 +56,9 @@ class TodayAShareZzshareDisclosureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
             prices = output / "prices.csv"
-            prices.write_text("symbol,date,close\n000001,2026-06-05,8\n", encoding="utf-8")
+            prices.write_text(
+                "symbol,date,close\n000001,2026-06-05,8\n", encoding="utf-8"
+            )
             write_truncated_local_metadata(output)
 
             metadata = input_metadata_for_prices(str(prices))
@@ -86,7 +90,9 @@ class TodayAShareZzshareDisclosureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
             prices = output / "prices.csv"
-            prices.write_text("symbol,date,close\n000001,2026-06-05,8\n", encoding="utf-8")
+            prices.write_text(
+                "symbol,date,close\n000001,2026-06-05,8\n", encoding="utf-8"
+            )
             write_truncated_local_metadata(output)
 
             metadata = input_metadata_for_prices(str(prices))
@@ -112,12 +118,16 @@ class TodayAShareZzshareDisclosureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
             prices = output / "prices.csv"
-            prices.write_text("symbol,date,close\n000001,2026-06-05,8\n", encoding="utf-8")
+            prices.write_text(
+                "symbol,date,close\n000001,2026-06-05,8\n", encoding="utf-8"
+            )
             metadata = zzshare_metadata_payload()
             metadata["possibly_truncated_symbols"] = []
             metadata["dropped_invalid_rows"] = 0
             metadata["non_trading_rows"] = 1
-            (output / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+            (output / "metadata.json").write_text(
+                json.dumps(metadata), encoding="utf-8"
+            )
 
             loaded = input_metadata_for_prices(str(prices))
 
@@ -128,12 +138,18 @@ class TodayAShareZzshareDisclosureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
             prices = output / "prices.csv"
-            prices.write_text("symbol,date,close\n000001,2026-06-05,8\n", encoding="utf-8")
+            prices.write_text(
+                "symbol,date,close\n000001,2026-06-05,8\n", encoding="utf-8"
+            )
             metadata = zzshare_metadata_payload()
             metadata["invalid_rows"] = "not-a-number"
-            (output / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+            (output / "metadata.json").write_text(
+                json.dumps(metadata), encoding="utf-8"
+            )
 
-            with self.assertRaisesRegex(ValueError, "metadata invalid_rows must be an integer"):
+            with self.assertRaisesRegex(
+                ValueError, "metadata invalid_rows must be an integer"
+            ):
                 input_metadata_for_prices(str(prices))
 
 

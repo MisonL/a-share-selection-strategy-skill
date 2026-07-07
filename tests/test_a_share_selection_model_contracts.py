@@ -10,7 +10,7 @@ SKILL_ROOT = ROOT / "skills" / "a-share-selection-strategy"
 SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from a_share_selection_model_contracts import (  # noqa: E402
+from lib.selection_core.a_share_selection_model_contracts import (  # noqa: E402
     LIMIT_RULES_MODEL_NOT_MODELED,
     TRADABILITY_MODEL_ENTRY_EXIT,
     TRADABILITY_MODEL_HOLDING_PERIOD,

@@ -33,14 +33,18 @@ def main(argv: list[str] | None = None) -> int:
         write_output(skipped, Path(args.skipped_output))
         write_json(summary, Path(args.summary_output))
     except Exception as exc:  # noqa: BLE001
-        print(f"ERROR: code=bad_input output_written=false message={exc}", file=sys.stderr)
+        print(
+            f"ERROR: code=bad_input output_written=false message={exc}", file=sys.stderr
+        )
         return 2
     print_summary(summary, args.summary_output)
     return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Allocate candidates with portfolio capacity.")
+    parser = argparse.ArgumentParser(
+        description="Allocate candidates with portfolio capacity."
+    )
     parser.add_argument("--prices", required=True)
     parser.add_argument("--raw-candidates", nargs="+", required=True)
     parser.add_argument("--expected-signal-dates", nargs="+")
@@ -64,8 +68,8 @@ def ensure_runtime_dependencies() -> None:
     if "pd" in globals():
         return
     import pandas as pandas_module
-    import portfolio_candidate_allocation as allocation_module
-    import a_share_selection_data as data_module
+    import lib.selection_core.a_share_selection_data as data_module
+    import lib.gates.portfolio_candidate_allocation as allocation_module
 
     globals().update(
         {
@@ -90,7 +94,9 @@ def write_output(frame: pd.DataFrame, path: Path) -> None:
 
 def write_json(data: dict[str, Any], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8"
+    )
 
 
 def print_summary(summary: dict[str, Any], output: str) -> None:

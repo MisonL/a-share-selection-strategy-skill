@@ -13,8 +13,8 @@ TESTS = ROOT / "tests"
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(TESTS))
 
-import run_today_a_share_selection_helpers as helpers  # noqa: E402
-from a_share_selection_html_report import render_report  # noqa: E402
+import lib.runner.run_today_a_share_selection_helpers as helpers  # noqa: E402
+from lib.report_html.a_share_selection_html_report import render_report  # noqa: E402
 from html_report_helpers import minimal_summary  # noqa: E402
 from test_today_a_share_html_report import visible_before_technical_details  # noqa: E402
 from test_today_a_share_history_end_date import minimal_history_manifest  # noqa: E402
@@ -226,9 +226,7 @@ def write_history_metadata_with_fallback(output: Path) -> None:
                 ],
                 "failed_symbols": [],
                 "empty_symbols": [],
-                "fallback_errors": [
-                    {"symbol": "000001", "error": "hist unavailable"}
-                ],
+                "fallback_errors": [{"symbol": "000001", "error": "hist unavailable"}],
             }
         ),
         encoding="utf-8",

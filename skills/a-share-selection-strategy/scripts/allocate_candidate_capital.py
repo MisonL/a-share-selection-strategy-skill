@@ -19,7 +19,9 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
     parser.add_argument("--prices", required=True, help="Path to OHLCV CSV/Parquet.")
-    parser.add_argument("--candidates", required=True, help="Path to candidates CSV/Parquet.")
+    parser.add_argument(
+        "--candidates", required=True, help="Path to candidates CSV/Parquet."
+    )
     parser.add_argument("--output", required=True, help="Path to output CSV.")
     parser.add_argument("--cash-budget", type=float, required=True)
     parser.add_argument("--lot-size", type=int, default=100)
@@ -49,8 +51,7 @@ def main(argv: list[str] | None = None) -> int:
         write_output(result, Path(args.output))
     except Exception as exc:  # noqa: BLE001
         print(
-            "ERROR: code=bad_input "
-            f"output_written=false message={exc}",
+            f"ERROR: code=bad_input output_written=false message={exc}",
             file=sys.stderr,
         )
         return 2
@@ -62,9 +63,9 @@ def ensure_runtime_dependencies() -> None:
     if "pd" in globals():
         return
     import pandas as pandas_module
-    import a_share_selection_capital as capital_module
-    import a_share_selection_data as data_module
-    import validate_ohlcv as validator_module
+    import lib.selection_core.a_share_selection_capital as capital_module
+    import lib.selection_core.a_share_selection_data as data_module
+    import lib.a_share_selection_validation as validation_module
 
     globals().update(
         {
@@ -73,7 +74,7 @@ def ensure_runtime_dependencies() -> None:
             "SIZING_FIELDS": capital_module.SIZING_FIELDS,
             "parse_dates": data_module.parse_dates,
             "read_table": data_module.read_table,
-            "validate_frame": validator_module.validate_frame,
+            "validate_frame": validation_module.validate_frame,
         }
     )
 
@@ -98,16 +99,18 @@ def allocate_capital(
         raise ValueError("candidate dates must be parseable")
     if result.duplicated(["symbol", "_signal_date"]).any():
         raise ValueError("candidates contain duplicate symbol/date rows")
-    merged = result.merge(quotes, on=["symbol", "_signal_date"], how="left", validate="many_to_one")
+    merged = result.merge(
+        quotes, on=["symbol", "_signal_date"], how="left", validate="many_to_one"
+    )
     if merged["signal_close"].isna().any():
         missing = int(merged["signal_close"].isna().sum())
         raise ValueError(f"missing signal close for {missing} candidates")
     validate_candidate_close(merged, close_tolerance)
     slot_cash = cash_budget / len(merged)
     merged["cash_slot"] = slot_cash
-    merged["quantity"] = (
-        (slot_cash / (merged["signal_close"] * lot_size)).astype(int) * lot_size
-    )
+    merged["quantity"] = (slot_cash / (merged["signal_close"] * lot_size)).astype(
+        int
+    ) * lot_size
     merged["cash_reserved"] = merged["quantity"] * merged["signal_close"]
     merged["notional"] = merged["cash_reserved"]
     merged["weight"] = merged["cash_reserved"] / cash_budget
@@ -185,7 +188,9 @@ def validate_candidate_close(frame: pd.DataFrame, tolerance: float) -> None:
         raise ValueError("candidate close differs from price signal close")
 
 
-def build_summary(frame: pd.DataFrame, cash_budget: float, lot_size: int) -> dict[str, Any]:
+def build_summary(
+    frame: pd.DataFrame, cash_budget: float, lot_size: int
+) -> dict[str, Any]:
     total_reserved = float(frame["cash_reserved"].sum())
     return {
         "candidates": int(len(frame)),

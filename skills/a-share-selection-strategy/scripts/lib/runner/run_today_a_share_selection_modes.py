@@ -1,0 +1,130 @@
+"""Mode resolution helpers for the local A-share selection runner."""
+
+from __future__ import annotations
+
+if __name__ == "__main__":
+    import sys
+    from pathlib import Path
+
+    _SCRIPT_PATH = Path(__file__).resolve()
+    _SCRIPTS_DIR = next(
+        parent for parent in _SCRIPT_PATH.parents if parent.name == "scripts"
+    )
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+    from lib.a_share_selection_cli_guard import fail_not_cli
+
+    fail_not_cli(__file__)
+
+
+import csv
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from lib.a_share_selection_config import load_config
+
+
+@dataclass(frozen=True)
+class ModeResolution:
+    mode: str
+    decision: str
+    reason: str
+    missing_prediction_column_groups: tuple[str, ...] = ()
+
+
+def resolve_mode(args: Any) -> ModeResolution:
+    if args.mode != "auto":
+        validate_explicit_config_mode(args)
+        return ModeResolution(
+            args.mode,
+            "explicit",
+            f"user_requested_{args.mode}",
+            explicit_missing_prediction_column_groups(args),
+        )
+    if args.config:
+        return resolve_config_mode(Path(args.config))
+    if not args.prices_input:
+        return ModeResolution(
+            "generic",
+            "auto_generic",
+            (
+                "history_fetch_inputs_do_not_include_prediction;"
+                "use_mode_prediction_with_external_prediction_columns_for_prediction_scoring"
+            ),
+        )
+    missing = missing_prediction_column_groups(input_columns(Path(args.prices_input)))
+    if missing:
+        reason = "missing_prediction_columns:" + ",".join(missing)
+        return ModeResolution("generic", "auto_generic", reason, tuple(missing))
+    return ModeResolution(
+        "prediction", "auto_prediction", "prediction_required_columns_present"
+    )
+
+
+def resolve_config_mode(path: Path) -> ModeResolution:
+    config = load_config(path)
+    if config_mode(config) == "prediction":
+        return ModeResolution(
+            "prediction",
+            "auto_prediction_config",
+            "config_score_mode_prediction-derived",
+        )
+    return ModeResolution(
+        "generic", "auto_generic_config", "config_not_prediction-derived"
+    )
+
+
+def validate_explicit_config_mode(args: Any) -> None:
+    if not args.config:
+        return
+    resolved = config_mode(load_config(Path(args.config)))
+    if resolved != args.mode:
+        raise ValueError(
+            "explicit mode conflicts with config score_mode: "
+            f"mode={args.mode} config_mode={resolved}"
+        )
+
+
+def explicit_missing_prediction_column_groups(args: Any) -> tuple[str, ...]:
+    if args.mode != "prediction" or not args.prices_input:
+        return ()
+    return tuple(
+        missing_prediction_column_groups(input_columns(Path(args.prices_input)))
+    )
+
+
+def config_mode(config: dict) -> str:
+    return (
+        "prediction" if config.get("score_mode") == "prediction-derived" else "generic"
+    )
+
+
+def input_columns(path: Path) -> set[str]:
+    if not path.exists():
+        raise FileNotFoundError(f"prices input not found: {path}")
+    suffix = path.suffix.lower()
+    if suffix == ".csv":
+        with path.open(newline="", encoding="utf-8") as handle:
+            return set(next(csv.reader(handle), []))
+    if suffix in {".parquet", ".pq"}:
+        return parquet_columns(path)
+    raise ValueError("unsupported input format; use .csv, .parquet, or .pq")
+
+
+def parquet_columns(path: Path) -> set[str]:
+    try:
+        import pyarrow.parquet as pq
+    except Exception:  # noqa: BLE001
+        import pandas as pd
+
+        return set(pd.read_parquet(path).columns)
+    return set(pq.ParquetFile(path).schema_arrow.names)
+
+
+def missing_prediction_column_groups(columns: set[str]) -> list[str]:
+    required = {
+        "market": {"market"},
+        "prediction": {"prediction", "prediction_score"},
+        "turnover": {"turn", "turnover"},
+    }
+    return [name for name, choices in required.items() if not columns & choices]

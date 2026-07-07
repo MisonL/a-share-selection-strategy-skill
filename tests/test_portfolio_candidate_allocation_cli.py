@@ -19,7 +19,7 @@ sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(TESTS))
 
 import allocate_portfolio_candidate_capital as cli  # noqa: E402
-import portfolio_candidate_allocation as allocation  # noqa: E402
+import lib.gates.portfolio_candidate_allocation as allocation  # noqa: E402
 from helpers import build_frame  # noqa: E402
 
 
@@ -29,7 +29,9 @@ class PortfolioCandidateAllocationCliTests(unittest.TestCase):
         date = signal_date(prices, 20)
         frames = [candidates(prices, date, ["000002", "600001"])]
 
-        selected, sized, skipped, summary = allocate(prices, frames, max_open_positions=1)
+        selected, sized, skipped, summary = allocate(
+            prices, frames, max_open_positions=1
+        )
 
         self.assertEqual(1, len(selected[0]))
         self.assertEqual(1, len(sized[0]))
@@ -50,7 +52,9 @@ class PortfolioCandidateAllocationCliTests(unittest.TestCase):
             candidates(prices, second, ["000002"]),
         ]
 
-        selected, _sized, skipped, summary = allocate(prices, frames, fail_on_symbol_overlap=True)
+        selected, _sized, skipped, summary = allocate(
+            prices, frames, fail_on_symbol_overlap=True
+        )
 
         self.assertEqual([1, 0], [len(frame) for frame in selected])
         self.assertEqual(["symbol_overlap"], skipped["skip_reason"].tolist())
@@ -102,7 +106,9 @@ class PortfolioCandidateAllocationCliTests(unittest.TestCase):
             summary = json.loads((root / "allocation_summary.json").read_text())
 
         self.assertEqual(0, code)
-        self.assertIn("OK: allocation_model=portfolio_cash_lot_floor", stdout.getvalue())
+        self.assertIn(
+            "OK: allocation_model=portfolio_cash_lot_floor", stdout.getvalue()
+        )
         self.assertEqual("", stderr.getvalue())
         self.assertEqual(1, len(selected))
         self.assertEqual(1, len(sized))
@@ -145,7 +151,9 @@ class PortfolioCandidateAllocationCliTests(unittest.TestCase):
         self.assertIn("expected-signal-date", stderr.getvalue())
         self.assertFalse(selected_exists)
 
-    def test_cli_rejects_raw_candidates_with_sizing_fields_without_outputs(self) -> None:
+    def test_cli_rejects_raw_candidates_with_sizing_fields_without_outputs(
+        self,
+    ) -> None:
         prices = build_frame(days=40)
         date = signal_date(prices, 20)
         frame = candidates(prices, date, ["000002"]).assign(
@@ -209,31 +217,49 @@ def candidates(prices: pd.DataFrame, date: str, symbols: list[str]) -> pd.DataFr
     rows = []
     for rank, symbol in enumerate(symbols, start=1):
         row = prices[(prices["symbol"] == symbol) & (prices["date"] == date)].iloc[0]
-        rows.append({"rank": rank, "symbol": symbol, "date": date, "close": row["close"]})
+        rows.append(
+            {"rank": rank, "symbol": symbol, "date": date, "close": row["close"]}
+        )
     return pd.DataFrame(rows)
 
 
-def write_inputs(root: Path, prices: pd.DataFrame, frame: pd.DataFrame) -> dict[str, Path]:
+def write_inputs(
+    root: Path, prices: pd.DataFrame, frame: pd.DataFrame
+) -> dict[str, Path]:
     paths = {"prices": root / "prices.csv", "raw": root / "raw.csv"}
     prices.to_csv(paths["prices"], index=False)
     frame.to_csv(paths["raw"], index=False)
     return paths
 
 
-def cli_args(root: Path, paths: dict[str, Path], *, max_open_positions: int) -> list[str]:
+def cli_args(
+    root: Path, paths: dict[str, Path], *, max_open_positions: int
+) -> list[str]:
     return [
-        "--prices", str(paths["prices"]),
-        "--raw-candidates", str(paths["raw"]),
-        "--candidate-outputs", str(root / "candidates.csv"),
-        "--sized-outputs", str(root / "sized.csv"),
-        "--skipped-output", str(root / "skipped.csv"),
-        "--summary-output", str(root / "allocation_summary.json"),
-        "--cash-budget", "10000",
-        "--hold-days", "5",
-        "--max-open-positions", str(max_open_positions),
-        "--max-gross-weight", "1.0",
-        "--max-gross-notional", "10000",
-        "--max-cash-reserved", "10000",
+        "--prices",
+        str(paths["prices"]),
+        "--raw-candidates",
+        str(paths["raw"]),
+        "--candidate-outputs",
+        str(root / "candidates.csv"),
+        "--sized-outputs",
+        str(root / "sized.csv"),
+        "--skipped-output",
+        str(root / "skipped.csv"),
+        "--summary-output",
+        str(root / "allocation_summary.json"),
+        "--cash-budget",
+        "10000",
+        "--hold-days",
+        "5",
+        "--max-open-positions",
+        str(max_open_positions),
+        "--max-gross-weight",
+        "1.0",
+        "--max-gross-notional",
+        "10000",
+        "--max-cash-reserved",
+        "10000",
     ]
 
 

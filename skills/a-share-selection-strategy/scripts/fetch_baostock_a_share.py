@@ -9,10 +9,15 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from a_share_selection_symbols import baostock_code, parse_six_digit_symbols
+from lib.selection_core.a_share_selection_symbols import (
+    baostock_code,
+    parse_six_digit_symbols,
+)
 
 
-FIELDS = "date,code,open,high,low,close,preclose,pctChg,volume,amount,turn,tradestatus,isST"
+FIELDS = (
+    "date,code,open,high,low,close,preclose,pctChg,volume,amount,turn,tradestatus,isST"
+)
 NUMERIC_COLUMNS = ["open", "high", "low", "close", "volume", "amount", "turn"]
 
 
@@ -23,12 +28,18 @@ def main(argv: list[str] | None = None) -> int:
             "Exit 0 plus written files still require metadata and gate review."
         )
     )
-    parser.add_argument("--symbols", required=True, help="Comma-separated six-digit symbols.")
+    parser.add_argument(
+        "--symbols", required=True, help="Comma-separated six-digit symbols."
+    )
     parser.add_argument("--start-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
     parser.add_argument("--end-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
     parser.add_argument("--output", required=True, help="Output CSV path.")
-    parser.add_argument("--metadata-output", required=True, help="Output metadata JSON path.")
-    parser.add_argument("--adjust", default="3", help="baostock adjustflag. Default: 3.")
+    parser.add_argument(
+        "--metadata-output", required=True, help="Output metadata JSON path."
+    )
+    parser.add_argument(
+        "--adjust", default="3", help="baostock adjustflag. Default: 3."
+    )
     parser.add_argument(
         "--fail-on-fetch-error",
         action="store_true",
@@ -49,15 +60,24 @@ def main(argv: list[str] | None = None) -> int:
             metadata,
             drop_invalid_rows=args.drop_invalid_rows,
         )
-        metadata = output_status(metadata, output_written=True, metadata_output_written=True)
+        metadata = output_status(
+            metadata, output_written=True, metadata_output_written=True
+        )
         write_outputs(frame, metadata, output, metadata_output)
     except Exception as exc:  # noqa: BLE001
         remove_output(output)
-        print(f"ERROR: code=fetch_failed output_written=false message={exc}", file=sys.stderr)
+        print(
+            f"ERROR: code=fetch_failed output_written=false message={exc}",
+            file=sys.stderr,
+        )
         return 2
-    strict_errors = strict_gate_errors(metadata, fail_on_fetch_error=args.fail_on_fetch_error)
+    strict_errors = strict_gate_errors(
+        metadata, fail_on_fetch_error=args.fail_on_fetch_error
+    )
     if strict_errors:
-        metadata = output_status(metadata, output_written=False, metadata_output_written=True)
+        metadata = output_status(
+            metadata, output_written=False, metadata_output_written=True
+        )
         remove_output(output)
         write_metadata(metadata, metadata_output)
         print_summary(metadata, prefix="ERROR_SUMMARY")
@@ -75,7 +95,7 @@ def ensure_runtime_dependencies() -> None:
     if "pd" in globals():
         return
     import pandas as pandas_module
-    import a_share_selection_tradability as tradability_module
+    import lib.selection_core.a_share_selection_tradability as tradability_module
 
     globals().update(
         {
@@ -98,7 +118,9 @@ def fetch_prices(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any]
     failed = []
     try:
         if login.error_code != "0":
-            raise RuntimeError(f"baostock login failed: {login.error_code} {login.error_msg}")
+            raise RuntimeError(
+                f"baostock login failed: {login.error_code} {login.error_msg}"
+            )
         symbols = parse_symbols(args.symbols)
         name_lookup = fetch_symbol_names(bs, symbols)
         for symbol in symbols:
@@ -114,7 +136,9 @@ def fetch_prices(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any]
             if result.error_code != "0":
                 failed.append({"symbol": symbol, "error": result.error_msg})
                 continue
-            symbol_rows = collect_rows(result, symbol, name_lookup["names"].get(symbol, ""))
+            symbol_rows = collect_rows(
+                result, symbol, name_lookup["names"].get(symbol, "")
+            )
             rows.extend(symbol_rows)
             symbols_meta.append(symbol_metadata(symbol, code, symbol_rows))
     finally:
@@ -185,7 +209,9 @@ def collect_rows(result: Any, symbol: str, name: str = "") -> list[dict[str, Any
     return rows
 
 
-def symbol_metadata(symbol: str, code: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
+def symbol_metadata(
+    symbol: str, code: str, rows: list[dict[str, Any]]
+) -> dict[str, Any]:
     dates = [row["date"] for row in rows]
     return {
         "symbol": symbol,
@@ -260,10 +286,16 @@ def apply_quality_policy(
     metadata["invalid_symbols"] = sorted({item["symbol"] for item in invalid})
     metadata["invalid_row_examples"] = invalid[:10]
     metadata["dropped_invalid_rows"] = len(invalid) if drop_invalid_rows else 0
-    result = frame.drop(index=[item["index"] for item in invalid]) if drop_invalid_rows else frame
+    result = (
+        frame.drop(index=[item["index"] for item in invalid])
+        if drop_invalid_rows
+        else frame
+    )
     result = result.reset_index(drop=True)
     metadata["rows"] = int(len(result))
-    metadata["symbol_count"] = int(result["symbol"].nunique()) if not result.empty else 0
+    metadata["symbol_count"] = (
+        int(result["symbol"].nunique()) if not result.empty else 0
+    )
     metadata.update(prefixed_tradability_stats(frame, "raw_"))
     metadata.update(tradability_stats(result))
     metadata["symbols"] = [
@@ -283,9 +315,7 @@ def invalid_row_details(frame: pd.DataFrame) -> list[dict[str, Any]]:
     details = []
     for index in frame.index[row_mask]:
         invalid_columns = [
-            column
-            for column in NUMERIC_COLUMNS
-            if bool(invalid_mask.at[index, column])
+            column for column in NUMERIC_COLUMNS if bool(invalid_mask.at[index, column])
         ]
         row = frame.loc[index]
         details.append(
@@ -329,7 +359,9 @@ def strict_gate_errors(
     if metadata["invalid_rows"] != metadata["dropped_invalid_rows"]:
         errors.append(f"invalid_rows={metadata['invalid_rows']}")
     if metadata.get("tradestatus_missing_rows", 0):
-        errors.append(f"tradestatus_missing_rows={metadata['tradestatus_missing_rows']}")
+        errors.append(
+            f"tradestatus_missing_rows={metadata['tradestatus_missing_rows']}"
+        )
     if metadata.get("non_trading_rows", 0):
         errors.append(f"non_trading_rows={metadata['non_trading_rows']}")
     if fail_on_fetch_error and metadata["failed_symbols"]:

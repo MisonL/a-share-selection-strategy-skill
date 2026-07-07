@@ -9,7 +9,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from a_share_selection_model_contracts import TRADABILITY_MODEL_HOLDING_PERIOD
+from lib.selection_core.a_share_selection_model_contracts import (
+    TRADABILITY_MODEL_HOLDING_PERIOD,
+)
 
 SIGNAL_SUFFIXES = ("slice", "predict", "validate", "score", "allocate", "backtest")
 PORTFOLIO_SIGNAL_SUFFIXES = ("slice", "predict", "validate", "score")
@@ -26,7 +28,9 @@ def main(argv: list[str] | None = None) -> int:
         if output:
             write_json(report, output)
     except Exception as exc:  # noqa: BLE001
-        print(f"ERROR: code=bad_input output_written=false message={exc}", file=sys.stderr)
+        print(
+            f"ERROR: code=bad_input output_written=false message={exc}", file=sys.stderr
+        )
         return 2
     if report["errors"]:
         print_summary(report, output, prefix="ERROR_SUMMARY")
@@ -84,9 +88,13 @@ def build_report(manifest: dict[str, Any], args: argparse.Namespace) -> dict[str
             "verdict": manifest_verdict(errors),
             "errors": errors,
         }
-    allocation_model = str(manifest.get("allocation_model", "equal_cash_budget_lot_floor"))
+    allocation_model = str(
+        manifest.get("allocation_model", "equal_cash_budget_lot_floor")
+    )
     errors.extend(step_order_errors(steps, signal_dates, allocation_model))
-    errors.extend(step_record_errors(step_list, expect_overlap=args.expect_portfolio_violations))
+    errors.extend(
+        step_record_errors(step_list, expect_overlap=args.expect_portfolio_violations)
+    )
     errors.extend(command_errors(step_list, signal_dates, args, allocation_model))
     return {
         "schema_version": 1,
@@ -116,7 +124,9 @@ def offline_plan_errors(
 ) -> list[str]:
     offline_mode = manifest.get("execution_mode") == "offline_plan"
     commands_not_executed = manifest.get("commands_executed") is False
-    all_planned = bool(steps) and all(item.get("planned_only") is True for item in steps)
+    all_planned = bool(steps) and all(
+        item.get("planned_only") is True for item in steps
+    )
     if not (offline_mode or commands_not_executed or all_planned):
         return []
     return [
@@ -151,7 +161,9 @@ def top_level_errors(
     return errors
 
 
-def step_order_errors(steps: Any, signal_dates: list[str], allocation_model: str) -> list[str]:
+def step_order_errors(
+    steps: Any, signal_dates: list[str], allocation_model: str
+) -> list[str]:
     if not isinstance(steps, list):
         return ["steps_not_list"]
     actual = [step.get("step") for step in steps if isinstance(step, dict)]
@@ -163,7 +175,11 @@ def step_order_errors(steps: Any, signal_dates: list[str], allocation_model: str
 
 def expected_steps(signal_dates: list[str], allocation_model: str) -> list[str]:
     names = ["fetch"]
-    suffixes = PORTFOLIO_SIGNAL_SUFFIXES if allocation_model == "portfolio_cash_lot_floor" else SIGNAL_SUFFIXES
+    suffixes = (
+        PORTFOLIO_SIGNAL_SUFFIXES
+        if allocation_model == "portfolio_cash_lot_floor"
+        else SIGNAL_SUFFIXES
+    )
     for signal_date in signal_dates:
         names.extend(f"{signal_date}:{suffix}" for suffix in suffixes)
     if allocation_model == "portfolio_cash_lot_floor":
@@ -173,7 +189,9 @@ def expected_steps(signal_dates: list[str], allocation_model: str) -> list[str]:
     return names
 
 
-def step_record_errors(steps: list[dict[str, Any]], *, expect_overlap: bool) -> list[str]:
+def step_record_errors(
+    steps: list[dict[str, Any]], *, expect_overlap: bool
+) -> list[str]:
     errors = []
     for item in steps:
         name = str(item.get("step"))
@@ -195,7 +213,11 @@ def step_record_errors(steps: list[dict[str, Any]], *, expect_overlap: bool) -> 
 
 def overlap_errors(code: int, allowed: list[int], expect_overlap: bool) -> list[str]:
     if expect_overlap:
-        return [] if allowed == [0, 3] and code in (0, 3) else ["portfolio_overlap_gate_mismatch"]
+        return (
+            []
+            if allowed == [0, 3] and code in (0, 3)
+            else ["portfolio_overlap_gate_mismatch"]
+        )
     if allowed != [0] or code != 0:
         return ["portfolio_overlap_unexpected_violation"]
     return []
@@ -225,7 +247,13 @@ def command_errors(
         )
     if allocation_model == "portfolio_cash_lot_floor":
         errors.extend(portfolio_allocate_errors(by_name.get("portfolio_allocate", [])))
-    errors.extend(requirements(by_name.get("equity", []), "equity", ["portfolio_equity_curve.py", "--fail-on-incomplete"]))
+    errors.extend(
+        requirements(
+            by_name.get("equity", []),
+            "equity",
+            ["portfolio_equity_curve.py", "--fail-on-incomplete"],
+        )
+    )
     errors.extend(overlap_command_errors(by_name.get("portfolio_overlap", [])))
     errors.extend(summary_command_errors(by_name.get("summary", []), args))
     return errors
@@ -239,20 +267,37 @@ def signal_command_errors(
 ) -> list[str]:
     checks = {
         "slice": ["slice_prices_as_of.py", "--as-of-date", signal_date],
-        "predict": ["generate_lightgbm_predictions.py", "--summary-output", "--fail-on-skipped"],
+        "predict": [
+            "generate_lightgbm_predictions.py",
+            "--summary-output",
+            "--fail-on-skipped",
+        ],
         "validate": ["validate_ohlcv.py", "--config", "prediction_profile_config.json"],
         "score": ["score_candidates.py", "--fail-on-skipped", "--fail-on-empty-result"],
         "backtest": backtest_requirements(signal_date, required_tradability_model),
     }
     if allocation_model != "portfolio_cash_lot_floor":
-        checks["allocate"] = ["allocate_candidate_capital.py", "--cash-budget", "--lot-size", "--fail-on-unallocated"]
+        checks["allocate"] = [
+            "allocate_candidate_capital.py",
+            "--cash-budget",
+            "--lot-size",
+            "--fail-on-unallocated",
+        ]
     errors = []
     for suffix, required in checks.items():
-        errors.extend(requirements(by_name.get(f"{signal_date}:{suffix}", []), f"{signal_date}:{suffix}", required))
+        errors.extend(
+            requirements(
+                by_name.get(f"{signal_date}:{suffix}", []),
+                f"{signal_date}:{suffix}",
+                required,
+            )
+        )
     return errors
 
 
-def backtest_requirements(signal_date: str, required_tradability_model: str) -> list[str]:
+def backtest_requirements(
+    signal_date: str, required_tradability_model: str
+) -> list[str]:
     required = [
         "backtest_buy_hold.py",
         "--require-tradable-bars",
@@ -343,10 +388,14 @@ def load_json(path: Path) -> dict[str, Any]:
 
 def write_json(data: dict[str, Any], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8"
+    )
 
 
-def print_summary(report: dict[str, Any], output: Path | None, prefix: str = "OK") -> None:
+def print_summary(
+    report: dict[str, Any], output: Path | None, prefix: str = "OK"
+) -> None:
     target = f" output={output}" if output else ""
     artifact_checked = str(report["artifact_checked"]).lower()
     print(

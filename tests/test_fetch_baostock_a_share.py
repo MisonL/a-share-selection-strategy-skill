@@ -15,7 +15,7 @@ SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import fetch_baostock_a_share as fetcher  # noqa: E402
-from a_share_selection_tradability import tradability_stats  # noqa: E402
+from lib.selection_core.a_share_selection_tradability import tradability_stats  # noqa: E402
 
 
 class FetchBaostockAShareTests(unittest.TestCase):
@@ -130,16 +130,21 @@ class FetchBaostockAShareTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "prices.csv"
             meta = Path(tmpdir) / "metadata.json"
-            output.write_text("symbol,date,close\nSTALE,2026-01-01,1\n", encoding="utf-8")
+            output.write_text(
+                "symbol,date,close\nSTALE,2026-01-01,1\n", encoding="utf-8"
+            )
             meta.write_text('{"stale": true}\n', encoding="utf-8")
             old_main = fetcher.fetch_prices
             stdout = StringIO()
             stderr = StringIO()
             try:
+
                 def fake_fetch_prices(_args):
                     frame = fetcher.pd.DataFrame([valid_row("000001", "2026-05-20")])
                     metadata = metadata_for(["000001"], frame)
-                    metadata["failed_symbols"] = [{"symbol": "000001", "error": "offline"}]
+                    metadata["failed_symbols"] = [
+                        {"symbol": "000001", "error": "offline"}
+                    ]
                     metadata["empty_symbols"] = ["000001"]
                     metadata["symbol_count"] = 0
                     return frame, metadata
@@ -171,11 +176,15 @@ class FetchBaostockAShareTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertFalse(output_exists)
         self.assertTrue(meta_exists)
-        self.assertEqual([{"symbol": "000001", "error": "offline"}], saved["failed_symbols"])
+        self.assertEqual(
+            [{"symbol": "000001", "error": "offline"}], saved["failed_symbols"]
+        )
         self.assertFalse(saved["output_written"])
         self.assertTrue(saved["metadata_output_written"])
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
-        self.assertIn("output_written=false metadata_output_written=true", stderr.getvalue())
+        self.assertIn(
+            "output_written=false metadata_output_written=true", stderr.getvalue()
+        )
 
     def test_partial_default_stdout_discloses_partial_result(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -184,6 +193,7 @@ class FetchBaostockAShareTests(unittest.TestCase):
             old_main = fetcher.fetch_prices
             stdout = StringIO()
             try:
+
                 def fake_fetch_prices(_args):
                     frame = fetcher.pd.DataFrame([valid_row("000001", "2026-05-20")])
                     metadata = metadata_for(["000001", "600000"], frame)
@@ -420,8 +430,7 @@ def metadata_for(symbols: list[str], frame: fetcher.pd.DataFrame) -> dict:
         "raw_rows": len(frame),
         "symbol_count": frame["symbol"].nunique(),
         "symbols": [
-            fetcher.symbol_metadata_for_frame(symbol, frame)
-            for symbol in symbols
+            fetcher.symbol_metadata_for_frame(symbol, frame) for symbol in symbols
         ],
         "failed_symbols": [],
         "empty_symbols": [],

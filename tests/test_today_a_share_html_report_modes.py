@@ -13,7 +13,7 @@ TESTS = ROOT / "tests"
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(TESTS))
 
-from a_share_selection_html_report import render_report  # noqa: E402
+from lib.report_html.a_share_selection_html_report import render_report  # noqa: E402
 from html_report_helpers import minimal_summary  # noqa: E402
 
 
@@ -107,7 +107,9 @@ class TodayAShareHtmlReportModesTests(unittest.TestCase):
                     "diagnostics_output_written": False,
                 }
             )
-            report = render_report(summary, strict_gate_manifest("generic"), language="en")
+            report = render_report(
+                summary, strict_gate_manifest("generic"), language="en"
+            )
 
         self.assertIn("Generic technical scoring", report)
         self.assertIn("Generic scoring reached a strict-gate failure", report)
@@ -123,7 +125,10 @@ class TodayAShareHtmlReportModesTests(unittest.TestCase):
             summary["missing_prediction_requirement"] = "prediction_or_prediction_score"
             report = render_report(summary, {"steps": []}, language="en")
 
-        self.assertIn("Prediction mode was requested, but required prediction columns are missing.", report)
+        self.assertIn(
+            "Prediction mode was requested, but required prediction columns are missing.",
+            report,
+        )
         self.assertIn("本次请求外部预测列评分，但输入缺少必需预测列。", report)
         self.assertIn("Missing required prediction columns", report)
         self.assertIn("validation failed before scoring", report)
@@ -131,7 +136,9 @@ class TodayAShareHtmlReportModesTests(unittest.TestCase):
         self.assertNotIn("Read from input columns", report)
         self.assertNotIn("supplied prediction columns were consumed", report)
 
-    def test_prediction_mode_failed_validate_without_missing_groups_is_not_ready(self) -> None:
+    def test_prediction_mode_failed_validate_without_missing_groups_is_not_ready(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             summary = minimal_summary(tmpdir, Path(tmpdir) / "diagnostics.csv")
             summary.update(prediction_summary_overrides())
@@ -140,7 +147,9 @@ class TodayAShareHtmlReportModesTests(unittest.TestCase):
 
         self.assertIn("did not reach a successful scoring step", report)
         self.assertIn("Not consumed because scoring did not complete", report)
-        self.assertIn("It did not consume prediction columns or rank candidates.", report)
+        self.assertIn(
+            "It did not consume prediction columns or rank candidates.", report
+        )
         self.assertNotIn("Read from input columns", report)
 
     def test_prediction_strict_gate_failure_reports_consumed_input(self) -> None:
@@ -148,10 +157,14 @@ class TodayAShareHtmlReportModesTests(unittest.TestCase):
             summary = minimal_summary(tmpdir, Path(tmpdir) / "diagnostics.csv")
             summary.update(prediction_summary_overrides())
             summary["failed_steps"] = ["score"]
-            report = render_report(summary, strict_gate_manifest("prediction"), language="en")
+            report = render_report(
+                summary, strict_gate_manifest("prediction"), language="en"
+            )
 
         self.assertIn("Read from input columns", report)
-        self.assertIn("reached scoring and consumed supplied prediction columns", report)
+        self.assertIn(
+            "reached scoring and consumed supplied prediction columns", report
+        )
         self.assertIn("scoring reached a strict-gate failure", report)
         self.assertIn("supplied prediction columns were consumed", report)
         self.assertNotIn("Not consumed because scoring did not complete", report)
@@ -203,7 +216,12 @@ def strict_gate_manifest(mode: str) -> dict[str, object]:
     return {
         "steps": [
             {"step": "validate", "returncode": 0, "allowed_returncodes": [0]},
-            {"step": "score", "returncode": 3, "allowed_returncodes": [0], "stdout": stdout},
+            {
+                "step": "score",
+                "returncode": 3,
+                "allowed_returncodes": [0],
+                "stdout": stdout,
+            },
         ]
     }
 

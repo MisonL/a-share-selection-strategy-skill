@@ -4,11 +4,23 @@
 
 配置文件的权威路径在 `../configs/`；旧命令传入的 `scripts/*.json` 会由 CLI 自动回退到 `../configs/`。
 
-脚本入口机器注册表见 `../configs/script_entrypoints.json`。本文件是人类和 Agent 的解释层，注册表是测试校验用事实源；它只用于审计根层 `.py` 是否被归类，不是运行时 dispatcher，也不替代 CLI 合约。
+脚本入口机器注册表见 `../configs/script_entrypoints.json`。本文件是人类和 Agent 的解释层，注册表是测试校验用事实源；它只用于审计根层 `.py` 是否被归类，不是运行时 dispatcher，也不替代 CLI 合约。注册表 v2 额外标注 `visibility`、`kind`、`stability`、`domain` 和 `skill_route`；`skill_route=false` 的 internal helper 不进入 Agent 默认路由。
 
 根层 `.py` 路径保持兼容；部分内部 helper 的真实实现已迁入 `lib/`，根层同名文件只做 re-export 和直接执行 fail-fast。用户命令仍使用本文件列出的根层 CLI，不直接调用 `lib/`。
 
+新的内部 helper 不再新增到 `scripts/` 根层；默认放入 `lib/` 或后续更细分的内部子目录。根层 internal helper 只是兼容预算，后续迁移只能减少或保持，不应增加。HTML、runner、walk-forward、zzshare fetch、gates support 和 selection_core helper 已分别下沉到 `lib/report_html/`、`lib/runner/`、`lib/walk_forward/`、`lib/fetch/`、`lib/gates/` 和 `lib/selection_core/`，根层只保留相关 public CLI 和 4 个 compatibility wrapper。
+
+依赖方向默认从公开 CLI 指向内部 helper；internal helper 默认不得 import public CLI。共享 OHLCV frame 校验逻辑位于 `lib/a_share_selection_validation.py`，公开 CLI 和内部 helper 都从内部模块复用。
+
+`lib/` 内部实现分为纯 helper、parser 层和明确产物层。纯 helper 不得新增 argparse CLI、不得直接写出 CSV/JSON/HTML 等产物，也不得 import 公开 CLI；parser 层只构造 public CLI 的 `ArgumentParser`；明确产物层只在 public CLI 调用下写出 run artifact。需要直接执行时只允许 fail-fast。
+
+`lib/selection_core/` 只接收评分、字段、符号、数据解析、披露、诊断和本地校验逻辑。runner 编排、HTML 展示、provider 取数、walk-forward artifact 检查和 gate/backtest support 不得放回 selection_core。
+
+`compatibility_wrapper` 条目必须在 `../configs/script_entrypoints.json` 记录 `migration_target` 和 `deletion_blocker`；内部运行路径应优先导入 `lib.*`，没有外部兼容理由的 wrapper 应删除。
+
 命令细节、依赖和字段映射仍以 [../references/script-reference.md](../references/script-reference.md) 为准；脚本边界和 helper 边界先读本文件。
+
+逐个脚本的用途、必要性和迁移判断见 [../references/script-inventory.md](../references/script-inventory.md)。该文件只用于审查“为什么脚本多、每个是否必要”，不是常规任务启动路径。
 
 ## 稳定 CLI
 
@@ -51,28 +63,38 @@
 
 ## 内部 helper
 
-这些模块可能带 `__main__`，但直接执行只用于 fail-fast 提示“不是 CLI 入口”。不要把它们当作用户入口或 `--help` 合约：
+这些模块可能带 `__main__`，但直接执行只用于 fail-fast 提示“不是 CLI 入口”。不要把它们当作用户入口、内部实现入口或 `--help` 合约：
 
-- `a_share_selection_*.py`
-- `run_today_a_share_selection_*.py`
-- `walk_forward_*.py`
-- `zzshare_a_share_data.py`
-- `zzshare_a_share_quality.py`
-- `lightgbm_prediction_summary.py`
-- `portfolio_candidate_allocation.py`
+- `a_share_selection_calendar_contract.py`
+- `a_share_selection_cli_guard.py`
+- `a_share_selection_config.py`
 - `a_share_selection_paths.py`
 
 直接复用 Python 代码时，需要将本目录加入 `PYTHONPATH` 或 `sys.path`。不要把内部 helper 的导入路径当成稳定 package API。
 
-HTML 报告模块是当前最大维护热点：`a_share_selection_html_sections.py`、`a_share_selection_html_scripts.py`、`a_share_selection_html_candidate_master.py` 只能继续作为展示层 helper 拆分，不能把候选事实、门禁判断或机器字段来源移动进 HTML 展示层。后续拆分时保留 `run_today_a_share_selection.py` 和 `report.html` 输出契约不变。
+HTML 报告模块已下沉到 `lib/report_html/`。`a_share_selection_html_sections.py`、`a_share_selection_html_scripts.py`、`a_share_selection_html_candidate_master.py` 仍是维护热点，只能继续作为展示层 helper 拆分，不能把候选事实、门禁判断或机器字段来源移动进 HTML 展示层。后续拆分时保留 `run_today_a_share_selection.py` 和 `report.html` 输出契约不变。
+
+后续结构收口优先级：逐步解除 4 个 compatibility wrapper 的外部 root import blocker；HTML、runner、walk-forward、zzshare fetch helper、gates support helper 和 selection_core helper 已完成下沉；公开 CLI 路径默认冻结，不为整理目录而移动用户命令。
+
+## 维护热点
+
+以下文件是已知维护热点，不是新增入口，也不是当前必须拆分的阻塞项。后续拆分必须保持 public CLI、CSV/JSON artifact 和 `report.html` 输出契约不变。
+
+| 文件 | 当前边界 | 后续拆分原则 |
+| --- | --- | --- |
+| `lib/report_html/a_share_selection_html_sections.py` | HTML section rendering | 只拆展示层 section 组合，不移动候选事实、门禁判断或机器字段来源 |
+| `lib/report_html/a_share_selection_html_scripts.py` | HTML 内嵌交互脚本字符串 | 只拆前端展示脚本片段，不改变报告数据模型 |
+| `lib/report_html/a_share_selection_html_candidate_master.py` | 候选详情展示组装 | 只拆 candidate display helpers，不改变候选 CSV/diagnostics 语义 |
 
 ## 判定规则
 
 1. 看到 `create_demo_data.py`、`validate_ohlcv.py`、`score_candidates.py`、`run_today_a_share_selection.py`、`slice_prices_as_of.py`，先按稳定 CLI 处理。
 2. 看到 `fetch_*.py`，先按取数入口处理，检查数据源边界和落地 metadata。
 3. 看到 `generate_lightgbm_predictions.py`、`allocate_*_capital.py`、`backtest_*`、`portfolio_*`、`run_baostock_walk_forward.py`、`validate_walk_forward_*`、`probe_*`，先按门禁和回测入口处理。
-4. 看到 `a_share_selection_*.py`、`run_today_a_share_selection_*.py`、`walk_forward_*.py`、`zzshare_a_share_data.py`、`zzshare_a_share_quality.py`、`lightgbm_prediction_summary.py`、`portfolio_candidate_allocation.py`，先按内部 helper 处理。
+4. 看到根层 `a_share_selection_calendar_contract.py`、`a_share_selection_cli_guard.py`、`a_share_selection_config.py`、`a_share_selection_paths.py`，先按兼容 wrapper 处理；`lib/report_html/` 是 HTML 展示层内部实现包，`lib/runner/` 是 `run_today_a_share_selection.py` 的内部实现包，`lib/walk_forward/` 是 public walk-forward gate CLI 的内部实现包，`lib/fetch/` 是 provider fetch helper 包，`lib/gates/` 是 gate/backtest support helper 包，`lib/selection_core/` 是评分、字段、符号和数据校验内部实现包。
 5. `__main__` 只代表可 fail-fast，不代表对用户公开的 CLI 合约。
+
+`skill_route=true` 表示脚本允许被任务拓扑引用，不表示 Agent 应在首轮从 24 个 public CLI 中随机选择。默认主入口仍是 `validate_ohlcv.py`、`score_candidates.py` 和 `run_today_a_share_selection.py`；fetch、prediction、backtest、capacity、probe 和 validator CLI 只在路径命中或 artifact 门禁需要时使用。
 
 ## 入口选择规则
 

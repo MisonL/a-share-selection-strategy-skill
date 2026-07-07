@@ -28,7 +28,13 @@
 
 稳定 CLI、取数入口、门禁回测入口和内部 helper 的完整边界见 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md)。本文件只在已经确定入口后提供配置、依赖、字段和命令细节。
 
-`../configs/script_entrypoints.json` 必须覆盖 `scripts/` 根层每个 `.py`，并把它们归入 `stable_cli`、`fetch_cli`、`gate_backtest_cli` 或 `internal_helper`。新增、删除或移动根层脚本时，先更新注册表，再更新 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) 的解释层。
+`../configs/script_entrypoints.json` 必须覆盖 `scripts/` 根层每个 `.py`，并把它们归入 `stable_cli`、`fetch_cli`、`gate_backtest_cli` 或 `internal_helper`。注册表 v2 用 `visibility`、`kind`、`stability`、`domain` 和 `skill_route` 拆开描述入口可见性、脚本类型、稳定性、领域和 Agent 路由资格；新增、删除或移动根层脚本时，先更新注册表，再更新 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) 的解释层。
+
+新增内部 helper 默认不得放到 `scripts/` 根层；放入 `scripts/lib/` 或后续内部子目录。根层 internal helper 是兼容预算，只允许迁出、删减或保留，不允许无审计地扩张。
+
+依赖方向默认是 public CLI 调用 internal helper，internal helper 默认不得 import public CLI。共享 OHLCV frame 校验逻辑位于 `scripts/lib/a_share_selection_validation.py`，公开 CLI 和内部 helper 都从内部模块复用。
+
+`compatibility_wrapper` 条目必须在 `../configs/script_entrypoints.json` 记录 `migration_target` 和 `deletion_blocker`，用于说明真实内部实现位置和根层 wrapper 的外部兼容保留原因。内部运行路径应优先导入 `lib.*`。
 
 联网取数必须先落地本地文件和 metadata，再进入 `validate_ohlcv.py`、评分和汇报。不得把在线 API 响应直接解释成已验证候选。
 
@@ -41,6 +47,8 @@ P1 `portfolio_cash_lot_floor`、单信号日定位链路、manifest/artifact val
 Python 代码复用这些脚本时，需要将 `skills/a-share-selection-strategy/scripts/` 加入 `PYTHONPATH` 或 `sys.path`。不要把 `from scripts.<name> import ...` 当成稳定 API。
 
 部分内部 helper 的实现位于 `scripts/lib/`，根层同名 `.py` 文件保留为兼容 wrapper。外部调用和旧测试仍应通过根层路径导入；`lib/` 不是用户 CLI 入口。
+
+公开 CLI 路径默认冻结；不要为了目录整洁移动 `stable_cli`、`fetch_cli` 或 `gate_backtest_cli`。若确需移动公开入口，必须先设计兼容 wrapper、更新 runbook/README/测试，并证明旧命令仍可用。
 
 ## 依赖和离线环境
 
@@ -102,10 +110,11 @@ Python 代码复用这些脚本时，需要将 `skills/a-share-selection-strateg
 | akshare `stock_zh_a_daily` | `date -> date`、`open/high/low/close` 同名映射、`volume -> volume`、`amount -> amount`、`turnover -> turn` |
 | baostock | `code -> symbol`，去掉 `sz.` 或 `sh.`；补 `market=A-share`；其余 OHLCV 字段同名映射 |
 | zzshare `daily(fields=all)` | `ts_code -> symbol`，去掉 `.SZ`、`.SH` 或 `.BJ`；`trade_date -> date`、`volume/vol -> volume`、`turnover/amount -> amount`、`turnover_rate -> turn`、`is_paused -> tradestatus`、`is_st -> isST` |
-| tushare | `ts_code -> symbol`，去掉 `.SZ` 或 `.SH`；`trade_date -> date`、`vol -> volume`、`turnover_rate -> turn` |
 | yfinance | `Date/Symbol/Open/High/Low/Close/Volume` 映射为小写标准字段 |
 
 `成交额` 只能映射为可选字段 `amount`，不得映射为 `volume`。不要把 `Adj Close` 静默替换为 `close`；如使用复权价，必须记录复权口径。
+
+本节只列已落地入口和通用输入别名。未出现在 `../configs/script_entrypoints.json` 或 `../configs/data_sources.json` 的数据源，不代表本 Skill 提供内置 fetch 能力。
 
 ## 常用命令
 

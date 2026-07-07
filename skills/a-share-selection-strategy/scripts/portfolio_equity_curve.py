@@ -23,7 +23,9 @@ def main(argv: list[str] | None = None) -> int:
             "Use --fail-on-incomplete for strict gates."
         )
     )
-    parser.add_argument("--backtests", nargs="+", required=True, help="Backtest CSV/Parquet paths.")
+    parser.add_argument(
+        "--backtests", nargs="+", required=True, help="Backtest CSV/Parquet paths."
+    )
     parser.add_argument("--output", required=True, help="Output equity curve CSV path.")
     parser.add_argument("--initial-equity", type=float, default=1.0)
     parser.add_argument("--fail-on-incomplete", action="store_true")
@@ -66,8 +68,7 @@ def main(argv: list[str] | None = None) -> int:
         write_output(curve, Path(args.output))
     except Exception as exc:  # noqa: BLE001
         print(
-            "ERROR: code=bad_input "
-            f"output_written=false message={exc}",
+            f"ERROR: code=bad_input output_written=false message={exc}",
             file=sys.stderr,
         )
         return 2
@@ -80,7 +81,7 @@ def ensure_runtime_dependencies() -> None:
     if "pd" in globals():
         return
     import pandas as pandas_module
-    import a_share_selection_data as data_module
+    import lib.selection_core.a_share_selection_data as data_module
 
     globals().update(
         {
@@ -99,7 +100,10 @@ def validate_gate_thresholds(
         raise ValueError("min-final-equity must be > 0")
     if max_drawdown_floor is None:
         return
-    if max_drawdown_floor < MIN_DRAWDOWN_FLOOR or max_drawdown_floor > MAX_DRAWDOWN_FLOOR:
+    if (
+        max_drawdown_floor < MIN_DRAWDOWN_FLOOR
+        or max_drawdown_floor > MAX_DRAWDOWN_FLOOR
+    ):
         raise ValueError("max-drawdown-floor must be between -1.0 and 0.0")
 
 

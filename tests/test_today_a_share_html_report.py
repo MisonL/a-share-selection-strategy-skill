@@ -15,7 +15,7 @@ TESTS = ROOT / "tests"
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(TESTS))
 
-from a_share_selection_html_report import render_report  # noqa: E402
+from lib.report_html.a_share_selection_html_report import render_report  # noqa: E402
 from html_report_helpers import minimal_summary, read_report, read_summary, report_run  # noqa: E402
 
 
@@ -30,7 +30,9 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertEqual(0, result.code, result.stderr)
         self.assertEqual("auto", summary["html_report_language"])
         self.assertEqual("zh", summary["html_report_initial_language"])
-        self.assertIn('<html lang="zh-CN" data-lang="zh" data-lang-mode="auto">', report)
+        self.assertIn(
+            '<html lang="zh-CN" data-lang="zh" data-lang-mode="auto">', report
+        )
         self.assertIn("A 股策略选股报告", report)
         self.assertIn("A 股选股报告 - 已完成", report)
         self.assertIn("A 股规则筛选观察", report)
@@ -50,9 +52,16 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("local_prices_generic", report)
         self.assertIn("local_input", report)
         self.assertIn("不允许 / local_prices_input_not_full_market_scan", report)
-        self.assertIn('data-i18n-en="not allowed / local_prices_input_not_full_market_scan"', report)
-        self.assertIn('data-i18n-zh="不允许 / local_prices_input_not_full_market_scan"', report)
-        self.assertIn('data-i18n-en="Machine fields explain how the run was executed:', report)
+        self.assertIn(
+            'data-i18n-en="not allowed / local_prices_input_not_full_market_scan"',
+            report,
+        )
+        self.assertIn(
+            'data-i18n-zh="不允许 / local_prices_input_not_full_market_scan"', report
+        )
+        self.assertIn(
+            'data-i18n-en="Machine fields explain how the run was executed:', report
+        )
         self.assertIn('data-i18n-zh="机器字段说明：', report)
         self.assertIn("details.technical-details", report)
         self.assertIn("查看命令级执行细节", report)
@@ -69,7 +78,12 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
     def test_can_force_english_initial_language(self) -> None:
         with report_run(
             extra_args=["--html-report-language", "en"],
-            env={"LC_ALL": "", "LC_MESSAGES": "", "LANGUAGE": "", "LANG": "zh_CN.UTF-8"},
+            env={
+                "LC_ALL": "",
+                "LC_MESSAGES": "",
+                "LANGUAGE": "",
+                "LANG": "zh_CN.UTF-8",
+            },
         ) as result:
             summary = read_summary(result.output)
             report = read_report(result.output)
@@ -90,22 +104,34 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("Scoring Method", report)
         self.assertIn("Generic technical scoring", report)
         self.assertIn("Why this mode", report)
-        self.assertIn("Input has no prediction column, so auto mode used technical gates.", report)
+        self.assertIn(
+            "Input has no prediction column, so auto mode used technical gates.", report
+        )
         self.assertIn("Execution path", report)
         self.assertIn("Coverage class", report)
         self.assertIn("Full-market claim", report)
         self.assertIn("local_prices_generic", report)
         self.assertIn("local_input", report)
         self.assertIn("not allowed / local_prices_input_not_full_market_scan", report)
-        self.assertIn('data-i18n-en="not allowed / local_prices_input_not_full_market_scan"', report)
-        self.assertIn('data-i18n-zh="不允许 / local_prices_input_not_full_market_scan"', report)
+        self.assertIn(
+            'data-i18n-en="not allowed / local_prices_input_not_full_market_scan"',
+            report,
+        )
+        self.assertIn(
+            'data-i18n-zh="不允许 / local_prices_input_not_full_market_scan"', report
+        )
         self.assertIn("el.open = false", report)
-        self.assertIn("const initial = mode === 'auto' ? (saved || generated) : mode", report)
+        self.assertIn(
+            "const initial = mode === 'auto' ? (saved || generated) : mode", report
+        )
         self.assertIn("aShareSelectionReportLang", report)
         self.assertIn('data-i18n-zh="A 股策略选股报告"', report)
         self.assertIn("Show command-level execution details", report)
         self.assertIn("Reason", report)
-        self.assertIn("recent price action looks acceptable; risk checks did not show an obvious rule breach", report)
+        self.assertIn(
+            "recent price action looks acceptable; risk checks did not show an obvious rule breach",
+            report,
+        )
         self.assertIn(">0.613<", report)
         self.assertNotIn(">0.6132124346769261<", report)
         self.assertIn(">./summary.json</code>", report)
@@ -198,7 +224,9 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;", report)
         self.assertIn("&lt;script&gt;alert(2)&lt;/script&gt;", report)
 
-    def test_auto_report_preserves_generated_language_on_first_browser_load(self) -> None:
+    def test_auto_report_preserves_generated_language_on_first_browser_load(
+        self,
+    ) -> None:
         with report_run(
             env={"LC_ALL": "", "LC_MESSAGES": "", "LANGUAGE": "", "LANG": "zh_CN.UTF-8"}
         ) as result:
@@ -207,7 +235,9 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertEqual(0, result.code, result.stderr)
         self.assertIn('data-lang="zh" data-lang-mode="auto"', report)
         self.assertIn("const generated = root.dataset.lang || 'en'", report)
-        self.assertIn("const initial = mode === 'auto' ? (saved || generated) : mode", report)
+        self.assertIn(
+            "const initial = mode === 'auto' ? (saved || generated) : mode", report
+        )
         self.assertNotIn("browserLang", report)
         self.assertIn("function emptyDetailDataset()", report)
         self.assertIn("refreshEmptyRowText();", report)
@@ -270,8 +300,12 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         preview = report.split('<section id="complete-candidates"', 1)[0]
         complete = report.split('<section id="complete-candidates"', 1)[1]
         complete_section = complete.split("</section>", 1)[0]
-        appendix_detail = report.split('<details class="report-details candidate-detail-table">', 1)[1]
-        appendix_detail = appendix_detail.split('<details class="report-details pipeline-detail">', 1)[0]
+        appendix_detail = report.split(
+            '<details class="report-details candidate-detail-table">', 1
+        )[1]
+        appendix_detail = appendix_detail.split(
+            '<details class="report-details pipeline-detail">', 1
+        )[0]
         self.assertNotIn("Name 26", preview)
         self.assertIn("Name 26", complete)
         self.assertIn("Name 26", appendix_detail)
@@ -429,7 +463,9 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             report = render_report(summary, {"steps": []}, language="zh")
 
         self.assertIn("机器字段说明", report)
-        self.assertIn('data-i18n-en="Machine fields explain how the run was executed:', report)
+        self.assertIn(
+            'data-i18n-en="Machine fields explain how the run was executed:', report
+        )
         self.assertIn('data-i18n-zh="机器字段说明：', report)
         self.assertIn("字段覆盖率", report)
         self.assertIn("field-coverage-card", report)
@@ -506,7 +542,9 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("近一年涨跌幅", notice)
         self.assertIn("1/1001", complete)
 
-    def test_yfinance_symbol_name_is_displayed_as_ticker_in_candidate_table(self) -> None:
+    def test_yfinance_symbol_name_is_displayed_as_ticker_in_candidate_table(
+        self,
+    ) -> None:
         report = render_candidate_report(
             [
                 (
@@ -524,7 +562,9 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
 
     def test_yfinance_symbol_name_source_scope_is_displayed_as_ticker(self) -> None:
         report = render_candidate_report(
-            ["1,AAPL,AAPL,,yfinance_us,api,manual,2026-06-17,190.0,0.9,positive momentum,"],
+            [
+                "1,AAPL,AAPL,,yfinance_us,api,manual,2026-06-17,190.0,0.9,positive momentum,"
+            ],
             language="en",
             input_metadata={"market": "US"},
         )
@@ -534,9 +574,13 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertNotIn("Name not provided", complete)
         self.assertNotIn('class="name-cell missing"', complete)
 
-    def test_yfinance_symbol_name_source_type_is_trimmed_and_displayed_as_ticker(self) -> None:
+    def test_yfinance_symbol_name_source_type_is_trimmed_and_displayed_as_ticker(
+        self,
+    ) -> None:
         report = render_candidate_report(
-            ['1,MSFT,MSFT,,external,api," YFINANCE ",2026-06-17,350.0,0.95,positive momentum,'],
+            [
+                '1,MSFT,MSFT,,external,api," YFINANCE ",2026-06-17,350.0,0.95,positive momentum,'
+            ],
             language="en",
             input_metadata={"market": "US"},
         )
@@ -546,19 +590,29 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertNotIn("Name not provided", complete)
         self.assertNotIn('class="name-cell missing"', complete)
 
-    def test_non_yfinance_symbol_name_equal_symbol_is_missing_in_en_and_zh(self) -> None:
+    def test_non_yfinance_symbol_name_equal_symbol_is_missing_in_en_and_zh(
+        self,
+    ) -> None:
         en_report = render_candidate_report(
-            ["1,600000.SH,600000.SH,,fundamental,exchange,manual,2026-06-17,10.0,0.8,positive momentum,"],
+            [
+                "1,600000.SH,600000.SH,,fundamental,exchange,manual,2026-06-17,10.0,0.8,positive momentum,"
+            ],
             language="en",
         )
         zh_report = render_candidate_report(
-            ["1,600000.SH,600000.SH,,fundamental,exchange,manual,2026-06-17,10.0,0.8,positive momentum,"],
+            [
+                "1,600000.SH,600000.SH,,fundamental,exchange,manual,2026-06-17,10.0,0.8,positive momentum,"
+            ],
             language="zh",
         )
         en_complete = en_report.split('<section id="complete-candidates"', 1)[1]
         zh_complete = zh_report.split('<section id="complete-candidates"', 1)[1]
-        self.assertIn('<strong class="name-cell missing">Name not provided</strong>', en_complete)
-        self.assertIn('<strong class="name-cell missing">名称未提供</strong>', zh_complete)
+        self.assertIn(
+            '<strong class="name-cell missing">Name not provided</strong>', en_complete
+        )
+        self.assertIn(
+            '<strong class="name-cell missing">名称未提供</strong>', zh_complete
+        )
         self.assertNotIn('<strong class="name-cell">600000.SH</strong>', en_complete)
         self.assertNotIn('<strong class="name-cell">600000.SH</strong>', zh_complete)
 
@@ -604,7 +658,9 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertNotIn("Stale Diagnostic", report)
         self.assertNotIn("Price is above the configured limit", report)
 
-    def test_report_distinguishes_written_empty_candidates_from_missing_output(self) -> None:
+    def test_report_distinguishes_written_empty_candidates_from_missing_output(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
             candidates = output / "candidates.csv"
@@ -635,12 +691,16 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertNotIn("No rows written for this run.", en_report)
         self.assertIn("Completed run with zero candidates", en_report)
         self.assertIn("effective_empty_result=true", en_report)
-        self.assertIn("Top blocking rules: close_below_ma20=8, volume_too_low=3.", en_report)
+        self.assertIn(
+            "Top blocking rules: close_below_ma20=8, volume_too_low=3.", en_report
+        )
         self.assertNotIn("本次运行未写出相关行。", zh_report)
         self.assertIn("本次成功运行但没有候选", zh_report)
         self.assertIn("主要拦截规则：close_below_ma20=8，volume_too_low=3。", zh_report)
 
-    def test_failed_missing_candidate_output_does_not_claim_successful_empty_result(self) -> None:
+    def test_failed_missing_candidate_output_does_not_claim_successful_empty_result(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
             summary = minimal_summary(tmpdir, output / "diagnostics.csv")
@@ -688,11 +748,18 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("本次在前置筛选阶段停止", report)
         self.assertIn("先扩大 spot 股票池或放宽过滤条件", report)
         self.assertIn("这次失败没有形成可用观察清单", report)
-        self.assertIn('data-i18n-en="The run stopped at the preflight spot-selection stage', report)
+        self.assertIn(
+            'data-i18n-en="The run stopped at the preflight spot-selection stage',
+            report,
+        )
         self.assertIn('data-i18n-zh="本次在前置筛选阶段停止', report)
-        self.assertIn('data-i18n-en="Expand the spot universe or relax the filters', report)
+        self.assertIn(
+            'data-i18n-en="Expand the spot universe or relax the filters', report
+        )
         self.assertIn('data-i18n-zh="先扩大 spot 股票池或放宽过滤条件', report)
-        self.assertIn('data-i18n-en="This failed run has no usable watchlist because', report)
+        self.assertIn(
+            'data-i18n-en="This failed run has no usable watchlist because', report
+        )
         self.assertIn('data-i18n-zh="这次失败没有形成可用观察清单', report)
 
     def test_report_shows_history_selection_evidence_paths(self) -> None:
@@ -784,7 +851,9 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("不是交易指令", zh_visible)
         self.assertIn("不是真实成交或收益证明", zh_visible)
 
-    def test_report_discloses_unknown_local_input_before_technical_details(self) -> None:
+    def test_report_discloses_unknown_local_input_before_technical_details(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             summary = minimal_summary(tmpdir, Path(tmpdir) / "diagnostics.csv")
             summary["input_metadata"] = {
@@ -823,7 +892,9 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("market 只是输出标签", zh_visible)
         self.assertIn("不是交易所或交易日历证明", zh_visible)
 
-    def test_report_discloses_input_csv_provenance_in_visible_and_technical_details(self) -> None:
+    def test_report_discloses_input_csv_provenance_in_visible_and_technical_details(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             summary = minimal_summary(tmpdir, Path(tmpdir) / "diagnostics.csv")
             summary["input_metadata"] = {
@@ -932,7 +1003,9 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("运行数字", report)
         self.assertIn("展开明细表", report)
         self.assertIn("门禁诊断", report)
-        self.assertLess(report.index('class="selection-flow"'), report.index('class="table-wrap"'))
+        self.assertLess(
+            report.index('class="selection-flow"'), report.index('class="table-wrap"')
+        )
         self.assertLess(
             report.index('class="candidate-cards"'),
             report.index('<details class="report-details candidate-detail-table">'),
@@ -1036,7 +1109,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("合成 demo 数据；不是真实行情。", visible)
         self.assertNotIn("low-price-ultra-short", visible)
         self.assertIn("使用边界 / 风险提示", visible)
-        self.assertLess(report.index("合成 demo 数据；不是真实行情。"), report.index("观察池 Top 5 预览"))
+        self.assertLess(
+            report.index("合成 demo 数据；不是真实行情。"),
+            report.index("观察池 Top 5 预览"),
+        )
 
     def test_report_renders_candidate_cards_before_full_table(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1067,8 +1143,15 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             '<strong class="stock-anchor">Alpha Tech</strong><span class="stock-code">300001</span>',
             report,
         )
-        self.assertNotIn("Cash reserved", report.split('<details class="report-details candidate-detail-table">', 1)[0])
-        self.assertLess(report.index('class="candidate-cards"'), report.index('class="table-wrap"'))
+        self.assertNotIn(
+            "Cash reserved",
+            report.split('<details class="report-details candidate-detail-table">', 1)[
+                0
+            ],
+        )
+        self.assertLess(
+            report.index('class="candidate-cards"'), report.index('class="table-wrap"')
+        )
 
     def test_complete_candidate_table_is_viewable_inside_static_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1096,11 +1179,17 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("data-candidate-search", complete)
         self.assertIn('id="candidate-search" name="candidate_search"', complete)
         self.assertIn("data-candidate-board", complete)
-        self.assertIn('id="candidate-filter-board" name="candidate_filter_board"', complete)
+        self.assertIn(
+            'id="candidate-filter-board" name="candidate_filter_board"', complete
+        )
         self.assertIn("data-candidate-industry", complete)
-        self.assertIn('id="candidate-filter-industry" name="candidate_filter_industry"', complete)
+        self.assertIn(
+            'id="candidate-filter-industry" name="candidate_filter_industry"', complete
+        )
         self.assertIn("data-candidate-level", complete)
-        self.assertIn('id="candidate-filter-level" name="candidate_filter_level"', complete)
+        self.assertIn(
+            'id="candidate-filter-level" name="candidate_filter_level"', complete
+        )
         self.assertIn("data-candidate-sort", complete)
         self.assertIn('id="candidate-sort" name="candidate_sort"', complete)
         self.assertIn('id="candidate-page-size" name="candidate_page_size"', complete)
@@ -1159,7 +1248,9 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("关键指标", complete)
         self.assertIn("筛选依据", complete)
         self.assertIn("字段可用性", complete)
-        self.assertIn("已提供：行业。未提供：近一年涨跌幅、市值、PE TTM、PB LF。", complete)
+        self.assertIn(
+            "已提供：行业。未提供：近一年涨跌幅、市值、PE TTM、PB LF。", complete
+        )
         self.assertIn("风险与证据", complete)
         self.assertIn('class="stock-fact-grid primary"', complete)
         self.assertIn('class="stock-fact-grid secondary"', complete)
@@ -1170,7 +1261,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn('class="stock-text-section action"', complete)
         self.assertIn('class="stock-text-section evidence"', complete)
         self.assertEqual(complete.count("data-detail-title"), 1)
-        detail = complete.split('data-candidate-detail', 1)[1].split("</aside>", 1)[0]
+        detail = complete.split("data-candidate-detail", 1)[1].split("</aside>", 1)[0]
         self.assertEqual(detail.count("data-detail-level"), 2)
         self.assertIn("data-detail-risk", detail)
         self.assertIn("data-detail-open-stock", detail)
@@ -1188,25 +1279,41 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertNotIn("data-detail-level-copy", detail)
         self.assertIn("data-detail-summary", complete)
         self.assertIn('placeholder="代码 / 名称 / 板块 / 行业 / 关键词"', complete)
-        self.assertIn('data-i18n-placeholder-en="Code / name / board / industry / keyword"', complete)
-        self.assertIn('data-i18n-placeholder-zh="代码 / 名称 / 板块 / 行业 / 关键词"', complete)
+        self.assertIn(
+            'data-i18n-placeholder-en="Code / name / board / industry / keyword"',
+            complete,
+        )
+        self.assertIn(
+            'data-i18n-placeholder-zh="代码 / 名称 / 板块 / 行业 / 关键词"', complete
+        )
         self.assertIn('data-i18n-zh="板块">板块</span></th>', complete)
         self.assertIn(">创业板</td>", complete)
         self.assertIn('data-board="创业板"', complete)
         self.assertIn("aShareSelectionReportLang", report)
         self.assertIn("initCandidateMasterDetail", report)
         self.assertIn("function runAfterFirstPaint(callback)", report)
-        self.assertIn("['aria-label', 'title', 'placeholder'].forEach(attribute =>", report)
+        self.assertIn(
+            "['aria-label', 'title', 'placeholder'].forEach(attribute =>", report
+        )
         self.assertIn("el.setAttribute(attribute, value)", report)
         self.assertIn("window.requestIdleCallback(callback, { timeout: 350 })", report)
-        self.assertIn("setLang(initial, { forceText: initial !== generated, silent: true })", report)
+        self.assertIn(
+            "setLang(initial, { forceText: initial !== generated, silent: true })",
+            report,
+        )
         self.assertIn("root.dataset.uiReady = 'true'", report)
         self.assertIn("addEventListener('click'", report)
         self.assertIn("tbody.addEventListener('click'", report)
         self.assertIn("tbody.addEventListener('dblclick'", report)
         self.assertIn("let selectedRow = null", report)
-        self.assertIn("const reportContent = rootEl.closest('[data-report-content]') || document", report)
-        self.assertIn("const previewTriggers = reportContent.querySelectorAll('[data-preview-symbol]')", report)
+        self.assertIn(
+            "const reportContent = rootEl.closest('[data-report-content]') || document",
+            report,
+        )
+        self.assertIn(
+            "const previewTriggers = reportContent.querySelectorAll('[data-preview-symbol]')",
+            report,
+        )
         self.assertIn("data-preview-symbol", report)
         self.assertIn("if (index < 0)", report)
         self.assertIn("data-candidate-toolbar-status", complete)
@@ -1229,14 +1336,18 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("event.key === 'Enter' && row === selectedRow", report)
         self.assertIn("trapStockFocus", report)
         self.assertIn("copyCurrentStockSummary", report)
-        self.assertIn("Clipboard access is often blocked for local file reports", report)
+        self.assertIn(
+            "Clipboard access is often blocked for local file reports", report
+        )
         self.assertIn("calculateTechnicalIndicators", report)
         self.assertIn("calculateKdj", report)
         self.assertIn("calculateBollinger", report)
         self.assertIn("calculateAtr", report)
         self.assertIn("const technicalCache = new Map()", report)
         self.assertIn("function indicatorsForRows(rows)", report)
-        self.assertIn("technicalCache.set(key, calculateTechnicalIndicators(rows));", report)
+        self.assertIn(
+            "technicalCache.set(key, calculateTechnicalIndicators(rows));", report
+        )
         self.assertNotIn("const window = candles.slice", report)
         self.assertNotIn("const window = closes.slice", report)
         self.assertIn("originalIndex", report)
@@ -1245,7 +1356,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("if (chartHoverIndex === nextHoverIndex)", report)
         self.assertIn("const tooltipWidth = Math.min(210, width - 20);", report)
         self.assertNotIn("stockChartTooltip.offsetWidth", report)
-        self.assertIn("stockChartTooltip.replaceChildren(tooltipDate, tooltipPrices, tooltipVolume)", report)
+        self.assertIn(
+            "stockChartTooltip.replaceChildren(tooltipDate, tooltipPrices, tooltipVolume)",
+            report,
+        )
         self.assertNotIn("stockChartTooltip.innerHTML", report)
         self.assertIn("const terms = query.split(/\\s+/).filter(Boolean)", report)
         self.assertIn("terms.every(term => haystack.includes(term))", report)
@@ -1258,12 +1372,16 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("navigator.clipboard.writeText(summary)", report)
         self.assertIn("activeStockRow.setAttribute('aria-expanded', 'true')", report)
         self.assertIn("activeStockRow.setAttribute('aria-expanded', 'false')", report)
-        self.assertIn("document.removeEventListener('keydown', handleStockKeydown)", report)
-        self.assertIn("document.addEventListener('keydown', handleStockKeydown)", report)
+        self.assertIn(
+            "document.removeEventListener('keydown', handleStockKeydown)", report
+        )
+        self.assertIn(
+            "document.addEventListener('keydown', handleStockKeydown)", report
+        )
         self.assertIn("setModalContentHidden(true, stockDrawer)", report)
         self.assertIn("setModalContentHidden(false, null)", report)
-        self.assertIn('data-report-content', report)
-        self.assertIn('data-report-modal-root', report)
+        self.assertIn("data-report-content", report)
+        self.assertIn("data-report-modal-root", report)
         self.assertIn("stockDrawer.dataset.selectedSymbol", report)
         self.assertIn("stockDrawer.dataset.selectedName", report)
         self.assertIn("width < 520 ? rawDate.slice(5) : rawDate", report)
@@ -1301,11 +1419,19 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             report = render_report(summary, {"steps": []}, language="zh")
 
         complete = report.split('<section id="complete-candidates"', 1)[1]
-        payload = complete.split('data-candidate-candles>', 1)[1].split("</script>", 1)[0]
+        payload = complete.split("data-candidate-candles>", 1)[1].split("</script>", 1)[
+            0
+        ]
         candles = json.loads(payload)
-        self.assertEqual(["2026-06-04", 9.8, 10.6, 9.7, 10.1, 1200.0], candles["300001"][0])
-        self.assertEqual(["2026-06-05", 10.1, 10.8, 10.0, 10.6, 1500.0], candles["300001"][1])
-        self.assertEqual(["2026-06-05", 19.8, 20.2, 19.5, 20.0, 2100.0], candles["600000"][0])
+        self.assertEqual(
+            ["2026-06-04", 9.8, 10.6, 9.7, 10.1, 1200.0], candles["300001"][0]
+        )
+        self.assertEqual(
+            ["2026-06-05", 10.1, 10.8, 10.0, 10.6, 1500.0], candles["300001"][1]
+        )
+        self.assertEqual(
+            ["2026-06-05", 19.8, 20.2, 19.5, 20.0, 2100.0], candles["600000"][0]
+        )
 
     def test_embedded_kline_data_is_limited_for_large_reports(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1321,9 +1447,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
                 rows.append(
                     f"{index + 1},{symbol},Stock {index + 1},主板,2026-06-17,10,0.6,reason,"
                 )
-                price_rows.append(
-                    f"{symbol},2026-06-17,9,11,8,10,{1000 + index}"
-                )
+                price_rows.append(f"{symbol},2026-06-17,9,11,8,10,{1000 + index}")
             candidates.write_text("\n".join(rows) + "\n", encoding="utf-8")
             prices.write_text("\n".join(price_rows) + "\n", encoding="utf-8")
             summary = minimal_summary(tmpdir, output / "diagnostics.csv")
@@ -1381,7 +1505,9 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         toolbar = complete.split('<div class="master-table">', 1)[0]
         self.assertNotIn("data-candidate-industry", toolbar)
 
-    def test_candidate_tables_mark_missing_stock_name_without_reusing_code(self) -> None:
+    def test_candidate_tables_mark_missing_stock_name_without_reusing_code(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
             candidates = output / "candidates.csv"
@@ -1407,7 +1533,9 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
 
         preview = report.split('<section id="complete-candidates"', 1)[0]
         complete = report.split('<section id="complete-candidates"', 1)[1]
-        self.assertIn('<strong class="stock-anchor missing">名称未提供</strong>', preview)
+        self.assertIn(
+            '<strong class="stock-anchor missing">名称未提供</strong>', preview
+        )
         self.assertIn('<span class="stock-code">000100</span>', preview)
         self.assertIn('<span class="symbol-cell">000100</span>', complete)
         self.assertIn('<strong class="name-cell missing">名称未提供</strong>', complete)
@@ -1429,7 +1557,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
                 }
             )
             with patch(
-                "a_share_selection_html_sections.path_mtime",
+                "lib.report_html.a_share_selection_html_sections.path_mtime",
                 side_effect=PermissionError("denied"),
             ):
                 report = render_report(summary, {"steps": []}, language="en")
@@ -1462,10 +1590,12 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             report = render_report(summary, {"steps": []}, language="en")
 
         complete = report.split('<section id="complete-candidates"', 1)[1]
-        detail = complete.split('data-detail-reason', 1)[1].split("</aside>", 1)[0]
+        detail = complete.split("data-detail-reason", 1)[1].split("</aside>", 1)[0]
         self.assertNotIn("<script>alert(1)</script>", detail)
         self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", detail)
-        self.assertIn('data-row-reason="&lt;script&gt;alert(1)&lt;/script&gt;"', complete)
+        self.assertIn(
+            'data-row-reason="&lt;script&gt;alert(1)&lt;/script&gt;"', complete
+        )
 
     def test_candidate_detail_discloses_missing_optional_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1493,7 +1623,9 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
 
         complete = report.split('<section id="complete-candidates"', 1)[1]
         self.assertIn("字段可用性", complete)
-        self.assertIn("本次源数据未提供行业、近一年涨跌幅、市值、PE TTM、PB LF。", complete)
+        self.assertIn(
+            "本次源数据未提供行业、近一年涨跌幅、市值、PE TTM、PB LF。", complete
+        )
         self.assertIn("data-row-field-availability", complete)
 
     def test_report_tables_and_paths_are_folded_for_consumer_view(self) -> None:
@@ -1534,8 +1666,12 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn('class="table-wrap"', diagnostics_detail)
         self.assertIn("Gamma", diagnostics_detail)
         self.assertIn(">./summary.json</code>", evidence_detail)
-        self.assertLess(report.index("观察池 Top 5 预览"), report.index(candidate_detail))
-        self.assertLess(report.index("这里保留每只股票的规则结果"), report.index(diagnostics_detail))
+        self.assertLess(
+            report.index("观察池 Top 5 预览"), report.index(candidate_detail)
+        )
+        self.assertLess(
+            report.index("这里保留每只股票的规则结果"), report.index(diagnostics_detail)
+        )
 
     def test_report_uses_productized_visual_shell(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1570,7 +1706,7 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn('data-insight-kind-en="Input data"', report)
         self.assertIn('data-insight-title-en="Input data scope"', report)
         self.assertIn('data-insight-facts-en="Sample stocks::', report)
-        self.assertIn('|Price rows::', report)
+        self.assertIn("|Price rows::", report)
         self.assertIn('class="insight-drawer"', report)
         self.assertIn('role="dialog"', report)
         self.assertNotIn('class="watchlist-dashboard"', report)
@@ -1580,44 +1716,104 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn('<button type="button" class="flow-step input"', report)
         self.assertIn("Clickable details", report)
         self.assertIn(".overview-shell", report)
-        self.assertIn(".overview-lead,.overview-title,.overview-facts,.overview-metrics,.overview-flow,.overview-preview,.overview-open{min-width:0}", report)
-        self.assertIn(".overview-lead{grid-area:lead;display:grid;gap:12px}.overview-facts{grid-area:facts;display:grid;gap:12px}.overview-flow{grid-area:flow}.overview-preview{grid-area:preview}.overview-open{grid-area:open}", report)
-        self.assertIn("button.pipeline-card,button.flow-step{font:inherit;color:inherit;cursor:pointer}", report)
+        self.assertIn(
+            ".overview-lead,.overview-title,.overview-facts,.overview-metrics,.overview-flow,.overview-preview,.overview-open{min-width:0}",
+            report,
+        )
+        self.assertIn(
+            ".overview-lead{grid-area:lead;display:grid;gap:12px}.overview-facts{grid-area:facts;display:grid;gap:12px}.overview-flow{grid-area:flow}.overview-preview{grid-area:preview}.overview-open{grid-area:open}",
+            report,
+        )
+        self.assertIn(
+            "button.pipeline-card,button.flow-step{font:inherit;color:inherit;cursor:pointer}",
+            report,
+        )
         self.assertIn("--surface-highlight:inset 0 1px 0 rgba(255,255,255,.82)", report)
         self.assertIn("--hairline:0 0 0 1px rgba(15,23,42,.075)", report)
         self.assertIn("--hairline-danger:0 0 0 1px rgba(199,53,53,.18)", report)
-        self.assertIn("--control-shadow:var(--hairline-soft),var(--surface-highlight),0 3px 9px rgba(15,23,42,.035)", report)
-        self.assertIn("--shadow:var(--hairline),var(--surface-highlight),0 10px 26px rgba(15,23,42,.06)", report)
-        self.assertIn("--shadow-float:var(--hairline),var(--surface-highlight),0 24px 64px rgba(15,23,42,.22)", report)
-        self.assertIn(".section,.panel-card{background:var(--surface);border:0;border-radius:8px;box-shadow:var(--shadow)}", report)
-        self.assertIn(".hero-badge{display:inline-flex;align-items:center;min-height:30px;border:0;border-radius:6px;background:#fff;color:#26384f;font-weight:800;padding:5px 13px;box-shadow:var(--hairline-soft)}", report)
-        self.assertIn(".hero-machine-note{margin:0;border:0;border-left:4px solid #1b75d0;border-radius:8px;background:#f8fbff;padding:11px 12px;color:#334155;font-size:13px;line-height:1.5;overflow-wrap:anywhere;box-shadow:var(--hairline-blue),var(--surface-highlight),0 8px 18px rgba(15,23,42,.045)}", report)
-        self.assertIn(".pipeline-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;align-items:stretch;border:0;border-radius:8px;background:#fff;overflow:hidden;box-shadow:var(--shadow)}", report)
-        self.assertIn(".selection-flow-card{border:0;border-radius:8px;background:#fff;padding:9px 20px;box-shadow:var(--shadow)}", report)
-        self.assertIn(".selection-flow{display:grid;grid-template-columns:minmax(0,1fr) 36px minmax(0,1fr) 36px minmax(0,1fr) 36px minmax(0,1fr);align-items:center;gap:10px;min-width:0}", report)
-        self.assertIn(".flow-step{display:grid;justify-items:center;min-width:0;border:0;border-radius:8px;background:transparent;color:#1e293b;text-align:center;padding:8px 8px;overflow-wrap:anywhere}", report)
-        self.assertIn(".flow-step span:not(.flow-index){display:block;min-width:0;margin-top:7px;color:#0f172a;font-weight:900;line-height:1.2;overflow-wrap:anywhere}", report)
-        self.assertIn(".flow-step small{display:block;min-width:0;margin-top:1px;color:#64748b;font-size:12px;line-height:1.2;overflow-wrap:anywhere}", report)
-        self.assertIn(".flow-arrow{width:100%;min-width:18px;height:2px;background:#64748b;position:relative}", report)
+        self.assertIn(
+            "--control-shadow:var(--hairline-soft),var(--surface-highlight),0 3px 9px rgba(15,23,42,.035)",
+            report,
+        )
+        self.assertIn(
+            "--shadow:var(--hairline),var(--surface-highlight),0 10px 26px rgba(15,23,42,.06)",
+            report,
+        )
+        self.assertIn(
+            "--shadow-float:var(--hairline),var(--surface-highlight),0 24px 64px rgba(15,23,42,.22)",
+            report,
+        )
+        self.assertIn(
+            ".section,.panel-card{background:var(--surface);border:0;border-radius:8px;box-shadow:var(--shadow)}",
+            report,
+        )
+        self.assertIn(
+            ".hero-badge{display:inline-flex;align-items:center;min-height:30px;border:0;border-radius:6px;background:#fff;color:#26384f;font-weight:800;padding:5px 13px;box-shadow:var(--hairline-soft)}",
+            report,
+        )
+        self.assertIn(
+            ".hero-machine-note{margin:0;border:0;border-left:4px solid #1b75d0;border-radius:8px;background:#f8fbff;padding:11px 12px;color:#334155;font-size:13px;line-height:1.5;overflow-wrap:anywhere;box-shadow:var(--hairline-blue),var(--surface-highlight),0 8px 18px rgba(15,23,42,.045)}",
+            report,
+        )
+        self.assertIn(
+            ".pipeline-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;align-items:stretch;border:0;border-radius:8px;background:#fff;overflow:hidden;box-shadow:var(--shadow)}",
+            report,
+        )
+        self.assertIn(
+            ".selection-flow-card{border:0;border-radius:8px;background:#fff;padding:9px 20px;box-shadow:var(--shadow)}",
+            report,
+        )
+        self.assertIn(
+            ".selection-flow{display:grid;grid-template-columns:minmax(0,1fr) 36px minmax(0,1fr) 36px minmax(0,1fr) 36px minmax(0,1fr);align-items:center;gap:10px;min-width:0}",
+            report,
+        )
+        self.assertIn(
+            ".flow-step{display:grid;justify-items:center;min-width:0;border:0;border-radius:8px;background:transparent;color:#1e293b;text-align:center;padding:8px 8px;overflow-wrap:anywhere}",
+            report,
+        )
+        self.assertIn(
+            ".flow-step span:not(.flow-index){display:block;min-width:0;margin-top:7px;color:#0f172a;font-weight:900;line-height:1.2;overflow-wrap:anywhere}",
+            report,
+        )
+        self.assertIn(
+            ".flow-step small{display:block;min-width:0;margin-top:1px;color:#64748b;font-size:12px;line-height:1.2;overflow-wrap:anywhere}",
+            report,
+        )
+        self.assertIn(
+            ".flow-arrow{width:100%;min-width:18px;height:2px;background:#64748b;position:relative}",
+            report,
+        )
         self.assertNotIn("grid-template-columns:repeat(7,max-content)", report)
         self.assertNotIn(".flow-arrow{width:88px", report)
         self.assertIn(".pipeline-card:hover,.pipeline-card:focus-visible", report)
         self.assertIn(".flow-step:hover,.flow-step:focus-visible", report)
         self.assertIn(".insight-drawer[hidden]{display:none}", report)
-        self.assertIn(".insight-dialog{position:relative;width:min(580px,100%);max-height:min(720px,calc(100vh - 48px));overflow:auto;border:0;border-radius:8px;background:#fff;padding:20px 22px 18px;box-shadow:var(--shadow-float);contain:content}", report)
+        self.assertIn(
+            ".insight-dialog{position:relative;width:min(580px,100%);max-height:min(720px,calc(100vh - 48px));overflow:auto;border:0;border-radius:8px;background:#fff;padding:20px 22px 18px;box-shadow:var(--shadow-float);contain:content}",
+            report,
+        )
         self.assertIn(
             'class="insight-close" data-insight-close aria-label="Close" data-i18n-aria-label-en="Close" data-i18n-aria-label-zh="关闭"',
             report,
         )
-        self.assertIn(".insight-facts{display:grid;grid-template-columns:minmax(140px,190px)", report)
+        self.assertIn(
+            ".insight-facts{display:grid;grid-template-columns:minmax(140px,190px)",
+            report,
+        )
         self.assertIn(".insight-drawer{place-items:end center;padding:12px}", report)
         self.assertIn(".insight-close{min-width:44px;min-height:44px}", report)
         self.assertIn(".candidate-cards[data-preview-table]", report)
-        self.assertIn(".candidate-cards[data-preview-table] tr[data-preview-symbol]{cursor:pointer}", report)
-        self.assertIn(".candidate-cards[data-preview-table] th:nth-last-child(2),.candidate-cards[data-preview-table] td:nth-last-child(2){width:88px}", report)
+        self.assertIn(
+            ".candidate-cards[data-preview-table] tr[data-preview-symbol]{cursor:pointer}",
+            report,
+        )
+        self.assertIn(
+            ".candidate-cards[data-preview-table] th:nth-last-child(2),.candidate-cards[data-preview-table] td:nth-last-child(2){width:88px}",
+            report,
+        )
         self.assertIn("@media(max-width:1500px)", report)
         self.assertIn(
-            ".overview-shell{display:grid;grid-template-columns:minmax(0,1fr) minmax(520px,1fr);grid-template-areas:\"lead facts\" \"preview flow\" \"open open\";gap:12px;align-items:start}",
+            '.overview-shell{display:grid;grid-template-columns:minmax(0,1fr) minmax(520px,1fr);grid-template-areas:"lead facts" "preview flow" "open open";gap:12px;align-items:start}',
             report,
         )
         self.assertIn(
@@ -1630,89 +1826,270 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         )
         self.assertNotIn("candidate-entry-card", report)
         self.assertIn("justify-content:center", report)
-        self.assertIn(".candidate-file-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}", report)
-        self.assertIn(".candidate-download-link{display:inline-flex;align-items:center;justify-content:center;min-height:40px", report)
-        self.assertIn(".candidate-file-actions{display:grid;grid-template-columns:1fr;justify-content:stretch;width:100%}", report)
+        self.assertIn(
+            ".candidate-file-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}",
+            report,
+        )
+        self.assertIn(
+            ".candidate-download-link{display:inline-flex;align-items:center;justify-content:center;min-height:40px",
+            report,
+        )
+        self.assertIn(
+            ".candidate-file-actions{display:grid;grid-template-columns:1fr;justify-content:stretch;width:100%}",
+            report,
+        )
         self.assertIn(".candidate-download-link{min-height:44px}", report)
-        self.assertIn(".stock-code{display:block;margin-top:3px;color:#334155;font-size:13px", report)
+        self.assertIn(
+            ".stock-code{display:block;margin-top:3px;color:#334155;font-size:13px",
+            report,
+        )
         self.assertIn(".name-cell.missing,.stock-anchor.missing{color:#64748b}", report)
-        self.assertIn(".stock-dialog{width:min(1120px,100%);max-height:min(92vh,920px);overflow:auto;border:0;border-radius:10px;background:linear-gradient(180deg,#fff 0,#fbfdff 100%);box-shadow:var(--shadow-float);contain:content;scrollbar-gutter:stable}", report)
-        self.assertIn(".stock-dialog-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(360px,.95fr);gap:14px;padding:14px;align-items:start}", report)
-        self.assertIn(".stock-tech-summary{border:0;border-radius:8px;background:#f8fbff;padding:10px 12px;color:#1e293b;font-size:13px;line-height:1.45;font-weight:750;box-shadow:var(--hairline-blue)}", report)
-        self.assertIn(".stock-tech-card[data-status=\"positive\"]", report)
-        self.assertIn(".stock-tech-card[data-status=\"attention\"]", report)
-        self.assertIn(".stock-tech-card[data-status=\"negative\"]", report)
-        self.assertIn(".stock-tech-card[data-status=\"attention\"] strong{color:#854d0e}", report)
-        self.assertIn(".stock-tech-card[data-status=\"negative\"] strong{color:#991b1b}", report)
-        self.assertIn(".stock-dialog-close:hover,.stock-dialog-close:focus-visible{outline:2px solid #1b75d0;outline-offset:2px", report)
-        self.assertIn(".stock-action-grid button:hover,.stock-action-grid button:focus-visible{outline:2px solid #1b75d0;outline-offset:2px", report)
-        self.assertIn(".stock-chart-wrap canvas{display:block;width:100%;height:100%;touch-action:none}", report)
-        self.assertIn(".candidate-toolbar{display:grid;grid-template-columns:2fr repeat(3,minmax(130px,1fr)) max-content", report)
-        self.assertIn(".candidate-toolbar.has-industry{grid-template-columns:2fr repeat(4,minmax(130px,1fr)) max-content}", report)
-        self.assertIn(".candidate-toolbar input,.candidate-toolbar select{width:100%;height:40px;border:0;border-radius:7px;background:#fff;color:var(--ink);font:inherit;padding:7px 10px;box-shadow:var(--control-shadow)}", report)
-        self.assertIn(".candidate-toolbar input:focus-visible,.candidate-toolbar select:focus-visible{outline:2px solid #1b75d0;outline-offset:2px", report)
-        self.assertIn(".candidate-toolbar button:focus-visible{outline:2px solid #1b75d0;outline-offset:2px", report)
-        self.assertIn(".detail-action-button:hover,.detail-action-button:focus-visible{outline:2px solid #1b75d0;outline-offset:2px", report)
-        self.assertIn(".candidate-pager button:not(:disabled):hover,.candidate-pager button:not(:disabled):focus-visible{outline:2px solid #1b75d0;outline-offset:2px", report)
-        self.assertIn(".stock-technical-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}", report)
+        self.assertIn(
+            ".stock-dialog{width:min(1120px,100%);max-height:min(92vh,920px);overflow:auto;border:0;border-radius:10px;background:linear-gradient(180deg,#fff 0,#fbfdff 100%);box-shadow:var(--shadow-float);contain:content;scrollbar-gutter:stable}",
+            report,
+        )
+        self.assertIn(
+            ".stock-dialog-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(360px,.95fr);gap:14px;padding:14px;align-items:start}",
+            report,
+        )
+        self.assertIn(
+            ".stock-tech-summary{border:0;border-radius:8px;background:#f8fbff;padding:10px 12px;color:#1e293b;font-size:13px;line-height:1.45;font-weight:750;box-shadow:var(--hairline-blue)}",
+            report,
+        )
+        self.assertIn('.stock-tech-card[data-status="positive"]', report)
+        self.assertIn('.stock-tech-card[data-status="attention"]', report)
+        self.assertIn('.stock-tech-card[data-status="negative"]', report)
+        self.assertIn(
+            '.stock-tech-card[data-status="attention"] strong{color:#854d0e}', report
+        )
+        self.assertIn(
+            '.stock-tech-card[data-status="negative"] strong{color:#991b1b}', report
+        )
+        self.assertIn(
+            ".stock-dialog-close:hover,.stock-dialog-close:focus-visible{outline:2px solid #1b75d0;outline-offset:2px",
+            report,
+        )
+        self.assertIn(
+            ".stock-action-grid button:hover,.stock-action-grid button:focus-visible{outline:2px solid #1b75d0;outline-offset:2px",
+            report,
+        )
+        self.assertIn(
+            ".stock-chart-wrap canvas{display:block;width:100%;height:100%;touch-action:none}",
+            report,
+        )
+        self.assertIn(
+            ".candidate-toolbar{display:grid;grid-template-columns:2fr repeat(3,minmax(130px,1fr)) max-content",
+            report,
+        )
+        self.assertIn(
+            ".candidate-toolbar.has-industry{grid-template-columns:2fr repeat(4,minmax(130px,1fr)) max-content}",
+            report,
+        )
+        self.assertIn(
+            ".candidate-toolbar input,.candidate-toolbar select{width:100%;height:40px;border:0;border-radius:7px;background:#fff;color:var(--ink);font:inherit;padding:7px 10px;box-shadow:var(--control-shadow)}",
+            report,
+        )
+        self.assertIn(
+            ".candidate-toolbar input:focus-visible,.candidate-toolbar select:focus-visible{outline:2px solid #1b75d0;outline-offset:2px",
+            report,
+        )
+        self.assertIn(
+            ".candidate-toolbar button:focus-visible{outline:2px solid #1b75d0;outline-offset:2px",
+            report,
+        )
+        self.assertIn(
+            ".detail-action-button:hover,.detail-action-button:focus-visible{outline:2px solid #1b75d0;outline-offset:2px",
+            report,
+        )
+        self.assertIn(
+            ".candidate-pager button:not(:disabled):hover,.candidate-pager button:not(:disabled):focus-visible{outline:2px solid #1b75d0;outline-offset:2px",
+            report,
+        )
+        self.assertIn(
+            ".stock-technical-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}",
+            report,
+        )
         self.assertIn("@media(max-width:1100px)", report)
         self.assertIn("@media(max-width:640px)", report)
         self.assertIn("@media(max-width:520px)", report)
-        self.assertIn(".overview-shell,.final-notice-grid{grid-template-columns:minmax(0,1fr)}", report)
-        self.assertIn(".overview-shell{grid-template-areas:\"lead\" \"facts\" \"flow\" \"preview\" \"open\"}", report)
-        self.assertIn(".hero-copy,.overview-lead,.overview-title,.overview-facts,.overview-metrics,.overview-flow,.overview-preview,.overview-open{min-width:0}", report)
+        self.assertIn(
+            ".overview-shell,.final-notice-grid{grid-template-columns:minmax(0,1fr)}",
+            report,
+        )
+        self.assertIn(
+            '.overview-shell{grid-template-areas:"lead" "facts" "flow" "preview" "open"}',
+            report,
+        )
+        self.assertIn(
+            ".hero-copy,.overview-lead,.overview-title,.overview-facts,.overview-metrics,.overview-flow,.overview-preview,.overview-open{min-width:0}",
+            report,
+        )
         self.assertIn(".hero-fact-card{max-width:100%;min-width:0}", report)
-        self.assertIn(".hero-badge{flex:1 1 calc(50% - 8px);justify-content:center;min-width:0;min-height:36px;overflow-wrap:anywhere}", report)
-        self.assertIn(".hero-note{align-items:flex-start;max-width:100%;overflow-wrap:anywhere}", report)
-        self.assertIn(".candidate-toolbar,.candidate-toolbar.has-industry{grid-template-columns:1fr}", report)
-        self.assertIn(".hero-fact-card div{grid-template-columns:minmax(0,1fr);min-width:0;gap:2px;padding:5px 8px 5px 18px}", report)
-        self.assertIn(".hero-fact-card span,.hero-fact-card strong{min-width:0;overflow-wrap:anywhere}", report)
+        self.assertIn(
+            ".hero-badge{flex:1 1 calc(50% - 8px);justify-content:center;min-width:0;min-height:36px;overflow-wrap:anywhere}",
+            report,
+        )
+        self.assertIn(
+            ".hero-note{align-items:flex-start;max-width:100%;overflow-wrap:anywhere}",
+            report,
+        )
+        self.assertIn(
+            ".candidate-toolbar,.candidate-toolbar.has-industry{grid-template-columns:1fr}",
+            report,
+        )
+        self.assertIn(
+            ".hero-fact-card div{grid-template-columns:minmax(0,1fr);min-width:0;gap:2px;padding:5px 8px 5px 18px}",
+            report,
+        )
+        self.assertIn(
+            ".hero-fact-card span,.hero-fact-card strong{min-width:0;overflow-wrap:anywhere}",
+            report,
+        )
         self.assertIn("overflow-x:auto", report)
         self.assertIn("flex-wrap:wrap", report)
         self.assertIn("min-height:44px", report)
         self.assertIn("white-space:normal", report)
-        self.assertIn(".candidate-page-numbers{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}", report)
-        self.assertIn(".candidate-page-number{min-width:44px;min-height:44px;border:0;border-radius:7px;background:#fff;color:#1e293b;font:inherit;box-shadow:var(--control-shadow);cursor:pointer}", report)
+        self.assertIn(
+            ".candidate-page-numbers{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}",
+            report,
+        )
+        self.assertIn(
+            ".candidate-page-number{min-width:44px;min-height:44px;border:0;border-radius:7px;background:#fff;color:#1e293b;font:inherit;box-shadow:var(--control-shadow);cursor:pointer}",
+            report,
+        )
         self.assertIn("grid-template-columns:repeat(2,minmax(0,1fr))", report)
         self.assertIn("grid-template-columns:repeat(4,minmax(0,1fr))", report)
         self.assertIn(".flow-arrow{display:none}", report)
-        self.assertIn(".hero-fact-card{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))", report)
+        self.assertIn(
+            ".hero-fact-card{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))",
+            report,
+        )
         self.assertIn(".pipeline-card:nth-child(2n){border-right:0}", report)
-        self.assertIn(".hero-fact-card,.pipeline-metrics{grid-template-columns:1fr}", report)
-        self.assertIn(".selection-flow{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}", report)
+        self.assertIn(
+            ".hero-fact-card,.pipeline-metrics{grid-template-columns:1fr}", report
+        )
+        self.assertIn(
+            ".selection-flow{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}",
+            report,
+        )
         self.assertNotIn(".hero-badge{flex-basis:100%}", report)
-        self.assertIn(".pipeline-icon::before,.pipeline-icon::after{content:\"\";position:absolute;left:50%;top:50%;background:#fff;transform:translate(-50%,-50%)}", report)
-        self.assertIn(".pipeline-icon.circle::before{width:10px;height:10px;border-radius:50%;box-shadow:-11px 0 0 #fff,11px 0 0 #fff,0 15px 0 5px #fff;clip-path:none;transform:translate(-50%,-72%)}", report)
-        self.assertIn(".pipeline-icon.eye::before{width:30px;height:20px;border:4px solid #fff;border-radius:50%;background:transparent;clip-path:none}", report)
-        self.assertIn(".pipeline-icon.circle::before{width:8px;height:8px;box-shadow:-9px 0 0 #fff,9px 0 0 #fff,0 12px 0 4px #fff}", report)
-        self.assertIn(".pipeline-copy{display:grid;grid-template-columns:minmax(0,max-content) minmax(0,max-content) minmax(0,1fr);align-items:center;column-gap:10px;min-width:0}", report)
-        self.assertIn(".pipeline-card strong{display:block;color:#111827;font-size:30px;line-height:1;letter-spacing:0;font-variant-numeric:tabular-nums}", report)
-        self.assertIn(".pipeline-card small{display:block;min-width:0;color:#475569;font-size:13px;line-height:1.1;white-space:normal;overflow-wrap:anywhere}", report)
-        self.assertIn(".pipeline-copy{grid-template-columns:max-content max-content;grid-template-areas:\"label value\" \"note note\";align-items:center;column-gap:6px;row-gap:3px}", report)
-        self.assertIn(".pipeline-card small{grid-area:note;font-size:12px;line-height:1.2}", report)
-        self.assertIn(".detail-evidence-card{border-left:0;border-top:1px solid #e7edf4}", report)
-        self.assertIn(".master-table{max-height:420px;overflow:auto;border:0;border-radius:8px;background:#fff;contain:content;box-shadow:var(--hairline-soft)}", report)
-        self.assertIn(".candidate-master-detail{margin-top:8px;max-width:100%;overflow:hidden", report)
-        self.assertIn(".master-list-panel{min-width:0;max-width:100%;overflow:clip}", report)
-        self.assertIn(".master-table:not(.has-wide-table) th:nth-child(1),.master-table:not(.has-wide-table) td:nth-child(1){width:62px}", report)
+        self.assertIn(
+            '.pipeline-icon::before,.pipeline-icon::after{content:"";position:absolute;left:50%;top:50%;background:#fff;transform:translate(-50%,-50%)}',
+            report,
+        )
+        self.assertIn(
+            ".pipeline-icon.circle::before{width:10px;height:10px;border-radius:50%;box-shadow:-11px 0 0 #fff,11px 0 0 #fff,0 15px 0 5px #fff;clip-path:none;transform:translate(-50%,-72%)}",
+            report,
+        )
+        self.assertIn(
+            ".pipeline-icon.eye::before{width:30px;height:20px;border:4px solid #fff;border-radius:50%;background:transparent;clip-path:none}",
+            report,
+        )
+        self.assertIn(
+            ".pipeline-icon.circle::before{width:8px;height:8px;box-shadow:-9px 0 0 #fff,9px 0 0 #fff,0 12px 0 4px #fff}",
+            report,
+        )
+        self.assertIn(
+            ".pipeline-copy{display:grid;grid-template-columns:minmax(0,max-content) minmax(0,max-content) minmax(0,1fr);align-items:center;column-gap:10px;min-width:0}",
+            report,
+        )
+        self.assertIn(
+            ".pipeline-card strong{display:block;color:#111827;font-size:30px;line-height:1;letter-spacing:0;font-variant-numeric:tabular-nums}",
+            report,
+        )
+        self.assertIn(
+            ".pipeline-card small{display:block;min-width:0;color:#475569;font-size:13px;line-height:1.1;white-space:normal;overflow-wrap:anywhere}",
+            report,
+        )
+        self.assertIn(
+            '.pipeline-copy{grid-template-columns:max-content max-content;grid-template-areas:"label value" "note note";align-items:center;column-gap:6px;row-gap:3px}',
+            report,
+        )
+        self.assertIn(
+            ".pipeline-card small{grid-area:note;font-size:12px;line-height:1.2}",
+            report,
+        )
+        self.assertIn(
+            ".detail-evidence-card{border-left:0;border-top:1px solid #e7edf4}", report
+        )
+        self.assertIn(
+            ".master-table{max-height:420px;overflow:auto;border:0;border-radius:8px;background:#fff;contain:content;box-shadow:var(--hairline-soft)}",
+            report,
+        )
+        self.assertIn(
+            ".candidate-master-detail{margin-top:8px;max-width:100%;overflow:hidden",
+            report,
+        )
+        self.assertIn(
+            ".master-list-panel{min-width:0;max-width:100%;overflow:clip}", report
+        )
+        self.assertIn(
+            ".master-table:not(.has-wide-table) th:nth-child(1),.master-table:not(.has-wide-table) td:nth-child(1){width:62px}",
+            report,
+        )
         self.assertIn(".master-table tbody tr[hidden]{display:none}", report)
         self.assertIn(".candidate-detail-panel{position:sticky;top:12px}", report)
         self.assertIn(".detail-head-copy{display:grid;gap:4px;min-width:0}", report)
-        self.assertIn(".detail-head-note{color:#64748b;font-size:12px;font-weight:700;line-height:1.35}", report)
-        self.assertIn(".candidate-detail-panel{max-height:520px;position:relative;top:auto}", report)
-        self.assertIn(".candidate-detail-panel{align-self:stretch;height:100%;max-height:560px;border:0;border-radius:8px;background:#fff;min-width:0;overflow:auto;box-shadow:var(--shadow);contain:content;scrollbar-gutter:stable}", report)
-        self.assertIn(".candidate-detail-panel{box-shadow:var(--hairline-soft);position:relative;top:auto}", report)
-        self.assertIn(".candidate-master-detail{margin-top:8px;max-width:100%;overflow:hidden;border:0;border-radius:8px;background:#fff;padding:10px;box-shadow:var(--shadow);scroll-margin-top:18px}", report)
-        self.assertIn(".candidate-open-banner{display:grid;grid-template-columns:max-content minmax(0,1fr) max-content;grid-template-areas:\"title body button\" \"foot foot button\";gap:5px 16px;align-items:center;justify-items:start;width:100%;min-height:0;border:0;border-radius:8px;background:linear-gradient(180deg,#fbfffd 0,#f2fbf6 100%);padding:14px 18px;color:#1e293b;text-align:left;text-decoration:none;box-shadow:var(--hairline-green),var(--surface-highlight),0 6px 16px rgba(10,143,99,.07)}", report)
-        self.assertIn(".candidate-open-banner:hover,.candidate-open-banner:focus-visible{outline:2px solid #0a8f63;outline-offset:2px;background:linear-gradient(180deg,#f4fbf7 0,#e9f8f1 100%);box-shadow:inset 0 0 0 2px rgba(10,143,99,.16)}", report)
-        self.assertIn(".watchlist-preview-pane{min-width:0;border:0;border-radius:8px;background:#fff;padding:11px;box-shadow:var(--shadow)}", report)
-        self.assertIn(".field-coverage-chip[data-field-missing=\"true\"]{background:#fffaf2;box-shadow:var(--hairline-warn),var(--surface-highlight),0 3px 10px rgba(217,119,6,.045)}", report)
-        self.assertIn(".stock-action-section{background:#f8fbff;box-shadow:var(--hairline-blue),var(--surface-highlight),0 4px 12px rgba(27,117,208,.045)}", report)
-        self.assertIn(".stock-next-section{background:#fff;box-shadow:var(--hairline-blue),var(--surface-highlight),0 4px 12px rgba(27,117,208,.035)}", report)
-        self.assertIn(".preview-mobile-meta-item{display:grid;gap:2px;min-width:0;border:0;border-radius:8px;background:#fbfdff;padding:8px 9px;color:#334155;font-size:13px;line-height:1.35;overflow-wrap:anywhere;box-shadow:var(--hairline-soft),var(--surface-highlight)}", report)
-        self.assertIn(".master-table tr[data-selected=\"true\"]{background:#eaf4ff;box-shadow:inset 0 0 0 2px #6daff0}", report)
-        self.assertIn(".candidate-page-numbers{grid-column:1/-1;grid-row:2;justify-content:center}", report)
-        self.assertIn(".candidate-pager label{grid-column:2;grid-row:3;display:flex;align-items:center;justify-content:flex-end;gap:6px}", report)
+        self.assertIn(
+            ".detail-head-note{color:#64748b;font-size:12px;font-weight:700;line-height:1.35}",
+            report,
+        )
+        self.assertIn(
+            ".candidate-detail-panel{max-height:520px;position:relative;top:auto}",
+            report,
+        )
+        self.assertIn(
+            ".candidate-detail-panel{align-self:stretch;height:100%;max-height:560px;border:0;border-radius:8px;background:#fff;min-width:0;overflow:auto;box-shadow:var(--shadow);contain:content;scrollbar-gutter:stable}",
+            report,
+        )
+        self.assertIn(
+            ".candidate-detail-panel{box-shadow:var(--hairline-soft);position:relative;top:auto}",
+            report,
+        )
+        self.assertIn(
+            ".candidate-master-detail{margin-top:8px;max-width:100%;overflow:hidden;border:0;border-radius:8px;background:#fff;padding:10px;box-shadow:var(--shadow);scroll-margin-top:18px}",
+            report,
+        )
+        self.assertIn(
+            '.candidate-open-banner{display:grid;grid-template-columns:max-content minmax(0,1fr) max-content;grid-template-areas:"title body button" "foot foot button";gap:5px 16px;align-items:center;justify-items:start;width:100%;min-height:0;border:0;border-radius:8px;background:linear-gradient(180deg,#fbfffd 0,#f2fbf6 100%);padding:14px 18px;color:#1e293b;text-align:left;text-decoration:none;box-shadow:var(--hairline-green),var(--surface-highlight),0 6px 16px rgba(10,143,99,.07)}',
+            report,
+        )
+        self.assertIn(
+            ".candidate-open-banner:hover,.candidate-open-banner:focus-visible{outline:2px solid #0a8f63;outline-offset:2px;background:linear-gradient(180deg,#f4fbf7 0,#e9f8f1 100%);box-shadow:inset 0 0 0 2px rgba(10,143,99,.16)}",
+            report,
+        )
+        self.assertIn(
+            ".watchlist-preview-pane{min-width:0;border:0;border-radius:8px;background:#fff;padding:11px;box-shadow:var(--shadow)}",
+            report,
+        )
+        self.assertIn(
+            '.field-coverage-chip[data-field-missing="true"]{background:#fffaf2;box-shadow:var(--hairline-warn),var(--surface-highlight),0 3px 10px rgba(217,119,6,.045)}',
+            report,
+        )
+        self.assertIn(
+            ".stock-action-section{background:#f8fbff;box-shadow:var(--hairline-blue),var(--surface-highlight),0 4px 12px rgba(27,117,208,.045)}",
+            report,
+        )
+        self.assertIn(
+            ".stock-next-section{background:#fff;box-shadow:var(--hairline-blue),var(--surface-highlight),0 4px 12px rgba(27,117,208,.035)}",
+            report,
+        )
+        self.assertIn(
+            ".preview-mobile-meta-item{display:grid;gap:2px;min-width:0;border:0;border-radius:8px;background:#fbfdff;padding:8px 9px;color:#334155;font-size:13px;line-height:1.35;overflow-wrap:anywhere;box-shadow:var(--hairline-soft),var(--surface-highlight)}",
+            report,
+        )
+        self.assertIn(
+            '.master-table tr[data-selected="true"]{background:#eaf4ff;box-shadow:inset 0 0 0 2px #6daff0}',
+            report,
+        )
+        self.assertIn(
+            ".candidate-page-numbers{grid-column:1/-1;grid-row:2;justify-content:center}",
+            report,
+        )
+        self.assertIn(
+            ".candidate-pager label{grid-column:2;grid-row:3;display:flex;align-items:center;justify-content:flex-end;gap:6px}",
+            report,
+        )
         self.assertIn(
             "@media(hover:none){.candidate-open-button,.candidate-download-link,.candidate-toolbar input,.candidate-toolbar select,.candidate-toolbar button,.candidate-pager button,.candidate-pager select,.stock-dialog-close,.stock-action-grid button,.detail-action-button{min-height:44px}}",
             report,
@@ -1726,7 +2103,9 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("let bodyLockCount = 0", report)
         self.assertIn("setBodyLocked(true);", report)
         self.assertIn("setBodyLocked(false);", report)
-        close_drawer_body = report.split("function closeDrawer() {", 1)[1].split("document.removeEventListener('keydown', handleKeydown)", 1)[0]
+        close_drawer_body = report.split("function closeDrawer() {", 1)[1].split(
+            "document.removeEventListener('keydown', handleKeydown)", 1
+        )[0]
         self.assertLess(
             close_drawer_body.index("setModalContentHidden(false, null);"),
             close_drawer_body.index("drawer.setAttribute('aria-hidden', 'true');"),
@@ -1737,13 +2116,18 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("!elements.includes(document.activeElement)", report)
         self.assertIn("document.addEventListener('keydown', handleKeydown)", report)
         self.assertIn("document.removeEventListener('keydown', handleKeydown)", report)
-        self.assertIn("kind.textContent = localizedDataset(trigger, 'insightKind');", report)
+        self.assertIn(
+            "kind.textContent = localizedDataset(trigger, 'insightKind');", report
+        )
         self.assertIn("report-language-change", report)
         self.assertIn("renderFacts(localizedDataset(trigger, 'insightFacts'))", report)
         self.assertIn("updateTechnicalIndicators(candles);", report)
         self.assertIn("const technical = indicatorsForRows(rows);", report)
         self.assertIn(".flow-step small{display:none}", report)
-        self.assertIn("min-width:0;border:0;border-radius:8px;background:#fff;padding:11px;box-shadow:var(--shadow)", report)
+        self.assertIn(
+            "min-width:0;border:0;border-radius:8px;background:#fff;padding:11px;box-shadow:var(--shadow)",
+            report,
+        )
 
     def test_pipeline_input_metric_uses_stock_count_not_price_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1763,15 +2147,17 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             "</section>",
             1,
         )[0]
-        input_card = metrics.split('<button type="button" class="pipeline-card input"', 1)[
-            1
-        ].split("</button>", 1)[0]
+        input_card = metrics.split(
+            '<button type="button" class="pipeline-card input"', 1
+        )[1].split("</button>", 1)[0]
         input_card_visible = input_card.split('class="pipeline-copy"', 1)[1]
         flow = report.split('<section class="selection-flow"', 1)[1].split(
             "</section>",
             1,
         )[0]
-        input_step = flow.split('<button type="button" class="flow-step input"', 1)[1].split(
+        input_step = flow.split('<button type="button" class="flow-step input"', 1)[
+            1
+        ].split(
             "</button>",
             1,
         )[0]

@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 
@@ -47,7 +48,9 @@ def main(argv: list[str] | None = None) -> int:
         print("Local validation gates:")
         for check in checks:
             print(f"- {check.name}")
-        print("External gates not run: real market data, real prediction, broker orders, live backtests")
+        print(
+            "External gates not run: real market data, real prediction, broker orders, live backtests"
+        )
         return 0
 
     for index, check in enumerate(checks, start=1):
@@ -94,6 +97,7 @@ def build_parser() -> argparse.ArgumentParser:
 def build_checks(args: argparse.Namespace) -> list[Check]:
     checks = [
         Check("JSON configs and evals parse", check_json_files),
+        Check("YAML agent manifest parse", check_yaml_agent_manifest),
         Check("scripts compileall", check_compileall),
     ]
     if not args.skip_skill_validate:
@@ -120,6 +124,29 @@ def check_json_files() -> None:
         json.loads(path.read_text(encoding="utf-8"))
 
 
+def check_yaml_agent_manifest() -> None:
+    manifests = sorted((SKILL_ROOT / "agents").glob("*.yaml"))
+    if not manifests:
+        raise RuntimeError("no YAML agent manifest files found")
+    code = (
+        "import yaml\n"
+        "from pathlib import Path\n"
+        f"manifests = {[str(path) for path in manifests]!r}\n"
+        "for manifest in manifests:\n"
+        "    data = yaml.safe_load(Path(manifest).read_text(encoding='utf-8'))\n"
+        "    if not isinstance(data, dict):\n"
+        "        raise RuntimeError(f'{manifest}: expected mapping root')\n"
+        "    interface = data.get('interface')\n"
+        "    if not isinstance(interface, dict):\n"
+        "        raise RuntimeError(f'{manifest}: missing interface mapping')\n"
+        "    for key in ['display_name', 'short_description', 'default_prompt']:\n"
+        "        value = interface.get(key)\n"
+        "        if not isinstance(value, str) or not value.strip():\n"
+        "            raise RuntimeError(f'{manifest}: missing interface.{key}')\n"
+    )
+    run_command([uv_command(), "run", "--with", "pyyaml", "python", "-c", code])
+
+
 def check_compileall() -> None:
     env = os.environ.copy()
     env["PYTHONPYCACHEPREFIX"] = "/tmp/a-share-selection-pycache"
@@ -133,7 +160,7 @@ def check_skill_validate(args: argparse.Namespace) -> None:
     quick_validate = quick_validate_path(args.quick_validate)
     run_command(
         [
-            "uv",
+            uv_command(),
             "run",
             "--with",
             "pyyaml",
@@ -195,7 +222,9 @@ def text_hygiene_paths() -> list[Path]:
 
 
 def conflict_marker(line: str) -> bool:
-    return line.startswith("<<<<<<< ") or line == "=======" or line.startswith(">>>>>>> ")
+    return (
+        line.startswith("<<<<<<< ") or line == "=======" or line.startswith(">>>>>>> ")
+    )
 
 
 def check_secret_scan() -> None:
@@ -241,7 +270,7 @@ def check_unittest() -> None:
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     run_command(
         [
-            "uv",
+            uv_command(),
             "run",
             "--with",
             "pandas",
@@ -258,6 +287,22 @@ def check_unittest() -> None:
             "-v",
         ],
         env=env,
+    )
+
+
+def uv_command() -> str:
+    found = shutil.which("uv")
+    if found:
+        return found
+    for candidate in [
+        Path("/usr/local/bin/uv"),
+        Path("/opt/homebrew/bin/uv"),
+        Path.home() / ".local/bin/uv",
+    ]:
+        if candidate.is_file():
+            return str(candidate)
+    raise FileNotFoundError(
+        "uv executable not found; install uv or add it to PATH before running validation"
     )
 
 

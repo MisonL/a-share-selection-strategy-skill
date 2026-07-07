@@ -21,7 +21,7 @@ sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(TESTS))
 
 import fetch_zzshare_a_share as fetcher  # noqa: E402
-import zzshare_a_share_data as zzshare_data  # noqa: E402
+import lib.fetch.zzshare_a_share_data as zzshare_data  # noqa: E402
 from zzshare_fetch_fakes import FakeDataApi, restore_module, valid_daily  # noqa: E402
 
 
@@ -51,7 +51,9 @@ class FetchZzshareAShareTests(unittest.TestCase):
         self.assertEqual("920002.BJ", fetcher.ts_code("920002"))
 
     def test_parse_symbols_accepts_bj_prefixes_and_suffixes_for_zzshare(self) -> None:
-        self.assertEqual(["430047", "835185"], fetcher.parse_symbols("bj.430047,835185.BJ"))
+        self.assertEqual(
+            ["430047", "835185"], fetcher.parse_symbols("bj.430047,835185.BJ")
+        )
 
     def test_collect_rows_maps_zzshare_fields_and_preserves_amount(self) -> None:
         raw = pd.DataFrame(
@@ -131,7 +133,10 @@ class FetchZzshareAShareTests(unittest.TestCase):
         self.assertEqual([], saved["failed_symbols"])
         self.assertEqual([], saved["empty_symbols"])
         self.assertTrue(saved["token_configured"])
-        self.assertIn("quota and stability require external verification", saved["data_source_note"])
+        self.assertIn(
+            "quota and stability require external verification",
+            saved["data_source_note"],
+        )
         self.assertNotIn("free SDK endpoint", saved["data_source_note"])
         self.assertEqual("https://example.test", saved["http_url"])
         self.assertEqual(7.0, saved["timeout_seconds"])
@@ -155,7 +160,9 @@ class FetchZzshareAShareTests(unittest.TestCase):
         self.assertEqual("", rows[0]["name"])
 
     def test_cli_partial_default_discloses_empty_symbol(self) -> None:
-        fake_api = FakeDataApi({"000001.SZ": valid_daily(), "600000.SH": pd.DataFrame()})
+        fake_api = FakeDataApi(
+            {"000001.SZ": valid_daily(), "600000.SH": pd.DataFrame()}
+        )
         old_module = sys.modules.get("zzshare.client")
         sys.modules["zzshare.client"] = types.SimpleNamespace(DataApi=fake_api.factory)
         try:
@@ -199,7 +206,9 @@ class FetchZzshareAShareTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as tmpdir:
                 output = Path(tmpdir) / "prices.csv"
                 metadata = Path(tmpdir) / "metadata.json"
-                output.write_text("symbol,date,close\n000001,2026-01-01,1\n", encoding="utf-8")
+                output.write_text(
+                    "symbol,date,close\n000001,2026-01-01,1\n", encoding="utf-8"
+                )
                 metadata.write_text('{"stale": true}\n', encoding="utf-8")
                 stdout = StringIO()
                 stderr = StringIO()
@@ -323,6 +332,7 @@ class FetchZzshareAShareTests(unittest.TestCase):
         self.assertEqual([1.25], sleep_calls)
         self.assertEqual(2, len(frame))
         self.assertEqual(2, metadata["symbol_count"])
+
 
 if __name__ == "__main__":
     unittest.main()

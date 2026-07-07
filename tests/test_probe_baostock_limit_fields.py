@@ -15,12 +15,16 @@ SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import probe_baostock_limit_fields as probe  # noqa: E402
-from a_share_selection_model_contracts import LIMIT_RULES_MODEL_NOT_MODELED  # noqa: E402
+from lib.selection_core.a_share_selection_model_contracts import (
+    LIMIT_RULES_MODEL_NOT_MODELED,
+)  # noqa: E402
 
 
 class ProbeBaostockLimitFieldsTests(unittest.TestCase):
     def test_parse_fields_rejects_empty_and_base_fields(self) -> None:
-        self.assertEqual(["preclose", "up_limit"], probe.parse_fields("preclose,up_limit"))
+        self.assertEqual(
+            ["preclose", "up_limit"], probe.parse_fields("preclose,up_limit")
+        )
         with self.assertRaisesRegex(ValueError, "must not be empty"):
             probe.parse_fields("")
         with self.assertRaisesRegex(ValueError, "invalid probe fields"):
@@ -29,8 +33,20 @@ class ProbeBaostockLimitFieldsTests(unittest.TestCase):
     def test_probe_records_roles_and_error_codes(self) -> None:
         args = args_for(candidate_fields="up_limit", control_fields="preclose")
         results = [
-            probe.probe_one_field(FakeBaostock(), args=args, field="up_limit", symbols=["000001"], role="candidate"),
-            probe.probe_one_field(FakeBaostock(), args=args, field="preclose", symbols=["000001"], role="control"),
+            probe.probe_one_field(
+                FakeBaostock(),
+                args=args,
+                field="up_limit",
+                symbols=["000001"],
+                role="candidate",
+            ),
+            probe.probe_one_field(
+                FakeBaostock(),
+                args=args,
+                field="preclose",
+                symbols=["000001"],
+                role="control",
+            ),
         ]
         report = probe.build_report(
             args=args,
@@ -42,7 +58,9 @@ class ProbeBaostockLimitFieldsTests(unittest.TestCase):
 
         by_field = {item["field"]: item for item in report["field_results"]}
         self.assertEqual(2, report["schema_version"])
-        self.assertEqual(["up_limit"], report["summary"]["unsupported_candidate_fields"])
+        self.assertEqual(
+            ["up_limit"], report["summary"]["unsupported_candidate_fields"]
+        )
         self.assertEqual(["preclose"], report["summary"]["available_control_fields"])
         self.assertEqual([], report["summary"]["supported_direct_limit_fields"])
         self.assertEqual([], report["summary"]["supported_trading_state_fields"])
@@ -68,8 +86,20 @@ class ProbeBaostockLimitFieldsTests(unittest.TestCase):
     def test_trading_state_field_does_not_make_direct_limit_available(self) -> None:
         args = args_for(candidate_fields="is_trading", control_fields="preclose")
         results = [
-            probe.probe_one_field(TradingStateBaostock(), args=args, field="is_trading", symbols=["000001"], role="candidate"),
-            probe.probe_one_field(TradingStateBaostock(), args=args, field="preclose", symbols=["000001"], role="control"),
+            probe.probe_one_field(
+                TradingStateBaostock(),
+                args=args,
+                field="is_trading",
+                symbols=["000001"],
+                role="candidate",
+            ),
+            probe.probe_one_field(
+                TradingStateBaostock(),
+                args=args,
+                field="preclose",
+                symbols=["000001"],
+                role="control",
+            ),
         ]
         report = probe.build_report(
             args=args,
@@ -79,24 +109,34 @@ class ProbeBaostockLimitFieldsTests(unittest.TestCase):
             results=results,
         )
 
-        self.assertEqual(["is_trading"], report["summary"]["supported_candidate_fields"])
+        self.assertEqual(
+            ["is_trading"], report["summary"]["supported_candidate_fields"]
+        )
         self.assertEqual([], report["summary"]["supported_direct_limit_fields"])
-        self.assertEqual(["is_trading"], report["summary"]["supported_trading_state_fields"])
+        self.assertEqual(
+            ["is_trading"], report["summary"]["supported_trading_state_fields"]
+        )
         self.assertEqual(False, report["summary"]["direct_limit_field_available"])
         self.assertEqual(True, report["summary"]["trading_state_field_available"])
 
-    def test_default_field_set_keeps_limit_rules_not_modeled_without_direct_fields(self) -> None:
+    def test_default_field_set_keeps_limit_rules_not_modeled_without_direct_fields(
+        self,
+    ) -> None:
         args = args_for(
             candidate_fields=",".join(probe.CANDIDATE_FIELDS),
             control_fields=",".join(probe.CONTROL_FIELDS),
         )
         fake = DefaultFieldSetBaostock()
         results = [
-            probe.probe_one_field(fake, args=args, field=field, symbols=["000001"], role="candidate")
+            probe.probe_one_field(
+                fake, args=args, field=field, symbols=["000001"], role="candidate"
+            )
             for field in probe.CANDIDATE_FIELDS
         ]
         results.extend(
-            probe.probe_one_field(fake, args=args, field=field, symbols=["000001"], role="control")
+            probe.probe_one_field(
+                fake, args=args, field=field, symbols=["000001"], role="control"
+            )
             for field in probe.CONTROL_FIELDS
         )
         report = probe.build_report(
@@ -108,7 +148,9 @@ class ProbeBaostockLimitFieldsTests(unittest.TestCase):
         )
         summary = report["summary"]
 
-        self.assertEqual(list(probe.CANDIDATE_FIELDS), summary["unsupported_candidate_fields"])
+        self.assertEqual(
+            list(probe.CANDIDATE_FIELDS), summary["unsupported_candidate_fields"]
+        )
         self.assertEqual([], summary["supported_direct_limit_fields"])
         self.assertEqual(False, summary["direct_limit_field_available"])
         self.assertEqual([], summary["supported_trading_state_fields"])
@@ -131,7 +173,13 @@ class ProbeBaostockLimitFieldsTests(unittest.TestCase):
     def test_provider_error_is_reported_when_other_symbol_succeeds(self) -> None:
         args = args_for(candidate_fields="up_limit", control_fields="preclose")
         mixed = MixedBaostock()
-        result = probe.probe_one_field(mixed, args=args, field="up_limit", symbols=["000001", "600000"], role="candidate")
+        result = probe.probe_one_field(
+            mixed,
+            args=args,
+            field="up_limit",
+            symbols=["000001", "600000"],
+            role="candidate",
+        )
         report = probe.build_report(
             args=args,
             symbols=["000001", "600000"],
@@ -152,12 +200,18 @@ def call_cli(extra: list[str]) -> tuple[int, str, str, dict[str, object]]:
         with redirect_stdout(stdout), redirect_stderr(stderr):
             code = probe.main(
                 [
-                    "--symbols", "000001",
-                    "--start-date", "2025-08-25",
-                    "--end-date", "2025-09-10",
-                    "--candidate-fields", "up_limit",
-                    "--control-fields", "preclose",
-                    "--output", str(output),
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2025-08-25",
+                    "--end-date",
+                    "2025-09-10",
+                    "--candidate-fields",
+                    "up_limit",
+                    "--control-fields",
+                    "preclose",
+                    "--output",
+                    str(output),
                     *extra,
                 ]
             )
@@ -169,8 +223,12 @@ def fake_report(args: object, *, provider_error: bool) -> dict[str, object]:
     status_code = "999999" if provider_error else "10004012"
     fake = FakeBaostock(error_code=status_code)
     results = [
-        probe.probe_one_field(fake, args=args, field="up_limit", symbols=["000001"], role="candidate"),
-        probe.probe_one_field(fake, args=args, field="preclose", symbols=["000001"], role="control"),
+        probe.probe_one_field(
+            fake, args=args, field="up_limit", symbols=["000001"], role="candidate"
+        ),
+        probe.probe_one_field(
+            fake, args=args, field="preclose", symbols=["000001"], role="control"
+        ),
     ]
     return probe.build_report(
         args=args,
@@ -185,33 +243,52 @@ class FakeBaostock:
     def __init__(self, error_code: str = "10004012") -> None:
         self.error_code = error_code
 
-    def query_history_k_data_plus(self, _code: str, fields: str, **_kwargs: object) -> object:
+    def query_history_k_data_plus(
+        self, _code: str, fields: str, **_kwargs: object
+    ) -> object:
         field = fields.split(",")[-1]
         if field == "preclose":
-            return FakeResult(field, error_code="0", rows=[["2025-09-01", "sz.000001", "10.0"], ["2025-09-02", "sz.000001", "10.2"]])
+            return FakeResult(
+                field,
+                error_code="0",
+                rows=[
+                    ["2025-09-01", "sz.000001", "10.0"],
+                    ["2025-09-02", "sz.000001", "10.2"],
+                ],
+            )
         return FakeResult(field, error_code=self.error_code, error_msg="参数错误")
 
 
 class MixedBaostock:
-    def query_history_k_data_plus(self, code: str, fields: str, **_kwargs: object) -> object:
+    def query_history_k_data_plus(
+        self, code: str, fields: str, **_kwargs: object
+    ) -> object:
         field = fields.split(",")[-1]
         if code == "sz.000001":
-            return FakeResult(field, error_code="0", rows=[["2025-09-01", code, "10.0"]])
+            return FakeResult(
+                field, error_code="0", rows=[["2025-09-01", code, "10.0"]]
+            )
         return FakeResult(field, error_code="999999", error_msg="provider unavailable")
 
 
 class TradingStateBaostock:
-    def query_history_k_data_plus(self, code: str, fields: str, **_kwargs: object) -> object:
+    def query_history_k_data_plus(
+        self, code: str, fields: str, **_kwargs: object
+    ) -> object:
         field = fields.split(",")[-1]
         if field == "preclose":
-            return FakeResult(field, error_code="0", rows=[["2025-09-01", code, "10.0"]])
+            return FakeResult(
+                field, error_code="0", rows=[["2025-09-01", code, "10.0"]]
+            )
         if field == "is_trading":
             return FakeResult(field, error_code="0", rows=[["2025-09-01", code, "1"]])
         return FakeResult(field, error_code="10004012", error_msg="参数错误")
 
 
 class DefaultFieldSetBaostock:
-    def query_history_k_data_plus(self, code: str, fields: str, **_kwargs: object) -> object:
+    def query_history_k_data_plus(
+        self, code: str, fields: str, **_kwargs: object
+    ) -> object:
         field = fields.split(",")[-1]
         if field in probe.CONTROL_FIELDS:
             return FakeResult(field, error_code="0", rows=[["2025-09-01", code, "1"]])
@@ -219,7 +296,14 @@ class DefaultFieldSetBaostock:
 
 
 class FakeResult:
-    def __init__(self, field: str, *, error_code: str, rows: list[list[str]] | None = None, error_msg: str = "") -> None:
+    def __init__(
+        self,
+        field: str,
+        *,
+        error_code: str,
+        rows: list[list[str]] | None = None,
+        error_msg: str = "",
+    ) -> None:
         self.fields = ["date", "code", field]
         self.error_code = error_code
         self.error_msg = error_msg
@@ -234,7 +318,9 @@ class FakeResult:
         return self.rows[self.index]
 
 
-def args_for(candidate_fields: str = "up_limit", control_fields: str = "preclose") -> object:
+def args_for(
+    candidate_fields: str = "up_limit", control_fields: str = "preclose"
+) -> object:
     class Args:
         symbols = "000001"
         start_date = "2025-08-25"

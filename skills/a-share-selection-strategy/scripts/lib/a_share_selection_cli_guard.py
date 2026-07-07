@@ -2,16 +2,37 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
 
-CLI_ENTRIES = (
+FALLBACK_CLI_ENTRIES = (
     "validate_ohlcv.py",
     "score_candidates.py",
     "run_today_a_share_selection.py",
     "run_baostock_walk_forward.py",
 )
+
+
+def cli_entries() -> tuple[str, ...]:
+    registry = (
+        Path(__file__).resolve().parents[2] / "configs" / "script_entrypoints.json"
+    )
+    try:
+        data = json.loads(registry.read_text(encoding="utf-8"))
+        entries = data.get("entries", {})
+        public_entries = sorted(
+            script
+            for script, metadata in entries.items()
+            if isinstance(metadata, dict) and metadata.get("public_entry") is True
+        )
+    except (OSError, TypeError, ValueError):
+        return FALLBACK_CLI_ENTRIES
+    return tuple(public_entries) if public_entries else FALLBACK_CLI_ENTRIES
+
+
+CLI_ENTRIES = cli_entries()
 
 
 def fail_not_cli(path: str) -> None:

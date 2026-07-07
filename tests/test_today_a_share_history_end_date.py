@@ -13,8 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "skills" / "a-share-selection-strategy" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import run_today_a_share_selection_helpers as helpers  # noqa: E402
-from a_share_selection_html_report import render_report  # noqa: E402
+import lib.runner.run_today_a_share_selection_helpers as helpers  # noqa: E402
+from lib.report_html.a_share_selection_html_report import render_report  # noqa: E402
 
 
 class TodayAShareHistoryEndDateTests(unittest.TestCase):
@@ -29,7 +29,9 @@ class TodayAShareHistoryEndDateTests(unittest.TestCase):
                 date_min="2026-01-01",
                 date_max="2026-06-05",
             )
-            manifest = minimal_history_manifest(output, end_date="2026-06-06", symbols=symbols)
+            manifest = minimal_history_manifest(
+                output, end_date="2026-06-06", symbols=symbols
+            )
 
             summary = helpers.summary_view(manifest, "completed")
             stdout = StringIO()
@@ -45,8 +47,18 @@ class TodayAShareHistoryEndDateTests(unittest.TestCase):
         self.assertFalse(history["history_metadata_end_date_has_rows"])
         self.assertEqual(
             [
-                {"symbol": "000001", "date_min": "2026-01-01", "date_max": "2026-06-05", "rows": 120},
-                {"symbol": "600001", "date_min": "2026-01-01", "date_max": "2026-06-05", "rows": 120},
+                {
+                    "symbol": "000001",
+                    "date_min": "2026-01-01",
+                    "date_max": "2026-06-05",
+                    "rows": 120,
+                },
+                {
+                    "symbol": "600001",
+                    "date_min": "2026-01-01",
+                    "date_max": "2026-06-05",
+                    "rows": 120,
+                },
             ],
             history["history_metadata_symbol_date_ranges"],
         )
@@ -62,7 +74,10 @@ class TodayAShareHistoryEndDateTests(unittest.TestCase):
         self.assertIn("0/2 symbols reached the requested end date", report)
         self.assertIn("History end date has rows", report)
         self.assertIn(">False<", report)
-        self.assertIn("Requested 2026-06-06, actual latest 2026-06-05; 0/2 symbols reached the requested end date", report)
+        self.assertIn(
+            "Requested 2026-06-06, actual latest 2026-06-05; 0/2 symbols reached the requested end date",
+            report,
+        )
 
     def test_history_end_date_comparison_normalizes_supported_formats(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -97,7 +112,9 @@ class TodayAShareHistoryEndDateTests(unittest.TestCase):
                 date_max="2026-06-05",
                 date_max_by_symbol={"000001": "2026-06-06"},
             )
-            manifest = minimal_history_manifest(output, end_date="2026-06-06", symbols=symbols)
+            manifest = minimal_history_manifest(
+                output, end_date="2026-06-06", symbols=symbols
+            )
 
             summary = helpers.summary_view(manifest, "completed")
             stdout = StringIO()

@@ -44,15 +44,15 @@ def ensure_runtime_dependencies() -> None:
     if "pd" in globals():
         return
     import pandas as pandas_module
-    import a_share_selection_data as data_module
-    import validate_ohlcv as validator_module
+    import lib.selection_core.a_share_selection_data as data_module
+    import lib.a_share_selection_validation as validation_module
 
     globals().update(
         {
             "pd": pandas_module,
             "parse_dates": data_module.parse_dates,
             "read_table": data_module.read_table,
-            "validate_frame": validator_module.validate_frame,
+            "validate_frame": validation_module.validate_frame,
         }
     )
 
@@ -70,7 +70,9 @@ def slice_prices(frame: pd.DataFrame, *, as_of_date: str) -> pd.DataFrame:
     result = result[result["_parsed_date"] <= cutoff]
     if result.empty:
         raise ValueError(f"no rows on or before as-of-date {as_of_date}")
-    result = result.sort_values(["symbol", "_parsed_date"]).drop(columns=["_parsed_date"])
+    result = result.sort_values(["symbol", "_parsed_date"]).drop(
+        columns=["_parsed_date"]
+    )
     annotate_as_of_metadata(result, as_of_date)
     return result.reset_index(drop=True)
 

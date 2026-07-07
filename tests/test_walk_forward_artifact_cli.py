@@ -17,7 +17,7 @@ SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import validate_walk_forward_artifacts as artifact_cli  # noqa: E402
-from a_share_selection_model_contracts import (  # noqa: E402
+from lib.selection_core.a_share_selection_model_contracts import (  # noqa: E402
     LIMIT_RULES_MODEL_NOT_MODELED,
     TRADABILITY_MODEL_ENTRY_EXIT,
 )
@@ -35,7 +35,9 @@ class WalkForwardArtifactCliTests(unittest.TestCase):
         self.assertEqual(0, code)
         self.assertIn("OK:", stdout)
         self.assertIn("manifest_checked=True", stdout)
-        self.assertIn("verdict=known_portfolio_violation_reproduced_not_capacity_pass", stdout)
+        self.assertIn(
+            "verdict=known_portfolio_violation_reproduced_not_capacity_pass", stdout
+        )
         self.assertIn("claim_boundary=artifact_validation_not_external_gate", stdout)
         self.assertEqual("", stderr)
         self.assertEqual([], report["errors"])
@@ -49,7 +51,9 @@ class WalkForwardArtifactCliTests(unittest.TestCase):
     def test_cli_rejects_future_price_leakage(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
-            append_price_row(root / "signals/2026-05-12/prices_signal_window.csv", "2026-05-13")
+            append_price_row(
+                root / "signals/2026-05-12/prices_signal_window.csv", "2026-05-13"
+            )
 
             code, _stdout, stderr = call_cli(root, root / "artifact_validation.json")
 
@@ -60,7 +64,9 @@ class WalkForwardArtifactCliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
             rename_signal_dir(root, "2026-05-12", "20260512")
-            append_price_row(root / "signals/20260512/prices_signal_window.csv", "2026-05-13")
+            append_price_row(
+                root / "signals/20260512/prices_signal_window.csv", "2026-05-13"
+            )
 
             code, _stdout, stderr = call_cli(
                 root,
@@ -105,12 +111,17 @@ class WalkForwardArtifactCliTests(unittest.TestCase):
         self.assertIn("verdict=artifacts_pass_enabled_gates_not_external_proof", stdout)
         self.assertTrue(report["capacity_gate_pass"])
         self.assertEqual("pass", report["capacity_gate_status"])
-        self.assertEqual("artifacts_pass_enabled_gates_not_external_proof", report["verdict"])
+        self.assertEqual(
+            "artifacts_pass_enabled_gates_not_external_proof", report["verdict"]
+        )
 
     def test_cli_rejects_missing_sizing_field(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
-            drop_column(root / "signals/2026-05-12/prediction_sized_candidates.csv", "cash_reserved")
+            drop_column(
+                root / "signals/2026-05-12/prediction_sized_candidates.csv",
+                "cash_reserved",
+            )
 
             code, _stdout, stderr = call_cli(root, root / "artifact_validation.json")
 
@@ -120,7 +131,9 @@ class WalkForwardArtifactCliTests(unittest.TestCase):
     def test_cli_rejects_backtest_signal_date_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
-            rewrite_backtest_signal_date(root / "signals/2026-05-12/prediction_backtest.csv", "2026-05-09")
+            rewrite_backtest_signal_date(
+                root / "signals/2026-05-12/prediction_backtest.csv", "2026-05-09"
+            )
 
             code, _stdout, stderr = call_cli(root, root / "artifact_validation.json")
 
@@ -234,7 +247,9 @@ def call_cli(
         LIMIT_RULES_MODEL_NOT_MODELED,
     ]
     if include_manifest_validation:
-        args.extend(["--manifest-validation", str(root / "run_manifest_validation.json")])
+        args.extend(
+            ["--manifest-validation", str(root / "run_manifest_validation.json")]
+        )
     if extra_args:
         args.extend(extra_args)
     stdout = StringIO()
@@ -254,7 +269,9 @@ def build_run(root: Path, *, portfolio_violations: int = 1) -> Path:
     write_csv(signal_dir / "prediction_sized_candidates.csv", sized_rows())
     write_csv(signal_dir / "prediction_backtest.csv", backtest_rows())
     write_csv(root / "prediction_equity_curve.csv", equity_rows())
-    write_json(root / "prediction_overlap_summary.json", overlap_summary(portfolio_violations))
+    write_json(
+        root / "prediction_overlap_summary.json", overlap_summary(portfolio_violations)
+    )
     write_json(root / "prediction_run_summary.json", run_summary(portfolio_violations))
     write_json(root / "run_manifest_validation.json", manifest_validation())
     return root
@@ -362,7 +379,14 @@ def backtest_rows() -> list[dict[str, object]]:
 
 
 def equity_rows() -> list[dict[str, object]]:
-    return [{"signal_date": "2026-05-12", "positions": 2, "incomplete_trades": 0, "equity": 0.995}]
+    return [
+        {
+            "signal_date": "2026-05-12",
+            "positions": 2,
+            "incomplete_trades": 0,
+            "equity": 0.995,
+        }
+    ]
 
 
 def overlap_summary(portfolio_violations: int = 1) -> dict[str, object]:
@@ -402,7 +426,9 @@ def manifest_validation() -> dict[str, object]:
 
 def append_price_row(path: Path, date: str) -> None:
     rows = pd.read_csv(path, dtype={"symbol": str})
-    rows = pd.concat([rows, pd.DataFrame([price_row("000001", date)])], ignore_index=True)
+    rows = pd.concat(
+        [rows, pd.DataFrame([price_row("000001", date)])], ignore_index=True
+    )
     rows.to_csv(path, index=False)
 
 

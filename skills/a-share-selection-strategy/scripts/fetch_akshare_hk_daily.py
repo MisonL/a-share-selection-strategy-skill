@@ -9,7 +9,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from a_share_selection_symbols import normalize_hk_symbol, valid_hk_symbol_text
+from lib.selection_core.a_share_selection_symbols import (
+    normalize_hk_symbol,
+    valid_hk_symbol_text,
+)
 
 
 SOURCE = "akshare_stock_hk_daily"
@@ -37,7 +40,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         frame, metadata = fetch_prices(args)
         frame, metadata = apply_quality_policy(frame, metadata, args.drop_invalid_rows)
-        metadata = output_status(metadata, output_written=True, metadata_output_written=True)
+        metadata = output_status(
+            metadata, output_written=True, metadata_output_written=True
+        )
         write_outputs(frame, metadata, output, metadata_output)
     except Exception as exc:  # noqa: BLE001
         remove_output(output)
@@ -49,9 +54,13 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    strict_errors = strict_gate_errors(metadata, fail_on_fetch_error=args.fail_on_fetch_error)
+    strict_errors = strict_gate_errors(
+        metadata, fail_on_fetch_error=args.fail_on_fetch_error
+    )
     if strict_errors:
-        metadata = output_status(metadata, output_written=False, metadata_output_written=True)
+        metadata = output_status(
+            metadata, output_written=False, metadata_output_written=True
+        )
         remove_output(output)
         write_metadata(metadata, metadata_output)
         print_summary(metadata, prefix="ERROR_SUMMARY")
@@ -77,8 +86,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--start-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
     parser.add_argument("--end-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
     parser.add_argument("--output", required=True, help="Output CSV path.")
-    parser.add_argument("--metadata-output", required=True, help="Output metadata JSON path.")
-    parser.add_argument("--adjust", default="", help="akshare adjust value. Default: empty.")
+    parser.add_argument(
+        "--metadata-output", required=True, help="Output metadata JSON path."
+    )
+    parser.add_argument(
+        "--adjust", default="", help="akshare adjust value. Default: empty."
+    )
     parser.add_argument("--fail-on-fetch-error", action="store_true")
     parser.add_argument(
         "--drop-invalid-rows",
@@ -117,7 +130,9 @@ def fetch_prices(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any]
     return frame, build_metadata(args, frame, symbols_meta, failed)
 
 
-def fetch_symbol(ak: Any, args: argparse.Namespace, symbol: str) -> list[dict[str, Any]]:
+def fetch_symbol(
+    ak: Any, args: argparse.Namespace, symbol: str
+) -> list[dict[str, Any]]:
     raw = ak.stock_hk_daily(symbol=symbol, adjust=args.adjust)
     return collect_rows(filter_date_range(raw, args.start_date, args.end_date), symbol)
 
@@ -133,7 +148,9 @@ def parse_symbols(text: str) -> list[str]:
             continue
         symbols.append(normalized.zfill(5))
     if invalid:
-        raise ValueError(f"HK symbols must be 1 to 5 digits or HK-prefixed/suffixed: {','.join(invalid)}")
+        raise ValueError(
+            f"HK symbols must be 1 to 5 digits or HK-prefixed/suffixed: {','.join(invalid)}"
+        )
     if not symbols:
         raise ValueError("symbols must not be empty")
     return symbols
@@ -146,7 +163,9 @@ def akshare_date(text: str) -> str:
     return compact
 
 
-def filter_date_range(frame: pd.DataFrame, start_date: str, end_date: str) -> pd.DataFrame:
+def filter_date_range(
+    frame: pd.DataFrame, start_date: str, end_date: str
+) -> pd.DataFrame:
     ensure_runtime_dependencies()
     if frame.empty:
         return frame
@@ -163,7 +182,9 @@ def collect_rows(frame: pd.DataFrame, symbol: str) -> list[dict[str, Any]]:
         return []
     missing = [column for column in REQUIRED_COLUMNS if column not in frame.columns]
     if missing:
-        raise ValueError(f"akshare stock_hk_daily missing required columns: {', '.join(missing)}")
+        raise ValueError(
+            f"akshare stock_hk_daily missing required columns: {', '.join(missing)}"
+        )
     return [row_record(row, symbol) for _, row in frame.iterrows()]
 
 
@@ -260,11 +281,20 @@ def apply_quality_policy(
     metadata["invalid_symbols"] = sorted({item["symbol"] for item in invalid})
     metadata["invalid_row_examples"] = invalid[:10]
     metadata["dropped_invalid_rows"] = len(invalid) if drop_invalid_rows else 0
-    result = frame.drop(index=[item["index"] for item in invalid]) if drop_invalid_rows else frame
+    result = (
+        frame.drop(index=[item["index"] for item in invalid])
+        if drop_invalid_rows
+        else frame
+    )
     result = result.reset_index(drop=True)
     metadata["rows"] = int(len(result))
-    metadata["symbol_count"] = int(result["symbol"].nunique()) if not result.empty else 0
-    metadata["symbols"] = [symbol_metadata_for_frame(symbol, result) for symbol in metadata["requested_symbols"]]
+    metadata["symbol_count"] = (
+        int(result["symbol"].nunique()) if not result.empty else 0
+    )
+    metadata["symbols"] = [
+        symbol_metadata_for_frame(symbol, result)
+        for symbol in metadata["requested_symbols"]
+    ]
     metadata["empty_symbols"] = empty_symbols(metadata["symbols"])
     return result, metadata
 
@@ -293,7 +323,11 @@ def invalid_numeric_columns(row: pd.Series) -> list[str]:
 
 
 def symbol_metadata_for_frame(symbol: str, frame: pd.DataFrame) -> dict[str, Any]:
-    rows = [] if frame.empty else frame[frame["symbol"].astype(str) == symbol].to_dict("records")
+    rows = (
+        []
+        if frame.empty
+        else frame[frame["symbol"].astype(str) == symbol].to_dict("records")
+    )
     return symbol_metadata(symbol, rows)
 
 
@@ -333,7 +367,9 @@ def summary_prefix(metadata: dict[str, Any]) -> str:
     return "OK"
 
 
-def write_outputs(frame: pd.DataFrame, metadata: dict[str, Any], output: Path, meta: Path) -> None:
+def write_outputs(
+    frame: pd.DataFrame, metadata: dict[str, Any], output: Path, meta: Path
+) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(output, index=False)
     write_metadata(metadata, meta)

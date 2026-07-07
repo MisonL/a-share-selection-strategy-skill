@@ -13,7 +13,7 @@ sys.path.insert(0, str(TESTS))
 
 from test_walk_forward_artifact_cli import build_run, call_cli, drop_column  # noqa: E402
 from test_walk_forward_artifact_cli import price_row  # noqa: E402
-from walk_forward_artifact_checks import price_window_errors  # noqa: E402
+from lib.walk_forward.artifact_checks import price_window_errors  # noqa: E402
 
 
 class WalkForwardArtifactPriceCliTests(unittest.TestCase):
@@ -27,7 +27,9 @@ class WalkForwardArtifactPriceCliTests(unittest.TestCase):
     def test_cli_rejects_candidate_close_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
-            update_first_value(root / "signals/2026-05-12/prediction_candidates.csv", "close", 9.0)
+            update_first_value(
+                root / "signals/2026-05-12/prediction_candidates.csv", "close", 9.0
+            )
 
             code, _stdout, stderr = call_cli(root, root / "artifact_validation.json")
 
@@ -47,7 +49,11 @@ class WalkForwardArtifactPriceCliTests(unittest.TestCase):
     def test_cli_rejects_sized_signal_close_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
-            update_first_value(root / "signals/2026-05-12/prediction_sized_candidates.csv", "signal_close", 9.0)
+            update_first_value(
+                root / "signals/2026-05-12/prediction_sized_candidates.csv",
+                "signal_close",
+                9.0,
+            )
 
             code, _stdout, stderr = call_cli(root, root / "artifact_validation.json")
 
@@ -57,7 +63,11 @@ class WalkForwardArtifactPriceCliTests(unittest.TestCase):
     def test_cli_rejects_optional_sized_close_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))
-            update_first_value(root / "signals/2026-05-12/prediction_sized_candidates.csv", "close", 9.0)
+            update_first_value(
+                root / "signals/2026-05-12/prediction_sized_candidates.csv",
+                "close",
+                9.0,
+            )
 
             code, _stdout, stderr = call_cli(root, root / "artifact_validation.json")
 

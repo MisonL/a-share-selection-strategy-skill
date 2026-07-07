@@ -20,13 +20,13 @@ sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(TESTS))
 
 import score_candidates as scorer  # noqa: E402
-import a_share_selection_candidate_fields  # noqa: E402
-import a_share_selection_metrics as metrics  # noqa: E402
-from a_share_selection_data import ACCEPTED_DATE_FORMATS, read_table  # noqa: E402
-from a_share_selection_prepare import prepare_frame  # noqa: E402
-from a_share_selection_spot import normalized_spot_view  # noqa: E402
-from a_share_selection_symbols import stock_symbol_key  # noqa: E402
-from a_share_selection_universe import apply_universe_filter  # noqa: E402
+import lib.selection_core.a_share_selection_candidate_fields as a_share_selection_candidate_fields  # noqa: E402
+import lib.selection_core.a_share_selection_metrics as metrics  # noqa: E402
+from lib.selection_core.a_share_selection_data import ACCEPTED_DATE_FORMATS, read_table  # noqa: E402
+from lib.selection_core.a_share_selection_prepare import prepare_frame  # noqa: E402
+from lib.selection_core.a_share_selection_spot import normalized_spot_view  # noqa: E402
+from lib.selection_core.a_share_selection_symbols import stock_symbol_key  # noqa: E402
+from lib.selection_core.a_share_selection_universe import apply_universe_filter  # noqa: E402
 import validate_ohlcv  # noqa: E402
 from helpers import build_frame, load_config, permissive_thresholds  # noqa: E402
 
@@ -73,7 +73,9 @@ class AShareSelectionScriptTests(unittest.TestCase):
         self.assertEqual("000002", loaded["symbol"].iloc[0])
 
     def test_candidate_field_type_hints_resolve_after_lazy_pandas_import(self) -> None:
-        hints = get_type_hints(a_share_selection_candidate_fields.merge_latest_gate_fields)
+        hints = get_type_hints(
+            a_share_selection_candidate_fields.merge_latest_gate_fields
+        )
         self.assertIn("scored", hints)
         self.assertIn("input_frame", hints)
 
@@ -128,7 +130,9 @@ class AShareSelectionScriptTests(unittest.TestCase):
         self.assertIn("examples=", joined)
         self.assertIn("normalized_date=", joined)
 
-    def test_validate_reports_available_errors_when_required_column_missing(self) -> None:
+    def test_validate_reports_available_errors_when_required_column_missing(
+        self,
+    ) -> None:
         frame = build_frame()
         frame["symbol"] = "1"
         frame = frame.drop(columns=["volume"])
@@ -160,7 +164,9 @@ class AShareSelectionScriptTests(unittest.TestCase):
         diagnostics = pd.DataFrame(summary["threshold_diagnostics"])
         candidate_value = float(candidates.iloc[0]["one_year_pct_chg"])
         diagnostic_value = float(
-            diagnostics[diagnostics["symbol"].astype(str).eq(symbol)]["one_year_pct_chg"].iloc[0]
+            diagnostics[diagnostics["symbol"].astype(str).eq(symbol)][
+                "one_year_pct_chg"
+            ].iloc[0]
         )
 
         self.assertAlmostEqual(expected, candidate_value)
@@ -307,9 +313,7 @@ class AShareSelectionScriptTests(unittest.TestCase):
     def test_universe_filtering_reports_all_filtered_symbols(self) -> None:
         config = load_config("prediction_profile_config.json")
         frame = build_frame(include_prediction=True, include_turn=True)
-        frame["symbol"] = frame["symbol"].map(
-            {"000002": "900001", "600001": "810002"}
-        )
+        frame["symbol"] = frame["symbol"].map({"000002": "900001", "600001": "810002"})
         _, summary = scorer.score_candidates(frame, config)
         self.assertEqual(2, summary["raw_symbols"])
         self.assertEqual(0, summary["input_symbols"])
@@ -365,7 +369,9 @@ class AShareSelectionScriptTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "prediction or prediction_score"):
             scorer.score_candidates(frame, config)
 
-    def test_prediction_validation_reports_missing_turn_and_invalid_market_label_symbol(self) -> None:
+    def test_prediction_validation_reports_missing_turn_and_invalid_market_label_symbol(
+        self,
+    ) -> None:
         config = load_config("prediction_profile_config.json")
         frame = build_frame(include_prediction=True)
         frame = frame[frame["symbol"].eq("000002")].copy()
@@ -550,8 +556,7 @@ class AShareSelectionScriptTests(unittest.TestCase):
 
         candidates, summary = scorer.score_candidates(frame, config, spot)
         by_symbol = {
-            row["symbol"]: row["spot_industry"]
-            for _, row in candidates.iterrows()
+            row["symbol"]: row["spot_industry"] for _, row in candidates.iterrows()
         }
 
         self.assertEqual(2, summary["spot_matched_symbols"])
@@ -562,8 +567,12 @@ class AShareSelectionScriptTests(unittest.TestCase):
         config = load_config("hong_kong_generic_config.json")
         config["thresholds"] = permissive_thresholds(120)
         frame = build_frame(include_turn=True)
-        frame["symbol"] = frame["symbol"].map({"000002": "0700.HK", "600001": "08001.HK"})
-        frame["name"] = frame["symbol"].map({"0700.HK": "Tencent", "08001.HK": "Gem Co"})
+        frame["symbol"] = frame["symbol"].map(
+            {"000002": "0700.HK", "600001": "08001.HK"}
+        )
+        frame["name"] = frame["symbol"].map(
+            {"0700.HK": "Tencent", "08001.HK": "Gem Co"}
+        )
         frame["market"] = "HK"
         spot = pd.DataFrame(
             [
@@ -574,8 +583,7 @@ class AShareSelectionScriptTests(unittest.TestCase):
 
         candidates, summary = scorer.score_candidates(frame, config, spot)
         by_symbol = {
-            row["symbol"]: row["spot_industry"]
-            for _, row in candidates.iterrows()
+            row["symbol"]: row["spot_industry"] for _, row in candidates.iterrows()
         }
 
         self.assertEqual(2, summary["spot_matched_symbols"])
@@ -779,7 +787,9 @@ class AShareSelectionScriptTests(unittest.TestCase):
     def test_cli_preserves_as_of_metadata_in_candidates_and_diagnostics(self) -> None:
         frame = build_frame(include_turn=True)
         frame["requested_as_of_date"] = "2026-06-06"
-        frame["actual_data_date"] = pd.to_datetime(frame["date"]).max().date().isoformat()
+        frame["actual_data_date"] = (
+            pd.to_datetime(frame["date"]).max().date().isoformat()
+        )
         frame["as_of_date_observed"] = False
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "prices.csv"
@@ -937,7 +947,9 @@ class AShareSelectionScriptTests(unittest.TestCase):
         self.assertEqual({"000002"}, set(candidates["symbol"]))
         self.assertEqual({"max_close": 1}, summary["threshold_failures"])
 
-    def test_ultra_short_profile_requires_amount_turn_and_tradability_columns(self) -> None:
+    def test_ultra_short_profile_requires_amount_turn_and_tradability_columns(
+        self,
+    ) -> None:
         config = load_config("ultra_short_low_price_config.json")
         frame = build_frame(include_turn=True, include_tradability=True).drop(
             columns=["amount", "turn", "tradestatus", "isST"]
@@ -946,7 +958,9 @@ class AShareSelectionScriptTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "min_amount threshold requires amount"):
             scorer.score_candidates(frame, config)
 
-    def test_ultra_short_profile_filters_liquidity_st_suspended_and_one_word_bar(self) -> None:
+    def test_ultra_short_profile_filters_liquidity_st_suspended_and_one_word_bar(
+        self,
+    ) -> None:
         config = load_config("ultra_short_low_price_config.json")
         config["thresholds"] = permissive_thresholds(120) | {
             "min_amount": 100000000.0,
@@ -1000,7 +1014,9 @@ class AShareSelectionScriptTests(unittest.TestCase):
 
     def test_cli_low_prediction_reports_effective_empty_result(self) -> None:
         config = load_config("prediction_profile_config.json")
-        frame = build_frame(include_prediction=True, prediction_value=0.1, include_turn=True)
+        frame = build_frame(
+            include_prediction=True, prediction_value=0.1, include_turn=True
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "prices.csv"
             output_path = Path(tmpdir) / "prediction_low_pred.csv"
@@ -1026,6 +1042,7 @@ class AShareSelectionScriptTests(unittest.TestCase):
                 {"threshold_filtered_all"},
                 set(diagnostics["empty_result_reason"]),
             )
+
 
 if __name__ == "__main__":
     unittest.main()

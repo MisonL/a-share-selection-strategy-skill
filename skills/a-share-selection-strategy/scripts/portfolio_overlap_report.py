@@ -9,10 +9,17 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from a_share_selection_calendar_contract import CALENDAR_MODEL
+from lib.a_share_selection_calendar_contract import CALENDAR_MODEL
 
 
-REQUIRED_COLUMNS = ["symbol", "signal_date", "entry_date", "exit_date", "missing_data", "status"]
+REQUIRED_COLUMNS = [
+    "symbol",
+    "signal_date",
+    "entry_date",
+    "exit_date",
+    "missing_data",
+    "status",
+]
 CLAIM_BOUNDARY = "local_capacity_gate_not_broker_or_external_cash_capacity_proof"
 
 
@@ -24,9 +31,15 @@ def main(argv: list[str] | None = None) -> int:
             "ordinary business days, not an exchange trading calendar."
         )
     )
-    parser.add_argument("--backtests", nargs="+", required=True, help="Backtest CSV/Parquet paths.")
-    parser.add_argument("--daily-output", required=True, help="Daily open positions CSV path.")
-    parser.add_argument("--overlap-output", required=True, help="Same-symbol overlap CSV path.")
+    parser.add_argument(
+        "--backtests", nargs="+", required=True, help="Backtest CSV/Parquet paths."
+    )
+    parser.add_argument(
+        "--daily-output", required=True, help="Daily open positions CSV path."
+    )
+    parser.add_argument(
+        "--overlap-output", required=True, help="Same-symbol overlap CSV path."
+    )
     parser.add_argument("--summary-output", required=True, help="Summary JSON path.")
     parser.add_argument("--max-open-positions", type=int, default=None)
     parser.add_argument("--max-gross-weight", type=float, default=None)
@@ -52,8 +65,7 @@ def main(argv: list[str] | None = None) -> int:
             return 3
     except Exception as exc:  # noqa: BLE001
         print(
-            "ERROR: code=bad_input "
-            f"output_written=false message={exc}",
+            f"ERROR: code=bad_input output_written=false message={exc}",
             file=sys.stderr,
         )
         return 2
@@ -65,8 +77,8 @@ def ensure_runtime_dependencies() -> None:
     if "pd" in globals():
         return
     import pandas as pandas_module
-    import a_share_selection_capital as capital_module
-    import a_share_selection_data as data_module
+    import lib.selection_core.a_share_selection_capital as capital_module
+    import lib.selection_core.a_share_selection_data as data_module
 
     globals().update(
         {
@@ -98,7 +110,9 @@ def build_overlap_report(
     complete["exit_date"] = parse_dates(complete["exit_date"])
     complete["signal_date"] = parse_dates(complete["signal_date"])
     if complete[["entry_date", "exit_date", "signal_date"]].isna().any().any():
-        raise ValueError("complete trades must have parseable signal, entry, and exit dates")
+        raise ValueError(
+            "complete trades must have parseable signal, entry, and exit dates"
+        )
     set_active_trade_context(complete)
     daily = daily_open_positions(complete)
     overlaps = same_symbol_overlaps(daily)
@@ -148,7 +162,9 @@ def daily_open_positions(complete: pd.DataFrame) -> pd.DataFrame:
                 }
             )
     if not rows:
-        return pd.DataFrame(columns=["date", "open_positions", "symbols", "signal_dates"])
+        return pd.DataFrame(
+            columns=["date", "open_positions", "symbols", "signal_dates"]
+        )
     expanded = pd.DataFrame(rows)
     return pd.DataFrame(
         {"date": date, **daily_row(group).to_dict()}
@@ -173,7 +189,9 @@ def same_symbol_overlaps(daily: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for _, row in daily.iterrows():
         symbols = str(row["symbols"]).split(",") if row["symbols"] else []
-        indices = [int(value) for value in str(row["trade_indices"]).split(",") if value]
+        indices = [
+            int(value) for value in str(row["trade_indices"]).split(",") if value
+        ]
         if len(symbols) == int(row["open_positions"]):
             continue
         rows.extend(overlap_rows_for_date(str(row["date"]), indices))
@@ -189,7 +207,9 @@ def overlap_rows_for_date(date: str, trade_indices: list[int]) -> list[dict[str,
     for symbol, indices in seen.items():
         if len(indices) <= 1:
             continue
-        signal_dates = sorted(active_trade_context[index]["signal_date"] for index in indices)
+        signal_dates = sorted(
+            active_trade_context[index]["signal_date"] for index in indices
+        )
         rows.append(
             {
                 "date": date,
@@ -221,7 +241,9 @@ def build_summary(
     present = [field for field in CAPITAL_FIELDS if field in combined]
     missing = [field for field in CAPITAL_FIELDS if field not in combined]
     max_open = int(daily["open_positions"].max()) if not daily.empty else 0
-    max_dates = daily.loc[daily["open_positions"] == max_open, "date"].astype(str).tolist()
+    max_dates = (
+        daily.loc[daily["open_positions"] == max_open, "date"].astype(str).tolist()
+    )
     return {
         "trades": int(len(combined)),
         "complete_trades": int(len(complete)),
@@ -271,6 +293,7 @@ def gate_limits(args: argparse.Namespace) -> dict[str, Any]:
         "require_capital_fields": bool(args.require_capital_fields),
     }
 
+
 def empty_overlaps() -> pd.DataFrame:
     return pd.DataFrame(
         columns=["date", "symbol", "open_positions", "signal_dates", "trade_indices"]
@@ -291,19 +314,29 @@ def gate_violations(
     violations = []
     if max_open_positions is not None and max_open_positions < 1:
         raise ValueError("max-open-positions must be >= 1")
-    if max_open_positions is not None and summary["max_open_positions"] > max_open_positions:
+    if (
+        max_open_positions is not None
+        and summary["max_open_positions"] > max_open_positions
+    ):
         violations.append(
             f"max_open_positions={summary['max_open_positions']} limit={max_open_positions}"
         )
     capacity_gate(summary, violations, "weight", "max_gross_weight", max_gross_weight)
-    capacity_gate(summary, violations, "notional", "max_gross_notional", max_gross_notional)
-    capacity_gate(summary, violations, "cash_reserved", "max_cash_reserved", max_cash_reserved)
+    capacity_gate(
+        summary, violations, "notional", "max_gross_notional", max_gross_notional
+    )
+    capacity_gate(
+        summary, violations, "cash_reserved", "max_cash_reserved", max_cash_reserved
+    )
     if fail_on_symbol_overlap and summary["same_symbol_overlap_rows"]:
-        violations.append(f"same_symbol_overlap_rows={summary['same_symbol_overlap_rows']}")
+        violations.append(
+            f"same_symbol_overlap_rows={summary['same_symbol_overlap_rows']}"
+        )
     if require_capital_fields and not summary["cash_capacity_verifiable"]:
         missing = ",".join(summary["capital_fields_missing"])
         violations.append(f"capital_fields_missing={missing}")
     return violations
+
 
 def write_outputs(
     daily: pd.DataFrame,

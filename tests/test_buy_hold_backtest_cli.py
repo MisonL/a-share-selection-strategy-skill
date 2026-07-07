@@ -19,8 +19,10 @@ sys.path.insert(0, str(TESTS))
 
 import backtest_buy_hold as backtest  # noqa: E402
 from helpers import build_frame  # noqa: E402
-from a_share_selection_backtest_rows import completed_or_incomplete_row  # noqa: E402
-from a_share_selection_model_contracts import (  # noqa: E402
+from lib.selection_core.a_share_selection_backtest_rows import (
+    completed_or_incomplete_row,
+)  # noqa: E402
+from lib.selection_core.a_share_selection_model_contracts import (  # noqa: E402
     LIMIT_RULES_MODEL_NOT_MODELED,
     TRADABILITY_MODEL_ENTRY_EXIT,
     TRADABILITY_MODEL_HOLDING_PERIOD,
@@ -31,9 +33,7 @@ from a_share_selection_model_contracts import (  # noqa: E402
 class BuyHoldBacktestCliTests(unittest.TestCase):
     def test_buy_hold_returns_close_to_close_result(self) -> None:
         prices = build_frame(days=130)
-        candidate = prices[prices["symbol"] == "000002"].iloc[[20]][
-            ["symbol", "date"]
-        ]
+        candidate = prices[prices["symbol"] == "000002"].iloc[[20]][["symbol", "date"]]
         result, summary = backtest.run_backtest(
             prices,
             candidate,
@@ -56,7 +56,9 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         self.assertEqual("round_trip_bps", result["cost_model"].iloc[0])
         self.assertEqual("round_trip_bps", result["slippage_model"].iloc[0])
         self.assertEqual(TRADABILITY_MODEL_NONE, result["tradability_model"].iloc[0])
-        self.assertEqual(LIMIT_RULES_MODEL_NOT_MODELED, result["limit_rules_model"].iloc[0])
+        self.assertEqual(
+            LIMIT_RULES_MODEL_NOT_MODELED, result["limit_rules_model"].iloc[0]
+        )
 
     def test_cli_preserves_candidate_capital_fields_for_all_rows(self) -> None:
         prices = build_frame(days=130)
@@ -106,9 +108,16 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
 
         self.assertEqual(0, code)
         self.assertEqual(["complete", "incomplete"], result["status"].tolist())
-        self.assertEqual(["none", "missing_entry_price"], result["missing_reason"].tolist())
-        self.assertEqual(["equal_cash_budget_lot_floor"] * 2, result["capital_model"].tolist())
-        self.assertEqual(["local_sizing_not_broker_order"] * 2, result["sizing_claim_boundary"].tolist())
+        self.assertEqual(
+            ["none", "missing_entry_price"], result["missing_reason"].tolist()
+        )
+        self.assertEqual(
+            ["equal_cash_budget_lot_floor"] * 2, result["capital_model"].tolist()
+        )
+        self.assertEqual(
+            ["local_sizing_not_broker_order"] * 2,
+            result["sizing_claim_boundary"].tolist(),
+        )
         self.assertEqual([0.25, 0.4], result["weight"].tolist())
         self.assertEqual([25000.0, 40000.0], result["notional"].tolist())
         self.assertEqual([1000, 1500], result["quantity"].tolist())
@@ -148,9 +157,7 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
 
     def test_negative_cost_or_slippage_is_rejected(self) -> None:
         prices = build_frame(days=130)
-        candidate = prices[prices["symbol"] == "000002"].iloc[[20]][
-            ["symbol", "date"]
-        ]
+        candidate = prices[prices["symbol"] == "000002"].iloc[[20]][["symbol", "date"]]
         with self.assertRaisesRegex(ValueError, "cost-bps"):
             backtest.run_backtest(prices, candidate, hold_days=5, cost_bps=-1)
         with self.assertRaisesRegex(ValueError, "slippage-bps"):
@@ -179,7 +186,9 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
     def test_require_tradable_bars_marks_non_tradable_entry(self) -> None:
         prices = build_frame(days=130)
         prices["tradestatus"] = "1"
-        mask = (prices["symbol"] == "000002") & (prices["date"] == prices.iloc[20]["date"])
+        mask = (prices["symbol"] == "000002") & (
+            prices["date"] == prices.iloc[20]["date"]
+        )
         prices.loc[mask, "tradestatus"] = "0"
         candidate = prices[prices["symbol"] == "000002"].iloc[[20]][["symbol", "date"]]
 
@@ -195,8 +204,12 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         self.assertTrue(summary["tradability_required"])
         self.assertEqual(TRADABILITY_MODEL_ENTRY_EXIT, summary["tradability_model"])
         self.assertEqual("non_tradable_entry", result["missing_reason"].iloc[0])
-        self.assertEqual(TRADABILITY_MODEL_ENTRY_EXIT, result["tradability_model"].iloc[0])
-        self.assertEqual(LIMIT_RULES_MODEL_NOT_MODELED, result["limit_rules_model"].iloc[0])
+        self.assertEqual(
+            TRADABILITY_MODEL_ENTRY_EXIT, result["tradability_model"].iloc[0]
+        )
+        self.assertEqual(
+            LIMIT_RULES_MODEL_NOT_MODELED, result["limit_rules_model"].iloc[0]
+        )
         self.assertEqual("non_tradable_entry:1", summary["missing_reason_counts"])
 
     def test_require_tradable_bars_keeps_middle_non_trading_complete(self) -> None:
@@ -240,9 +253,15 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         self.assertEqual(1, summary["incomplete_trades"])
         self.assertTrue(summary["tradability_required"])
         self.assertEqual(TRADABILITY_MODEL_HOLDING_PERIOD, summary["tradability_model"])
-        self.assertEqual("non_tradable_holding_period", result["missing_reason"].iloc[0])
-        self.assertEqual(TRADABILITY_MODEL_HOLDING_PERIOD, result["tradability_model"].iloc[0])
-        self.assertEqual("non_tradable_holding_period:1", summary["missing_reason_counts"])
+        self.assertEqual(
+            "non_tradable_holding_period", result["missing_reason"].iloc[0]
+        )
+        self.assertEqual(
+            TRADABILITY_MODEL_HOLDING_PERIOD, result["tradability_model"].iloc[0]
+        )
+        self.assertEqual(
+            "non_tradable_holding_period:1", summary["missing_reason_counts"]
+        )
 
     def test_require_tradable_holding_period_requires_status_column(self) -> None:
         prices = build_frame(days=130)
@@ -273,7 +292,9 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         self.assertEqual(1, summary["incomplete_trades"])
         self.assertEqual(TRADABILITY_MODEL_ENTRY_EXIT, summary["tradability_model"])
         self.assertEqual("missing_tradestatus", result["missing_reason"].iloc[0])
-        self.assertEqual(TRADABILITY_MODEL_ENTRY_EXIT, result["tradability_model"].iloc[0])
+        self.assertEqual(
+            TRADABILITY_MODEL_ENTRY_EXIT, result["tradability_model"].iloc[0]
+        )
 
     def test_cli_strict_incomplete_returns_error_without_output(self) -> None:
         prices = build_frame(days=130)
@@ -343,7 +364,9 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         self.assertIn("slippage_bps=5.0", stdout.getvalue())
         self.assertIn("incomplete_trades=1", stderr.getvalue())
 
-    def test_cli_non_strict_missing_future_price_discloses_incomplete_boundary(self) -> None:
+    def test_cli_non_strict_missing_future_price_discloses_incomplete_boundary(
+        self,
+    ) -> None:
         prices = build_frame(days=130)
         history = prices[prices["symbol"] == "000002"].reset_index(drop=True)
         candidate = history.iloc[[-2]][["symbol", "date"]]
@@ -414,7 +437,9 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         prices = build_frame(days=130)
         prices["tradestatus"] = "1"
         history = prices[prices["symbol"] == "000002"].reset_index(drop=True)
-        mask = (prices["symbol"] == "000002") & (prices["date"] == history.loc[20, "date"])
+        mask = (prices["symbol"] == "000002") & (
+            prices["date"] == history.loc[20, "date"]
+        )
         prices.loc[mask, "tradestatus"] = "0"
         candidate = history.iloc[[20]][["symbol", "date"]]
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -442,11 +467,17 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertFalse(output_path.exists())
         self.assertIn("tradability_required=True", stdout.getvalue())
-        self.assertIn(f"tradability_model={TRADABILITY_MODEL_ENTRY_EXIT}", stdout.getvalue())
-        self.assertIn(f"limit_rules_model={LIMIT_RULES_MODEL_NOT_MODELED}", stdout.getvalue())
+        self.assertIn(
+            f"tradability_model={TRADABILITY_MODEL_ENTRY_EXIT}", stdout.getvalue()
+        )
+        self.assertIn(
+            f"limit_rules_model={LIMIT_RULES_MODEL_NOT_MODELED}", stdout.getvalue()
+        )
         self.assertIn("missing_reason_counts=non_tradable_entry:1", stdout.getvalue())
 
-    def test_cli_require_tradable_holding_period_returns_error_without_output(self) -> None:
+    def test_cli_require_tradable_holding_period_returns_error_without_output(
+        self,
+    ) -> None:
         prices = build_frame(days=130)
         prices["tradestatus"] = "1"
         history = prices[prices["symbol"] == "000002"].reset_index(drop=True)
@@ -479,8 +510,12 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertFalse(output_path.exists())
         self.assertIn("tradability_required=True", stdout.getvalue())
-        self.assertIn(f"tradability_model={TRADABILITY_MODEL_HOLDING_PERIOD}", stdout.getvalue())
-        self.assertIn("missing_reason_counts=non_tradable_holding_period:1", stdout.getvalue())
+        self.assertIn(
+            f"tradability_model={TRADABILITY_MODEL_HOLDING_PERIOD}", stdout.getvalue()
+        )
+        self.assertIn(
+            "missing_reason_counts=non_tradable_holding_period:1", stdout.getvalue()
+        )
         self.assertIn("incomplete_trades=1", stderr.getvalue())
 
 

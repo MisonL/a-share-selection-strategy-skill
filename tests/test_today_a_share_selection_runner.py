@@ -21,16 +21,16 @@ sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(TESTS))
 
 import run_today_a_share_selection as runner  # noqa: E402
-from run_today_a_share_selection_helpers import (  # noqa: E402
+from lib.runner.run_today_a_share_selection_helpers import (  # noqa: E402
     summary_view,
     spot_rows,
     tabular_row_count,
 )
-from run_today_a_share_selection_history import (  # noqa: E402
+from lib.runner.run_today_a_share_selection_history import (  # noqa: E402
     parse_history_symbols,
     read_symbols_file,
 )
-from run_today_a_share_selection_outputs import clear_stale_run_outputs  # noqa: E402
+from lib.runner.run_today_a_share_selection_outputs import clear_stale_run_outputs  # noqa: E402
 from helpers import build_frame, load_config  # noqa: E402
 
 HAS_PARQUET_ENGINE = any(
@@ -41,9 +41,9 @@ HAS_PARQUET_ENGINE = any(
 class TodayAShareSelectionRunnerTests(unittest.TestCase):
     def test_generic_runner_writes_manifest_summary_and_outputs(self) -> None:
         frame = build_frame(include_turn=True, include_tradability=True)
-        frame[["open", "high", "low", "close"]] = frame[
-            ["open", "high", "low", "close"]
-        ] * 0.75
+        frame[["open", "high", "low", "close"]] = (
+            frame[["open", "high", "low", "close"]] * 0.75
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "input.csv"
@@ -59,7 +59,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
 
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
             report = (output / "report.html").read_text(encoding="utf-8")
             candidate_rows = csv_rows(output / "candidates.csv")
@@ -81,7 +83,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("lightgbm_not_used=true", stdout)
         self.assertIn("lightgbm_output_source=not_used", stdout)
         self.assertIn("lightgbm_executed_by_runner=false", stdout)
-        self.assertEqual(["validate", "score"], [step["step"] for step in manifest["steps"]])
+        self.assertEqual(
+            ["validate", "score"], [step["step"] for step in manifest["steps"]]
+        )
         self.assertEqual("auto", manifest["requested_mode"])
         self.assertEqual("local_prices_generic", manifest["execution_path"])
         self.assertEqual("prices_input_provided", manifest["execution_path_reason"])
@@ -98,7 +102,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn(manifest["html_report_initial_language"], {"zh", "en"})
         self.assertTrue(manifest["summary_output_written"])
         self.assertTrue(manifest["manifest_output_written"])
-        self.assertIn("missing_prediction_columns:prediction", manifest["mode_decision_reason"])
+        self.assertIn(
+            "missing_prediction_columns:prediction", manifest["mode_decision_reason"]
+        )
         self.assertEqual(["prediction"], manifest["missing_prediction_column_groups"])
         self.assertEqual(
             "prediction_or_prediction_score",
@@ -122,7 +128,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual("auto", summary["requested_mode"])
         self.assertEqual("generic", summary["mode"])
         self.assertEqual("auto_generic", summary["mode_decision"])
-        self.assertIn("missing_prediction_columns:prediction", summary["mode_decision_reason"])
+        self.assertIn(
+            "missing_prediction_columns:prediction", summary["mode_decision_reason"]
+        )
         self.assertEqual(["prediction"], summary["missing_prediction_column_groups"])
         self.assertEqual(
             "prediction_or_prediction_score",
@@ -165,13 +173,26 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("Use boundary / risk reminder", report)
         self.assertIn("Complete Candidate Table", report)
         self.assertIn("Report Appendix", report)
-        self.assertIn("not_investment_advice_not_trade_instruction_not_real_fill_not_return_proof", report)
+        self.assertIn(
+            "not_investment_advice_not_trade_instruction_not_real_fill_not_return_proof",
+            report,
+        )
         self.assertIn('data-lang-mode="auto"', report)
         self.assertTrue(
-            all(row["advice_boundary"] == summary["advice_boundary"] for row in candidate_rows)
+            all(
+                row["advice_boundary"] == summary["advice_boundary"]
+                for row in candidate_rows
+            )
         )
-        self.assertTrue(all(row["execution_path"] == "local_prices_generic" for row in candidate_rows))
-        self.assertTrue(all(row["coverage_class"] == "local_input" for row in candidate_rows))
+        self.assertTrue(
+            all(
+                row["execution_path"] == "local_prices_generic"
+                for row in candidate_rows
+            )
+        )
+        self.assertTrue(
+            all(row["coverage_class"] == "local_input" for row in candidate_rows)
+        )
         self.assertTrue(
             all(row["full_market_claim_allowed"] == "False" for row in candidate_rows)
         )
@@ -183,19 +204,28 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             )
         )
         self.assertTrue(
-            all(row["advice_boundary"] == summary["advice_boundary"] for row in diagnostic_rows)
-        )
-        self.assertTrue(
-            all(row["execution_path_reason"] == "prices_input_provided" for row in diagnostic_rows)
+            all(
+                row["advice_boundary"] == summary["advice_boundary"]
+                for row in diagnostic_rows
+            )
         )
         self.assertTrue(
             all(
-                row["recommendation_boundary"] == "ranking_signal_not_buy_sell_instruction"
+                row["execution_path_reason"] == "prices_input_provided"
+                for row in diagnostic_rows
+            )
+        )
+        self.assertTrue(
+            all(
+                row["recommendation_boundary"]
+                == "ranking_signal_not_buy_sell_instruction"
                 for row in candidate_rows
             )
         )
 
-    def test_prediction_runner_fails_without_prediction_and_keeps_manifest(self) -> None:
+    def test_prediction_runner_fails_without_prediction_and_keeps_manifest(
+        self,
+    ) -> None:
         frame = build_frame(
             include_turn=True,
             include_prediction=False,
@@ -218,7 +248,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
 
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
             report = (output / "report.html").read_text(encoding="utf-8")
 
@@ -237,7 +269,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertTrue(manifest["prediction_mode"])
         self.assertFalse(manifest["consumes_prediction_columns"])
         self.assertEqual("not_used", manifest["prediction_input_source"])
-        self.assertEqual("external_input", manifest["requested_prediction_input_source"])
+        self.assertEqual(
+            "external_input", manifest["requested_prediction_input_source"]
+        )
         self.assertEqual("not_used", manifest["lightgbm_output_source"])
         self.assertEqual("external_input", manifest["requested_lightgbm_output_source"])
         self.assertFalse(summary["consumes_prediction_columns"])
@@ -272,7 +306,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertNotIn("Read from input columns", report)
         self.assertNotIn("ranked candidates from prediction columns", report)
 
-    def test_generic_validate_failure_report_does_not_claim_completed_scoring(self) -> None:
+    def test_generic_validate_failure_report_does_not_claim_completed_scoring(
+        self,
+    ) -> None:
         frame = build_frame(include_turn=False, include_tradability=True)
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -313,9 +349,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
     def test_failed_reused_output_dir_does_not_show_stale_candidates(self) -> None:
         frame = build_frame(include_turn=True, include_tradability=True)
-        frame[["open", "high", "low", "close"]] = frame[
-            ["open", "high", "low", "close"]
-        ] * 0.75
+        frame[["open", "high", "low", "close"]] = (
+            frame[["open", "high", "low", "close"]] * 0.75
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "input.csv"
@@ -361,9 +397,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
     def test_pre_mode_failure_clears_reused_output_files(self) -> None:
         frame = build_frame(include_turn=True, include_tradability=True)
-        frame[["open", "high", "low", "close"]] = frame[
-            ["open", "high", "low", "close"]
-        ] * 0.75
+        frame[["open", "high", "low", "close"]] = (
+            frame[["open", "high", "low", "close"]] * 0.75
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "input.csv"
@@ -443,7 +479,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
 
         self.assertEqual(2, code)
         self.assertIn("stale run output path is a directory", stderr)
@@ -476,7 +514,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
 
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
             report = (output / "report.html").read_text(encoding="utf-8")
 
@@ -496,7 +536,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertFalse(manifest["lightgbm_executed_by_runner"])
         self.assertTrue(manifest["consumes_prediction_columns"])
         self.assertEqual("external_input", manifest["prediction_input_source"])
-        self.assertEqual("external_input", manifest["requested_prediction_input_source"])
+        self.assertEqual(
+            "external_input", manifest["requested_prediction_input_source"]
+        )
         self.assertFalse(manifest["prediction_model_executed_by_runner"])
         self.assertEqual("external_input", manifest["lightgbm_output_source"])
         self.assertEqual("external_input", manifest["requested_lightgbm_output_source"])
@@ -512,9 +554,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
     def test_no_html_report_removes_stale_report_in_reused_output_dir(self) -> None:
         frame = build_frame(include_turn=True, include_tradability=True)
-        frame[["open", "high", "low", "close"]] = frame[
-            ["open", "high", "low", "close"]
-        ] * 0.75
+        frame[["open", "high", "low", "close"]] = (
+            frame[["open", "high", "low", "close"]] * 0.75
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "input.csv"
@@ -572,9 +614,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
     def test_html_report_write_failure_does_not_block_success_summary(self) -> None:
         frame = build_frame(include_turn=True, include_tradability=True)
-        frame[["open", "high", "low", "close"]] = frame[
-            ["open", "high", "low", "close"]
-        ] * 0.75
+        frame[["open", "high", "low", "close"]] = (
+            frame[["open", "high", "low", "close"]] * 0.75
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "input.csv"
@@ -587,7 +629,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ["--prices-input", str(prices), "--output-dir", str(output)]
             )
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
 
         self.assertEqual(0, code, stderr)
         self.assertIn("html_report=unavailable", stdout)
@@ -601,9 +645,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
     def test_html_report_replaces_stale_symlink_without_corrupting_csv(self) -> None:
         frame = build_frame(include_turn=True, include_tradability=True)
-        frame[["open", "high", "low", "close"]] = frame[
-            ["open", "high", "low", "close"]
-        ] * 0.75
+        frame[["open", "high", "low", "close"]] = (
+            frame[["open", "high", "low", "close"]] * 0.75
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "input.csv"
@@ -659,7 +703,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
 
         self.assertEqual(3, code)
         self.assertIn("step=validate", stderr)
@@ -858,7 +904,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             )
 
             runner.run_pipeline(context)
-            saved = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            saved = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
 
         text = json.dumps(saved)
         self.assertEqual(
@@ -891,7 +939,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 )
             finally:
                 runner.apply_resume_from = original_apply_resume_from
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
 
         self.assertEqual(2, code)
@@ -1112,7 +1162,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("unsupported yfinance history options would be ignored", stderr)
         self.assertIn("--drop-invalid-history-rows", stderr)
 
-    def test_runner_rejects_zzshare_only_options_for_other_history_sources(self) -> None:
+    def test_runner_rejects_zzshare_only_options_for_other_history_sources(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             code, _stdout, stderr = call_runner(
                 [
@@ -1170,9 +1222,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
     def test_preflight_error_clears_reused_output_files(self) -> None:
         frame = build_frame(include_turn=True, include_tradability=True)
-        frame[["open", "high", "low", "close"]] = frame[
-            ["open", "high", "low", "close"]
-        ] * 0.75
+        frame[["open", "high", "low", "close"]] = (
+            frame[["open", "high", "low", "close"]] * 0.75
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "input.csv"
@@ -1280,7 +1332,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertFalse(summary["candidates_output_written"])
         self.assertFalse(summary["diagnostics_output_written"])
 
-    def test_invalid_zzshare_history_timeout_nan_clears_reused_output_files(self) -> None:
+    def test_invalid_zzshare_history_timeout_nan_clears_reused_output_files(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "run"
             output.mkdir()
@@ -1337,9 +1391,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
     def test_runner_records_local_spot_input_in_score_command(self) -> None:
         frame = build_frame(include_turn=True, include_tradability=True)
-        frame[["open", "high", "low", "close"]] = frame[
-            ["open", "high", "low", "close"]
-        ] * 0.75
+        frame[["open", "high", "low", "close"]] = (
+            frame[["open", "high", "low", "close"]] * 0.75
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "input.csv"
@@ -1359,13 +1413,17 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
 
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
 
         self.assertEqual(0, code, stderr)
         score_command = manifest["steps"][1]["command"]
         self.assertIn("--spot-input", score_command)
-        self.assertEqual("local_prices_input+local_spot_input", manifest["source_scope"])
+        self.assertEqual(
+            "local_prices_input+local_spot_input", manifest["source_scope"]
+        )
         self.assertEqual(1, summary["spot_rows"])
         self.assertEqual(1, summary["spot_matched_symbols"])
 
@@ -1373,9 +1431,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         frame = build_frame(include_turn=True, include_tradability=True)
         frame = frame[frame["symbol"] == "000002"].copy()
         frame["name"] = "2"
-        frame[["open", "high", "low", "close"]] = frame[
-            ["open", "high", "low", "close"]
-        ] * 0.75
+        frame[["open", "high", "low", "close"]] = (
+            frame[["open", "high", "low", "close"]] * 0.75
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "input.csv"
@@ -1472,12 +1530,16 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertTrue(summary["spot_metadata_output_written"])
         self.assertTrue(summary["spot_output"].endswith("spot.csv"))
         self.assertFalse(summary["spot_output_written"])
-        self.assertEqual("2026-06-06T09:31:00Z", summary["spot_metadata"]["snapshot_time"])
+        self.assertEqual(
+            "2026-06-06T09:31:00Z", summary["spot_metadata"]["snapshot_time"]
+        )
         self.assertEqual(2, summary["spot_metadata"]["requested_pages"])
         self.assertEqual(1, summary["spot_metadata"]["successful_pages"])
         self.assertEqual(100, summary["spot_metadata"]["raw_items"])
         self.assertEqual(100, summary["spot_metadata"]["filtered_items"])
-        self.assertEqual("partial_not_full_market", summary["spot_metadata"]["coverage_claim"])
+        self.assertEqual(
+            "partial_not_full_market", summary["spot_metadata"]["coverage_claim"]
+        )
         self.assertEqual(
             ["rerun_with_fail_on_partial"],
             summary["spot_metadata"]["allowed_failure_actions"],
@@ -1514,7 +1576,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
             summary = summary_view(manifest, "completed")
 
-        self.assertEqual(["000003", "000004"], summary["score"]["failed_symbol_examples"])
+        self.assertEqual(
+            ["000003", "000004"], summary["score"]["failed_symbol_examples"]
+        )
         self.assertEqual(
             ["300001"],
             summary["score"]["insufficient_history_symbol_examples"],
@@ -1536,7 +1600,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
     def test_tabular_row_count_counts_csv_records_with_embedded_newlines(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "rows.csv"
-            path.write_text('symbol,name\n000001,"Alpha\nName"\n000002,Beta\n', encoding="utf-8")
+            path.write_text(
+                'symbol,name\n000001,"Alpha\nName"\n000002,Beta\n', encoding="utf-8"
+            )
 
             rows = tabular_row_count(path)
 
@@ -1556,10 +1622,14 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             output = Path(tmpdir)
             source = output / "prices.CSV"
             stale_alias = output / "prices.csv"
-            source.write_text("symbol,date,close\n000001,2026-01-01,8.0\n", encoding="utf-8")
+            source.write_text(
+                "symbol,date,close\n000001,2026-01-01,8.0\n", encoding="utf-8"
+            )
             if not stale_alias.exists():
                 stale_alias.hardlink_to(source)
-            args = SimpleNamespace(prices_input=str(source), spot_input=None, fetch_spot=None)
+            args = SimpleNamespace(
+                prices_input=str(source), spot_input=None, fetch_spot=None
+            )
 
             clear_stale_run_outputs(args, output)
 
@@ -1574,7 +1644,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             source.write_text("symbol,spot_price\n000001,8.0\n", encoding="utf-8")
             if not stale_alias.exists():
                 stale_alias.hardlink_to(source)
-            args = SimpleNamespace(prices_input=None, spot_input=str(source), fetch_spot=None)
+            args = SimpleNamespace(
+                prices_input=None, spot_input=str(source), fetch_spot=None
+            )
 
             clear_stale_run_outputs(args, output)
 
@@ -1595,9 +1667,13 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
             clear_stale_run_outputs(args, output)
 
-            self.assertEqual("000001\n600000\n", symbols_file.read_text(encoding="utf-8"))
+            self.assertEqual(
+                "000001\n600000\n", symbols_file.read_text(encoding="utf-8")
+            )
 
-    def test_runner_builds_history_fetch_before_validate_when_prices_are_omitted(self) -> None:
+    def test_runner_builds_history_fetch_before_validate_when_prices_are_omitted(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
             args = parsed_args(
@@ -1615,13 +1691,21 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
             manifest = runner.initial_manifest(args)
-            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+            context = runner.RunContext(
+                args, manifest, output / "run_manifest.json", ok_executor
+            )
 
             runner.run_pipeline(context)
 
-        self.assertEqual(["fetch_history", "validate", "score"], [step["step"] for step in manifest["steps"]])
+        self.assertEqual(
+            ["fetch_history", "validate", "score"],
+            [step["step"] for step in manifest["steps"]],
+        )
         self.assertEqual("generic", manifest["mode"])
-        self.assertIn("history_fetch_inputs_do_not_include_prediction", manifest["mode_decision_reason"])
+        self.assertIn(
+            "history_fetch_inputs_do_not_include_prediction",
+            manifest["mode_decision_reason"],
+        )
         self.assertIn("use_mode_prediction", manifest["mode_decision_reason"])
         self.assertEqual("baostock_history_fetch", manifest["source_scope"])
         self.assertEqual(["000001", "600000"], manifest["history_symbols"])
@@ -1656,7 +1740,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             )
 
             runner.run_pipeline(context)
-            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            selected = json.loads(
+                (output / "selected_symbols.json").read_text(encoding="utf-8")
+            )
 
         fetch_history = manifest["steps"][0]
         self.assertEqual(["000001", "600000"], manifest["history_symbols"])
@@ -1782,7 +1868,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
 
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
 
         self.assertEqual(0, code, stderr)
@@ -1791,7 +1879,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual("plan_only", manifest["execution_mode"])
         self.assertFalse(manifest["commands_executed"])
         self.assertTrue(manifest["plan_only"])
-        self.assertEqual(["validate", "score"], [step["step"] for step in manifest["steps"]])
+        self.assertEqual(
+            ["validate", "score"], [step["step"] for step in manifest["steps"]]
+        )
         self.assertTrue(all(step["planned"] for step in manifest["steps"]))
         self.assertTrue(all(not step["executed"] for step in manifest["steps"]))
         self.assertTrue(all(step["returncode"] is None for step in manifest["steps"]))
@@ -1817,7 +1907,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
 
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
 
         self.assertEqual(2, code)
@@ -1848,7 +1940,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
 
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
 
         self.assertEqual(0, code, stderr)
         self.assertFalse(manifest["commands_executed"])
@@ -1912,8 +2006,12 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
 
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
-            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
+            selected = json.loads(
+                (output / "selected_symbols.json").read_text(encoding="utf-8")
+            )
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
 
         self.assertEqual(0, code, stderr)
@@ -1935,7 +2033,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual("fetch_history", fetch_history["step"])
         self.assertIn("000002,600000", fetch_history["command"])
 
-    def test_runner_resume_from_resolves_relative_output_dir_from_manifest(self) -> None:
+    def test_runner_resume_from_resolves_relative_output_dir_from_manifest(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             previous = root / "previous"
@@ -1974,13 +2074,17 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
 
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
 
         self.assertEqual(0, code, stderr)
         self.assertEqual(str(artifacts), manifest["resume_prior_output_dir"])
         self.assertEqual(["000002"], manifest["history_symbols"])
 
-    def test_resume_output_dir_uses_manifest_parent_when_relative_path_matches(self) -> None:
+    def test_resume_output_dir_uses_manifest_parent_when_relative_path_matches(
+        self,
+    ) -> None:
         manifest_path = Path("/tmp/a-share-pass1/run_manifest.json")
 
         output = runner.resume_output_dir(
@@ -1990,7 +2094,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
         self.assertEqual(Path("/tmp/a-share-pass1"), output)
 
-    def test_resume_output_dir_uses_manifest_parent_for_nested_relative_suffix(self) -> None:
+    def test_resume_output_dir_uses_manifest_parent_for_nested_relative_suffix(
+        self,
+    ) -> None:
         manifest_path = Path("/tmp/runs/pass1/run_manifest.json")
 
         output = runner.resume_output_dir(
@@ -2044,7 +2150,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
 
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
 
         self.assertEqual(0, code, stderr)
         self.assertEqual(
@@ -2116,7 +2224,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
 
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
 
         self.assertEqual(0, code, stderr)
         self.assertEqual(
@@ -2130,7 +2240,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("--timeout-seconds", fetch_history)
         self.assertIn("9.5", fetch_history)
 
-    def test_runner_resume_from_does_not_inherit_source_specific_options_when_source_changes(self) -> None:
+    def test_runner_resume_from_does_not_inherit_source_specific_options_when_source_changes(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             previous = root / "previous"
@@ -2176,10 +2288,14 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
 
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
 
         self.assertEqual(0, code, stderr)
-        self.assertEqual(["start_date", "end_date"], manifest["resume_inherited_options"])
+        self.assertEqual(
+            ["start_date", "end_date"], manifest["resume_inherited_options"]
+        )
         self.assertEqual("baostock", manifest["history_source"])
         self.assertEqual("", manifest["history_adjust"])
         self.assertEqual("", manifest["history_http_url"])
@@ -2187,7 +2303,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertNotIn("--http-url", fetch_history)
         self.assertNotIn("https://example.test/api", fetch_history)
 
-    def test_runner_resume_from_same_output_dir_reads_artifacts_before_cleanup(self) -> None:
+    def test_runner_resume_from_same_output_dir_reads_artifacts_before_cleanup(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "run"
             output.mkdir()
@@ -2225,7 +2343,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             )
 
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            selected = json.loads(
+                (output / "selected_symbols.json").read_text(encoding="utf-8")
+            )
 
         self.assertEqual(0, code, stderr)
         self.assertEqual(["000002"], manifest["history_symbols"])
@@ -2235,9 +2355,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
 
     def test_runner_resume_failure_clears_reused_output_files(self) -> None:
         frame = build_frame(include_turn=True, include_tradability=True)
-        frame[["open", "high", "low", "close"]] = frame[
-            ["open", "high", "low", "close"]
-        ] * 0.75
+        frame[["open", "high", "low", "close"]] = (
+            frame[["open", "high", "low", "close"]] * 0.75
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "input.csv"
@@ -2337,7 +2457,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertFalse(summary["input_metadata"]["history_output_written"])
         self.assertTrue(summary["input_metadata"]["history_metadata_output_written"])
         self.assertEqual(1, summary["history_selection"]["history_empty_symbol_count"])
-        self.assertEqual(["000001"], summary["history_selection"]["history_empty_symbols"])
+        self.assertEqual(
+            ["000001"], summary["history_selection"]["history_empty_symbols"]
+        )
         self.assertTrue(summary["history_selection"]["history_partial_result"])
         self.assertFalse(summary["history_selection"]["history_output_written"])
         self.assertEqual("3", summary["history_selection"]["history_adjustflag"])
@@ -2359,7 +2481,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             self.assertEqual("True", row["history_metadata_output_written"])
             self.assertEqual("3", row["history_adjustflag"])
 
-    def test_zzshare_history_quality_metadata_propagates_to_runner_surfaces(self) -> None:
+    def test_zzshare_history_quality_metadata_propagates_to_runner_surfaces(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
             args = parsed_args(
@@ -2436,7 +2560,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             self.assertEqual("3", row["history_non_trading_rows"])
             self.assertEqual("4", row["history_tradestatus_missing_rows"])
 
-    def test_embedded_csv_provenance_survives_runner_without_metadata_file(self) -> None:
+    def test_embedded_csv_provenance_survives_runner_without_metadata_file(
+        self,
+    ) -> None:
         config = load_config("prediction_profile_config.json")
         config["thresholds"] = {
             "min_total_score": -10.0,
@@ -2734,12 +2860,18 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
             manifest = runner.initial_manifest(args)
-            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+            context = runner.RunContext(
+                args, manifest, output / "run_manifest.json", ok_executor
+            )
 
             runner.run_pipeline(context)
-            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            selected = json.loads(
+                (output / "selected_symbols.json").read_text(encoding="utf-8")
+            )
             (output / "history_metadata.json").write_text(
-                json.dumps({"failed_symbols": [{"symbol": "600001", "error": "offline"}]}),
+                json.dumps(
+                    {"failed_symbols": [{"symbol": "600001", "error": "offline"}]}
+                ),
                 encoding="utf-8",
             )
             stdout = StringIO()
@@ -2748,8 +2880,14 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 runner.helpers.print_summary(manifest, output)
 
         self.assertEqual(["000001"], manifest["history_symbols"])
-        self.assertEqual("history_fetch_spot_derived_explicit_limit_with_local_spot_generic", manifest["execution_path"])
-        self.assertEqual("derive_symbols_from_spot+explicit_history_limit+spot_input", manifest["execution_path_reason"])
+        self.assertEqual(
+            "history_fetch_spot_derived_explicit_limit_with_local_spot_generic",
+            manifest["execution_path"],
+        )
+        self.assertEqual(
+            "derive_symbols_from_spot+explicit_history_limit+spot_input",
+            manifest["execution_path_reason"],
+        )
         self.assertEqual("spot_derived_limited_pool", manifest["coverage_class"])
         self.assertFalse(manifest["full_market_claim_allowed"])
         self.assertEqual(
@@ -2829,22 +2967,33 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
             manifest = runner.initial_manifest(args)
-            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+            context = runner.RunContext(
+                args, manifest, output / "run_manifest.json", ok_executor
+            )
 
             runner.run_pipeline(context)
-            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            selected = json.loads(
+                (output / "selected_symbols.json").read_text(encoding="utf-8")
+            )
             stdout = StringIO()
             with redirect_stdout(stdout):
                 summary = summary_view(manifest, "completed")
                 runner.helpers.print_summary(manifest, output)
 
-        self.assertEqual("history_fetch_explicit_symbols_generic", manifest["execution_path"])
+        self.assertEqual(
+            "history_fetch_explicit_symbols_generic", manifest["execution_path"]
+        )
         self.assertEqual("explicit_symbols", manifest["execution_path_reason"])
         self.assertEqual("explicit_symbol_pool", manifest["coverage_class"])
-        self.assertEqual("explicit_symbols_not_full_market_scan", manifest["full_market_claim_boundary"])
+        self.assertEqual(
+            "explicit_symbols_not_full_market_scan",
+            manifest["full_market_claim_boundary"],
+        )
         self.assertEqual(["000001"], selected["symbols"])
         self.assertEqual(1, selected["selected_symbol_count"])
-        self.assertEqual("explicit_symbols_no_spot_limit", selected["history_symbol_limit_source"])
+        self.assertEqual(
+            "explicit_symbols_no_spot_limit", selected["history_symbol_limit_source"]
+        )
         self.assertEqual("explicit_symbols", summary["history_selection"]["source"])
         self.assertEqual(1, summary["history_selection"]["selected_symbol_count"])
         self.assertEqual("", summary["history_selection"]["max_history_symbols"])
@@ -2858,7 +3007,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             stdout.getvalue(),
         )
 
-    def test_yfinance_history_market_reads_source_config_not_output_dir_copy(self) -> None:
+    def test_yfinance_history_market_reads_source_config_not_output_dir_copy(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
             stale_config = output / "hong_kong_generic_config.json"
@@ -2917,10 +3068,14 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
             manifest = runner.initial_manifest(args)
-            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+            context = runner.RunContext(
+                args, manifest, output / "run_manifest.json", ok_executor
+            )
 
             runner.run_pipeline(context)
-            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            selected = json.loads(
+                (output / "selected_symbols.json").read_text(encoding="utf-8")
+            )
             stdout = StringIO()
             with redirect_stdout(stdout):
                 summary = summary_view(manifest, "completed")
@@ -2952,7 +3107,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         )
         self.assertIn("coverage_class=explicit_symbol_limited_pool", stdout.getvalue())
 
-    def test_explicit_default_history_limit_is_not_misclassified_as_spot_sample_cap(self) -> None:
+    def test_explicit_default_history_limit_is_not_misclassified_as_spot_sample_cap(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             spot = root / "spot.csv"
@@ -2986,10 +3143,14 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
             manifest = runner.initial_manifest(args)
-            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+            context = runner.RunContext(
+                args, manifest, output / "run_manifest.json", ok_executor
+            )
 
             runner.run_pipeline(context)
-            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            selected = json.loads(
+                (output / "selected_symbols.json").read_text(encoding="utf-8")
+            )
             stdout = StringIO()
             with redirect_stdout(stdout):
                 summary = summary_view(manifest, "completed")
@@ -3010,7 +3171,10 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             manifest["full_market_claim_boundary"],
         )
         self.assertEqual("explicit_user_input", selected["history_symbol_limit_source"])
-        self.assertEqual("explicit_user_input", summary["history_selection"]["history_symbol_limit_source"])
+        self.assertEqual(
+            "explicit_user_input",
+            summary["history_selection"]["history_symbol_limit_source"],
+        )
         self.assertEqual(50, summary["history_selection"]["max_history_symbols"])
         self.assertEqual(
             "history_fetch_spot_derived_explicit_limit_with_local_spot_generic",
@@ -3072,7 +3236,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             )
 
             runner.run_pipeline(context)
-            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            selected = json.loads(
+                (output / "selected_symbols.json").read_text(encoding="utf-8")
+            )
 
         self.assertEqual(["09988", "00700"], manifest["history_symbols"])
         self.assertEqual(["09988", "00700"], selected["selected_symbols"])
@@ -3117,10 +3283,14 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
             manifest = runner.initial_manifest(args)
-            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+            context = runner.RunContext(
+                args, manifest, output / "run_manifest.json", ok_executor
+            )
 
             runner.run_pipeline(context)
-            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            selected = json.loads(
+                (output / "selected_symbols.json").read_text(encoding="utf-8")
+            )
 
         self.assertEqual(["000001", "600001"], manifest["history_symbols"])
         self.assertEqual(["000001", "600001"], selected["selected_symbols"])
@@ -3129,7 +3299,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("--adjust", manifest["steps"][0]["command"])
         self.assertIn("--drop-invalid-rows", manifest["steps"][0]["command"])
 
-    def test_runner_derives_history_symbols_from_common_dot_suffix_aliases(self) -> None:
+    def test_runner_derives_history_symbols_from_common_dot_suffix_aliases(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             spot = root / "spot.csv"
@@ -3163,7 +3335,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
             manifest = runner.initial_manifest(args)
-            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+            context = runner.RunContext(
+                args, manifest, output / "run_manifest.json", ok_executor
+            )
 
             runner.run_pipeline(context)
 
@@ -3187,10 +3361,14 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
             manifest = runner.initial_manifest(args)
-            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+            context = runner.RunContext(
+                args, manifest, output / "run_manifest.json", ok_executor
+            )
 
             runner.run_pipeline(context)
-            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            selected = json.loads(
+                (output / "selected_symbols.json").read_text(encoding="utf-8")
+            )
 
         self.assertEqual(["000001", "600000"], manifest["history_symbols"])
         self.assertEqual(["000001", "600000"], selected["symbols"])
@@ -3213,7 +3391,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
             manifest = runner.initial_manifest(args)
-            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+            context = runner.RunContext(
+                args, manifest, output / "run_manifest.json", ok_executor
+            )
 
             with self.assertRaisesRegex(ValueError, "bj.430047"):
                 runner.run_pipeline(context)
@@ -3278,11 +3458,17 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
             manifest = runner.initial_manifest(args)
-            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+            context = runner.RunContext(
+                args, manifest, output / "run_manifest.json", ok_executor
+            )
 
             runner.run_pipeline(context)
-            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
-            fetch_history = next(step for step in manifest["steps"] if step["step"] == "fetch_history")
+            selected = json.loads(
+                (output / "selected_symbols.json").read_text(encoding="utf-8")
+            )
+            fetch_history = next(
+                step for step in manifest["steps"] if step["step"] == "fetch_history"
+            )
 
         self.assertEqual(["430047", "835185"], manifest["history_symbols"])
         self.assertEqual(["430047", "835185"], selected["symbols"])
@@ -3307,12 +3493,16 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
             manifest = runner.initial_manifest(args)
-            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+            context = runner.RunContext(
+                args, manifest, output / "run_manifest.json", ok_executor
+            )
 
             with self.assertRaisesRegex(ValueError, "symbols must be six digits"):
                 runner.run_pipeline(context)
 
-    def test_runner_reports_missing_spot_price_alias_for_symbol_derivation(self) -> None:
+    def test_runner_reports_missing_spot_price_alias_for_symbol_derivation(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             spot = root / "spot.csv"
@@ -3334,12 +3524,16 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
             manifest = runner.initial_manifest(args)
-            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+            context = runner.RunContext(
+                args, manifest, output / "run_manifest.json", ok_executor
+            )
 
             with self.assertRaisesRegex(ValueError, "spot input requires price column"):
                 runner.run_pipeline(context)
 
-    def test_runner_filters_non_numeric_spot_rows_before_history_derivation(self) -> None:
+    def test_runner_filters_non_numeric_spot_rows_before_history_derivation(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             spot = root / "spot.csv"
@@ -3374,10 +3568,14 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
             manifest = runner.initial_manifest(args)
-            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+            context = runner.RunContext(
+                args, manifest, output / "run_manifest.json", ok_executor
+            )
 
             runner.run_pipeline(context)
-            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            selected = json.loads(
+                (output / "selected_symbols.json").read_text(encoding="utf-8")
+            )
 
         self.assertEqual(["000001"], manifest["history_symbols"])
         self.assertEqual(3, selected["raw_spot_rows"])
@@ -3409,7 +3607,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
             manifest = runner.initial_manifest(args)
-            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+            context = runner.RunContext(
+                args, manifest, output / "run_manifest.json", ok_executor
+            )
 
             with self.assertRaisesRegex(
                 ValueError,
@@ -3421,7 +3621,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ),
             ):
                 runner.run_pipeline(context)
-            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            selected = json.loads(
+                (output / "selected_symbols.json").read_text(encoding="utf-8")
+            )
 
         self.assertTrue(selected["selection_failed"])
         self.assertEqual(
@@ -3441,9 +3643,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
     def test_runner_counts_parquet_spot_rows_in_summary(self) -> None:
         pd = __import__("pandas")
         frame = build_frame(include_turn=True, include_tradability=True)
-        frame[["open", "high", "low", "close"]] = frame[
-            ["open", "high", "low", "close"]
-        ] * 0.75
+        frame[["open", "high", "low", "close"]] = (
+            frame[["open", "high", "low", "close"]] * 0.75
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "input.csv"
@@ -3477,9 +3679,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
     def test_runner_counts_uppercase_parquet_spot_rows_in_summary(self) -> None:
         pd = __import__("pandas")
         frame = build_frame(include_turn=True, include_tradability=True)
-        frame[["open", "high", "low", "close"]] = frame[
-            ["open", "high", "low", "close"]
-        ] * 0.75
+        frame[["open", "high", "low", "close"]] = (
+            frame[["open", "high", "low", "close"]] * 0.75
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "input.csv"
@@ -3515,9 +3717,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
     def test_runner_preserves_pq_prices_input_extension(self) -> None:
         pd = __import__("pandas")
         frame = build_frame(include_turn=True, include_tradability=True)
-        frame[["open", "high", "low", "close"]] = frame[
-            ["open", "high", "low", "close"]
-        ] * 0.75
+        frame[["open", "high", "low", "close"]] = (
+            frame[["open", "high", "low", "close"]] * 0.75
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "input.pq"
@@ -3533,7 +3735,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
 
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
             prices_copy_exists = (output / "prices.pq").exists()
 
@@ -3547,9 +3751,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
     def test_runner_normalizes_uppercase_parquet_prices_input_extension(self) -> None:
         pd = __import__("pandas")
         frame = build_frame(include_turn=True, include_tradability=True)
-        frame[["open", "high", "low", "close"]] = frame[
-            ["open", "high", "low", "close"]
-        ] * 0.75
+        frame[["open", "high", "low", "close"]] = (
+            frame[["open", "high", "low", "close"]] * 0.75
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "input.PQ"
@@ -3565,7 +3769,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
 
-            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
             prices_copy_exists = (output / "prices.pq").exists()
 
@@ -3610,10 +3816,14 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
             manifest = runner.initial_manifest(args)
-            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+            context = runner.RunContext(
+                args, manifest, output / "run_manifest.json", ok_executor
+            )
 
             runner.run_pipeline(context)
-            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            selected = json.loads(
+                (output / "selected_symbols.json").read_text(encoding="utf-8")
+            )
 
         self.assertEqual(["000001"], manifest["history_symbols"])
         self.assertEqual(
@@ -3659,10 +3869,14 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 ]
             )
             manifest = runner.initial_manifest(args)
-            context = runner.RunContext(args, manifest, output / "run_manifest.json", ok_executor)
+            context = runner.RunContext(
+                args, manifest, output / "run_manifest.json", ok_executor
+            )
 
             runner.run_pipeline(context)
-            selected = json.loads((output / "selected_symbols.json").read_text(encoding="utf-8"))
+            selected = json.loads(
+                (output / "selected_symbols.json").read_text(encoding="utf-8")
+            )
 
         self.assertEqual(
             "history_fetch_spot_derived_sample_with_local_spot_generic",
@@ -3678,8 +3892,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             "default_small_sample_cap_not_full_market",
             manifest["full_market_claim_boundary"],
         )
-        self.assertEqual("small_sample_default_cap", selected["history_symbol_limit_source"])
-
+        self.assertEqual(
+            "small_sample_default_cap", selected["history_symbol_limit_source"]
+        )
 
 
 def call_runner(args: list[str]) -> tuple[int, str, str]:
@@ -3718,7 +3933,9 @@ def assert_rows_keep_embedded_provenance(
         test.assertEqual(expected["source_scope"], row["source_scope"])
         test.assertEqual("False", row["real_market_data"])
         test.assertEqual(expected["metadata_source"], row["metadata_source"])
-        test.assertEqual(expected["source_claim_boundary"], row["source_claim_boundary"])
+        test.assertEqual(
+            expected["source_claim_boundary"], row["source_claim_boundary"]
+        )
         test.assertEqual(expected["data_source_note"], row["data_source_note"])
 
 

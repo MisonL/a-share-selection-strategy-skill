@@ -17,6 +17,7 @@ if __name__ == "__main__":
 
 
 import csv
+import json
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +47,10 @@ RUN_PROVENANCE_COLUMNS = (
     "input_token_configured",
     "history_fields",
     "history_request_interval_seconds",
+    "history_max_concurrent_symbol_requests",
+    "history_max_rate_limit_sleep_seconds",
+    "history_max_429_events",
+    "history_max_runtime_seconds",
     "history_limit",
     "history_max_pages",
     "history_partial_result",
@@ -53,11 +58,20 @@ RUN_PROVENANCE_COLUMNS = (
     "history_failed_symbol_count",
     "history_empty_symbol_count",
     "history_possibly_truncated_symbol_count",
+    "history_unprocessed_symbol_count",
+    "history_rate_limit_budget_exhausted",
+    "history_rate_limit_exhaustion_reason",
     "history_invalid_rows",
     "history_dropped_invalid_rows",
     "history_non_trading_rows",
+    "history_non_trading_policy",
+    "history_dropped_non_trading_rows",
+    "history_retained_non_trading_rows",
     "history_tradestatus_missing_rows",
     "input_possibly_truncated_symbol_count",
+    "input_unprocessed_symbol_count",
+    "input_rate_limit_budget_exhausted",
+    "input_rate_limit_exhaustion_reason",
     "input_invalid_rows",
     "input_dropped_invalid_rows",
     "input_non_trading_rows",
@@ -67,6 +81,32 @@ RUN_PROVENANCE_COLUMNS = (
     "history_adjustflag",
     "history_output_written",
     "history_metadata_output_written",
+    "history_checkpoint_enabled",
+    "history_resume_from_checkpoint",
+    "history_checkpoint_batch_size",
+    "history_checkpoint_symbols_skipped",
+    "clean_pool_removed_symbol_count",
+    "clean_pool_reason_counts",
+    "input_clean_pool_removed_symbol_count",
+    "input_clean_pool_reason_counts",
+    "filter_prices_to_spot_universe",
+    "prices_filter_spot_universe",
+    "prices_filter_min_symbol_latest_date",
+    "prices_filter_output_format",
+    "prices_filter_output_prices",
+    "prices_filter_sidecar_output",
+    "prices_filter_sidecar_sha256",
+    "prices_filter_metadata_output",
+    "prices_filter_input_rows",
+    "prices_filter_output_rows",
+    "prices_filter_spot_symbol_count",
+    "prices_filter_input_symbol_count",
+    "prices_filter_kept_symbol_count",
+    "prices_filter_removed_symbol_count",
+    "prices_filter_removed_stale_symbol_count",
+    "prices_filter_output_written",
+    "prices_filter_failure_reason",
+    "prices_filter_claim_boundary",
 )
 OPTIONAL_METADATA_COLUMNS = ("source", "market_label_only", "source_claim_boundary")
 
@@ -119,6 +159,19 @@ def provenance_fields(manifest: dict[str, Any]) -> dict[str, Any]:
             "history_request_interval_seconds",
             "",
         ),
+        "history_max_concurrent_symbol_requests": metadata.get(
+            "history_max_concurrent_symbol_requests",
+            "",
+        ),
+        "history_max_rate_limit_sleep_seconds": metadata.get(
+            "history_max_rate_limit_sleep_seconds",
+            "",
+        ),
+        "history_max_429_events": metadata.get("history_max_429_events", ""),
+        "history_max_runtime_seconds": metadata.get(
+            "history_max_runtime_seconds",
+            "",
+        ),
         "history_limit": metadata.get("history_limit", ""),
         "history_max_pages": metadata.get("history_max_pages", ""),
         "history_partial_result": metadata.get("history_partial_result", ""),
@@ -129,17 +182,53 @@ def provenance_fields(manifest: dict[str, Any]) -> dict[str, Any]:
             "history_possibly_truncated_symbol_count",
             "",
         ),
+        "history_unprocessed_symbol_count": metadata.get(
+            "history_unprocessed_symbol_count",
+            "",
+        ),
+        "history_rate_limit_budget_exhausted": metadata.get(
+            "history_rate_limit_budget_exhausted",
+            "",
+        ),
+        "history_rate_limit_exhaustion_reason": metadata.get(
+            "history_rate_limit_exhaustion_reason",
+            "",
+        ),
         "history_invalid_rows": metadata.get("history_invalid_rows", ""),
         "history_dropped_invalid_rows": metadata.get(
             "history_dropped_invalid_rows", ""
         ),
         "history_non_trading_rows": metadata.get("history_non_trading_rows", ""),
+        "history_non_trading_policy": metadata.get(
+            "history_non_trading_policy",
+            "",
+        ),
+        "history_dropped_non_trading_rows": metadata.get(
+            "history_dropped_non_trading_rows",
+            "",
+        ),
+        "history_retained_non_trading_rows": metadata.get(
+            "history_retained_non_trading_rows",
+            "",
+        ),
         "history_tradestatus_missing_rows": metadata.get(
             "history_tradestatus_missing_rows",
             "",
         ),
         "input_possibly_truncated_symbol_count": metadata.get(
             "input_possibly_truncated_symbol_count",
+            "",
+        ),
+        "input_unprocessed_symbol_count": metadata.get(
+            "input_unprocessed_symbol_count",
+            "",
+        ),
+        "input_rate_limit_budget_exhausted": metadata.get(
+            "input_rate_limit_budget_exhausted",
+            "",
+        ),
+        "input_rate_limit_exhaustion_reason": metadata.get(
+            "input_rate_limit_exhaustion_reason",
             "",
         ),
         "input_invalid_rows": metadata.get("input_invalid_rows", ""),
@@ -158,6 +247,82 @@ def provenance_fields(manifest: dict[str, Any]) -> dict[str, Any]:
         "history_metadata_output_written": metadata.get(
             "history_metadata_output_written",
             "",
+        ),
+        "history_checkpoint_enabled": metadata.get("history_checkpoint_enabled", ""),
+        "history_resume_from_checkpoint": metadata.get(
+            "history_resume_from_checkpoint",
+            "",
+        ),
+        "history_checkpoint_batch_size": metadata.get(
+            "history_checkpoint_batch_size",
+            "",
+        ),
+        "history_checkpoint_symbols_skipped": metadata.get(
+            "history_checkpoint_symbols_skipped",
+            "",
+        ),
+        "clean_pool_removed_symbol_count": metadata.get(
+            "clean_pool_removed_symbol_count",
+            "",
+        ),
+        "clean_pool_reason_counts": metadata.get("clean_pool_reason_counts", ""),
+        "input_clean_pool_removed_symbol_count": metadata.get(
+            "input_clean_pool_removed_symbol_count",
+            "",
+        ),
+        "input_clean_pool_reason_counts": metadata.get(
+            "input_clean_pool_reason_counts",
+            "",
+        ),
+        "filter_prices_to_spot_universe": bool(
+            manifest.get("filter_prices_to_spot_universe", False)
+        ),
+        "prices_filter_spot_universe": bool(
+            manifest.get("prices_filter_spot_universe", False)
+        ),
+        "prices_filter_min_symbol_latest_date": manifest.get(
+            "prices_filter_min_symbol_latest_date", ""
+        ),
+        "prices_filter_output_format": manifest.get(
+            "prices_filter_output_format", ""
+        ),
+        "prices_filter_output_prices": manifest.get(
+            "prices_filter_output_prices", ""
+        ),
+        "prices_filter_sidecar_output": manifest.get(
+            "prices_filter_sidecar_output", ""
+        ),
+        "prices_filter_sidecar_sha256": manifest.get(
+            "prices_filter_sidecar_sha256", ""
+        ),
+        "prices_filter_metadata_output": manifest.get(
+            "prices_filter_metadata_output", ""
+        ),
+        "prices_filter_input_rows": manifest.get("prices_filter_input_rows", ""),
+        "prices_filter_output_rows": manifest.get("prices_filter_output_rows", ""),
+        "prices_filter_spot_symbol_count": manifest.get(
+            "prices_filter_spot_symbol_count", ""
+        ),
+        "prices_filter_input_symbol_count": manifest.get(
+            "prices_filter_input_symbol_count", ""
+        ),
+        "prices_filter_kept_symbol_count": manifest.get(
+            "prices_filter_kept_symbol_count", ""
+        ),
+        "prices_filter_removed_symbol_count": manifest.get(
+            "prices_filter_removed_symbol_count", ""
+        ),
+        "prices_filter_removed_stale_symbol_count": manifest.get(
+            "prices_filter_removed_stale_symbol_count", ""
+        ),
+        "prices_filter_output_written": bool(
+            manifest.get("prices_filter_output_written", False)
+        ),
+        "prices_filter_failure_reason": manifest.get(
+            "prices_filter_failure_reason", ""
+        ),
+        "prices_filter_claim_boundary": manifest.get(
+            "prices_filter_claim_boundary", ""
         ),
     }
     for column in OPTIONAL_METADATA_COLUMNS:
@@ -186,7 +351,13 @@ def merge_provenance_fields(row: dict[str, Any], fields: dict[str, Any]) -> None
     for column, value in fields.items():
         if preserves_input_provenance(row, column):
             continue
-        row[column] = value
+        row[column] = provenance_csv_value(value)
+
+
+def provenance_csv_value(value: Any) -> Any:
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+    return value
 
 
 def preserves_input_provenance(row: dict[str, Any], column: str) -> bool:

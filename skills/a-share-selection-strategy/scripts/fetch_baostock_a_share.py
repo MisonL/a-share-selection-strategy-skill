@@ -9,6 +9,16 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from lib.fetch.baostock_a_share_universe import (
+    baostock_a_share_stock_symbol,
+    collect_a_share_stock_symbols,
+    is_baostock_a_share_stock_code,
+)
+from lib.fetch.baostock_a_share_names import (
+    collect_stock_basic_name,
+    fetch_symbol_names,
+    resolve_symbol_names,
+)
 from lib.selection_core.a_share_selection_symbols import (
     baostock_code,
     parse_six_digit_symbols,
@@ -19,9 +29,11 @@ FIELDS = (
     "date,code,open,high,low,close,preclose,pctChg,volume,amount,turn,tradestatus,isST"
 )
 NUMERIC_COLUMNS = ["open", "high", "low", "close", "volume", "amount", "turn"]
+CLAIM_BOUNDARY = "baostock_external_api_not_broker_order_or_full_market_proof"
+DATA_SOURCE_NOTE = "baostock public API; scope is requested symbols and date range only"
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Fetch baostock A-share daily data into local CSV and metadata. "
@@ -50,20 +62,32 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Explicitly drop rows with invalid baostock OHLCV, amount, or turn values.",
     )
-    args = parser.parse_args(argv)
+    parser.add_argument(
+        "--names-input",
+        default="",
+        help="Optional CSV or Parquet with symbol/name columns.",
+    )
+    parser.add_argument(
+        "--missing-name-policy",
+        choices=("query", "fail", "blank"),
+        default="query",
+        help="How to handle names absent from --names-input. Default: query.",
+    )
+    parser.add_argument(
+        "--non-trading-policy",
+        choices=("reject", "drop", "keep"),
+        default="reject",
+        help="How to handle tradestatus values other than 1. Default: reject.",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
     output = Path(args.output)
     metadata_output = Path(args.metadata_output)
     try:
-        frame, metadata = fetch_prices(args)
-        frame, metadata = apply_quality_policy(
-            frame,
-            metadata,
-            drop_invalid_rows=args.drop_invalid_rows,
-        )
-        metadata = output_status(
-            metadata, output_written=True, metadata_output_written=True
-        )
-        write_outputs(frame, metadata, output, metadata_output)
+        metadata = fetch_and_write(args, output, metadata_output)
     except Exception as exc:  # noqa: BLE001
         remove_output(output)
         print(
@@ -71,9 +95,7 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    strict_errors = strict_gate_errors(
-        metadata, fail_on_fetch_error=args.fail_on_fetch_error
-    )
+    strict_errors = strict_gate_errors(metadata, fail_on_fetch_error=args.fail_on_fetch_error)
     if strict_errors:
         metadata = output_status(
             metadata, output_written=False, metadata_output_written=True
@@ -89,6 +111,25 @@ def main(argv: list[str] | None = None) -> int:
         return 3
     print_summary(metadata, prefix=summary_prefix(metadata))
     return 0
+
+
+def fetch_and_write(
+    args: argparse.Namespace,
+    output: Path,
+    metadata_output: Path,
+) -> dict[str, Any]:
+    frame, metadata = fetch_prices(args)
+    frame, metadata = apply_quality_policy(
+        frame,
+        metadata,
+        drop_invalid_rows=args.drop_invalid_rows,
+        non_trading_policy=args.non_trading_policy,
+    )
+    metadata = output_status(
+        metadata, output_written=True, metadata_output_written=True
+    )
+    write_outputs(frame, metadata, output, metadata_output)
+    return metadata
 
 
 def ensure_runtime_dependencies() -> None:
@@ -122,7 +163,12 @@ def fetch_prices(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any]
                 f"baostock login failed: {login.error_code} {login.error_msg}"
             )
         symbols = parse_symbols(args.symbols)
-        name_lookup = fetch_symbol_names(bs, symbols)
+        name_lookup = resolve_symbol_names(
+            bs,
+            symbols,
+            getattr(args, "names_input", ""),
+            getattr(args, "missing_name_policy", "query"),
+        )
         for symbol in symbols:
             code = baostock_code(symbol)
             result = bs.query_history_k_data_plus(
@@ -150,36 +196,6 @@ def fetch_prices(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any]
 
 def parse_symbols(text: str) -> list[str]:
     return parse_six_digit_symbols(text)
-
-
-def fetch_symbol_names(bs: Any, symbols: list[str]) -> dict[str, Any]:
-    names = {}
-    failed = []
-    missing = []
-    for symbol in symbols:
-        code = baostock_code(symbol)
-        result = bs.query_stock_basic(code=code)
-        if result.error_code != "0":
-            failed.append({"symbol": symbol, "error": result.error_msg})
-            continue
-        name = collect_stock_basic_name(result)
-        if name:
-            names[symbol] = name
-        else:
-            missing.append(symbol)
-    return {
-        "source": "baostock_query_stock_basic",
-        "names": names,
-        "failed_symbols": failed,
-        "missing_symbols": missing,
-    }
-
-
-def collect_stock_basic_name(result: Any) -> str:
-    while result.next():
-        raw = dict(zip(result.fields, result.get_row_data()))
-        return str(raw.get("code_name", "")).strip()
-    return ""
 
 
 def collect_rows(result: Any, symbol: str, name: str = "") -> list[dict[str, Any]]:
@@ -237,6 +253,12 @@ def build_metadata(
     }
     return {
         "source": "baostock",
+        "source_type": "external_fetch",
+        "source_scope": "baostock_history_fetch",
+        "real_market_data": True,
+        "partial_result": partial_result(failed, symbols_meta),
+        "source_claim_boundary": CLAIM_BOUNDARY,
+        "data_source_note": DATA_SOURCE_NOTE,
         "requested_symbols": parse_symbols(args.symbols),
         "start_date": args.start_date,
         "end_date": args.end_date,
@@ -255,9 +277,24 @@ def build_metadata(
         "name_lookup_count": len(name_lookup["names"]),
         "name_lookup_failed_symbols": name_lookup["failed_symbols"],
         "name_lookup_missing_symbols": name_lookup["missing_symbols"],
+        "names_input": name_lookup.get("input_path", ""),
+        "names_input_count": int(name_lookup.get("input_name_count", 0)),
+        "name_query_count": int(name_lookup.get("query_count", 0)),
+        "missing_name_policy": name_lookup.get(
+            "policy", getattr(args, "missing_name_policy", "query")
+        ),
+        "non_trading_policy": getattr(args, "non_trading_policy", "reject"),
+        "dropped_non_trading_rows": 0,
         **prefixed_tradability_stats(frame, "raw_"),
         **tradability_stats(frame),
     }
+
+
+def partial_result(
+    failed: list[dict[str, Any]],
+    symbols_meta: list[dict[str, Any]],
+) -> bool:
+    return bool(failed or empty_symbols(symbols_meta))
 
 
 def output_status(
@@ -278,6 +315,7 @@ def apply_quality_policy(
     metadata: dict[str, Any],
     *,
     drop_invalid_rows: bool,
+    non_trading_policy: str = "reject",
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     ensure_runtime_dependencies()
     invalid = invalid_row_details(frame)
@@ -291,7 +329,15 @@ def apply_quality_policy(
         if drop_invalid_rows
         else frame
     )
+    if non_trading_policy not in {"reject", "drop", "keep"}:
+        raise ValueError(f"unsupported non-trading-policy: {non_trading_policy}")
+    non_trading_mask = non_trading_row_mask(result)
+    dropped_non_trading = int(non_trading_mask.sum()) if non_trading_policy == "drop" else 0
+    if dropped_non_trading:
+        result = result.loc[~non_trading_mask]
     result = result.reset_index(drop=True)
+    metadata["non_trading_policy"] = non_trading_policy
+    metadata["dropped_non_trading_rows"] = dropped_non_trading
     metadata["rows"] = int(len(result))
     metadata["symbol_count"] = (
         int(result["symbol"].nunique()) if not result.empty else 0
@@ -303,7 +349,18 @@ def apply_quality_policy(
         for symbol in metadata["requested_symbols"]
     ]
     metadata["empty_symbols"] = empty_symbols(metadata["symbols"])
+    metadata["partial_result"] = partial_result(
+        metadata.get("failed_symbols", []),
+        metadata["symbols"],
+    )
     return result, metadata
+
+
+def non_trading_row_mask(frame: pd.DataFrame) -> pd.Series:
+    if frame.empty or "tradestatus" not in frame:
+        return pd.Series([False] * len(frame), index=frame.index)
+    status = frame["tradestatus"].astype(str).str.strip()
+    return status.ne("") & status.ne("1")
 
 
 def invalid_row_details(frame: pd.DataFrame) -> list[dict[str, Any]]:
@@ -362,17 +419,24 @@ def strict_gate_errors(
         errors.append(
             f"tradestatus_missing_rows={metadata['tradestatus_missing_rows']}"
         )
-    if metadata.get("non_trading_rows", 0):
+    if (
+        metadata.get("non_trading_policy", "reject") == "reject"
+        and metadata.get("non_trading_rows", 0)
+    ):
         errors.append(f"non_trading_rows={metadata['non_trading_rows']}")
     if fail_on_fetch_error and metadata["failed_symbols"]:
         errors.append(f"failed_symbols={len(metadata['failed_symbols'])}")
     if fail_on_fetch_error and metadata["empty_symbols"]:
         errors.append(f"empty_symbols={len(metadata['empty_symbols'])}")
-    if fail_on_fetch_error and metadata.get("name_lookup_failed_symbols"):
+    missing_name_policy = metadata.get("missing_name_policy", "query")
+    name_failure_is_strict = missing_name_policy != "blank" and (
+        fail_on_fetch_error or missing_name_policy == "fail"
+    )
+    if name_failure_is_strict and metadata.get("name_lookup_failed_symbols"):
         errors.append(
             f"name_lookup_failed_symbols={len(metadata['name_lookup_failed_symbols'])}"
         )
-    if fail_on_fetch_error and metadata.get("name_lookup_missing_symbols"):
+    if name_failure_is_strict and metadata.get("name_lookup_missing_symbols"):
         errors.append(
             f"name_lookup_missing_symbols={len(metadata['name_lookup_missing_symbols'])}"
         )
@@ -434,6 +498,11 @@ def print_summary(metadata: dict[str, Any], prefix: str = "OK") -> None:
         f"name_lookup_count={metadata.get('name_lookup_count', 0)} "
         f"name_lookup_failed_symbols={len(metadata.get('name_lookup_failed_symbols', []))} "
         f"name_lookup_missing_symbols={len(metadata.get('name_lookup_missing_symbols', []))} "
+        f"names_input_count={metadata.get('names_input_count', 0)} "
+        f"name_query_count={metadata.get('name_query_count', 0)} "
+        f"missing_name_policy={metadata.get('missing_name_policy', 'query')} "
+        f"non_trading_policy={metadata.get('non_trading_policy', 'reject')} "
+        f"dropped_non_trading_rows={metadata.get('dropped_non_trading_rows', 0)} "
         f"non_trading_rows={metadata.get('non_trading_rows', 0)} "
         f"tradestatus_missing_rows={metadata.get('tradestatus_missing_rows', 0)} "
         f"start_date={metadata['start_date']} end_date={metadata['end_date']} "

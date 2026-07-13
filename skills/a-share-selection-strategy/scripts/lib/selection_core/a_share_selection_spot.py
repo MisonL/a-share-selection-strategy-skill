@@ -112,7 +112,8 @@ def preferred_input_symbol_map(frame: pd.DataFrame) -> dict[str, str]:
     if "symbol" not in frame:
         return {}
     preferred: dict[str, str] = {}
-    for symbol in frame["symbol"].astype(str).str.strip():
+    symbols = frame["symbol"].astype(str).str.strip().drop_duplicates()
+    for symbol in symbols:
         key = stock_symbol_key(symbol)
         if key and key not in preferred:
             preferred[key] = symbol

@@ -6,9 +6,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import lib.selection_core.a_share_selection_score_profile as score_profile
 from lib.selection_core.a_share_selection_provenance import (
     PROVENANCE_COLUMNS,
     add_provenance_to_frame,
@@ -75,6 +77,16 @@ OUTPUT_COLUMNS = [
 ]
 
 
+@dataclass(frozen=True)
+class ScorePaths:
+    input: Path
+    config: Path
+    output: Path
+    diagnostics: Path | None
+    spot: Path | None
+    profile: Path | None
+
+
 def build_parser() -> argparse.ArgumentParser:
     description = "Score stock candidates from local CSV or Parquet OHLCV data."
     epilog = (
@@ -111,83 +123,133 @@ def build_parser() -> argparse.ArgumentParser:
         "--spot-input",
         help="Optional CSV or Parquet realtime spot file merged into outputs.",
     )
+    parser.add_argument(
+        "--profile-output",
+        help=(
+            "Optional JSON path for scoring timing and row-count profiling. "
+            "This is observational only and does not change scoring behavior."
+        ),
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    output_path = Path(args.output)
-    diagnostics_path = (
-        Path(args.diagnostics_output) if args.diagnostics_output else None
+    args = build_parser().parse_args(argv)
+    paths = score_paths(args)
+    profile = score_profile.start_profile(
+        paths.input,
+        paths.config,
+        paths.spot,
+        paths.profile,
     )
     try:
-        require_csv_output_suffix(output_path, "candidate output")
-        if diagnostics_path is not None:
-            require_csv_output_suffix(diagnostics_path, "diagnostics output")
-        ensure_runtime_dependencies()
-        config = load_config(Path(args.config))
-        spot = read_table(Path(args.spot_input)) if args.spot_input else None
-        candidates, summary = score_candidates(
-            read_table(Path(args.input)), config, spot
-        )
-        summary["input"] = Path(args.input).name
-        if args.spot_input:
-            summary["spot_input"] = Path(args.spot_input).name
-        strict_errors = strict_gate_errors(
-            summary,
-            fail_on_skipped=args.fail_on_skipped,
-            fail_on_empty_result=args.fail_on_empty_result,
-        )
-        if strict_errors:
-            remove_stale_outputs(output_path, diagnostics_path)
-            print_summary(summary, args.output, prefix="ERROR_SUMMARY")
-            print(
-                "ERROR: strict gate failed; "
-                f"{'; '.join(strict_errors)} output_not_written=true",
-                file=sys.stderr,
-            )
-            return 3
-        write_output(candidates, output_path)
-        if args.diagnostics_output:
-            write_threshold_diagnostics(
-                summary.get("threshold_diagnostics", []),
-                diagnostics_path,
-            )
-    except (ImportError, ModuleNotFoundError) as exc:
-        remove_stale_outputs(output_path, diagnostics_path)
-        print(
-            "ERROR: code=dependency_error "
-            f"input={Path(args.input).name} output_not_written=true message={exc}",
-            file=sys.stderr,
-        )
-        return 2
-    except (FileNotFoundError, json.JSONDecodeError) as exc:
-        remove_stale_outputs(output_path, diagnostics_path)
-        print(
-            "ERROR: code=config_error "
-            f"input={Path(args.input).name} output_not_written=true message={exc}",
-            file=sys.stderr,
-        )
-        return 2
-    except ValueError as exc:
-        remove_stale_outputs(output_path, diagnostics_path)
-        print(
-            "ERROR: code=bad_input "
-            f"input={Path(args.input).name} output_not_written=true message={exc}",
-            file=sys.stderr,
-        )
-        return 2
+        candidates, summary = execute_scoring(paths, profile)
     except Exception as exc:  # noqa: BLE001
-        remove_stale_outputs(output_path, diagnostics_path)
-        print(
-            "ERROR: code=runtime_error "
-            f"input={Path(args.input).name} output_not_written=true message={exc}",
-            file=sys.stderr,
-        )
-        return 2
+        return handle_score_error(exc, paths)
+    strict_errors = strict_gate_errors(
+        summary,
+        fail_on_skipped=args.fail_on_skipped,
+        fail_on_empty_result=args.fail_on_empty_result,
+    )
+    if strict_errors:
+        return handle_strict_failure(args, paths, summary, strict_errors)
+    try:
+        write_score_outputs(args, paths, profile, candidates, summary)
+    except Exception as exc:  # noqa: BLE001
+        return handle_score_error(exc, paths)
     print_summary(summary, args.output)
     return 0
+
+
+def score_paths(args: argparse.Namespace) -> ScorePaths:
+    return ScorePaths(
+        input=Path(args.input),
+        config=Path(args.config),
+        output=Path(args.output),
+        diagnostics=Path(args.diagnostics_output) if args.diagnostics_output else None,
+        spot=Path(args.spot_input) if args.spot_input else None,
+        profile=Path(args.profile_output) if args.profile_output else None,
+    )
+
+
+def execute_scoring(
+    paths: ScorePaths,
+    profile: dict[str, Any] | None,
+) -> tuple[Any, dict[str, Any]]:
+    validate_output_paths(paths)
+    ensure_runtime_dependencies()
+    score_profile.tick(profile, "dependencies_loaded")
+    config = load_config(paths.config)
+    score_profile.tick(profile, "config_loaded")
+    spot = read_table(paths.spot) if paths.spot else None
+    score_profile.tick(profile, "spot_loaded")
+    input_frame = read_table(paths.input)
+    score_profile.record_count(profile, "input_rows", len(input_frame))
+    score_profile.record_count(profile, "input_columns", len(input_frame.columns))
+    score_profile.tick(profile, "input_loaded")
+    candidates, summary = score_candidates(input_frame, config, spot, profile=profile)
+    score_profile.tick(profile, "scored")
+    summary["input"] = paths.input.name
+    if paths.spot:
+        summary["spot_input"] = paths.spot.name
+    score_profile.update_from_summary(profile, summary, len(candidates))
+    return candidates, summary
+
+
+def write_score_outputs(
+    args: argparse.Namespace,
+    paths: ScorePaths,
+    profile: dict[str, Any] | None,
+    candidates: Any,
+    summary: dict[str, Any],
+) -> None:
+    write_output(candidates, paths.output)
+    score_profile.tick(profile, "candidates_written")
+    if args.diagnostics_output:
+        write_threshold_diagnostics(summary.get("threshold_diagnostics", []), paths.diagnostics)
+    score_profile.tick(profile, "diagnostics_written")
+    write_profile_output(score_profile.finalize(profile, summary), paths.profile)
+
+
+def validate_output_paths(paths: ScorePaths) -> None:
+    require_csv_output_suffix(paths.output, "candidate output")
+    if paths.diagnostics is not None:
+        require_csv_output_suffix(paths.diagnostics, "diagnostics output")
+    if paths.profile is not None:
+        require_json_output_suffix(paths.profile, "profile output")
+
+
+def handle_strict_failure(
+    args: argparse.Namespace,
+    paths: ScorePaths,
+    summary: dict[str, Any],
+    errors: list[str],
+) -> int:
+    remove_stale_outputs(paths.output, paths.diagnostics, paths.profile)
+    print_summary(summary, args.output, prefix="ERROR_SUMMARY")
+    print(
+        f"ERROR: strict gate failed; {'; '.join(errors)} output_not_written=true",
+        file=sys.stderr,
+    )
+    return 3
+
+
+def handle_score_error(exc: Exception, paths: ScorePaths) -> int:
+    remove_stale_outputs(paths.output, paths.diagnostics, paths.profile)
+    if isinstance(exc, (ImportError, ModuleNotFoundError)):
+        code = "dependency_error"
+    elif isinstance(exc, (FileNotFoundError, json.JSONDecodeError)):
+        code = "config_error"
+    elif isinstance(exc, ValueError):
+        code = "bad_input"
+    else:
+        code = "runtime_error"
+    print(
+        f"ERROR: code={code} input={paths.input.name} "
+        f"output_not_written=true message={exc}",
+        file=sys.stderr,
+    )
+    return 2
 
 
 def ensure_runtime_dependencies() -> None:
@@ -244,22 +306,32 @@ def ensure_runtime_dependencies() -> None:
 
 
 def score_candidates(
-    frame: pd.DataFrame, config: dict[str, Any], spot: pd.DataFrame | None = None
+    frame: pd.DataFrame,
+    config: dict[str, Any],
+    spot: pd.DataFrame | None = None,
+    profile: dict[str, Any] | None = None,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     ensure_runtime_dependencies()
     validate_input_frame(frame, config)
     validate_profile_requirements(frame, config)
-    prepared = prepare_input_frame(frame, parse_dates)
+    prepared = prepare_input_frame(frame, parse_dates, validated=True)
+    score_profile.tick(profile, "input_prepared")
     raw_symbols = int(frame["symbol"].astype(str).nunique())
     if prepared.empty and raw_symbols:
         raise ValueError("no valid rows after basic data cleaning")
     validate_prediction_symbols(prepared, config)
     input_frame, universe_summary = apply_universe_filter(prepared, config)
+    score_profile.record_count(profile, "universe_rows", len(input_frame))
+    score_profile.record_count(profile, "universe_symbols", input_frame["symbol"].nunique())
+    score_profile.tick(profile, "universe_filtered")
     spot_view, spot_summary = merge_spot_view(input_frame, spot)
     validate_prediction_values(input_frame, config)
+    score_profile.tick(profile, "spot_merged")
     scored_rows, failed_symbols, short_symbols = score_groups(input_frame, config)
+    score_profile.tick(profile, "groups_scored")
     scored = pd.DataFrame(scored_rows)
     provenance = aggregate_input_provenance(input_frame)
+    score_profile.tick(profile, "provenance_aggregated")
     summary = build_summary(
         raw=frame,
         prepared=prepared,
@@ -272,6 +344,7 @@ def score_candidates(
     )
     summary.update(provenance)
     summary.update(spot_summary)
+    score_profile.tick(profile, "summary_built")
     if short_symbols:
         min_history = int(config["thresholds"].get("min_history_rows", 120))
         print_skipped_history_warning(short_symbols, min_history)
@@ -281,6 +354,7 @@ def score_candidates(
     scored = add_provenance_to_frame(scored, provenance)
     scored = merge_latest_gate_fields(scored, input_frame)
     scored = merge_latest_spot_fields(scored, spot_view)
+    score_profile.tick(profile, "gate_fields_merged")
     thresholded = apply_thresholds(scored, config["thresholds"])
     summary = add_threshold_summary(
         summary=summary,
@@ -289,6 +363,7 @@ def score_candidates(
         config=config,
     )
     ranked = rank_and_limit(thresholded, config)
+    score_profile.tick(profile, "thresholds_ranked")
     summary = complete_summary(summary, len(ranked))
     summary["threshold_diagnostics"] = threshold_diagnostics(
         scored=scored,
@@ -317,7 +392,8 @@ def ranked_result(
 
 
 def score_groups(
-    frame: pd.DataFrame, config: dict[str, Any]
+    frame: pd.DataFrame,
+    config: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
     min_history = int(config["thresholds"].get("min_history_rows", 120))
     rows = []
@@ -421,9 +497,24 @@ def write_output(frame: pd.DataFrame, path: Path) -> None:
     frame.to_csv(path, index=False)
 
 
+def write_profile_output(payload: dict[str, Any] | None, path: Path | None) -> None:
+    if payload is None or path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def require_csv_output_suffix(path: Path, label: str) -> None:
     if path.suffix.lower() != ".csv":
         raise ValueError(f"{label} supports CSV only; output suffix must be .csv")
+
+
+def require_json_output_suffix(path: Path, label: str) -> None:
+    if path.suffix.lower() != ".json":
+        raise ValueError(f"{label} supports JSON only; output suffix must be .json")
 
 
 def remove_stale_outputs(*paths: Path | None) -> None:

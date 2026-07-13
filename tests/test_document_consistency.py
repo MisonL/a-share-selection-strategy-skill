@@ -222,22 +222,32 @@ class DocumentConsistencyTests(unittest.TestCase):
 
         self.assertIn("## 任务拓扑", skill)
         self.assertIn("全 A 严格任务", skill)
+        self.assertIn("沪深 A 股股票池（前缀过滤，不含北交所）", skill)
         self.assertIn("今日 A 股选股", skill)
         self.assertIn("默认按全 A 严格任务判断", skill)
         self.assertIn("full-a-strict-workflow.md", skill)
         self.assertIn("跑全 A / 全市场真实任务", index)
         self.assertIn("今日 A 股选股 / 真实 A 股选股 / 全 A", runbook)
+        self.assertIn("沪深 A 股股票池（前缀过滤，不含北交所）", runbook)
         self.assertIn("用户没有限定 symbol、板块、本地股票池或本地行情文件", runbook)
         self.assertIn("## 当前推荐拓扑", workflow)
         self.assertIn("用户只说“选 A 股”", workflow)
+        self.assertIn("沪深 A 股股票池（前缀过滤，不含北交所）", workflow)
+        self.assertIn("baostock_universe", workflow)
         self.assertIn("eastmoney", workflow)
         self.assertIn("zzshare", workflow)
         self.assertIn("## 数据源能力矩阵", workflow)
         self.assertIn("`ZZSHARE_TOKEN`", workflow)
         self.assertIn("akshare", workflow)
         self.assertIn("fallback 成功不能写成主接口稳定", workflow)
+        self.assertIn("fetch_spot_fallback_used", workflow)
+        self.assertIn("fetch_spot_primary_failure", workflow)
         self.assertIn("query_stock_basic", workflow)
         self.assertIn("全市场 5000+ 标的会显著增加远端请求数", workflow)
+        self.assertIn("--derive-all-spot-symbols", workflow)
+        self.assertIn("--retry-interval-seconds", workflow)
+        self.assertIn("--request-interval-seconds", workflow)
+        self.assertIn("实时展示增强", workflow)
 
     def test_docs_lock_data_source_capability_boundaries(self) -> None:
         index = (
@@ -260,6 +270,7 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("data_sources.json", script_reference)
         self.assertIn("## 数据源能力边界", script_reference)
         self.assertIn("fetch_eastmoney_a_share_spot.py", script_reference)
+        self.assertIn("fetch_baostock_a_share_universe.py", script_reference)
         self.assertIn("fetch_zzshare_a_share.py", script_reference)
         self.assertIn("ZZSHARE_TOKEN", script_reference)
         self.assertIn("不要把 token 放进 CLI 参数", script_reference)
@@ -331,12 +342,22 @@ class DocumentConsistencyTests(unittest.TestCase):
             "full_a_stop_conditions",
             "cannot_prove",
         }
+        optional_metadata_keys = {
+            "date_resolution",
+            "retry_policy",
+            "license_claim_boundary",
+            "merge_contract",
+        }
         source_key_pattern = re.compile(r"^[a-z][a-z0-9_]*$")
 
         for source, metadata in registry["sources"].items():
             with self.subTest(source=source):
                 self.assertRegex(source, source_key_pattern)
-                self.assertEqual(expected_metadata_keys, set(metadata))
+                self.assertEqual(
+                    set(),
+                    set(metadata) - expected_metadata_keys - optional_metadata_keys,
+                )
+                self.assertLessEqual(expected_metadata_keys, set(metadata))
                 entry = metadata["entry"]
                 self.assertTrue((root / "scripts" / entry).is_file())
                 self.assertEqual(entry, Path(entry).name)
@@ -350,6 +371,157 @@ class DocumentConsistencyTests(unittest.TestCase):
                     self.assertTrue(metadata[key])
                 if metadata["token_environment_variable"]:
                     self.assertIn(metadata["token_environment_variable"], docs)
+
+        self.assertEqual(
+            "primary_universe_symbol_pool_for_history_breadth",
+            registry["sources"]["baostock_universe"]["full_a_role"],
+        )
+        self.assertEqual(
+            "supplemental_realtime_display_enrichment",
+            registry["sources"]["eastmoney_spot"]["full_a_role"],
+        )
+        self.assertIn(
+            "primary_full_a_universe_availability",
+            registry["sources"]["eastmoney_spot"]["cannot_prove"],
+        )
+
+    def test_source_routing_registry_is_strict_and_documented(self) -> None:
+        root = ROOT / "skills/a-share-selection-strategy"
+        routing = json.loads(
+            (root / "configs/source_routing.json").read_text(encoding="utf-8")
+        )
+        data_sources = json.loads(
+            (root / "configs/data_sources.json").read_text(encoding="utf-8")
+        )
+        entrypoints = json.loads(
+            (root / "configs/script_entrypoints.json").read_text(encoding="utf-8")
+        )
+        docs = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in [
+                root / "SKILL.md",
+                root / "references/index.md",
+                root / "references/script-reference.md",
+                root / "instructions/full-a-strict-workflow.md",
+            ]
+        )
+
+        self.assertEqual(
+            {
+                "schema_version",
+                "claim_boundary",
+                "routing_policy",
+                "scenarios",
+            },
+            set(routing),
+        )
+        self.assertEqual(1, routing["schema_version"])
+        self.assertEqual(
+            "scenario_source_routing_only_not_runtime_auto_selection_or_fallback",
+            routing["claim_boundary"],
+        )
+        self.assertEqual(
+            {
+                "automatic_source_selection": False,
+                "automatic_fallback": False,
+                "runtime_cli_explicit_fallback_requires_parameter": True,
+                "explicit_fallback_sources_do_not_disable_cli_fallback_parameter": True,
+                "network_sources_must_persist_csv_and_metadata": True,
+                "local_validation_does_not_prove_real_external_gates": True,
+            },
+            routing["routing_policy"],
+        )
+        self.assertIn("source_routing.json", docs)
+        self.assertIn("automatic_source_selection=false", docs)
+        self.assertIn("automatic_fallback=false", docs)
+        self.assertIn("runtime_cli_explicit_fallback_requires_parameter=true", docs)
+        self.assertIn(
+            "`explicit_fallback_sources=[]` 表示该场景不推荐自动或预设备用源",
+            docs,
+        )
+
+        expected_scenarios = {
+            "local_scoring",
+            "targeted_a_share_real_task",
+            "full_a_strict_scan",
+            "prediction_derived_a_share",
+            "hong_kong_dataset_review",
+            "overseas_ticker_review",
+            "external_source_probe",
+        }
+        self.assertEqual(expected_scenarios, set(routing["scenarios"]))
+
+        allowed_sources = set(data_sources["sources"])
+        allowed_entrypoints = set(entrypoints["entries"])
+        scenario_keys = {
+            "description",
+            "primary_sources",
+            "explicit_fallback_sources",
+            "supplemental_sources",
+            "stable_entrypoints",
+            "required_fields",
+            "stop_conditions",
+            "reporting_boundary",
+        }
+        optional_keys = {"default_controls", "supplemental_merge_contracts"}
+        for scenario, metadata in routing["scenarios"].items():
+            with self.subTest(scenario=scenario):
+                self.assertEqual(set(), set(metadata) - scenario_keys - optional_keys)
+                self.assertLessEqual(scenario_keys, set(metadata))
+                for key in [
+                    "primary_sources",
+                    "explicit_fallback_sources",
+                    "supplemental_sources",
+                ]:
+                    for source in metadata[key]:
+                        self.assertIn(source, allowed_sources)
+                for entrypoint in metadata["stable_entrypoints"]:
+                    self.assertIn(entrypoint, allowed_entrypoints)
+                    self.assertTrue(entrypoints["entries"][entrypoint]["public_entry"])
+                for key in [
+                    "description",
+                    "reporting_boundary",
+                ]:
+                    self.assertIsInstance(metadata[key], str)
+                    self.assertTrue(metadata[key])
+                self.assertTrue(metadata["required_fields"])
+                self.assertTrue(metadata["stop_conditions"])
+
+        full_a = routing["scenarios"]["full_a_strict_scan"]
+        self.assertEqual(["baostock_universe", "zzshare_history"], full_a["primary_sources"])
+        self.assertEqual([], full_a["explicit_fallback_sources"])
+        self.assertEqual(
+            1,
+            full_a["default_controls"]["zzshare_history"][
+                "history_max_concurrent_symbol_requests"
+            ],
+        )
+        self.assertEqual(
+            120,
+            full_a["default_controls"]["zzshare_history"][
+                "history_max_rate_limit_sleep_seconds"
+            ],
+        )
+        self.assertEqual(
+            3,
+            full_a["default_controls"]["zzshare_history"][
+                "history_max_429_events"
+            ],
+        )
+        self.assertEqual(
+            900,
+            full_a["default_controls"]["zzshare_history"][
+                "history_max_runtime_seconds"
+            ],
+        )
+        self.assertIn("eastmoney_spot", full_a["supplemental_sources"])
+        self.assertIn("pytdx_history", full_a["supplemental_sources"])
+        self.assertNotIn("pytdx_history", full_a["primary_sources"])
+        pytdx_contract = full_a["supplemental_merge_contracts"]["pytdx_history"]
+        self.assertEqual(["symbol", "date"], pytdx_contract["join_keys"])
+        self.assertTrue(pytdx_contract["strict_fields_same_date_required"])
+        self.assertFalse(pytdx_contract["selection_ready"])
+        self.assertTrue(pytdx_contract["forbid_previous_date_strict_field_fill"])
 
     def test_script_entrypoint_registry_covers_root_scripts(self) -> None:
         root = ROOT / "skills/a-share-selection-strategy"
@@ -387,7 +559,7 @@ class DocumentConsistencyTests(unittest.TestCase):
         inventory_by_script = {markdown_code_value(row[0]): row for row in body}
 
         self.assertEqual(set(registry["entries"]), set(inventory_by_script))
-        self.assertEqual(28, len(body))
+        self.assertEqual(len(registry["entries"]), len(body))
         self.assertIn("不是运行时入口", inventory)
         self.assertIn("不替代 `../configs/script_entrypoints.json`", inventory)
         self.assertIn("不进入 Skill 首轮读取路径", inventory)
@@ -401,7 +573,10 @@ class DocumentConsistencyTests(unittest.TestCase):
                 row = inventory_by_script[script]
                 self.assertEqual(metadata["category"], markdown_code_value(row[1]))
                 self.assertEqual(metadata["domain"], markdown_code_value(row[2]))
-                self.assertGreater(int(row[3]), 0)
+                self.assertEqual(
+                    len((root / "scripts" / script).read_text(encoding="utf-8").splitlines()),
+                    int(row[3]),
+                )
                 self.assertTrue(row[4])
                 self.assertTrue(row[5])
                 if metadata["public_entry"]:
@@ -467,6 +642,7 @@ class DocumentConsistencyTests(unittest.TestCase):
             "primary_artifacts",
         }
         wrapper_extra_keys = {"migration_target", "deletion_blocker"}
+        optional_entry_keys = {"date_resolution", "retry_policy"}
         public_categories = {"stable_cli", "fetch_cli", "gate_backtest_cli"}
         category_axes = {
             "stable_cli": ("public", "cli", "stable", "selection_core", True),
@@ -485,7 +661,11 @@ class DocumentConsistencyTests(unittest.TestCase):
                 expected_entry_keys = set(base_entry_keys)
                 if metadata.get("domain") == "compatibility_wrapper":
                     expected_entry_keys.update(wrapper_extra_keys)
-                self.assertEqual(expected_entry_keys, set(metadata))
+                self.assertEqual(
+                    set(),
+                    set(metadata) - expected_entry_keys - optional_entry_keys,
+                )
+                self.assertLessEqual(expected_entry_keys, set(metadata))
                 self.assertTrue((root / "scripts" / script).is_file())
                 self.assertEqual(script, Path(script).name)
                 self.assertIn(metadata["category"], allowed_categories)
@@ -540,9 +720,11 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertEqual(
             {
                 "fetch_eastmoney_a_share_spot.py",
+                "fetch_baostock_a_share_universe.py",
                 "fetch_baostock_a_share.py",
                 "fetch_akshare_a_share.py",
                 "fetch_akshare_hk_daily.py",
+                "fetch_pytdx_a_share.py",
                 "fetch_zzshare_a_share.py",
                 "fetch_yfinance_ohlcv.py",
             },
@@ -620,11 +802,12 @@ class DocumentConsistencyTests(unittest.TestCase):
             encoding="utf-8"
         )
         docs = scripts_index + "\n" + inventory
-        hotspots = [
-            root / "scripts/lib/report_html/a_share_selection_html_sections.py",
-            root / "scripts/lib/report_html/a_share_selection_html_scripts.py",
-            root / "scripts/lib/report_html/a_share_selection_html_candidate_master.py",
-        ]
+        scripts_root = root / "scripts"
+        hotspots = sorted(
+            path
+            for path in scripts_root.rglob("*.py")
+            if len(path.read_text(encoding="utf-8").splitlines()) > 800
+        )
 
         for path in hotspots:
             with self.subTest(path=path.name):
@@ -632,7 +815,7 @@ class DocumentConsistencyTests(unittest.TestCase):
                     len(path.read_text(encoding="utf-8").splitlines()),
                     300,
                 )
-                relative = path.relative_to(root / "scripts").as_posix()
+                relative = path.relative_to(scripts_root).as_posix()
                 self.assertIn(relative, docs)
 
         self.assertIn("维护热点", scripts_index)
@@ -640,6 +823,22 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("不移动候选事实、门禁判断或机器字段来源", docs)
         self.assertIn("不改变报告数据模型", docs)
         self.assertIn("不改变候选 CSV/diagnostics 语义", docs)
+        self.assertIn("summary/stdout/CSV provenance 字段", docs)
+        self.assertIn("步骤顺序", docs)
+        self.assertIn("职责豁免", docs)
+
+        long_functions = []
+        for path in scripts_root.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                if node.end_lineno - node.lineno + 1 > 80:
+                    long_functions.append((path, node.name))
+        self.assertTrue(long_functions)
+        for path, name in long_functions:
+            with self.subTest(path=path.name, function=name):
+                self.assertIn(f"`{name}()`", docs)
 
     def test_internal_helpers_do_not_depend_on_public_cli_entries(self) -> None:
         root = ROOT / "skills/a-share-selection-strategy"
@@ -700,12 +899,15 @@ class DocumentConsistencyTests(unittest.TestCase):
             "runner/run_today_a_share_selection_parser.py",
         }
         artifact_layers = {
+            "fetch/zzshare_a_share_checkpoint.py",
             "fetch/zzshare_a_share_quality.py",
+            "gates/incremental_history_execution.py",
             "gates/lightgbm_prediction_summary.py",
             "report_html/a_share_selection_html_report.py",
             "runner/run_today_a_share_selection_helpers.py",
             "runner/run_today_a_share_selection_history.py",
             "runner/run_today_a_share_selection_outputs.py",
+            "runner/run_today_a_share_selection_prices_sidecar.py",
             "selection_core/a_share_selection_diagnostics.py",
         }
 
@@ -777,9 +979,14 @@ class DocumentConsistencyTests(unittest.TestCase):
         )
         self.assertIn("不得 import 公开 CLI", scripts_index)
         self.assertIn("`skill_route=true` 表示脚本允许被任务拓扑引用", scripts_index)
-        self.assertIn(
-            "不表示 Agent 应在首轮从 24 个 public CLI 中随机选择", scripts_index
+        public_count = sum(
+            bool(metadata["public_entry"])
+            for metadata in registry["entries"].values()
         )
+        skill = (root / "SKILL.md").read_text(encoding="utf-8")
+        expected_count_text = f"{public_count} 个 public CLI"
+        self.assertIn(f"从 {expected_count_text} 中随机选择", scripts_index)
+        self.assertIn(f"{expected_count_text} 都是默认入口", skill)
 
     def test_script_reference_does_not_advertise_unregistered_fetch_sources(
         self,
@@ -883,6 +1090,15 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertNotIn("PYTHONPYCACHEPREFIX", readme_text)
         self.assertIn("validate_skill_changes.py` 的人工展开视图", agents_text)
         self.assertIn("validate_skill_changes.py` 的人工展开视图", runbook_text)
+        self.assertIn("无 `uv` 时创建临时虚拟环境", runbook_text)
+        self.assertIn(
+            "等价替换为 `/tmp/a-share-selection-skill-venv/bin/python`",
+            runbook_text,
+        )
+        self.assertIn(
+            "/tmp/a-share-selection-skill-venv/bin/python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py --help",
+            runbook_text,
+        )
         self.assertNotIn("/Users/", validator)
         self.assertIn("Path.home()", validator)
         self.assertIn("historical leaked-key probe split", validator)

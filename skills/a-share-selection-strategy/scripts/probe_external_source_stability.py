@@ -48,7 +48,8 @@ def main(argv: list[str] | None = None) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Probe akshare, yfinance, baostock, and zzshare source stability through fetch CLIs. "
+            "Probe eastmoney, baostock_universe, akshare, pytdx, yfinance, "
+            "baostock, and zzshare source stability through fetch CLIs. "
             "Repeated success only covers this run window and keeps "
             "long_term_stability_claim=not_proven."
         )
@@ -56,9 +57,44 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--summary-output", required=True)
     parser.add_argument("--iterations", type=positive_int, default=3)
+    parser.add_argument("--eastmoney-pages", type=positive_int, default=1)
+    parser.add_argument("--eastmoney-page-size", type=positive_int, default=100)
+    parser.add_argument("--eastmoney-timeout-seconds", type=float, default=10.0)
+    parser.add_argument("--eastmoney-retries", type=non_negative_int, default=5)
+    parser.add_argument(
+        "--eastmoney-retry-interval-seconds",
+        type=non_negative_float,
+        default=1.0,
+    )
+    parser.add_argument(
+        "--eastmoney-request-interval-seconds",
+        type=non_negative_float,
+        default=0.0,
+    )
+    parser.add_argument(
+        "--baostock-universe-lookback-days",
+        type=non_negative_int,
+        default=7,
+        help=(
+            "Probe-only lookback window for baostock universe. Default 7 improves "
+            "short-window observability and is not the production default; "
+            "fetch_baostock_a_share_universe.py and runner baostock_universe default to 0."
+        ),
+    )
+    parser.add_argument("--baostock-universe-retries", type=non_negative_int, default=1)
+    parser.add_argument(
+        "--baostock-universe-retry-interval-seconds",
+        type=non_negative_float,
+        default=1.0,
+    )
     parser.add_argument("--akshare-symbols", default="000001")
     parser.add_argument("--akshare-start-date", default="2025-09-01")
     parser.add_argument("--akshare-end-date", default="2026-05-29")
+    parser.add_argument("--pytdx-symbols", default="000001")
+    parser.add_argument("--pytdx-start-date", default="2026-01-01")
+    parser.add_argument("--pytdx-end-date", default="2026-01-10")
+    parser.add_argument("--pytdx-timeout-seconds", type=float, default=10.0)
+    parser.add_argument("--pytdx-max-pages", type=positive_int, default=1)
     parser.add_argument("--yfinance-symbols", default="AAPL,MSFT")
     parser.add_argument("--yfinance-start-date", default="2024-01-01")
     parser.add_argument("--yfinance-end-date", default="2026-05-29")
@@ -91,6 +127,13 @@ def positive_int(value: str) -> int:
     parsed = int(value)
     if parsed <= 0:
         raise argparse.ArgumentTypeError("value must be positive")
+    return parsed
+
+
+def non_negative_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("value must be non-negative")
     return parsed
 
 
@@ -160,11 +203,55 @@ def decode_timeout_output(value: str | bytes | None) -> str:
 
 def source_specs(args: argparse.Namespace, iteration_dir: Path) -> list[SourceSpec]:
     return [
+        eastmoney_spot_spec(args, iteration_dir),
+        baostock_universe_spec(args, iteration_dir),
         akshare_spec(args, iteration_dir),
+        pytdx_spec(args, iteration_dir),
         yfinance_spec(args, iteration_dir),
         baostock_spec(args, iteration_dir),
         zzshare_spec(args, iteration_dir),
     ]
+
+
+def eastmoney_spot_spec(args: argparse.Namespace, iteration_dir: Path) -> SourceSpec:
+    output = iteration_dir / "eastmoney_spot" / "spot.csv"
+    metadata = iteration_dir / "eastmoney_spot" / "spot_metadata.json"
+    return SourceSpec(
+        name="eastmoney_spot",
+        output_path=output,
+        metadata_path=metadata,
+        command=script_command(
+            "fetch_eastmoney_a_share_spot.py",
+            "--output", output,
+            "--metadata-output", metadata,
+            "--pages", args.eastmoney_pages,
+            "--page-size", args.eastmoney_page_size,
+            "--timeout-seconds", args.eastmoney_timeout_seconds,
+            "--retries", args.eastmoney_retries,
+            "--retry-interval-seconds", args.eastmoney_retry_interval_seconds,
+            "--request-interval-seconds", args.eastmoney_request_interval_seconds,
+            "--fail-on-partial",
+        ),
+    )
+
+
+def baostock_universe_spec(args: argparse.Namespace, iteration_dir: Path) -> SourceSpec:
+    output = iteration_dir / "baostock_universe" / "spot.csv"
+    metadata = iteration_dir / "baostock_universe" / "spot_metadata.json"
+    return SourceSpec(
+        name="baostock_universe",
+        output_path=output,
+        metadata_path=metadata,
+        command=script_command(
+            "fetch_baostock_a_share_universe.py",
+            "--output", output,
+            "--metadata-output", metadata,
+            "--lookback-days", args.baostock_universe_lookback_days,
+            "--retries", args.baostock_universe_retries,
+            "--retry-interval-seconds", args.baostock_universe_retry_interval_seconds,
+            "--fail-on-partial",
+        ),
+    )
 
 
 def akshare_spec(args: argparse.Namespace, iteration_dir: Path) -> SourceSpec:
@@ -181,6 +268,26 @@ def akshare_spec(args: argparse.Namespace, iteration_dir: Path) -> SourceSpec:
             "--end-date", args.akshare_end_date,
             "--output", output,
             "--metadata-output", metadata,
+        ),
+    )
+
+
+def pytdx_spec(args: argparse.Namespace, iteration_dir: Path) -> SourceSpec:
+    output = iteration_dir / "pytdx" / "prices.csv"
+    metadata = iteration_dir / "pytdx" / "metadata.json"
+    return SourceSpec(
+        name="pytdx",
+        output_path=output,
+        metadata_path=metadata,
+        command=script_command(
+            "fetch_pytdx_a_share.py",
+            "--symbols", args.pytdx_symbols,
+            "--start-date", args.pytdx_start_date,
+            "--end-date", args.pytdx_end_date,
+            "--output", output,
+            "--metadata-output", metadata,
+            "--timeout-seconds", args.pytdx_timeout_seconds,
+            "--max-pages", args.pytdx_max_pages,
             "--fail-on-fetch-error",
         ),
     )
@@ -281,13 +388,23 @@ def source_record(
 
 
 def source_checks(source: str, metadata: dict[str, Any], command: list[str] | None = None) -> list[dict[str, Any]]:
-    common = [
-        check("metadata_written", bool(metadata)),
-        check("rows_positive", int(metadata.get("rows", 0)) > 0),
-        check("symbol_count_matches_requested", int(metadata.get("symbol_count", -1)) == len(metadata.get("requested_symbols", []))),
-        check("failed_symbols_empty", not metadata.get("failed_symbols")),
-        check("empty_symbols_empty", not metadata.get("empty_symbols")),
-    ]
+    if source == "eastmoney_spot":
+        return spot_snapshot_checks(metadata, source="eastmoney")
+    if source == "baostock_universe":
+        return spot_snapshot_checks(metadata, source="baostock") + [
+            check(
+                "resolved_snapshot_date_recorded",
+                bool(metadata.get("resolved_snapshot_date")),
+            ),
+            check(
+                "lookback_matches_request",
+                str(metadata.get("lookback_days", "")) == requested_value(
+                    command,
+                    "--lookback-days",
+                ),
+            ),
+        ]
+    common = history_checks(metadata)
     if source == "akshare":
         return common + [
             check(
@@ -295,6 +412,25 @@ def source_checks(source: str, metadata: dict[str, Any], command: list[str] | No
                 int(metadata.get("invalid_rows", 0)) == int(metadata.get("dropped_invalid_rows", 0)),
             ),
             check("hist_provider_clean", not metadata.get("fallback_errors"), required=False),
+        ]
+    if source == "pytdx":
+        missing = set(metadata.get("missing_provider_fields", []))
+        return common + [
+            check(
+                "invalid_rows_accounted",
+                int(metadata.get("invalid_rows", 0)) == int(metadata.get("dropped_invalid_rows", 0)),
+            ),
+            check("timeout_seconds_recorded", float(metadata.get("timeout_seconds", 0.0)) > 0),
+            check("max_pages_matches_request", str(metadata.get("max_pages", "")) == requested_value(command, "--max-pages")),
+            check("token_not_configured", metadata.get("token_configured") is False),
+            check(
+                "missing_provider_fields_disclosed",
+                {"turn", "tradestatus", "isST", "name"}.issubset(missing),
+            ),
+            check(
+                "license_boundary_disclosed",
+                bool(metadata.get("license_claim_boundary")),
+            ),
         ]
     if source == "yfinance":
         return common + [
@@ -319,6 +455,28 @@ def source_checks(source: str, metadata: dict[str, Any], command: list[str] | No
             check("max_pages_matches_request", str(metadata.get("max_pages", "")) == requested_value(command, "--max-pages")),
         ]
     return common
+
+
+def spot_snapshot_checks(metadata: dict[str, Any], *, source: str) -> list[dict[str, Any]]:
+    return [
+        check("metadata_written", bool(metadata)),
+        check("source_matches", str(metadata.get("source", "")) == source),
+        check("raw_items_positive", int(metadata.get("raw_items", 0)) > 0),
+        check("filtered_items_positive", int(metadata.get("filtered_items", 0)) > 0),
+        check("partial_result_false", metadata.get("partial_result") is False),
+        check("output_written", metadata.get("output_written") is True),
+        check("metadata_output_written", metadata.get("metadata_output_written") is True),
+    ]
+
+
+def history_checks(metadata: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        check("metadata_written", bool(metadata)),
+        check("rows_positive", int(metadata.get("rows", 0)) > 0),
+        check("symbol_count_matches_requested", int(metadata.get("symbol_count", -1)) == len(metadata.get("requested_symbols", []))),
+        check("failed_symbols_empty", not metadata.get("failed_symbols")),
+        check("empty_symbols_empty", not metadata.get("empty_symbols")),
+    ]
 
 
 def requested_value(command: list[str] | None, option: str) -> str:

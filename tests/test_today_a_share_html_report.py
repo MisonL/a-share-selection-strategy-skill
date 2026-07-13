@@ -224,6 +224,60 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;", report)
         self.assertIn("&lt;script&gt;alert(2)&lt;/script&gt;", report)
 
+    def test_hero_discloses_external_prediction_and_real_market_flag(self) -> None:
+        summary = minimal_summary("/tmp", Path("/tmp") / "diagnostics.csv")
+        summary.update(
+            {
+                "prediction_mode": True,
+                "consumes_prediction_columns": True,
+                "input_metadata": {"real_market_data": True},
+                "real_market_data": False,
+            }
+        )
+
+        en_report = render_report(summary, {"steps": []}, language="en")
+        zh_report = render_report(summary, {"steps": []}, language="zh")
+
+        self.assertIn("External prediction columns", en_report)
+        self.assertIn("已使用外部预测列", zh_report)
+        self.assertNotIn("Prediction model used", en_report)
+        self.assertNotIn("已使用预测模型", zh_report)
+        self.assertIn('data-i18n-en="Real market data"', en_report)
+        self.assertIn('data-i18n-zh="真实行情数据"', zh_report)
+        self.assertIn("<strong>true</strong>", en_report)
+
+    def test_hero_does_not_claim_external_prediction_without_consumption(self) -> None:
+        summary = minimal_summary("/tmp", Path("/tmp") / "diagnostics.csv")
+        summary.update(
+            {
+                "prediction_mode": True,
+                "consumes_prediction_columns": False,
+            }
+        )
+
+        report = render_report(summary, {"steps": []}, language="en")
+
+        self.assertNotIn("External prediction columns", report)
+        self.assertIn("No prediction model", report)
+
+    def test_hero_real_market_flag_rejects_non_bool_metadata(self) -> None:
+        summary = minimal_summary("/tmp", Path("/tmp") / "diagnostics.csv")
+        summary.update(
+            {
+                "input_metadata": {
+                    "real_market_data": '"><script>alert(1)</script>',
+                },
+                "real_market_data": '"><script>alert(2)</script>',
+            }
+        )
+
+        report = render_report(summary, {"steps": []}, language="en")
+
+        self.assertIn('data-i18n-en="Real market data"', report)
+        self.assertIn("<strong>unknown</strong>", report)
+        self.assertNotIn("<script>alert(1)</script>", report)
+        self.assertNotIn("<script>alert(2)</script>", report)
+
     def test_auto_report_preserves_generated_language_on_first_browser_load(
         self,
     ) -> None:
@@ -869,6 +923,21 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("local file is not proof of real A-share market data", en_visible)
         self.assertIn("真实行情未知", zh_visible)
         self.assertIn("本地文件不能证明是真实 A 股行情", zh_visible)
+
+    def test_report_shows_real_market_data_machine_field_before_technical_details(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            summary = minimal_summary(tmpdir, Path(tmpdir) / "diagnostics.csv")
+            summary["input_metadata"] = {
+                "source_type": "local_file",
+                "real_market_data": False,
+            }
+            report = render_report(summary, {"steps": []}, language="en")
+
+        visible = visible_before_technical_details(report)
+        self.assertIn("Real market data", visible)
+        self.assertIn("false", visible)
 
     def test_report_discloses_market_label_only_before_technical_details(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

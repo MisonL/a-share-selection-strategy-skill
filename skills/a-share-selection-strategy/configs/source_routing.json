@@ -1,0 +1,249 @@
+{
+  "schema_version": 1,
+  "claim_boundary": "scenario_source_routing_only_not_runtime_auto_selection_or_fallback",
+  "routing_policy": {
+    "automatic_source_selection": false,
+    "automatic_fallback": false,
+    "runtime_cli_explicit_fallback_requires_parameter": true,
+    "explicit_fallback_sources_do_not_disable_cli_fallback_parameter": true,
+    "network_sources_must_persist_csv_and_metadata": true,
+    "local_validation_does_not_prove_real_external_gates": true
+  },
+  "scenarios": {
+    "local_scoring": {
+      "description": "Score or report from an already landed local prices CSV or Parquet file.",
+      "primary_sources": [],
+      "explicit_fallback_sources": [],
+      "supplemental_sources": [],
+      "stable_entrypoints": [
+        "validate_ohlcv.py",
+        "score_candidates.py",
+        "run_today_a_share_selection.py"
+      ],
+      "required_fields": [
+        "symbol",
+        "date",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume"
+      ],
+      "stop_conditions": [
+        "input_provenance_unknown",
+        "validate_ohlcv_failed",
+        "output_written_false"
+      ],
+      "reporting_boundary": "local_input_scoring_not_real_market_fetch_or_full_market_scan"
+    },
+    "targeted_a_share_real_task": {
+      "description": "Fetch and score a small explicit A-share symbol set.",
+      "primary_sources": [
+        "baostock_history"
+      ],
+      "explicit_fallback_sources": [],
+      "supplemental_sources": [
+        "zzshare_history",
+        "akshare_a_share",
+        "pytdx_history"
+      ],
+      "stable_entrypoints": [
+        "run_today_a_share_selection.py"
+      ],
+      "required_fields": [
+        "symbol",
+        "date",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume"
+      ],
+      "stop_conditions": [
+        "failed_symbols_nonempty",
+        "empty_symbols_nonempty",
+        "strict_gate_failed"
+      ],
+      "reporting_boundary": "explicit_symbol_pool_only_not_full_a_scan"
+    },
+    "full_a_strict_scan": {
+      "description": "Full A-share or broad-market real scan with explicit universe, history breadth, recovery, and final scoring gates.",
+      "primary_sources": [
+        "baostock_universe",
+        "zzshare_history"
+      ],
+      "explicit_fallback_sources": [],
+      "supplemental_sources": [
+        "eastmoney_spot",
+        "baostock_history",
+        "akshare_a_share",
+        "pytdx_history"
+      ],
+      "stable_entrypoints": [
+        "fetch_baostock_a_share_universe.py",
+        "fetch_eastmoney_a_share_spot.py",
+        "run_today_a_share_selection.py",
+        "prepare_clean_history_pool.py",
+        "prepare_incremental_history_plan.py"
+      ],
+      "required_fields": [
+        "symbol",
+        "date",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "turn",
+        "tradestatus",
+        "isST"
+      ],
+      "default_controls": {
+        "zzshare_history": {
+          "history_max_concurrent_symbol_requests": 1,
+          "history_max_rate_limit_sleep_seconds": 120,
+          "history_max_429_events": 3,
+          "history_max_runtime_seconds": 900,
+          "history_checkpoint_batch_size": 100,
+          "history_non_trading_policy": "drop"
+        }
+      },
+      "supplemental_merge_contracts": {
+        "pytdx_history": {
+          "allowed_fields": [
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "amount"
+          ],
+          "join_keys": [
+            "symbol",
+            "date"
+          ],
+          "strict_fields_same_date_required": true,
+          "selection_ready": false,
+          "forbid_previous_date_strict_field_fill": true
+        }
+      },
+      "stop_conditions": [
+        "universe_partial_result_true",
+        "history_failed_symbols_nonempty",
+        "history_empty_symbols_nonempty",
+        "possibly_truncated_symbols_nonempty",
+        "full_market_claim_allowed_false"
+      ],
+      "reporting_boundary": "full_a_claim_requires_current_artifacts_and_no_partial_history"
+    },
+    "prediction_derived_a_share": {
+      "description": "Use an external or locally generated prediction-derived A-share input with strict profile fields.",
+      "primary_sources": [],
+      "explicit_fallback_sources": [],
+      "supplemental_sources": [
+        "zzshare_history",
+        "baostock_history"
+      ],
+      "stable_entrypoints": [
+        "validate_ohlcv.py",
+        "score_candidates.py",
+        "generate_lightgbm_predictions.py"
+      ],
+      "required_fields": [
+        "market",
+        "prediction|prediction_score",
+        "turn|turnover",
+        "symbol",
+        "date"
+      ],
+      "stop_conditions": [
+        "prediction_column_missing",
+        "market_not_a_share",
+        "turn_missing",
+        "prediction_model_provenance_missing"
+      ],
+      "reporting_boundary": "prediction_profile_requires_real_prediction_input_not_generic_score"
+    },
+    "hong_kong_dataset_review": {
+      "description": "Review or score Hong Kong OHLCV datasets under the same local artifact contract.",
+      "primary_sources": [
+        "akshare_hk_daily"
+      ],
+      "explicit_fallback_sources": [],
+      "supplemental_sources": [],
+      "stable_entrypoints": [
+        "fetch_akshare_hk_daily.py",
+        "run_today_a_share_selection.py"
+      ],
+      "required_fields": [
+        "symbol",
+        "date",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume"
+      ],
+      "stop_conditions": [
+        "failed_symbols_nonempty",
+        "empty_symbols_nonempty"
+      ],
+      "reporting_boundary": "hong_kong_dataset_not_a_share_full_market_path"
+    },
+    "overseas_ticker_review": {
+      "description": "Review or score explicit overseas tickers with yfinance OHLCV.",
+      "primary_sources": [
+        "yfinance"
+      ],
+      "explicit_fallback_sources": [],
+      "supplemental_sources": [],
+      "stable_entrypoints": [
+        "fetch_yfinance_ohlcv.py",
+        "run_today_a_share_selection.py"
+      ],
+      "required_fields": [
+        "symbol",
+        "date",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume"
+      ],
+      "stop_conditions": [
+        "failed_symbols_nonempty",
+        "empty_symbols_nonempty",
+        "market_label_only_misused_as_calendar_proof"
+      ],
+      "reporting_boundary": "overseas_ticker_history_not_a_share_or_exchange_calendar_proof"
+    },
+    "external_source_probe": {
+      "description": "Short-window health observation for registered external fetch CLIs.",
+      "primary_sources": [
+        "eastmoney_spot",
+        "baostock_universe",
+        "akshare_a_share",
+        "pytdx_history",
+        "yfinance",
+        "baostock_history",
+        "zzshare_history"
+      ],
+      "explicit_fallback_sources": [],
+      "supplemental_sources": [],
+      "stable_entrypoints": [
+        "probe_external_source_stability.py"
+      ],
+      "required_fields": [
+        "metadata",
+        "checks",
+        "long_term_stability_claim"
+      ],
+      "stop_conditions": [
+        "source_passed_runs_less_than_runs",
+        "metadata_missing",
+        "long_term_stability_claim_not_not_proven"
+      ],
+      "reporting_boundary": "short_window_current_parameters_only_not_long_term_stability"
+    }
+  }
+}

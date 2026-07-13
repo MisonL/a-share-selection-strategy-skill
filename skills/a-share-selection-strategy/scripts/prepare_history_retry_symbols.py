@@ -13,6 +13,7 @@ RETRY_METADATA_KEYS = [
     "failed_symbols",
     "empty_symbols",
     "possibly_truncated_symbols",
+    "unprocessed_symbols",
 ]
 DEFAULT_EXCLUDE_KEYS = [
     "invalid_symbols",
@@ -41,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Include selected symbols that are not listed as failed, empty, "
-            "truncated, invalid, non-trading, or ST."
+            "truncated, unprocessed, invalid, non-trading, or ST."
         ),
     )
     return parser

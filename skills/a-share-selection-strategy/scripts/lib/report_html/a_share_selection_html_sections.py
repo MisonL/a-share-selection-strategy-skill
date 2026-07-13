@@ -162,7 +162,7 @@ def hero_copy(title: str, badges: str, note: str) -> str:
 
 
 def hero_badges(summary: dict[str, Any], language: str) -> list[tuple[str, str]]:
-    prediction = bool(summary.get("prediction_mode"))
+    prediction = bool(summary.get("consumes_prediction_columns"))
     return [
         (bilingual("Static HTML", "纯静态 HTML", language), "neutral"),
         (hero_market_label(summary, language), "neutral"),
@@ -172,7 +172,7 @@ def hero_badges(summary: dict[str, Any], language: str) -> list[tuple[str, str]]
         ),
         (bilingual("Not investment advice", "非投资建议", language), "neutral"),
         (
-            bilingual("Prediction model used", "已使用预测模型", language)
+            bilingual("External prediction columns", "已使用外部预测列", language)
             if prediction
             else bilingual("No prediction model", "无预测模型", language),
             "neutral",
@@ -249,6 +249,10 @@ def hero_fact_card(summary: dict[str, Any], language: str) -> str:
             data_scope_value(summary, language),
         ),
         (
+            bilingual("Real market data", "真实行情数据", language),
+            real_market_data_machine_value(summary),
+        ),
+        (
             bilingual("File note", "文件说明", language),
             bilingual(
                 "Single static HTML, local browser only",
@@ -258,11 +262,11 @@ def hero_fact_card(summary: dict[str, Any], language: str) -> str:
         ),
         (
             bilingual("Execution path", "执行路径", language),
-            str(summary.get("execution_path", "unresolved")),
+            esc(summary.get("execution_path", "unresolved")),
         ),
         (
             bilingual("Coverage class", "覆盖等级", language),
-            str(summary.get("coverage_class", "unknown")),
+            esc(summary.get("coverage_class", "unknown")),
         ),
         (
             bilingual("Full-market claim", "全市场声明", language),
@@ -319,6 +323,19 @@ def full_market_claim_value(summary: dict[str, Any], language: str) -> str:
     en = f"{'allowed' if allowed else 'not allowed'} / {boundary}"
     zh = f"{'允许' if allowed else '不允许'} / {boundary}"
     return bilingual(en, zh, language)
+
+
+def real_market_data_machine_value(summary: dict[str, Any]) -> str:
+    metadata = summary.get("input_metadata", {})
+    if isinstance(metadata, dict) and "real_market_data" in metadata:
+        return machine_value(metadata.get("real_market_data"))
+    return machine_value(summary.get("real_market_data", "unknown"))
+
+
+def machine_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return str(value).lower()
+    return "unknown"
 
 
 def report_generated_at(summary: dict[str, Any], language: str) -> str:
@@ -1425,6 +1442,20 @@ def input_partial_alerts(summary: dict[str, Any], language: str) -> list[str]:
     failed = list_count(metadata.get("failed_symbols"))
     empty = list_count(metadata.get("empty_symbols"))
     truncated = list_count(metadata.get("possibly_truncated_symbols"))
+    unprocessed = metadata.get("input_unprocessed_symbol_count")
+    if not isinstance(unprocessed, int):
+        unprocessed = list_count(metadata.get("unprocessed_symbols"))
+    rate_limit_exhausted = (
+        metadata.get("input_rate_limit_budget_exhausted") is True
+        or metadata.get("rate_limit_budget_exhausted") is True
+    )
+    rate_limit_reason = str(
+        metadata.get(
+            "input_rate_limit_exhaustion_reason",
+            metadata.get("rate_limit_exhaustion_reason", ""),
+        )
+        or "none"
+    )
     invalid = metadata.get("input_invalid_rows", metadata.get("invalid_rows", 0))
     dropped = metadata.get(
         "input_dropped_invalid_rows", metadata.get("dropped_invalid_rows", 0)
@@ -1445,6 +1476,9 @@ def input_partial_alerts(summary: dict[str, Any], language: str) -> list[str]:
         "Partial local input metadata; "
         f"failed_symbols={failed} empty_symbols={empty} "
         f"possibly_truncated_symbols={truncated} "
+        f"unprocessed_symbols={unprocessed} "
+        f"rate_limit_budget_exhausted={str(rate_limit_exhausted).lower()} "
+        f"rate_limit_exhaustion_reason={rate_limit_reason} "
         f"invalid_rows={invalid} dropped_invalid_rows={dropped} "
         f"non_trading_rows={non_trading} tradestatus_missing_rows={missing_status} "
         f"symbol_count={symbol_count}/{requested} "
@@ -1454,6 +1488,9 @@ def input_partial_alerts(summary: dict[str, Any], language: str) -> list[str]:
         "本地输入 metadata 为部分结果；"
         f"failed_symbols={failed} empty_symbols={empty} "
         f"possibly_truncated_symbols={truncated} "
+        f"unprocessed_symbols={unprocessed} "
+        f"rate_limit_budget_exhausted={str(rate_limit_exhausted).lower()} "
+        f"rate_limit_exhaustion_reason={rate_limit_reason} "
         f"invalid_rows={invalid} dropped_invalid_rows={dropped} "
         f"non_trading_rows={non_trading} tradestatus_missing_rows={missing_status} "
         f"symbol_count={symbol_count}/{requested} "
@@ -1521,6 +1558,13 @@ def history_alerts(summary: dict[str, Any], language: str) -> list[str]:
         failed = selection.get("history_metadata_failed_symbol_count", 0)
         empty = selection.get("history_empty_symbol_count", 0)
         truncated = selection.get("history_possibly_truncated_symbol_count", 0)
+        unprocessed = selection.get("history_unprocessed_symbol_count", 0)
+        rate_limit_exhausted = (
+            selection.get("history_rate_limit_budget_exhausted") is True
+        )
+        rate_limit_reason = str(
+            selection.get("history_rate_limit_exhaustion_reason", "") or "none"
+        )
         invalid = selection.get("history_invalid_rows", 0)
         dropped = selection.get("history_dropped_invalid_rows", 0)
         fallback = selection.get("history_metadata_fallback_error_count", 0)
@@ -1529,6 +1573,9 @@ def history_alerts(summary: dict[str, Any], language: str) -> list[str]:
             "Partial history fetch; "
             f"failed_symbols={failed} empty_symbols={empty} "
             f"possibly_truncated_symbols={truncated} "
+            f"unprocessed_symbols={unprocessed} "
+            f"rate_limit_budget_exhausted={str(rate_limit_exhausted).lower()} "
+            f"rate_limit_exhaustion_reason={rate_limit_reason} "
             f"invalid_rows={invalid} dropped_invalid_rows={dropped} "
             f"fallback_errors={fallback} output_written={output_written}; "
             "cannot be described as complete history."
@@ -1537,6 +1584,9 @@ def history_alerts(summary: dict[str, Any], language: str) -> list[str]:
             "历史抓取为部分结果；"
             f"failed_symbols={failed} empty_symbols={empty} "
             f"possibly_truncated_symbols={truncated} "
+            f"unprocessed_symbols={unprocessed} "
+            f"rate_limit_budget_exhausted={str(rate_limit_exhausted).lower()} "
+            f"rate_limit_exhaustion_reason={rate_limit_reason} "
             f"invalid_rows={invalid} dropped_invalid_rows={dropped} "
             f"fallback_errors={fallback} output_written={output_written}；"
             "不能描述为完整历史行情。"
@@ -1673,6 +1723,9 @@ def input_metadata_detail_fields(metadata: dict[str, Any]) -> list[tuple[str, An
         "failed_symbols",
         "empty_symbols",
         "possibly_truncated_symbols",
+        "unprocessed_symbols",
+        "rate_limit_budget_exhausted",
+        "rate_limit_exhaustion_reason",
         "invalid_rows",
         "invalid_symbols",
         "invalid_row_examples",
@@ -1685,11 +1738,20 @@ def input_metadata_detail_fields(metadata: dict[str, Any]) -> list[tuple[str, An
         "input_failed_symbol_count",
         "input_empty_symbol_count",
         "input_possibly_truncated_symbol_count",
+        "input_unprocessed_symbol_count",
+        "input_rate_limit_budget_exhausted",
+        "input_rate_limit_exhaustion_reason",
         "input_invalid_rows",
         "input_dropped_invalid_rows",
         "input_non_trading_rows",
         "input_tradestatus_missing_rows",
         "input_requested_symbol_count",
+        "clean_pool_generated_at",
+        "clean_pool_source_prices",
+        "clean_pool_removed_symbol_count",
+        "clean_pool_reason_counts",
+        "input_clean_pool_removed_symbol_count",
+        "input_clean_pool_reason_counts",
         "output_written",
         "metadata_output_written",
     )

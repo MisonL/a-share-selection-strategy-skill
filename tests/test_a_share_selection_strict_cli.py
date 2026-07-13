@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -150,6 +151,83 @@ class AShareSelectionStrictCliTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertFalse(output_exists)
         self.assertFalse(diagnostics_exists)
+        self.assertIn("output_not_written=true", stderr)
+
+    def test_cli_profile_output_is_explicit_observability_only(self) -> None:
+        frame = build_frame(include_prediction=True, include_turn=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            input_path = root / "prices.csv"
+            output_path = root / "candidates.csv"
+            diagnostics_path = root / "diagnostics.csv"
+            profile_path = root / "score_profile.json"
+            frame.to_csv(input_path, index=False)
+
+            code, _stdout, stderr = run_score_cli(
+                input_path,
+                output_path,
+                ["--profile-output", str(profile_path)],
+                diagnostics_output=diagnostics_path,
+            )
+            output_exists = output_path.exists()
+            diagnostics_exists = diagnostics_path.exists()
+            profile = json.loads(profile_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(0, code, stderr)
+        self.assertTrue(output_exists)
+        self.assertTrue(diagnostics_exists)
+        self.assertEqual("score_candidates_profile_v1", profile["profile_schema"])
+        self.assertEqual(len(frame), profile["input_rows"])
+        self.assertGreaterEqual(profile["candidate_rows"], 0)
+        self.assertGreater(profile["duration_seconds"], 0)
+        self.assertNotIn("started_monotonic", profile)
+        self.assertNotIn("last_monotonic", profile)
+        stages = [item["stage"] for item in profile["stages"]]
+        self.assertIn("input_loaded", stages)
+        self.assertIn("scored", stages)
+        self.assertIn("profile_write_started", stages)
+
+    def test_cli_default_does_not_write_profile_output(self) -> None:
+        frame = build_frame(include_prediction=True, include_turn=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            input_path = root / "prices.csv"
+            output_path = root / "candidates.csv"
+            profile_path = root / "score_profile.json"
+            frame.to_csv(input_path, index=False)
+
+            code, _stdout, stderr = run_score_cli(input_path, output_path, [])
+            output_exists = output_path.exists()
+            profile_exists = profile_path.exists()
+
+        self.assertEqual(0, code, stderr)
+        self.assertTrue(output_exists)
+        self.assertFalse(profile_exists)
+
+    def test_cli_strict_failure_removes_stale_profile_output(self) -> None:
+        frame = build_frame(
+            include_prediction=True,
+            prediction_value=0.1,
+            include_turn=True,
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            input_path = root / "prices.csv"
+            output_path = root / "prediction_empty_strict.csv"
+            profile_path = root / "score_profile.json"
+            frame.to_csv(input_path, index=False)
+            output_path.write_text("stale-candidates\n", encoding="utf-8")
+            profile_path.write_text("{}\n", encoding="utf-8")
+
+            code, _stdout, stderr = run_score_cli(
+                input_path,
+                output_path,
+                ["--fail-on-empty-result", "--profile-output", str(profile_path)],
+            )
+
+        self.assertEqual(3, code)
+        self.assertFalse(output_path.exists())
+        self.assertFalse(profile_path.exists())
         self.assertIn("output_not_written=true", stderr)
 
 

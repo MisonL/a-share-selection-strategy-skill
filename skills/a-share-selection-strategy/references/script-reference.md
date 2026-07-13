@@ -20,6 +20,7 @@
 | `../configs/prediction_profile_config.json` | prediction-derived A 股默认剖面 | 需要真实 `prediction` 或 `prediction_score` 输入 |
 | `../configs/hong_kong_generic_config.json` | 港股本地 OHLCV 通用技术评分 | 不证明港交所日历、真实成交或收益 |
 | `../configs/data_sources.json` | 数据源能力机器注册表 | 只用于审计和一致性检查，不做运行时自动选源或稳定性证明 |
+| `../configs/source_routing.json` | 业务场景到数据源的机器路由表 | 只用于审计和 Agent 决策辅助，不做运行时自动选源、自动 fallback 或稳定性证明 |
 | `../configs/script_entrypoints.json` | 脚本入口机器注册表 | 只用于审计根层 `.py` 分类，不做运行时 dispatch 或 CLI 合约替代 |
 
 旧命令里的 `../scripts/*.json` 路径仍由 CLI 解析到 `../configs/*.json`，但新文档和默认 runner 都应使用 `../configs/*.json`。
@@ -59,8 +60,26 @@ Python 代码复用这些脚本时，需要将 `skills/a-share-selection-strateg
 | LightGBM prediction 生成器 | `requirements-ml.txt` |
 | A 股 baostock 取数 | `baostock` |
 | A 股 akshare 取数 | `akshare` |
+| A 股 pytdx 取数 | `pytdx` |
 | A 股 zzshare 取数 | `zzshare` |
 | 海外 OHLCV 取数 | `yfinance` |
+
+常用场景按需安装命令：
+
+| 场景 | 命令骨架 |
+| --- | --- |
+| 本地校验、评分、clean pool、增量计划 | `uv run --with pandas --with numpy python ...` |
+| 全 A 股票池 universe | `uv run --with baostock python skills/a-share-selection-strategy/scripts/fetch_baostock_a_share_universe.py --lookback-days 7 --retries 1 --retry-interval-seconds 1 ...` |
+| 全 A 实时展示增强 | `python skills/a-share-selection-strategy/scripts/fetch_eastmoney_a_share_spot.py ...` |
+| 全 A zzshare 历史 breadth | `uv run --with pandas --with numpy --with zzshare python ...` |
+| baostock 小范围核验 | `uv run --with pandas --with numpy --with baostock python ...` |
+| akshare A 股或港股补充 | `uv run --with pandas --with numpy --with akshare python ...` |
+| pytdx A 股补充 | `uv run --with pandas --with numpy --with pytdx python ...` |
+| yfinance 海外 ticker 补充 | `uv run --with pandas --with numpy --with yfinance python ...` |
+
+这些依赖按场景显式安装，不要求用户默认全装。`baostock_universe` 是当前全 A 股票池主入口；`eastmoney` spot 入口只依赖标准库，适合补实时展示字段但不作为唯一全 A 股票池前置；`zzshare` 是当前全 A 历史主路径；`baostock`、`akshare`、`pytdx` 和 `yfinance` 是补充或核验源，不是静默 fallback。
+
+上表里的 `--lookback-days 7` 是非交易日或收盘后人工复验时的显式示例；`fetch_baostock_a_share_universe.py`、runner `--fetch-spot baostock_universe` 和 runner 显式 fallback 的日期回看默认值都是 0。
 
 完全离线运行时，必须使用已经安装好依赖的解释器、虚拟环境、wheelhouse 或已有包缓存。若 `uv run --with ...` 因无法解析依赖失败，应显式报告环境问题；不得用 mock 数据、跳过依赖或把未运行的脚本说成验证通过。
 
@@ -68,16 +87,32 @@ Python 代码复用这些脚本时，需要将 `skills/a-share-selection-strateg
 
 | 入口 | 服务 | 数据范围 | 适合用途 | 不能证明 |
 | --- | --- | --- | --- | --- |
-| `fetch_eastmoney_a_share_spot.py` | 东方财富公开 spot 接口 | A 股实时快照展示字段 | 全 A universe 候选池、当日展示字段 | 历史 OHLCV、分页完整性、长期稳定性 |
+| `fetch_baostock_a_share_universe.py` | baostock `query_all_stock` | A 股 symbol/name universe 兼容快照 | 全 A 股票池主入口；可用 `--lookback-days` 解析最近非空交易日；`--retries` 失败重试会写入 `fetch_errors/fetch_attempts/max_attempts`；配合 `--derive-all-spot-symbols` 使用 | 实时行情、价格、成交额、行业、交易所日历或实时全市场行情证明 |
+| `fetch_eastmoney_a_share_spot.py` | 东方财富公开 spot 接口 | A 股实时快照展示字段 | 全 A 当日展示增强；长分页应使用稳定 symbol 排序和显式 retry/page interval | 历史 OHLCV、长期稳定性、唯一股票池前置 |
 | `fetch_zzshare_a_share.py` | zzshare `daily(fields=all)` | A 股日线、换手、停牌/ST 相关字段 | 大范围历史 breadth、spot 派生 symbol 池历史抓取 | 无 token 长期额度、无截断、券商订单或成交能力 |
-| `fetch_baostock_a_share.py` | baostock | A 股日线、`tradestatus/isST`、名称查询 | 小范围严格字段核验、walk-forward 门禁 | 全 A 首轮高吞吐抓取、直接涨跌停字段 |
+| `fetch_baostock_a_share.py` | baostock | A 股日线、`tradestatus/isST`；可复用 `symbol/name` 输入，仅查询缺名项 | 小范围严格字段核验、walk-forward 门禁 | 全 A 首轮高吞吐抓取、直接涨跌停字段 |
 | `fetch_akshare_a_share.py` | akshare | A 股日线、成交额、换手 | A 股历史补充或交叉观察 | `stock_zh_a_hist` 主接口稳定；fallback 不能当主源成功 |
+| `fetch_pytdx_a_share.py` | pytdx | A 股日线 OHLCV、成交额；近期窗口自适应首请求并记录 raw/output/request 指标 | no-token 历史补充和对照；仅可按同一 `symbol+date` 补字段 | 换手率、停牌/ST、股票名称、独立 strict merge、官方授权、机构或商业使用权、长期稳定性 |
 | `fetch_akshare_hk_daily.py` | akshare 港股日线 | 港股 OHLCV、成交额、名称 | 港股已落地数据集审查 | A 股全市场覆盖、港交所完整日历或可交易性 |
 | `fetch_yfinance_ohlcv.py` | yfinance/Yahoo | 通用 ticker OHLCV | 美股/海外 ticker 补充 | A 股换手率、A 股可交易字段、exchange/calendar proof |
 
 `ZZSHARE_TOKEN` 是唯一允许的 zzshare token 输入位置。不要把 token 放进 CLI 参数、config 或文档示例；runner 会记录 step command，命令行 token 会泄漏到 `run_manifest.json`。
 
 `../configs/data_sources.json` 应与本节表格和 [../instructions/full-a-strict-workflow.md](../instructions/full-a-strict-workflow.md) 的数据源能力矩阵保持一致；它不是调度器，不会绕过显式 CLI 参数或全 A 严格工作流。
+
+## 业务场景到数据源路由
+
+`../configs/source_routing.json` 是场景级路由事实源，用来回答“本地评分、定向 A 股、全 A、prediction-derived、港股、海外 ticker 或外部源探针应考虑哪些源”。它不是运行时自动选源器；`automatic_source_selection=false`、`automatic_fallback=false` 且 `runtime_cli_explicit_fallback_requires_parameter=true` 是硬边界。表内 `explicit_fallback_sources=[]` 表示该场景不推荐自动或预设备用源，不会禁用 CLI 层面的显式 fallback 参数；CLI 层面的 `--fetch-spot-fallback` 必须由用户显式传入，并披露 `fetch_spot_fallback_used` 和 `fetch_spot_primary_failure`。
+
+| 业务场景 | 主源 | 显式备用 | 补充或对照 | 边界 |
+| --- | --- | --- | --- | --- |
+| 本地评分 | 本地 `prices.csv` / Parquet | 无 | 无 | 只证明本地 artifact 评分，不证明真实取数 |
+| 定向 A 股真实任务 | `baostock_history` | 无 | `zzshare_history`、`akshare_a_share`、`pytdx_history` | 只覆盖显式 symbol 池，不外推全 A |
+| 全 A 严格扫描 | `baostock_universe` + `zzshare_history` | 无 | `eastmoney_spot`、`baostock_history`、`akshare_a_share`、`pytdx_history` | 当前口径是沪深 A 股股票池（前缀过滤，不含北交所）；Eastmoney 只补实时展示字段；失败不能阻断 universe + history 主路径，也不能声称实时全市场完成 |
+| prediction-derived A 股 | 外部或本地生成的 prediction 输入 | 无 | `zzshare_history`、`baostock_history` 只能补行情字段 | 行情源不能伪造 prediction |
+| 港股数据集审查 | `akshare_hk_daily` | 无 | 无 | 不参与 A 股全市场路径 |
+| 海外 ticker 审查 | `yfinance` | 无 | 无 | market 只是标签，不证明交易所日历 |
+| 外部源短窗口探针 | `probe_external_source_stability.py` 覆盖注册外部源 | 无 | 无 | 只证明当前窗口、参数和网络，不证明长期稳定 |
 
 ## 输入数据契约
 
@@ -109,6 +144,7 @@ Python 代码复用这些脚本时，需要将 `skills/a-share-selection-strateg
 | akshare A 股中文列 | `日期 -> date`、`股票代码 -> symbol`、`开盘/最高/最低/收盘 -> open/high/low/close`、`成交量 -> volume`、`成交额 -> amount`、`换手率 -> turn` |
 | akshare `stock_zh_a_daily` | `date -> date`、`open/high/low/close` 同名映射、`volume -> volume`、`amount -> amount`、`turnover -> turn` |
 | baostock | `code -> symbol`，去掉 `sz.` 或 `sh.`；补 `market=A-share`；其余 OHLCV 字段同名映射 |
+| pytdx | `datetime/year/month/day -> date`、`vol -> volume`、`amount -> amount`、`open/high/low/close` 同名映射；provider 不返回名称时 `name` 保持空值并记录 `name_value_policy=blank_missing_provider_name`，metadata 必须披露缺 `turn/tradestatus/isST/name` |
 | zzshare `daily(fields=all)` | `ts_code -> symbol`，去掉 `.SZ`、`.SH` 或 `.BJ`；`trade_date -> date`、`volume/vol -> volume`、`turnover/amount -> amount`、`turnover_rate -> turn`、`is_paused -> tradestatus`、`is_st -> isST` |
 | yfinance | `Date/Symbol/Open/High/Low/Close/Volume` 映射为小写标准字段 |
 
@@ -143,6 +179,9 @@ uv run --with pandas --with numpy --with baostock python skills/a-share-selectio
   --output-dir /tmp/a-share-selection-today \
   --mode auto \
   --history-source baostock \
+  --history-names-input /path/to/universe.csv \
+  --history-missing-name-policy query \
+  --history-baostock-non-trading-policy reject \
   --symbols 000001,600000 \
   --start-date 2025-01-01 \
   --end-date 2026-05-29 \
@@ -168,3 +207,54 @@ uv run --with pandas --with numpy --with baostock python skills/a-share-selectio
 ```
 
 `--symbols-file` 会在 manifest 中形成 `execution_path_reason=explicit_symbols_file`；`--plan-only` 只写计划 step 和审计输入快照，`commands_executed=false`；`--resume-from` 只生成 `resume_retry_symbols`，并在 `resume_inherited_options` 记录从上一轮继承的非敏感历史抓取参数，仍需重新检查新一轮 `history_metadata.json`。`history_http_url` 不从上一轮 manifest 自动继承；需要复用自定义 URL 时本轮显式传 `--history-http-url`，manifest 会用 `resume_sensitive_options_requiring_explicit_input` 提醒。
+
+全 A clean pool：
+
+```bash
+uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/prepare_clean_history_pool.py \
+  --prices-input "$RUN/pass1/prices.csv" \
+  --history-metadata "$RUN/pass1/history_metadata.json" \
+  --short-history "$RUN/pass1/short_history_symbols.json" \
+  --output "$RUN/clean/prices.csv" \
+  --metadata-output "$RUN/clean/history_metadata.json" \
+  --metadata-alias-output "$RUN/clean/metadata.json" \
+  --report-output "$RUN/clean/clean_history_report.json"
+```
+
+`prepare_clean_history_pool.py` 不联网、不重新取数，只基于既有 `history_metadata.json` 和短历史清单生成 clean `prices.csv`、clean metadata 和剔除报告。`metadata.json` 兼容副本必须通过 `--metadata-alias-output` 显式请求；脚本不会隐式覆盖同目录文件。`clean_history_report.json.skip_records[]` 必须保留 `symbol/source/reason/observed_at/ttl_days`，用于后续显式复核或过期重试。
+
+增量抓取完成后，同一入口可加 `--incremental-plan --incremental-prices --incremental-metadata`，先把验证过的 delta history 合并进 clean pool，再执行原有清洗。合并会拒绝 delta metadata 中的 failed/empty/truncated/unprocessed symbol 和 `rate_limit_budget_exhausted=true`、缺失计划 symbol、未达到 target date 或超过 target date 的增量行，并记录 `incremental_merge_*` 字段；它仍然只处理已落地 artifact，不联网、不证明完整全 A 完成。
+
+全 A 增量计划：
+
+```bash
+uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/prepare_incremental_history_plan.py \
+  --spot-input "$RUN/spot.csv" \
+  --prices-input "$RUN/clean/prices.parquet" \
+  --history-metadata "$RUN/clean/history_metadata.json" \
+  --min-history-rows 120 \
+  --target-end-date "$END_DATE" \
+  --output "$RUN/incremental/incremental_history_plan.json" \
+  --symbols-output "$RUN/incremental/incremental_history_symbols.txt"
+```
+
+`prepare_incremental_history_plan.py` 会读取 clean prices 的 `symbol/date` 两列并与 metadata 的 `rows/date_min/date_max` 对账；漂移或重复 symbol metadata 时显式失败。metadata 不存在、`rows <= 0`、`date_max` 为空、失败/空/截断/unprocessed 或少于 `--min-history-rows` 的 symbol 归入 full fetch，有效但 `date_max < target_end_date` 的 symbol 归入 delta fetch；无法解释原因的 `partial_result` 或限流耗尽状态、未清除 invalid rows、缺失 tradestatus 或 `output_written=false` 会直接失败。只有 `source_scope=clean_history_pool` 且带正数剔除原因的审计子集可以保留原始 partial/限流事实并继续。历史池中不属于当前 universe 的旧证券允许保留，但会以 `prices_extra_symbols` 审计。`fetch_buckets[]` 按 `fetch_mode/reason/start_date/end_date` 稳定分组，且必须与 `fetch_symbols` 一一对账；full bucket 的 `start_date` 为空，后续执行器必须显式提供完整历史起始日。`claim_boundary=incremental_history_plan_only_not_history_fetch_success`，因此该文件不能证明抓取成功；后续仍需逐 bucket 抓取并重新验证 metadata。
+
+按 bucket 执行计划：
+
+```bash
+uv run --with pandas --with numpy --with zzshare python skills/a-share-selection-strategy/scripts/execute_incremental_history_plan.py \
+  --plan "$RUN/incremental/incremental_history_plan.json" \
+  --provider zzshare \
+  --full-start-date "$START_DATE" \
+  --output-dir "$RUN/incremental/execution" \
+  --resume
+```
+
+一次执行只使用一个显式 provider，不自动切源。每个 bucket 分别保存 symbols、prices、metadata、SHA-256 和执行状态；任一命令非零、artifact 缺失、CSV 内容与计划/metadata 不一致或质量门禁失败都会停止并将 manifest 标记为 `partial`。`--resume` 只跳过状态为 complete、execution contract digest 一致且文件摘要和 artifact 校验仍通过的 bucket；计划的生成时间、耗时和吞吐等观测字段不参与 digest。全部 bucket 成功后，聚合 CSV 和 metadata 先写暂存文件再成对发布，失败会保留既有两份最终产物并标记 `failed_stage=aggregate_outputs`。零 bucket 计划显式记录 `no_op=true`、移除陈旧聚合产物，也不允许继续 verified merge。如同时提供 `--base-prices --base-metadata --merged-output --merged-metadata-output --merge-report-output`，入口会调用现有 verified incremental merge；这些参数必须成组提供。
+
+zzshare fetch 默认启用有界 429 控制：`--max-429-events 3`、`--max-rate-limit-sleep-seconds 120`、`--max-runtime-seconds 900`。控制器替代 SDK 内部不可控重试，按 `Retry-After` 维护全局 cooldown；预算耗尽时先 flush 当前 checkpoint，再停止调度并以非零退出。metadata 会记录 `rate_limit_429_events`、`rate_limit_sleep_seconds`、`rate_limit_retry_after_seconds`、`rate_limit_budget_exhausted`、`rate_limit_exhaustion_reason` 和 `unprocessed_symbols`。未调度 symbol 不得计为真实空结果，也不得自动切换数据源。
+
+本地 clean prices 最终评分时，`run_today_a_share_selection.py --prices-input ... --spot-input ... --filter-prices-to-spot-universe --min-symbol-latest-date "$END_DATE"` 会在 validate/score 前过滤当前 universe 外和最新日期过期的 symbol，并写出 `prices_filter.json`、summary/stdout 字段和 CSV provenance。大文件场景可显式加 `--prices-filter-output-format parquet`，让过滤后的运行内 prices 直接以 Parquet 进入 validate/score；同时写出 `<prices>.metadata.json` sidecar，记录 SHA-256、size、mtime、row/symbol/date 范围、过滤契约和原始 input metadata。后续复用以路径、size 和 SHA-256 校验内容身份，再读取 `symbol/date` 重算表统计并核对过滤契约，最后恢复 provenance；mtime 仅作审计，单独触碰时间不会使内容相同的 artifact 失效。sidecar 缺失、摘要不匹配、篡改或统计漂移都显式失败。默认不传时保持输入格式。该步骤不联网、不补数据，只是对既有 artifact 做显式收口。
+
+需要定位评分阶段耗时时，可显式传 `score_candidates.py --profile-output <path>.json`；runner 对应参数为 `run_today_a_share_selection.py --score-profile`，产物固定为运行目录下的 `score_profile.json`。profile 只记录阶段耗时和行数，不参与评分，也不能作为候选、行情完整性或性能提升证明。默认关闭时不写该文件，失败路径会移除陈旧 profile。

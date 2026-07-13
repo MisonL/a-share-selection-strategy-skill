@@ -197,6 +197,23 @@
         "metadata.json"
       ]
     },
+    "fetch_baostock_a_share_universe.py": {
+      "category": "fetch_cli",
+      "visibility": "public",
+      "kind": "cli",
+      "stability": "stable_external",
+      "domain": "fetch",
+      "skill_route": true,
+      "public_entry": true,
+      "network_required": true,
+      "real_gate_boundary": "baostock_universe_snapshot_not_realtime_spot_or_full_market_proof",
+      "date_resolution": "optional_lookback_days_records_requested_and_resolved_snapshot_dates",
+      "retry_policy": "explicit_retries_recorded_as_fetch_errors_fetch_attempts_and_max_attempts",
+      "primary_artifacts": [
+        "spot.csv",
+        "spot_metadata.json"
+      ]
+    },
     "fetch_eastmoney_a_share_spot.py": {
       "category": "fetch_cli",
       "visibility": "public",
@@ -210,6 +227,21 @@
       "primary_artifacts": [
         "spot.csv",
         "spot_metadata.json"
+      ]
+    },
+    "fetch_pytdx_a_share.py": {
+      "category": "fetch_cli",
+      "visibility": "public",
+      "kind": "cli",
+      "stability": "stable_external",
+      "domain": "fetch",
+      "skill_route": true,
+      "public_entry": true,
+      "network_required": true,
+      "real_gate_boundary": "pytdx_external_fetch_not_turnover_tradability_or_stability_proof",
+      "primary_artifacts": [
+        "prices.csv",
+        "metadata.json"
       ]
     },
     "fetch_yfinance_ohlcv.py": {
@@ -300,6 +332,53 @@
       "primary_artifacts": [
         "history_retry_symbols.txt",
         "history_retry_symbols.json"
+      ]
+    },
+    "prepare_clean_history_pool.py": {
+      "category": "gate_backtest_cli",
+      "visibility": "public",
+      "kind": "cli",
+      "stability": "stable_gate",
+      "domain": "gate_backtest",
+      "skill_route": true,
+      "public_entry": true,
+      "network_required": false,
+      "real_gate_boundary": "clean_history_pool_from_existing_artifacts_not_full_market_proof",
+      "primary_artifacts": [
+        "clean_prices.csv",
+        "clean_metadata.json",
+        "clean_history_report.json"
+      ]
+    },
+    "prepare_incremental_history_plan.py": {
+      "category": "gate_backtest_cli",
+      "visibility": "public",
+      "kind": "cli",
+      "stability": "stable_gate",
+      "domain": "gate_backtest",
+      "skill_route": true,
+      "public_entry": true,
+      "network_required": false,
+      "real_gate_boundary": "incremental_history_plan_only_not_history_fetch_success",
+      "primary_artifacts": [
+        "incremental_history_plan.json",
+        "incremental_history_symbols.txt"
+      ]
+    },
+    "execute_incremental_history_plan.py": {
+      "category": "gate_backtest_cli",
+      "visibility": "public",
+      "kind": "cli",
+      "stability": "stable_gate",
+      "domain": "gate_backtest",
+      "skill_route": true,
+      "public_entry": true,
+      "network_required": true,
+      "real_gate_boundary": "bucket_fetch_execution_not_full_market_or_selection_proof",
+      "primary_artifacts": [
+        "execution_manifest.json",
+        "incremental_prices.csv",
+        "incremental_metadata.json"
       ]
     },
     "probe_baostock_limit_fields.py": {

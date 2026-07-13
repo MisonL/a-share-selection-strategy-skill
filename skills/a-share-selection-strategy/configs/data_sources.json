@@ -5,7 +5,7 @@
     "eastmoney_spot": {
       "entry": "fetch_eastmoney_a_share_spot.py",
       "service": "eastmoney_public_spot",
-      "role": "full_market_universe_snapshot",
+      "role": "realtime_spot_display_enrichment",
       "requires_token": false,
       "token_environment_variable": "",
       "primary_fields": [
@@ -16,7 +16,7 @@
         "spot_amount",
         "spot_industry"
       ],
-      "full_a_role": "universe_candidate_pool",
+      "full_a_role": "supplemental_realtime_display_enrichment",
       "full_a_stop_conditions": [
         "partial_result=true",
         "output_written=false"
@@ -24,6 +24,7 @@
       "cannot_prove": [
         "historical_ohlcv",
         "pagination_completeness_when_partial",
+        "primary_full_a_universe_availability",
         "long_term_stability"
       ]
     },
@@ -87,7 +88,35 @@
       ],
       "cannot_prove": [
         "full_a_first_round_throughput",
+        "query_all_stock_prefix_filter_is_not_exchange_calendar_or_listing_status_proof",
         "limit_up_down_rules",
+        "broker_order_or_fill"
+      ]
+    },
+    "baostock_universe": {
+      "entry": "fetch_baostock_a_share_universe.py",
+      "service": "baostock_query_all_stock",
+      "role": "primary_full_a_universe_snapshot",
+      "requires_token": false,
+      "token_environment_variable": "",
+      "primary_fields": [
+        "symbol",
+        "name"
+      ],
+      "full_a_role": "primary_universe_symbol_pool_for_history_breadth",
+      "date_resolution": "explicit_lookback_until_nonempty_records_requested_and_resolved_snapshot_dates",
+      "retry_policy": "explicit_retries_recorded_as_fetch_errors_fetch_attempts_and_max_attempts",
+      "full_a_stop_conditions": [
+        "partial_result=true",
+        "output_written=false",
+        "raw_items=0"
+      ],
+      "cannot_prove": [
+        "realtime_quote",
+        "spot_price_or_amount",
+        "same_day_realtime_universe_when_date_fallback_used",
+        "exchange_calendar_or_listing_status_proof",
+        "realtime_full_market_quote_completion",
         "broker_order_or_fill"
       ]
     },
@@ -114,6 +143,54 @@
       ],
       "cannot_prove": [
         "stock_zh_a_hist_stability_when_fallback_used",
+        "long_term_stability",
+        "broker_order_or_fill"
+      ]
+    },
+    "pytdx_history": {
+      "entry": "fetch_pytdx_a_share.py",
+      "service": "pytdx_tdx_compatible_quote_server",
+      "role": "supplemental_no_token_a_share_history",
+      "requires_token": false,
+      "token_environment_variable": "",
+      "primary_fields": [
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "amount"
+      ],
+      "full_a_role": "explicit_supplemental_cross_check_only",
+      "license_claim_boundary": "pypi_license_unknown_readme_personal_research_boundary",
+      "merge_contract": {
+        "allowed_fields": [
+          "open",
+          "high",
+          "low",
+          "close",
+          "volume",
+          "amount"
+        ],
+        "join_keys": [
+          "symbol",
+          "date"
+        ],
+        "strict_fields_same_date_required": true,
+        "selection_ready": false
+      },
+      "full_a_stop_conditions": [
+        "failed_symbols_nonempty",
+        "empty_symbols_nonempty",
+        "invalid_rows_not_dropped",
+        "possibly_truncated_symbols_nonempty"
+      ],
+      "cannot_prove": [
+        "turnover",
+        "tradestatus_or_isST",
+        "stock_name",
+        "official_provider_license",
+        "institutional_or_commercial_use_rights",
         "long_term_stability",
         "broker_order_or_fill"
       ]

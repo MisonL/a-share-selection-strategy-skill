@@ -257,15 +257,23 @@ def secret_scan_paths() -> list[Path]:
 
 
 def check_pycache_absent() -> None:
-    roots = [ROOT / "skills", ROOT / "tests"]
     pycache_dirs = [
         str(path.relative_to(ROOT))
-        for root in roots
-        for path in root.rglob("__pycache__")
-        if path.is_dir()
+        for path in managed_pycache_dirs()
     ]
     if pycache_dirs:
         raise RuntimeError("__pycache__ directories found:\n" + "\n".join(pycache_dirs))
+
+
+def managed_pycache_dirs() -> list[Path]:
+    paths = []
+    root_pycache = ROOT / "__pycache__"
+    if root_pycache.is_dir():
+        paths.append(root_pycache)
+    for root in [ROOT / "skills", ROOT / "tests"]:
+        if root.is_dir():
+            paths.extend(path for path in root.rglob("__pycache__") if path.is_dir())
+    return sorted(set(paths))
 
 
 def check_unittest() -> None:

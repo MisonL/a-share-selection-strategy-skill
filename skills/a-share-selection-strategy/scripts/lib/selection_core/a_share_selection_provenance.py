@@ -41,7 +41,7 @@ def aggregate_input_provenance(frame: Any) -> dict[str, Any]:
 def aggregate_column_value(series: Any) -> Any:
     values = []
     missing_seen = False
-    for value in series:
+    for value in deduplicated_values(series):
         if missing_value(value):
             missing_seen = True
             continue
@@ -55,6 +55,16 @@ def aggregate_column_value(series: Any) -> Any:
     if len(values) == 1:
         return values[0]
     return "mixed"
+
+
+def deduplicated_values(series: Any) -> Any:
+    unique = getattr(series, "unique", None)
+    if callable(unique):
+        return unique()
+    drop_duplicates = getattr(series, "drop_duplicates", None)
+    if callable(drop_duplicates):
+        return drop_duplicates()
+    return series
 
 
 def normalized_value(value: Any) -> Any:

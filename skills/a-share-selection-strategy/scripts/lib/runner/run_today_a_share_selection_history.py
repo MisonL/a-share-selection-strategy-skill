@@ -42,18 +42,33 @@ ZZSHARE_ONLY_HISTORY_OPTIONS = [
     "history_http_url",
     "history_timeout_seconds",
     "history_request_interval_seconds",
+    "history_max_concurrent_symbol_requests",
+    "history_max_rate_limit_sleep_seconds",
+    "history_max_429_events",
+    "history_max_runtime_seconds",
     "history_limit",
     "history_max_pages",
+    "history_non_trading_policy",
+    "history_checkpoint_batch_size",
+    "history_resume_from_checkpoint",
+    "history_progress_interval",
 ]
 YFINANCE_UNSUPPORTED_HISTORY_OPTIONS = [
     "history_adjust",
     "drop_invalid_history_rows",
+]
+PYTDX_UNSUPPORTED_HISTORY_OPTIONS = [
+    "history_adjust",
 ]
 
 
 def validate_history_inputs(args: Any, spot: Path | None) -> None:
     if args.spot_input and args.fetch_spot:
         raise ValueError("use either --spot-input or --fetch-spot, not both")
+    if args.fetch_spot_fallback and not args.fetch_spot:
+        raise ValueError("--fetch-spot-fallback requires --fetch-spot")
+    if args.fetch_spot_fallback and args.fetch_spot_fallback == args.fetch_spot:
+        raise ValueError("--fetch-spot-fallback must differ from --fetch-spot")
     if args.prices_input:
         reject_ignored_history_options(args)
         return
@@ -88,8 +103,14 @@ def validate_history_required_inputs(args: Any, spot: Path | None) -> None:
         raise ValueError(
             "--derive-symbols-from-spot requires --spot-input or --fetch-spot"
         )
+    if args.derive_all_spot_symbols and not args.derive_symbols_from_spot:
+        raise ValueError(
+            "--derive-all-spot-symbols requires --derive-symbols-from-spot"
+        )
     if args.history_source == "yfinance":
         reject_yfinance_unsupported_history_options(args)
+    if args.history_source == "pytdx":
+        reject_pytdx_unsupported_history_options(args)
     if args.history_source != "zzshare":
         reject_zzshare_only_history_options(args)
 
@@ -109,8 +130,10 @@ def reject_ignored_history_options(args: Any) -> None:
             ignored.append("--" + name.replace("_", "-"))
     for name in [
         "derive_symbols_from_spot",
+        "derive_all_spot_symbols",
         "allow_partial_history",
         "drop_invalid_history_rows",
+        "history_resume_from_checkpoint",
     ]:
         if getattr(args, name):
             ignored.append("--" + name.replace("_", "-"))
@@ -125,7 +148,10 @@ def reject_zzshare_only_history_options(args: Any) -> None:
     names = [
         name
         for name in ZZSHARE_ONLY_HISTORY_OPTIONS
-        if not (name == "history_timeout_seconds" and args.history_source == "yfinance")
+        if not (
+            name == "history_timeout_seconds"
+            and args.history_source in {"pytdx", "yfinance"}
+        )
     ]
     ignored = option_flags(args, names)
     if ignored:
@@ -140,6 +166,15 @@ def reject_yfinance_unsupported_history_options(args: Any) -> None:
     if ignored:
         raise ValueError(
             "unsupported yfinance history options would be ignored: "
+            + ",".join(ignored)
+        )
+
+
+def reject_pytdx_unsupported_history_options(args: Any) -> None:
+    ignored = option_flags(args, PYTDX_UNSUPPORTED_HISTORY_OPTIONS)
+    if ignored:
+        raise ValueError(
+            "unsupported pytdx history options would be ignored: "
             + ",".join(ignored)
         )
 
@@ -173,6 +208,8 @@ def parse_history_symbols(args: Any) -> list[str]:
     text = explicit_symbols_text(args)
     if args.history_source == "zzshare":
         return parse_a_share_symbols(text)
+    if args.history_source == "pytdx":
+        return parse_six_digit_symbols(text)
     if args.history_source == AKSHARE_HK_DAILY_SOURCE:
         return parse_akshare_hk_symbols(text)
     if args.history_source == "yfinance":
@@ -294,12 +331,18 @@ def derive_symbols_from_spot(
 ) -> list[str]:
     frame = read_spot_frame(spot)
     config = json.loads(config_path.read_text(encoding="utf-8"))
-    filtered = filter_spot_universe(frame, config, history_source=args.history_source)
+    derive_all = bool(getattr(args, "derive_all_spot_symbols", False))
+    filtered = filter_spot_universe(
+        frame,
+        config,
+        history_source=args.history_source,
+        apply_thresholds=not derive_all,
+    )
     limit = int(args.max_history_symbols)
     max_history_symbols_is_default = not bool(
         getattr(args, "max_history_symbols_supplied", False)
     )
-    ranked = rank_spot_candidates(filtered).head(limit)
+    ranked = rank_spot_candidates(filtered, symbol_only=derive_all).head(limit)
     symbols = ranked["symbol"].astype(str).tolist()
     if not symbols:
         write_json(
@@ -310,6 +353,7 @@ def derive_symbols_from_spot(
                 config,
                 limit,
                 max_history_symbols_is_default=max_history_symbols_is_default,
+                derive_all_spot_symbols=derive_all,
                 failed=True,
             ),
             output / "selected_symbols.json",
@@ -329,6 +373,7 @@ def derive_symbols_from_spot(
             config,
             limit,
             max_history_symbols_is_default=max_history_symbols_is_default,
+            derive_all_spot_symbols=derive_all,
         ),
         output / "selected_symbols.json",
     )
@@ -349,14 +394,26 @@ def read_spot_frame(path: Path):
     raise ValueError("unsupported spot input format; use .csv, .parquet, or .pq")
 
 
-def filter_spot_universe(frame, config: dict[str, Any], history_source: str = ""):
-    result = normalize_spot_filter_frame(frame, history_source)
+def filter_spot_universe(
+    frame,
+    config: dict[str, Any],
+    history_source: str = "",
+    *,
+    apply_thresholds: bool = True,
+):
+    result = (
+        normalize_spot_filter_frame(frame, history_source)
+        if apply_thresholds
+        else normalize_spot_symbol_frame(frame, history_source)
+    )
     thresholds = config.get("thresholds", {})
     if history_source == AKSHARE_HK_DAILY_SOURCE:
         result = result[result["symbol"].map(valid_hk_symbol_text)]
     else:
         result = result[result["symbol"].str.fullmatch(r"\d{6}", na=False)]
     result = apply_symbol_universe(result, config.get("universe", {}))
+    if not apply_thresholds:
+        return result.copy()
     if "min_close" in thresholds:
         result = result[result["spot_price"] >= float(thresholds["min_close"])]
     if "max_close" in thresholds:
@@ -371,6 +428,17 @@ def filter_spot_universe(frame, config: dict[str, Any], history_source: str = ""
             .str.match(r"^(?:\*?ST|SST)", na=False)
         ]
     return result.copy()
+
+
+def normalize_spot_symbol_frame(frame, history_source: str = ""):
+    result = frame.copy()
+    result["symbol"] = normalize_history_spot_symbols(
+        first_existing_required(result, SYMBOL_COLUMN_ALIASES, "symbol"),
+        history_source,
+    )
+    if "name" not in result:
+        result["name"] = ""
+    return result
 
 
 def normalize_spot_filter_frame(frame, history_source: str = ""):
@@ -445,7 +513,9 @@ def apply_symbol_universe(frame, universe: dict[str, Any]):
     return result
 
 
-def rank_spot_candidates(frame):
+def rank_spot_candidates(frame, *, symbol_only: bool = False):
+    if symbol_only:
+        return frame.sort_values(["symbol"], ascending=[True])
     return frame.sort_values(["spot_amount", "spot_pct_chg"], ascending=[False, False])
 
 
@@ -457,6 +527,7 @@ def spot_symbol_metadata(
     limit: int,
     *,
     max_history_symbols_is_default: bool,
+    derive_all_spot_symbols: bool,
     failed: bool = False,
 ) -> dict[str, Any]:
     thresholds = config.get("thresholds", {})
@@ -464,6 +535,12 @@ def spot_symbol_metadata(
         "source": "spot_snapshot",
         "filter_profile": config.get("profile_name", ""),
         "preflight_stage": "derive_symbols",
+        "spot_symbol_filter_mode": (
+            "all_valid_spot_symbols"
+            if derive_all_spot_symbols
+            else "configured_spot_thresholds"
+        ),
+        "spot_thresholds_applied": not derive_all_spot_symbols,
         "raw_spot_rows": int(len(frame)),
         "filtered_spot_rows": int(len(filtered)),
         "selected_symbols": ranked["symbol"].astype(str).tolist(),
@@ -481,6 +558,7 @@ def spot_symbol_metadata(
                 for key in ["min_close", "max_close", "min_amount", "exclude_st"]
                 if key in thresholds
             },
+            "thresholds_applied": not derive_all_spot_symbols,
         },
     }
     if failed:

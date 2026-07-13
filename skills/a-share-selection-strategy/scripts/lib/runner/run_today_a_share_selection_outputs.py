@@ -17,6 +17,7 @@ if __name__ == "__main__":
 
 
 from pathlib import Path
+import time
 from typing import Any
 
 from lib.report_html.a_share_selection_html_i18n import initial_report_language
@@ -37,7 +38,9 @@ def finalize_outputs(
     manifest_path: Path,
     output: Path,
     status: str,
+    run_started_monotonic: float,
 ) -> None:
+    finalize_started = time.monotonic()
     requested_language = str(args.html_report_language)
     initial_language = initial_report_language(requested_language)
     manifest["html_report_language"] = requested_language
@@ -45,7 +48,6 @@ def finalize_outputs(
     manifest["html_report_written"] = False
     manifest["html_report_error_type"] = ""
     manifest["html_report_error"] = ""
-    write_json(manifest, manifest_path)
 
     summary = summary_view(manifest, status)
     report_path = output / "report.html"
@@ -60,9 +62,27 @@ def finalize_outputs(
 
     if args.no_html_report:
         remove_optional_report(report_path, summary, manifest)
+        report_duration = 0.0
     else:
+        report_started = time.monotonic()
         write_optional_report(summary, manifest, report_path, requested_language)
-    mark_core_outputs_written(summary, manifest, manifest_path, summary_path)
+        report_duration = round(max(time.monotonic() - report_started, 0.0), 6)
+    manifest["html_report_duration_seconds"] = report_duration
+    summary["html_report_duration_seconds"] = report_duration
+    finalize_duration = round(max(time.monotonic() - finalize_started, 0.0), 6)
+    run_duration = round(max(time.monotonic() - run_started_monotonic, 0.0), 6)
+    manifest["finalize_duration_seconds"] = finalize_duration
+    summary["finalize_duration_seconds"] = finalize_duration
+    manifest["run_duration_seconds"] = run_duration
+    summary["run_duration_seconds"] = run_duration
+    mark_core_outputs_written(
+        summary,
+        manifest,
+        manifest_path,
+        summary_path,
+        manifest_will_be_written=True,
+    )
+    sync_summary_fields_to_manifest(summary, manifest)
     write_json(manifest, manifest_path)
     write_json(summary, summary_path)
 
@@ -116,15 +136,48 @@ def mark_core_outputs_written(
     manifest: dict[str, Any],
     manifest_path: Path,
     summary_path: Path,
+    *,
+    manifest_will_be_written: bool = False,
 ) -> None:
     fields = {
         "manifest_output": str(manifest_path),
-        "manifest_output_written": manifest_path.is_file(),
+        "manifest_output_written": manifest_path.is_file() or manifest_will_be_written,
         "summary_output": str(summary_path),
         "summary_output_written": summary_path.is_file(),
     }
     manifest.update(fields)
     summary.update(fields)
+
+
+def sync_summary_fields_to_manifest(
+    summary: dict[str, Any],
+    manifest: dict[str, Any],
+) -> None:
+    for key in MANIFEST_SUMMARY_FIELD_KEYS:
+        if key in summary:
+            manifest[key] = summary[key]
+
+
+MANIFEST_SUMMARY_FIELD_KEYS = (
+    "status",
+    "selection_failed_reason",
+    "selection_failed_next_action",
+    "plan_only_reason",
+    "plan_only_next_action",
+    "planned_parameters",
+    "candidates_output_written",
+    "diagnostics_output_written",
+    "score_profile_output",
+    "score_profile_output_written",
+    "history_output_written",
+    "history_metadata_output_written",
+    "history_metadata_file_exists",
+    "history_artifact_status",
+    "source_provenance",
+    "short_history_symbol_count",
+    "short_history_symbols_metadata_output",
+    "short_history_symbols_output",
+)
 
 
 def remove_stale_output_path(path: Path) -> None:
@@ -137,7 +190,7 @@ def remove_stale_output_path(path: Path) -> None:
 
 def clear_stale_run_outputs(args: Any, output: Path) -> None:
     paths = [output / name for name in STALE_RUN_OUTPUTS]
-    paths.append(output / f"prices{tabular_suffix(args.prices_input or '')}")
+    paths.extend(prices_output_candidates(args, output))
     if args.spot_input or args.fetch_spot:
         paths.append(output / f"spot{tabular_suffix(args.spot_input or '')}")
     validate_symbols_file_cleanup_collision(args, output, paths)
@@ -177,6 +230,11 @@ def protected_run_output(path: Path, protected: list[Path]) -> bool:
     return any(same_existing_path(path, source) for source in protected)
 
 
+def prices_output_candidates(args: Any, output: Path) -> list[Path]:
+    suffixes = [".csv", ".parquet", ".pq", tabular_suffix(args.prices_input or "")]
+    return [output / f"prices{suffix}" for suffix in dict.fromkeys(suffixes)]
+
+
 def html_report_stdout_value(manifest: dict[str, Any], output: Path) -> str:
     if not manifest.get("html_report_enabled", True):
         return "disabled"
@@ -195,10 +253,17 @@ def html_report_error_stdout(manifest: dict[str, Any]) -> str:
 STALE_RUN_OUTPUTS = (
     "candidates.csv",
     "diagnostics.csv",
+    "score_profile.json",
     "history_metadata.json",
+    "history_symbols.txt",
+    "prices_filter.json",
+    "prices.parquet.metadata.json",
+    "prices.pq.metadata.json",
     "retry_plan.json",
     "retry_symbols.txt",
     "selected_symbols.json",
+    "short_history_symbols.json",
+    "short_history_symbols.txt",
     "spot_metadata.json",
 )
 SYMBOLS_FILE_BLOCKED_OUTPUTS = (
@@ -206,4 +271,4 @@ SYMBOLS_FILE_BLOCKED_OUTPUTS = (
     "summary.json",
     "report.html",
 )
-STALE_INPUT_ONLY_OUTPUTS = {"retry_plan.json", "retry_symbols.txt"}
+STALE_INPUT_ONLY_OUTPUTS = {"history_symbols.txt", "retry_plan.json", "retry_symbols.txt"}

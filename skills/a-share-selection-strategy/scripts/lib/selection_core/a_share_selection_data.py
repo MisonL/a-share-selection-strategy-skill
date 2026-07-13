@@ -38,14 +38,26 @@ def read_table(path: Path) -> pd.DataFrame:
 
 
 def ensure_text_columns(frame: pd.DataFrame) -> pd.DataFrame:
-    text_columns = [column for column in ("symbol", "name") if column in frame.columns]
+    text_columns = sorted(
+        {
+            *(
+                column
+                for column in frame.columns
+                if isinstance(frame[column].dtype, pd.StringDtype)
+            ),
+            *(column for column in ("symbol", "name") if column in frame.columns),
+        }
+    )
     if not text_columns:
         return frame
     result = frame.copy()
-    if "symbol" in text_columns:
-        result["symbol"] = result["symbol"].astype(str).str.strip()
-    if "name" in text_columns:
-        result["name"] = result["name"].map(text_value)
+    for column in text_columns:
+        values = result[column].astype(object)
+        if column == "symbol":
+            values = result[column].astype(str).str.strip().astype(object)
+        elif column == "name":
+            values = values.map(text_value)
+        result[column] = values
     return result
 
 
@@ -58,6 +70,15 @@ def text_value(value: object) -> object:
 def parse_dates(series: pd.Series) -> pd.Series:
     """Parse dates in ACCEPTED_DATE_FORMATS; unsupported formats become NaT."""
 
+    if pd.api.types.is_datetime64_any_dtype(series):
+        return series
+    if len(series) and pd.api.types.is_string_dtype(series):
+        iso = pd.to_datetime(series, format=ISO_DATE_FORMAT, errors="coerce")
+        if not iso.isna().any():
+            return iso
+        compact = pd.to_datetime(series, format=COMPACT_DATE_FORMAT, errors="coerce")
+        if not compact.isna().any():
+            return compact
     text = series.astype(str).str.strip()
     numeric_yyyymmdd = text.str.fullmatch(r"\d{8}")
     iso_yyyy_mm_dd = text.str.fullmatch(r"\d{4}-\d{2}-\d{2}")

@@ -110,19 +110,36 @@ def merge_latest_gate_fields(scored: DataFrame, input_frame: DataFrame) -> DataF
 
 def latest_gate_view(input_frame: DataFrame) -> DataFrame:
     pd = pandas_module()
-    rows = []
-    for _, group in input_frame.groupby("symbol", sort=False):
-        latest = group.iloc[-1]
-        rows.append(
-            {
-                "symbol": str(latest["symbol"]),
-                "amount": numeric_value(latest, "amount"),
-                "tradestatus": text_value(latest, "tradestatus"),
-                "isST": text_value(latest, "isST"),
-                "one_word_bar": one_word_bar(latest),
-            }
-        )
-    return pd.DataFrame(rows, columns=["symbol", *GATE_COLUMNS])
+    latest = input_frame.drop_duplicates(subset=["symbol"], keep="last").copy()
+    result = pd.DataFrame({"symbol": latest["symbol"].astype(str)})
+    result["amount"] = numeric_column(latest, "amount")
+    result["tradestatus"] = text_column(latest, "tradestatus")
+    result["isST"] = text_column(latest, "isST")
+    result["one_word_bar"] = one_word_bar_values(latest)
+    return result.reset_index(drop=True)
+
+
+def numeric_column(frame: DataFrame, column: str) -> Series:
+    pd = pandas_module()
+    if column not in frame:
+        return pd.Series(float("nan"), index=frame.index, dtype="float64")
+    return pd.to_numeric(frame[column], errors="coerce")
+
+
+def text_column(frame: DataFrame, column: str) -> Series:
+    pd = pandas_module()
+    if column not in frame:
+        return pd.Series("", index=frame.index, dtype="object")
+    return frame[column].fillna("").astype(str).str.strip()
+
+
+def one_word_bar_values(frame: DataFrame) -> Series:
+    pd = pandas_module()
+    price_columns = ["open", "high", "low", "close"]
+    if any(column not in frame for column in price_columns):
+        return pd.Series(False, index=frame.index, dtype="bool")
+    prices = frame[price_columns].apply(pd.to_numeric, errors="coerce")
+    return prices.notna().all(axis=1) & prices.eq(prices["open"], axis=0).all(axis=1)
 
 
 def numeric_value(row: Series, column: str) -> float:
@@ -138,11 +155,3 @@ def text_value(row: Series, column: str) -> str:
     if column not in row or pd.isna(row[column]):
         return ""
     return str(row[column]).strip()
-
-
-def one_word_bar(row: Series) -> bool:
-    pd = pandas_module()
-    values = [numeric_value(row, column) for column in ["open", "high", "low", "close"]]
-    if any(pd.isna(value) for value in values):
-        return False
-    return max(values) == min(values)

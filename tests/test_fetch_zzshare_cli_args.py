@@ -19,7 +19,7 @@ sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(TESTS))
 
 import fetch_zzshare_a_share as fetcher  # noqa: E402
-from zzshare_fetch_fakes import restore_module, valid_daily  # noqa: E402
+from zzshare_fetch_fakes import FakeDataApi, restore_module, valid_daily  # noqa: E402
 
 
 class FetchZzshareCliArgTests(unittest.TestCase):
@@ -97,6 +97,32 @@ class FetchZzshareCliArgTests(unittest.TestCase):
         )
         self.assertIn("max-pages must be positive", stderr)
 
+    def test_cli_rejects_invalid_rate_limit_budgets(self) -> None:
+        cases = [
+            ("--max-429-events", "0", "max-429-events must be positive"),
+            (
+                "--max-rate-limit-sleep-seconds",
+                "nan",
+                "max-rate-limit-sleep-seconds must be finite",
+            ),
+            ("--max-runtime-seconds", "0", "max-runtime-seconds must be positive"),
+        ]
+        for option, value, message in cases:
+            with self.subTest(option=option, value=value):
+                stderr = self.assert_invalid_arguments(
+                    [
+                        "--symbols",
+                        "000001",
+                        "--start-date",
+                        "2026-05-20",
+                        "--end-date",
+                        "2026-05-21",
+                        option,
+                        value,
+                    ]
+                )
+                self.assertIn(message, stderr)
+
     def test_cli_negative_request_interval_returns_argument_error_without_outputs(self) -> None:
         stderr = self.assert_invalid_arguments(
             [
@@ -111,6 +137,23 @@ class FetchZzshareCliArgTests(unittest.TestCase):
             ]
         )
         self.assertIn("request-interval-seconds must be non-negative", stderr)
+
+    def test_cli_non_positive_max_concurrent_requests_returns_argument_error_without_outputs(
+        self,
+    ) -> None:
+        stderr = self.assert_invalid_arguments(
+            [
+                "--symbols",
+                "000001",
+                "--start-date",
+                "2026-05-20",
+                "--end-date",
+                "2026-05-21",
+                "--max-concurrent-symbol-requests",
+                "0",
+            ]
+        )
+        self.assertIn("max-concurrent-symbol-requests must be positive", stderr)
 
     def test_cli_non_finite_request_interval_returns_argument_error_without_outputs(
         self,
@@ -143,6 +186,95 @@ class FetchZzshareCliArgTests(unittest.TestCase):
             ]
         )
         self.assertIn("symbols must be six digits: BAD001", stderr)
+
+    def test_cli_accepts_symbols_file_for_argument_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            symbols_file = Path(tmpdir) / "symbols.txt"
+            symbols_file.write_text("000001\n600000\n", encoding="utf-8")
+            fake_api = FakeDataApi(
+                {
+                    "000001.SZ": valid_daily(),
+                    "600000.SH": valid_daily(ts_code="600000.SH"),
+                }
+            )
+            old_module = sys.modules.get("zzshare.client")
+            sys.modules["zzshare.client"] = types.SimpleNamespace(DataApi=fake_api.factory)
+            try:
+                output = Path(tmpdir) / "prices.csv"
+                metadata = Path(tmpdir) / "metadata.json"
+                stdout = StringIO()
+                with redirect_stdout(stdout):
+                    code = fetcher.main(
+                        [
+                        "--symbols-file",
+                        str(symbols_file),
+                        "--start-date",
+                        "2026-05-20",
+                        "--end-date",
+                        "2026-05-21",
+                        "--output",
+                        str(output),
+                        "--metadata-output",
+                        str(metadata),
+                        "--request-interval-seconds",
+                        "0",
+                    ]
+                    )
+                data = json.loads(metadata.read_text(encoding="utf-8"))
+            finally:
+                restore_module("zzshare.client", old_module)
+
+        self.assertEqual(0, code)
+        self.assertIn("OK:", stdout.getvalue())
+        self.assertEqual(["000001", "600000"], data["requested_symbols"])
+
+    def test_cli_rejects_symbols_and_symbols_file_together(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            symbols_file = Path(tmpdir) / "symbols.txt"
+            symbols_file.write_text("000001\n", encoding="utf-8")
+            stderr = self.assert_invalid_arguments(
+                [
+                    "--symbols",
+                    "000001",
+                    "--symbols-file",
+                    str(symbols_file),
+                    "--start-date",
+                    "2026-05-20",
+                    "--end-date",
+                    "2026-05-21",
+                ]
+            )
+
+        self.assertIn("use either --symbols or --symbols-file", stderr)
+
+    def test_cli_missing_symbols_file_returns_invalid_argument(self) -> None:
+        stderr = self.assert_invalid_arguments(
+            [
+                "--symbols-file",
+                "/tmp/zzshare-symbols-file-does-not-exist.txt",
+                "--start-date",
+                "2026-05-20",
+                "--end-date",
+                "2026-05-21",
+            ]
+        )
+
+        self.assertIn("symbols file not found", stderr)
+
+    def test_cli_directory_symbols_file_returns_invalid_argument(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            stderr = self.assert_invalid_arguments(
+                [
+                    "--symbols-file",
+                    tmpdir,
+                    "--start-date",
+                    "2026-05-20",
+                    "--end-date",
+                    "2026-05-21",
+                ]
+            )
+
+        self.assertIn("symbols file is a directory", stderr)
 
     def test_cli_missing_dependency_removes_stale_metadata(self) -> None:
         old_module = sys.modules.get("zzshare.client")

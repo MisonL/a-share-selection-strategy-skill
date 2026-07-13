@@ -167,6 +167,7 @@ def validate_dates(frame: pd.DataFrame) -> Iterable[str]:
 
 def validate_duplicates(frame: pd.DataFrame) -> Iterable[str]:
     checked = frame[["symbol"]].copy()
+    checked["symbol"] = checked["symbol"].astype(str).str.strip()
     checked["date"] = parse_dates(frame["date"])
     checked = checked.dropna(subset=["date"])
     duplicated = checked.duplicated(subset=["symbol", "date"], keep=False)

@@ -21,9 +21,16 @@ def metadata_gate_errors(
         errors.append(
             f"metadata_symbol_count={actual_count} expected={expected_symbol_count}"
         )
-    for key in ["failed_symbols", "empty_symbols"]:
+    for key in [
+        "failed_symbols",
+        "empty_symbols",
+        "possibly_truncated_symbols",
+        "unprocessed_symbols",
+    ]:
         if metadata.get(key):
             errors.append(f"metadata_{key}={len(metadata[key])}")
+    if metadata.get("rate_limit_budget_exhausted") is True:
+        errors.append("metadata_rate_limit_budget_exhausted=true")
     errors.extend(invalid_row_errors(metadata, allow_dropped_invalid_rows))
     return errors
 

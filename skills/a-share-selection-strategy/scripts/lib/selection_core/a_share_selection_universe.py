@@ -32,11 +32,34 @@ def apply_universe_filter(
     frame: pd.DataFrame, config: dict[str, Any]
 ) -> tuple[pd.DataFrame, dict[str, int]]:
     universe = config.get("universe", {})
-    result = frame.copy()
     summary = dict(EMPTY_UNIVERSE_SUMMARY)
-    result = apply_market_filter(result, universe, summary)
-    result = apply_prefix_allow_filter(result, universe, summary)
-    result = apply_prefix_exclude_filter(result, universe, summary)
+    mask = pd.Series(True, index=frame.index)
+    symbol = symbol_text(frame)
+
+    market = universe.get("market")
+    if market and "market" in frame.columns:
+        before = symbol.loc[mask].nunique()
+        mask &= frame["market"].astype(str).eq(str(market))
+        after = symbol.loc[mask].nunique()
+        summary["market_filtered_symbols"] = int(before - after)
+
+    allow_regex = universe.get("symbol_prefix_allow_regex")
+    if allow_regex:
+        before = symbol.loc[mask].nunique()
+        mask &= symbol.str.match(str(allow_regex), na=False)
+        after = symbol.loc[mask].nunique()
+        summary["prefix_allow_filtered_symbols"] = int(before - after)
+
+    exclude = tuple(str(value) for value in universe.get("symbol_prefix_exclude", []))
+    if exclude:
+        before = symbol.loc[mask].nunique()
+        mask &= ~symbol.str.startswith(exclude, na=False)
+        after = symbol.loc[mask].nunique()
+        summary["prefix_excluded_symbols"] = int(before - after)
+
+    result = frame.loc[mask].copy()
+    if allow_regex or exclude:
+        result["symbol"] = symbol.loc[mask]
     return result.reset_index(drop=True), summary
 
 

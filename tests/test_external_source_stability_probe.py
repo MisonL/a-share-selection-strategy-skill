@@ -32,8 +32,8 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
             )
 
         summary = manifest["summary"]
-        self.assertEqual(4, summary["total_runs"])
-        self.assertEqual(4, summary["passed_runs"])
+        self.assertEqual(7, summary["total_runs"])
+        self.assertEqual(7, summary["passed_runs"])
         self.assertEqual(True, summary["all_sources_all_iterations_passed"])
         self.assertEqual("not_proven", summary["long_term_stability_claim"])
         self.assertEqual(
@@ -77,6 +77,18 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
         source_result = {"source": "akshare", "checks": checks, "passed": True}
         summary = probe.build_summary({"iterations": 1, "results": [source_result]})
         self.assertEqual({"hist_provider_clean": 1}, summary["sources"]["akshare"]["observation_failed_checks"])
+
+    def test_akshare_probe_command_keeps_fallback_as_observation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            args = args_for(output)
+            specs = {
+                spec.name: spec
+                for spec in probe.source_specs(args, output / "runs" / "iteration-1")
+            }
+
+        self.assertNotIn("--fail-on-fetch-error", specs["akshare"].command)
+        self.assertIn("--retry-interval-seconds", specs["eastmoney_spot"].command)
 
     def test_baostock_adjustflag_must_match_requested_adjust(self) -> None:
         command = ["python", "fetch_baostock_a_share.py", "--adjust", "2"]
@@ -129,6 +141,25 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
             by_name["possibly_truncated_symbols_empty"],
             probe.required_checks(failed_checks),
         )
+
+    def test_pytdx_disclosure_checks_are_required(self) -> None:
+        command = ["python", "fetch_pytdx_a_share.py", "--max-pages", "1"]
+        metadata = valid_metadata("pytdx")
+
+        checks = probe.source_checks("pytdx", metadata, command)
+        by_name = {item["name"]: item for item in checks}
+
+        self.assertEqual(True, by_name["missing_provider_fields_disclosed"]["passed"])
+        self.assertEqual(True, by_name["license_boundary_disclosed"]["passed"])
+        self.assertIn(
+            by_name["missing_provider_fields_disclosed"],
+            probe.required_checks(checks),
+        )
+
+        metadata["missing_provider_fields"] = ["name"]
+        failed_checks = probe.source_checks("pytdx", metadata, command)
+        by_name = {item["name"]: item for item in failed_checks}
+        self.assertEqual(False, by_name["missing_provider_fields_disclosed"]["passed"])
 
     def test_cli_returns_strict_error_when_required_source_fails(self) -> None:
         original_run = probe.run_command
@@ -217,8 +248,14 @@ class TimeoutExecutor:
 
 def source_from_command(command: list[str]) -> str:
     script = Path(command[1]).name
+    if script == "fetch_eastmoney_a_share_spot.py":
+        return "eastmoney_spot"
+    if script == "fetch_baostock_a_share_universe.py":
+        return "baostock_universe"
     if script == "fetch_akshare_a_share.py":
         return "akshare"
+    if script == "fetch_pytdx_a_share.py":
+        return "pytdx"
     if script == "fetch_yfinance_ohlcv.py":
         return "yfinance"
     if script == "fetch_baostock_a_share.py":
@@ -234,8 +271,47 @@ def metadata_path_from_command(command: list[str]) -> Path:
 
 
 def valid_metadata(source: str) -> dict[str, object]:
+    if source == "eastmoney_spot":
+        return {
+            "source": "eastmoney",
+            "raw_items": 100,
+            "filtered_items": 100,
+            "partial_result": False,
+            "output_written": True,
+            "metadata_output_written": True,
+        }
+    if source == "baostock_universe":
+        return {
+            "source": "baostock",
+            "raw_items": 2,
+            "filtered_items": 2,
+            "symbol_count": 2,
+            "partial_result": False,
+            "output_written": True,
+            "metadata_output_written": True,
+            "resolved_snapshot_date": "2026-07-09",
+            "lookback_days": 7,
+        }
     if source == "akshare":
         return akshare_metadata(fallback=False)
+    if source == "pytdx":
+        return {
+            "source": "pytdx",
+            "requested_symbols": ["000001"],
+            "rows": 5,
+            "symbol_count": 1,
+            "failed_symbols": [],
+            "empty_symbols": [],
+            "invalid_rows": 0,
+            "dropped_invalid_rows": 0,
+            "timeout_seconds": 10.0,
+            "max_pages": 1,
+            "token_configured": False,
+            "license_claim_boundary": (
+                "pypi_license_unknown_readme_personal_research_boundary"
+            ),
+            "missing_provider_fields": ["turn", "tradestatus", "isST", "name"],
+        }
     if source == "yfinance":
         return {
             "source": "yfinance",

@@ -35,6 +35,9 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
 
 
 def prices_output_path(manifest: dict[str, Any]) -> Path:
+    override = str(manifest.get("prices_output_path", ""))
+    if override:
+        return Path(override)
     source = str(manifest.get("prices_input", ""))
     suffix = tabular_suffix(source)
     return Path(manifest["output_dir"]) / f"prices{suffix}"
@@ -100,18 +103,33 @@ def spot_metadata_view(manifest: dict[str, Any]) -> dict[str, Any]:
     data = json.loads(metadata_path.read_text(encoding="utf-8"))
     keys = [
         "source",
+        "source_type",
         "source_scope",
+        "real_market_data",
+        "data_source_note",
         "snapshot_time",
         "requested_pages",
         "retry_attempts_per_page",
+        "retries",
         "successful_pages",
         "pages_successful",
         "failed_pages",
         "pages_failed",
+        "errors",
         "raw_items",
         "filtered_items",
+        "symbol_count",
+        "requested_snapshot_date",
+        "resolved_snapshot_date",
+        "lookback_days",
+        "date_fallback_used",
+        "excluded_count",
+        "started_at",
+        "finished_at",
+        "duration_seconds",
         "partial_result",
         "coverage_claim",
+        "source_claim_boundary",
         "allowed_failure_actions",
         "output_written",
         "metadata_output_written",
@@ -298,7 +316,7 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
         html_report_stdout_value,
     )
 
-    view = summary_view(manifest, "completed")
+    view = summary_view(manifest, str(manifest.get("status", "completed")))
     metadata = manifest.get("input_metadata", {})
     if not isinstance(metadata, dict):
         metadata = {}
@@ -307,12 +325,19 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
     html_error = html_report_error_stdout(manifest)
     disclosure = runner_disclosure_stdout(view)
     runner_metadata = runner_metadata_stdout(view, metadata)
+    spot_fallback = runner_spot_fallback_stdout(view)
+    prices_filter = runner_prices_filter_stdout(view)
+    score_profile = runner_score_profile_stdout(view)
     input_csv = input_csv_provenance_stdout(view.get("input_csv_provenance", {}))
     field_coverage = candidate_field_coverage_stdout(
         view.get("candidate_field_coverage", {})
     )
+    prefix = "PLAN_ONLY:" if manifest.get("plan_only") else "OK:"
     print(
-        "OK: runner=run_today_a_share_selection "
+        f"{prefix} runner=run_today_a_share_selection "
+        f"status={view.get('status', manifest.get('status', 'unknown'))} "
+        f"commands_executed={str(view.get('commands_executed', False)).lower()} "
+        f"plan_only_reason={metadata_stdout_value(view.get('plan_only_reason'))} "
         f"mode={manifest['mode']} steps={len(manifest['steps'])} "
         f"execution_path={manifest.get('execution_path', 'unresolved')} "
         f"execution_path_reason={manifest.get('execution_path_reason', 'unknown')} "
@@ -323,8 +348,11 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
         f"{manifest.get('full_market_claim_boundary', 'not_evaluated')} "
         f"prediction_mode={str(manifest['prediction_mode']).lower()} "
         f"consumes_prediction_columns={str(manifest.get('consumes_prediction_columns', False)).lower()} "
+        "external_prediction_consumed="
+        f"{str(manifest.get('consumes_prediction_columns', False)).lower()} "
         f"prediction_input_source={prediction_input_source(manifest)} "
         f"prediction_model_executed_by_runner={str(prediction_model_executed_by_runner(manifest)).lower()} "
+        f"prediction_model_executed={str(prediction_model_executed_by_runner(manifest)).lower()} "
         f"prediction_claim_boundary={view['prediction_claim_boundary']} "
         f"lightgbm_not_used={str(manifest['lightgbm_not_used']).lower()} "
         f"lightgbm_output_source={manifest.get('lightgbm_output_source', 'unknown')} "
@@ -332,10 +360,14 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
         f"metadata_source={metadata_stdout_value(metadata.get('source_type'))} "
         f"real_market_data={metadata_stdout_value(metadata.get('real_market_data'))} "
         f"source={metadata_stdout_value(metadata.get('source'))} "
+        f"history_source={metadata_stdout_value(view.get('history_source'))} "
         f"market_label_only={metadata_stdout_value(metadata.get('market_label_only'))} "
         "source_claim_boundary="
         f"{metadata_stdout_value(metadata.get('source_claim_boundary'))} "
         f"{runner_metadata} "
+        f"{spot_fallback} "
+        f"{prices_filter} "
+        f"{score_profile} "
         f"{input_csv} "
         f"prices_rows={view['prices_rows']} "
         f"candidate_rows={view['candidate_rows']} "
@@ -354,12 +386,76 @@ def runner_metadata_stdout(view: dict[str, Any], metadata: dict[str, Any]) -> st
         f"runner_metadata_source={metadata_stdout_value(metadata.get('source_type'))}",
         f"input_metadata_file={metadata_stdout_value(metadata.get('input_metadata_file'))}",
         f"runner_real_market_data={metadata_stdout_value(metadata.get('real_market_data'))}",
+        f"history_source={metadata_stdout_value(view.get('history_source'))}",
         f"source_scope={metadata_stdout_value(view.get('source_scope'))}",
         f"runner_source_scope={metadata_stdout_value(view.get('runner_source_scope'))}",
     ]
     if not history_metadata_stdout_available(metadata):
         parts.extend(input_metadata_stdout(metadata))
     return " ".join(parts)
+
+
+def runner_spot_fallback_stdout(view: dict[str, Any]) -> str:
+    primary_failure = view.get("fetch_spot_primary_failure")
+    failure_recorded = isinstance(primary_failure, dict) and bool(primary_failure)
+    returncode = ""
+    if isinstance(primary_failure, dict):
+        returncode = primary_failure.get("returncode", "")
+    return " ".join(
+        [
+            f"fetch_spot_fallback={metadata_stdout_value(view.get('fetch_spot_fallback'))}",
+            "fetch_spot_fallback_used="
+            f"{metadata_stdout_value(view.get('fetch_spot_fallback_used'))}",
+            "fetch_spot_primary_failure_recorded="
+            f"{str(failure_recorded).lower()}",
+            "fetch_spot_primary_failure_returncode="
+            f"{metadata_stdout_value(returncode)}",
+        ]
+    )
+
+
+def runner_prices_filter_stdout(view: dict[str, Any]) -> str:
+    return " ".join(
+        [
+            "filter_prices_to_spot_universe="
+            f"{metadata_stdout_value(view.get('filter_prices_to_spot_universe'))}",
+            "prices_filter_spot_universe="
+            f"{metadata_stdout_value(view.get('prices_filter_spot_universe'))}",
+            "prices_filter_min_symbol_latest_date="
+            f"{metadata_stdout_value(view.get('prices_filter_min_symbol_latest_date'))}",
+            "prices_filter_output_format="
+            f"{metadata_stdout_value(view.get('prices_filter_output_format'))}",
+            "prices_filter_output_prices="
+            f"{metadata_stdout_value(view.get('prices_filter_output_prices'))}",
+            "prices_filter_removed_symbol_count="
+            f"{metadata_stdout_value(view.get('prices_filter_removed_symbol_count'))}",
+            "prices_filter_removed_stale_symbol_count="
+            f"{metadata_stdout_value(view.get('prices_filter_removed_stale_symbol_count'))}",
+            "prices_filter_output_written="
+            f"{metadata_stdout_value(view.get('prices_filter_output_written'))}",
+            "prices_filter_failure_reason="
+            f"{metadata_stdout_value(view.get('prices_filter_failure_reason'))}",
+            "prices_filter_metadata_output="
+            f"{metadata_stdout_value(view.get('prices_filter_metadata_output'))}",
+            "prices_filter_claim_boundary="
+            f"{metadata_stdout_value(view.get('prices_filter_claim_boundary'))}",
+        ]
+    )
+
+
+def runner_score_profile_stdout(view: dict[str, Any]) -> str:
+    return " ".join(
+        [
+            "score_profile_enabled="
+            f"{metadata_stdout_value(view.get('score_profile_enabled'))}",
+            "score_profile_output_written="
+            f"{metadata_stdout_value(view.get('score_profile_output_written'))}",
+            "score_profile_rows="
+            f"{metadata_stdout_value(view.get('score_profile_rows'))}",
+            "score_profile_output="
+            f"{metadata_stdout_value(view.get('score_profile_output'))}",
+        ]
+    )
 
 
 def history_metadata_stdout_available(metadata: dict[str, Any]) -> bool:
@@ -384,6 +480,10 @@ def input_metadata_stdout(metadata: dict[str, Any]) -> list[str]:
         f"input_output_written={metadata_stdout_value(metadata.get('output_written'))}",
         "input_metadata_output_written="
         f"{metadata_stdout_value(metadata.get('metadata_output_written'))}",
+        "input_clean_pool_removed_symbol_count="
+        f"{metadata_stdout_value(metadata.get('input_clean_pool_removed_symbol_count'))}",
+        "input_clean_pool_reason_counts="
+        f"{metadata_structured_stdout(metadata.get('input_clean_pool_reason_counts'))}",
     ]
 
 
@@ -421,6 +521,17 @@ def metadata_stdout_value(value: Any) -> str:
     return text or "unknown"
 
 
+def metadata_structured_stdout(value: Any) -> str:
+    if isinstance(value, (dict, list)):
+        return json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    return metadata_stdout_value(value)
+
+
 def input_symbol_count_stdout(metadata: dict[str, Any]) -> str:
     symbol_count = metadata.get("symbol_count")
     requested = metadata.get("input_requested_symbol_count")
@@ -438,7 +549,13 @@ def metadata_list_stdout(value: Any) -> str:
         return "unknown"
     tokens = [metadata_item_stdout(item) for item in value]
     tokens = [token for token in tokens if token]
-    return ",".join(tokens) if tokens else "none"
+    if not tokens:
+        return "none"
+    limit = 20
+    if len(tokens) <= limit:
+        return ",".join(tokens)
+    sample = ",".join(tokens[:limit])
+    return f"{sample},__truncated__={len(tokens) - limit},__total__={len(tokens)}"
 
 
 def metadata_item_stdout(item: Any) -> str:
@@ -474,10 +591,48 @@ def runner_disclosure_stdout(view: dict[str, Any]) -> str:
     history = view.get("history_selection", {})
     if not isinstance(history, dict):
         history = {}
+    planned = view.get("planned_parameters", {})
+    if not isinstance(planned, dict):
+        planned = {}
+    history_symbols = view.get(
+        "history_symbol_count_label",
+        view.get("history_symbol_count", 0),
+    )
+    spot_lookback_days = metadata_or_planned_value(
+        spot,
+        planned,
+        "lookback_days",
+        "spot_fallback_lookback_days",
+    )
     parts = [
         f"spot_partial_result={metadata_stdout_value(spot.get('partial_result'))}",
         f"spot_failed_pages={metadata_stdout_value(spot_failed_pages(spot))}",
-        f"history_symbols={view.get('history_symbol_count', 0)}",
+        "spot_requested_snapshot_date="
+        f"{metadata_stdout_value(spot.get('requested_snapshot_date'))}",
+        "spot_resolved_snapshot_date="
+        f"{metadata_stdout_value(spot.get('resolved_snapshot_date'))}",
+        f"spot_date_fallback_used={metadata_stdout_value(spot.get('date_fallback_used'))}",
+        f"spot_lookback_days={metadata_stdout_value(spot_lookback_days)}",
+        f"history_symbols={metadata_stdout_value(history_symbols)}",
+        "history_rows="
+        f"{metadata_stdout_value(view.get('history_rows'))}",
+        "history_metadata_symbol_count="
+        f"{metadata_stdout_value(view.get('history_metadata_symbol_count'))}",
+        "history_requested_symbol_count="
+        f"{metadata_stdout_value(view.get('history_requested_symbol_count'))}",
+        "history_failed_symbol_count="
+        f"{metadata_stdout_value(view.get('history_metadata_failed_symbol_count'))}",
+        "history_empty_symbol_count="
+        f"{metadata_stdout_value(view.get('history_empty_symbol_count'))}",
+        "history_possibly_truncated_symbol_count="
+        f"{metadata_stdout_value(view.get('history_possibly_truncated_symbol_count'))}",
+        "history_unprocessed_symbol_count="
+        f"{metadata_stdout_value(view.get('history_unprocessed_symbol_count'))}",
+        "history_artifact_status="
+        f"{metadata_stdout_value(view.get('history_artifact_status'))}",
+        *quality_counter_stdout("history", view),
+        "history_fallback_error_count="
+        f"{metadata_stdout_value(view.get('history_metadata_fallback_error_count'))}",
     ]
     if history:
         parts.extend(
@@ -501,19 +656,43 @@ def runner_disclosure_stdout(view: dict[str, Any]) -> str:
                 f"{metadata_stdout_value(history.get('history_metadata_actual_date_max'))}",
                 "history_partial_result="
                 f"{metadata_stdout_value(history.get('history_partial_result'))}",
+                "history_unprocessed_symbols="
+                f"{metadata_list_stdout(history.get('history_unprocessed_symbols'))}",
+                "history_rate_limit_budget_exhausted="
+                f"{metadata_stdout_value(history.get('history_rate_limit_budget_exhausted'))}",
+                "history_rate_limit_exhaustion_reason="
+                f"{metadata_stdout_value(history.get('history_rate_limit_exhaustion_reason'))}",
                 "history_output_written="
                 f"{metadata_stdout_value(history.get('history_output_written'))}",
                 "history_token_configured="
                 f"{metadata_stdout_value(history.get('history_token_configured'))}",
                 f"history_fields={metadata_stdout_value(history.get('history_fields'))}",
                 "history_request_interval_seconds="
-                f"{metadata_stdout_value(history.get('history_request_interval_seconds'))}",
-                f"history_limit={metadata_stdout_value(history.get('history_limit'))}",
-                f"history_max_pages={metadata_stdout_value(history.get('history_max_pages'))}",
-                "history_empty_symbol_count="
-                f"{metadata_stdout_value(history.get('history_empty_symbol_count'))}",
-                "history_possibly_truncated_symbol_count="
-                f"{metadata_stdout_value(history.get('history_possibly_truncated_symbol_count'))}",
+                f"{metadata_stdout_value(history_or_planned_value(history, planned, 'history_request_interval_seconds'))}",
+                "history_max_concurrent_symbol_requests="
+                f"{metadata_stdout_value(history_or_planned_value(history, planned, 'history_max_concurrent_symbol_requests'))}",
+                "history_max_rate_limit_sleep_seconds="
+                f"{metadata_stdout_value(history_or_planned_value(history, planned, 'history_max_rate_limit_sleep_seconds'))}",
+                "history_max_429_events="
+                f"{metadata_stdout_value(history_or_planned_value(history, planned, 'history_max_429_events'))}",
+                "history_max_runtime_seconds="
+                f"{metadata_stdout_value(history_or_planned_value(history, planned, 'history_max_runtime_seconds'))}",
+                "history_limit="
+                f"{metadata_stdout_value(history_or_planned_value(history, planned, 'history_limit'))}",
+                "history_max_pages="
+                f"{metadata_stdout_value(history_or_planned_value(history, planned, 'history_max_pages'))}",
+                "history_non_trading_policy="
+                f"{metadata_stdout_value(history_or_planned_value(history, planned, 'history_non_trading_policy'))}",
+                "history_dropped_non_trading_rows="
+                f"{metadata_stdout_value(history.get('history_dropped_non_trading_rows'))}",
+                "history_retained_non_trading_rows="
+                f"{metadata_stdout_value(history.get('history_retained_non_trading_rows'))}",
+                "history_checkpoint_enabled="
+                f"{metadata_stdout_value(history.get('history_checkpoint_enabled'))}",
+                "history_checkpoint_batch_size="
+                f"{metadata_stdout_value(history_or_planned_value(history, planned, 'history_checkpoint_batch_size'))}",
+                "history_checkpoint_symbols_skipped="
+                f"{metadata_stdout_value(history.get('history_checkpoint_symbols_skipped'))}",
                 *quality_counter_stdout("history", history),
                 "history_failed_symbol_count="
                 f"{metadata_stdout_value(history.get('history_metadata_failed_symbol_count'))}",
@@ -530,6 +709,29 @@ def runner_disclosure_stdout(view: dict[str, Any]) -> str:
             ]
         )
     return " ".join(parts)
+
+
+def history_or_planned_value(
+    history: dict[str, Any],
+    planned: dict[str, Any],
+    key: str,
+) -> Any:
+    value = history.get(key)
+    if value not in (None, ""):
+        return value
+    return planned.get(key)
+
+
+def metadata_or_planned_value(
+    metadata: dict[str, Any],
+    planned: dict[str, Any],
+    metadata_key: str,
+    planned_key: str,
+) -> Any:
+    value = metadata.get(metadata_key)
+    if value not in (None, ""):
+        return value
+    return planned.get(planned_key)
 
 
 def spot_failed_pages(spot_metadata: dict[str, Any]) -> int | None:

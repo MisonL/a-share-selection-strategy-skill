@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -57,6 +59,26 @@ class ValidateSkillChangesTests(unittest.TestCase):
 
         self.assertEqual(1, len(commands))
         self.assertEqual(["uv", "run", "--with", "pyyaml", "python"], commands[0][:5])
+
+    def test_pycache_check_reports_without_deleting_repository_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            managed_paths = [
+                root / "__pycache__",
+                root / "skills" / "skill" / "__pycache__",
+                root / "tests" / "unit" / "__pycache__",
+            ]
+            ignored_path = root / ".venv" / "lib" / "__pycache__"
+            for path in [*managed_paths, ignored_path]:
+                path.mkdir(parents=True)
+
+            with patch.object(validate_skill_changes, "ROOT", root):
+                with self.assertRaisesRegex(RuntimeError, "__pycache__ directories found"):
+                    validate_skill_changes.check_pycache_absent()
+
+            for path in managed_paths:
+                self.assertTrue(path.is_dir())
+            self.assertTrue(ignored_path.is_dir())
 
 
 if __name__ == "__main__":

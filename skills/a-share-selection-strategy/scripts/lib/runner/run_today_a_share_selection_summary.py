@@ -58,6 +58,7 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "advice_boundary": ADVICE_BOUNDARY,
         "recommendation_boundary": RECOMMENDATION_BOUNDARY,
         **row_count_fields(manifest, paths, score, history_selection, initialized),
+        **selection_failure_fields(manifest, status, history_selection),
         "candidate_field_coverage": candidate_field_coverage(
             paths["candidates"], initialized
         ),
@@ -152,6 +153,7 @@ def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "execution_mode": manifest.get("execution_mode", "execute"),
         "commands_executed": bool(manifest.get("commands_executed", False)),
         "plan_only": bool(manifest.get("plan_only", False)),
+        **plan_only_fields(manifest, status),
         "resume_from": manifest.get("resume_from", ""),
         "resume_symbol_source": manifest.get("resume_symbol_source", ""),
         "resume_retry_symbol_count": manifest.get("resume_retry_symbol_count", 0),
@@ -159,6 +161,141 @@ def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:
             "resume_sensitive_options_requiring_explicit_input",
             [],
         ),
+        "history_source": manifest.get("history_source", ""),
+        "history_limit": manifest.get("history_limit", ""),
+        "history_max_pages": manifest.get("history_max_pages", ""),
+        "history_max_concurrent_symbol_requests": manifest.get(
+            "history_max_concurrent_symbol_requests",
+            "",
+        ),
+        "history_max_rate_limit_sleep_seconds": manifest.get(
+            "history_max_rate_limit_sleep_seconds", ""
+        ),
+        "history_max_429_events": manifest.get("history_max_429_events", ""),
+        "history_max_runtime_seconds": manifest.get(
+            "history_max_runtime_seconds", ""
+        ),
+        "history_non_trading_policy": manifest.get("history_non_trading_policy", ""),
+        "history_checkpoint_batch_size": manifest.get(
+            "history_checkpoint_batch_size",
+            "",
+        ),
+        "history_checkpoint_dir": manifest.get("history_checkpoint_dir", ""),
+        "history_resume_from_checkpoint": bool(
+            manifest.get("history_resume_from_checkpoint", False)
+        ),
+        "history_progress_interval": manifest.get("history_progress_interval", ""),
+        "filter_prices_to_spot_universe": bool(
+            manifest.get("filter_prices_to_spot_universe", False)
+        ),
+        "prices_filter_spot_universe": bool(
+            manifest.get("prices_filter_spot_universe", False)
+        ),
+        "prices_filter_min_symbol_latest_date": manifest.get(
+            "prices_filter_min_symbol_latest_date", ""
+        ),
+        "prices_filter_output_format": manifest.get(
+            "prices_filter_output_format", ""
+        ),
+        "prices_filter_output_prices": manifest.get(
+            "prices_filter_output_prices", ""
+        ),
+        "prices_filter_sidecar_output": manifest.get(
+            "prices_filter_sidecar_output", ""
+        ),
+        "prices_filter_sidecar_sha256": manifest.get(
+            "prices_filter_sidecar_sha256", ""
+        ),
+        "prices_filter_metadata_output": manifest.get(
+            "prices_filter_metadata_output", ""
+        ),
+        "prices_filter_source_prices": manifest.get(
+            "prices_filter_source_prices", ""
+        ),
+        "prices_filter_source_spot": manifest.get("prices_filter_source_spot", ""),
+        "prices_filter_input_rows": int(
+            manifest.get("prices_filter_input_rows", 0) or 0
+        ),
+        "prices_filter_output_rows": int(
+            manifest.get("prices_filter_output_rows", 0) or 0
+        ),
+        "prices_filter_spot_symbol_count": int(
+            manifest.get("prices_filter_spot_symbol_count", 0) or 0
+        ),
+        "prices_filter_input_symbol_count": int(
+            manifest.get("prices_filter_input_symbol_count", 0) or 0
+        ),
+        "prices_filter_kept_symbol_count": int(
+            manifest.get("prices_filter_kept_symbol_count", 0) or 0
+        ),
+        "prices_filter_removed_symbol_count": int(
+            manifest.get("prices_filter_removed_symbol_count", 0) or 0
+        ),
+        "prices_filter_removed_symbols": manifest.get(
+            "prices_filter_removed_symbols", []
+        ),
+        "prices_filter_removed_stale_symbol_count": int(
+            manifest.get("prices_filter_removed_stale_symbol_count", 0) or 0
+        ),
+        "prices_filter_removed_stale_symbols": manifest.get(
+            "prices_filter_removed_stale_symbols", []
+        ),
+        "prices_filter_output_written": bool(
+            manifest.get("prices_filter_output_written", False)
+        ),
+        "prices_filter_failure_reason": manifest.get(
+            "prices_filter_failure_reason", ""
+        ),
+        "prices_filter_error": manifest.get("prices_filter_error", ""),
+        "prices_filter_duration_seconds": manifest.get(
+            "prices_filter_duration_seconds", 0.0
+        ),
+        "prices_filter_claim_boundary": manifest.get(
+            "prices_filter_claim_boundary", ""
+        ),
+        "score_profile_output": manifest.get("score_profile_output", ""),
+        "score_profile_enabled": bool(manifest.get("score_profile_enabled", False)),
+        "score_profile_output_written": bool(
+            manifest.get("score_profile_output_written", False)
+        ),
+        "score_profile_rows": int(manifest.get("score_profile_rows", 0) or 0),
+        "score_profile_duration_seconds": manifest.get(
+            "score_profile_duration_seconds", 0.0
+        ),
+        "score_profile_input_rows_per_second": manifest.get(
+            "score_profile_input_rows_per_second"
+        ),
+        "score_profile_scored_symbols_per_second": manifest.get(
+            "score_profile_scored_symbols_per_second"
+        ),
+        "symbol_derivation_duration_seconds": manifest.get(
+            "symbol_derivation_duration_seconds", 0.0
+        ),
+        "html_report_duration_seconds": manifest.get(
+            "html_report_duration_seconds", 0.0
+        ),
+        "finalize_duration_seconds": manifest.get("finalize_duration_seconds", 0.0),
+        "run_duration_seconds": manifest.get("run_duration_seconds", 0.0),
+        "history_request_interval_seconds": manifest.get(
+            "history_request_interval_seconds",
+            "",
+        ),
+        "history_timeout_seconds": manifest.get("history_timeout_seconds", ""),
+        "fetch_spot": manifest.get("fetch_spot", ""),
+        "fetch_spot_fallback": manifest.get("fetch_spot_fallback", ""),
+        "spot_fallback_lookback_days": manifest.get("spot_fallback_lookback_days", ""),
+        "spot_fallback_retries": manifest.get("spot_fallback_retries", ""),
+        "spot_fallback_retry_interval_seconds": manifest.get(
+            "spot_fallback_retry_interval_seconds",
+            "",
+        ),
+        "fetch_spot_fallback_used": bool(
+            manifest.get("fetch_spot_fallback_used", False)
+        ),
+        "fetch_spot_primary_failure": manifest.get("fetch_spot_primary_failure", {}),
+        "spot_pages": manifest.get("spot_pages", ""),
+        "spot_page_size": manifest.get("spot_page_size", ""),
+        "planned_parameters": planned_parameters(manifest),
         "execution_path": manifest.get("execution_path", "unresolved"),
         "execution_path_reason": manifest.get("execution_path_reason", ""),
         "coverage_class": manifest.get("coverage_class", "unknown"),
@@ -182,10 +319,118 @@ def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         ),
         "steps": len(manifest["steps"]),
         "failed_steps": [step["step"] for step in failed],
+        "step_summary": step_summary(manifest),
         "failed_step_details": [failed_step_detail(step) for step in failed],
         "run_error_type": manifest.get("run_error_type", ""),
         "run_error": manifest.get("run_error", ""),
     }
+
+
+def plan_only_fields(manifest: dict[str, Any], status: str) -> dict[str, Any]:
+    if not bool(manifest.get("plan_only", False)):
+        return {
+            "plan_only_reason": "",
+            "plan_only_next_action": "",
+        }
+    if status == "planned":
+        return {
+            "plan_only_reason": "plan_only_no_commands_executed",
+            "plan_only_next_action": "execute_planned_workflow_to_collect_artifacts",
+        }
+    return {
+        "plan_only_reason": "plan_only_failed_before_execution_completed",
+        "plan_only_next_action": "inspect_run_error_and_fix_plan_options",
+    }
+
+
+def planned_parameters(manifest: dict[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    if manifest.get("fetch_spot"):
+        add_planned_values(
+            result,
+            manifest,
+            ("fetch_spot", "spot_pages"),
+        )
+        if manifest.get("fetch_spot") == "baostock_universe":
+            add_planned_values(
+                result,
+                manifest,
+                (
+                    "spot_fallback_lookback_days",
+                    "spot_fallback_retries",
+                    "spot_fallback_retry_interval_seconds",
+                ),
+            )
+        if manifest.get("fetch_spot_fallback"):
+            add_planned_values(
+                result,
+                manifest,
+                (
+                    "fetch_spot_fallback",
+                    "spot_fallback_lookback_days",
+                    "spot_fallback_retries",
+                    "spot_fallback_retry_interval_seconds",
+                ),
+            )
+    if manifest.get("filter_prices_to_spot_universe"):
+        result["filter_prices_to_spot_universe"] = True
+    if manifest.get("prices_filter_min_symbol_latest_date"):
+        result["min_symbol_latest_date"] = manifest[
+            "prices_filter_min_symbol_latest_date"
+        ]
+    if manifest.get("history_source"):
+        add_planned_values(
+            result,
+            manifest,
+            (
+                "history_source",
+                "history_limit",
+                "history_max_pages",
+                "history_max_concurrent_symbol_requests",
+                "history_max_rate_limit_sleep_seconds",
+                "history_max_429_events",
+                "history_max_runtime_seconds",
+                "history_request_interval_seconds",
+                "history_timeout_seconds",
+                "history_non_trading_policy",
+                "history_checkpoint_batch_size",
+                "history_progress_interval",
+                "start_date",
+                "end_date",
+            ),
+        )
+        if manifest.get("derive_symbols_from_spot"):
+            if manifest.get("derive_all_spot_symbols"):
+                result["derive_all_spot_symbols"] = True
+            add_planned_values(result, manifest, ("max_history_symbols",))
+    return result
+
+
+def add_planned_values(
+    result: dict[str, Any],
+    manifest: dict[str, Any],
+    keys: tuple[str, ...],
+) -> None:
+    for key in keys:
+        value = manifest.get(key)
+        if value not in ("", None):
+            result[key] = value
+
+
+def step_summary(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    return [step_summary_record(step) for step in manifest["steps"]]
+
+
+def step_summary_record(step: dict[str, Any]) -> dict[str, Any]:
+    record = {
+        "step": step.get("step", ""),
+        "planned": bool(step.get("planned", False)),
+        "executed": helpers.step_executed(step),
+        "returncode": step.get("returncode"),
+    }
+    if "duration_seconds" in step:
+        record["duration_seconds"] = step.get("duration_seconds")
+    return record
 
 
 def failed_step_detail(step: dict[str, Any]) -> dict[str, Any]:
@@ -249,12 +494,19 @@ def row_count_fields(
     history_selection: dict[str, Any],
     initialized: bool,
 ) -> dict[str, Any]:
+    history_count = history_symbol_count(manifest, history_selection)
     return {
         "spot_metadata": helpers.spot_metadata_view(manifest) if initialized else {},
         "spot_rows": helpers.spot_rows(manifest) if initialized else 0,
         "spot_matched_symbols": score.get("spot_matched_symbols", 0),
         "history_selection": history_selection,
-        "history_symbol_count": history_symbol_count(manifest, history_selection),
+        "history_symbol_count": history_count,
+        "history_symbol_count_label": history_symbol_count_label(
+            manifest,
+            history_count,
+        ),
+        **history_metadata_summary_fields(history_selection),
+        **short_history_artifact_fields(manifest),
         "prices_rows": row_count(paths["prices"], initialized),
         "candidate_rows": row_count(paths["candidates"], initialized),
         "diagnostic_rows": row_count(paths["diagnostics"], initialized),
@@ -263,6 +515,20 @@ def row_count_fields(
         "spot_metadata_output": str(paths["spot_metadata"]),
         "spot_metadata_output_written": output_file_written(
             paths["spot_metadata"], initialized
+        ),
+    }
+
+
+def short_history_artifact_fields(manifest: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "short_history_symbol_count": int(
+            manifest.get("short_history_symbol_count", 0) or 0
+        ),
+        "short_history_symbols_output": str(
+            manifest.get("short_history_symbols_output", "") or ""
+        ),
+        "short_history_symbols_metadata_output": str(
+            manifest.get("short_history_symbols_metadata_output", "") or ""
         ),
     }
 
@@ -295,7 +561,7 @@ def output_path_fields(paths: dict[str, Path], initialized: bool) -> dict[str, A
             paths["selected_symbols"], initialized
         ),
         "history_metadata_output": str(paths["history_metadata"]),
-        "history_metadata_output_written": output_file_written(
+        "history_metadata_file_exists": output_file_written(
             paths["history_metadata"], initialized
         ),
         "summary_output": str(paths["summary"]),
@@ -319,12 +585,17 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
         return {}
     selected_data = read_json_if_exists(selected_path)
     metadata = read_json_if_exists(metadata_path)
+    metadata_exists = metadata_path.is_file()
     selected_symbols = selected_symbol_values(selected_data, manifest)
     failed_symbols = metadata_list(metadata, "failed_symbols")
     empty_symbols = metadata_list(metadata, "empty_symbols")
     truncated_symbols = metadata_list(metadata, "possibly_truncated_symbols")
+    unprocessed_symbols = metadata_list(metadata, "unprocessed_symbols")
     fallback_errors = metadata_list(metadata, "fallback_errors")
     date_range = history_date_range_view(metadata, manifest)
+    fetch_duration = executed_step_duration(manifest, "fetch_history")
+    history_rows = int(metadata.get("rows", 0) or 0)
+    history_symbols = int(metadata.get("symbol_count", 0) or 0)
     view = {
         "source": selected_data.get("source", ""),
         "preflight_stage": selected_data.get("preflight_stage", ""),
@@ -341,16 +612,71 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
         "history_symbol_limit_source": history_limit_source(selected_data, manifest),
         "allow_partial_history": bool(manifest.get("allow_partial_history", False)),
         "history_partial_result": history_partial_result(metadata),
-        "history_output_written": bool(metadata.get("output_written", True)),
-        "history_metadata_output_written": bool(
-            metadata.get("metadata_output_written", metadata_path.exists())
+        "history_rows": history_rows,
+        "history_fetch_duration_seconds": fetch_duration,
+        "history_rows_per_second": (
+            round(history_rows / fetch_duration, 6)
+            if history_rows and fetch_duration
+            else None
         ),
+        "history_symbols_per_second": (
+            round(history_symbols / fetch_duration, 6)
+            if history_symbols and fetch_duration
+            else None
+        ),
+        "history_raw_rows": int(metadata.get("raw_rows", 0) or 0),
+        "history_output_rows": int(
+            metadata.get("output_rows", metadata.get("rows", 0)) or 0
+        ),
+        "history_requested_raw_rows": int(
+            metadata.get("requested_raw_rows", 0) or 0
+        ),
+        "history_api_request_count": int(metadata.get("api_request_count", 0) or 0),
+        "history_overfetch_rows": int(metadata.get("overfetch_rows", 0) or 0),
+        "history_raw_to_output_ratio": metadata.get("raw_to_output_ratio"),
+        "history_duration_seconds": metadata.get("duration_seconds"),
+        "history_rate_limit_429_events": int(
+            metadata.get("rate_limit_429_events", 0) or 0
+        ),
+        "history_rate_limit_sleep_seconds": float(
+            metadata.get("rate_limit_sleep_seconds", 0) or 0
+        ),
+        "history_network_retry_events": int(
+            metadata.get("network_retry_events", 0) or 0
+        ),
+        "history_network_retry_sleep_seconds": float(
+            metadata.get("network_retry_sleep_seconds", 0) or 0
+        ),
+        "history_metadata_symbol_count": int(metadata.get("symbol_count", 0) or 0),
+        "history_requested_symbol_count": len(
+            metadata_list(metadata, "requested_symbols")
+        ),
+        "history_output_written": metadata_bool(
+            metadata,
+            "output_written",
+            missing_default=False,
+        ),
+        "history_metadata_output_written": metadata_bool(
+            metadata,
+            "metadata_output_written",
+            missing_default=metadata_exists,
+        ),
+        "history_artifact_status": history_artifact_status(metadata, metadata_exists),
+        "history_failed_symbol_count": len(failed_symbols),
         "history_metadata_failed_symbol_count": len(failed_symbols),
         "history_metadata_failed_symbols": failed_symbols,
         "history_empty_symbol_count": len(empty_symbols),
         "history_empty_symbols": empty_symbols,
         "history_possibly_truncated_symbol_count": len(truncated_symbols),
         "history_possibly_truncated_symbols": truncated_symbols,
+        "history_unprocessed_symbol_count": len(unprocessed_symbols),
+        "history_unprocessed_symbols": unprocessed_symbols,
+        "history_rate_limit_budget_exhausted": (
+            metadata.get("rate_limit_budget_exhausted") is True
+        ),
+        "history_rate_limit_exhaustion_reason": str(
+            metadata.get("rate_limit_exhaustion_reason", "")
+        ),
         "history_invalid_rows": int(metadata.get("invalid_rows", 0) or 0),
         "history_dropped_invalid_rows": int(
             metadata.get("dropped_invalid_rows", 0) or 0
@@ -366,7 +692,7 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
         "selected_symbols_output": str(selected_path),
         "selected_symbols_output_written": selected_path.is_file(),
         "history_metadata_output": str(metadata_path),
-        "history_metadata_output_written": metadata_path.is_file(),
+        "history_metadata_file_exists": metadata_path.is_file(),
     }
     if "adjust" in metadata:
         view["history_adjust"] = metadata["adjust"]
@@ -377,8 +703,27 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
     for source_key, view_key in (
         ("fields", "history_fields"),
         ("request_interval_seconds", "history_request_interval_seconds"),
+        (
+            "max_concurrent_symbol_requests",
+            "history_max_concurrent_symbol_requests",
+        ),
+        ("max_rate_limit_sleep_seconds", "history_max_rate_limit_sleep_seconds"),
+        ("max_429_events", "history_max_429_events"),
+        ("max_runtime_seconds", "history_max_runtime_seconds"),
         ("limit", "history_limit"),
         ("max_pages", "history_max_pages"),
+        ("non_trading_policy", "history_non_trading_policy"),
+        ("dropped_non_trading_rows", "history_dropped_non_trading_rows"),
+        ("retained_non_trading_rows", "history_retained_non_trading_rows"),
+        ("checkpoint_enabled", "history_checkpoint_enabled"),
+        ("resume_from_checkpoint", "history_resume_from_checkpoint"),
+        ("checkpoint_batch_size", "history_checkpoint_batch_size"),
+        ("checkpoint_symbols_skipped", "history_checkpoint_symbols_skipped"),
+        ("checkpoint_requests_executed", "history_checkpoint_requests_executed"),
+        ("checkpoint_parts_written", "history_checkpoint_parts_written"),
+        ("checkpoint_parts_available", "history_checkpoint_parts_available"),
+        ("checkpoint_dir", "history_checkpoint_dir"),
+        ("checkpoint_manifest", "history_checkpoint_manifest"),
     ):
         if source_key in metadata:
             view[view_key] = metadata[source_key]
@@ -451,6 +796,8 @@ def selected_symbol_values(
         if isinstance(value, list):
             return value
     value = manifest.get("history_symbols", [])
+    if isinstance(value, list) and value == ["<derived_from_spot_snapshot>"]:
+        return []
     return value if isinstance(value, list) else []
 
 
@@ -567,7 +914,207 @@ def normalized_history_date(value: Any) -> str:
 def history_symbol_count(
     manifest: dict[str, Any], history_selection: dict[str, Any]
 ) -> int:
+    if spot_derivation_placeholder(manifest):
+        return 0
     if "selected_symbol_count" in history_selection:
         return int(history_selection["selected_symbol_count"])
     symbols = manifest.get("history_symbols", [])
     return len(symbols) if isinstance(symbols, list) else 0
+
+
+def history_symbol_count_label(manifest: dict[str, Any], count: int) -> str:
+    if spot_derivation_placeholder(manifest):
+        return "planned_placeholder"
+    return str(count)
+
+
+def spot_derivation_placeholder(manifest: dict[str, Any]) -> bool:
+    symbols = manifest.get("history_symbols", [])
+    return (
+        bool(manifest.get("plan_only", False))
+        and isinstance(symbols, list)
+        and symbols == ["<derived_from_spot_snapshot>"]
+    )
+
+
+def history_metadata_summary_fields(history_selection: dict[str, Any]) -> dict[str, Any]:
+    keys = (
+        "history_rows",
+        "history_fetch_duration_seconds",
+        "history_rows_per_second",
+        "history_symbols_per_second",
+        "history_raw_rows",
+        "history_output_rows",
+        "history_requested_raw_rows",
+        "history_api_request_count",
+        "history_overfetch_rows",
+        "history_raw_to_output_ratio",
+        "history_duration_seconds",
+        "history_rate_limit_429_events",
+        "history_rate_limit_sleep_seconds",
+        "history_network_retry_events",
+        "history_network_retry_sleep_seconds",
+        "history_max_rate_limit_sleep_seconds",
+        "history_max_429_events",
+        "history_max_runtime_seconds",
+        "history_metadata_symbol_count",
+        "history_requested_symbol_count",
+        "history_partial_result",
+        "history_output_written",
+        "history_metadata_output_written",
+        "history_artifact_status",
+        "history_failed_symbol_count",
+        "history_metadata_failed_symbol_count",
+        "history_empty_symbol_count",
+        "history_possibly_truncated_symbol_count",
+        "history_unprocessed_symbol_count",
+        "history_rate_limit_budget_exhausted",
+        "history_rate_limit_exhaustion_reason",
+        "history_invalid_rows",
+        "history_dropped_invalid_rows",
+        "history_non_trading_rows",
+        "history_non_trading_policy",
+        "history_dropped_non_trading_rows",
+        "history_retained_non_trading_rows",
+        "history_tradestatus_missing_rows",
+        "history_metadata_fallback_error_count",
+        "history_checkpoint_enabled",
+        "history_resume_from_checkpoint",
+        "history_checkpoint_batch_size",
+        "history_checkpoint_symbols_skipped",
+        "history_checkpoint_requests_executed",
+        "history_checkpoint_parts_written",
+        "history_checkpoint_parts_available",
+        "history_checkpoint_schema_version",
+        "history_checkpoint_execution_contract_sha256",
+    )
+    return {key: history_selection.get(key, default_history_value(key)) for key in keys}
+
+
+def executed_step_duration(manifest: dict[str, Any], step_name: str) -> float:
+    for step in manifest.get("steps", []):
+        if (
+            step.get("step") == step_name
+            and step.get("planned") is not True
+            and step.get("returncode") is not None
+        ):
+            return float(step.get("duration_seconds", 0.0) or 0.0)
+    return 0.0
+
+
+def selection_failure_fields(
+    manifest: dict[str, Any],
+    status: str,
+    history_selection: dict[str, Any],
+) -> dict[str, str]:
+    reason = str(history_selection.get("selection_failed_reason", "") or "").strip()
+    action = str(
+        history_selection.get("selection_failed_next_action", "") or ""
+    ).strip()
+    if reason:
+        return {
+            "selection_failed_reason": reason,
+            "selection_failed_next_action": action,
+        }
+    if status != "failed":
+        return {
+            "selection_failed_reason": "",
+            "selection_failed_next_action": "",
+        }
+    reason, action = failed_run_reason(manifest)
+    return {
+        "selection_failed_reason": reason,
+        "selection_failed_next_action": action,
+    }
+
+
+def failed_run_reason(manifest: dict[str, Any]) -> tuple[str, str]:
+    failed_steps = [
+        step
+        for step in manifest["steps"]
+        if helpers.step_executed(step)
+        and step.get("returncode") not in step.get("allowed_returncodes", [])
+    ]
+    if manifest.get("missing_prediction_column_groups"):
+        return (
+            "missing_prediction_columns",
+            "provide_prediction_or_prediction_score_or_use_generic_mode",
+        )
+    if failed_steps:
+        first_step = str(failed_steps[0].get("step", "") or "unknown")
+        if first_step == "validate":
+            return (
+                "validation_failed_before_scoring",
+                "fix_input_columns_or_config_before_rerun",
+            )
+        if first_step == "score":
+            return (
+                "scoring_failed",
+                "inspect_score_stderr_and_fix_input_or_config",
+            )
+        return (
+            f"{first_step}_failed",
+            "inspect_failed_step_details_and_rerun",
+        )
+    if manifest.get("run_error_type"):
+        return (
+            str(manifest.get("run_error_type")),
+            "inspect_run_error_and_fix_command_options",
+        )
+    return (
+        f"runner_failed_status_{manifest.get('status', 'unknown')}",
+        "inspect_failed_step_details_and_rerun",
+    )
+
+
+def default_history_value(key: str) -> Any:
+    if key in {
+        "history_partial_result",
+        "history_output_written",
+        "history_metadata_output_written",
+        "history_checkpoint_enabled",
+        "history_resume_from_checkpoint",
+        "history_rate_limit_budget_exhausted",
+    }:
+        return False
+    if key == "history_artifact_status":
+        return "not_written"
+    if key == "history_non_trading_policy":
+        return ""
+    if key == "history_rate_limit_exhaustion_reason":
+        return ""
+    return 0
+
+
+def history_artifact_status(metadata: dict[str, Any], metadata_exists: bool) -> str:
+    if not metadata_exists:
+        return "not_written"
+    output_written = metadata_bool(
+        metadata,
+        "output_written",
+        missing_default=False,
+    )
+    metadata_written = metadata_bool(
+        metadata,
+        "metadata_output_written",
+        missing_default=metadata_exists,
+    )
+    if output_written and metadata_written:
+        return "written"
+    if output_written:
+        return "inconsistent_metadata"
+    if metadata_written:
+        return "metadata_only"
+    return "not_written"
+
+
+def metadata_bool(
+    metadata: dict[str, Any],
+    key: str,
+    *,
+    missing_default: bool,
+) -> bool:
+    if key not in metadata:
+        return missing_default
+    value = metadata.get(key)
+    return value if isinstance(value, bool) else False

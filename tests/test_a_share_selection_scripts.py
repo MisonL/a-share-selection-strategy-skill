@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
-import json
-from typing import get_type_hints
 from pathlib import Path
+from typing import get_type_hints
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -22,9 +23,13 @@ sys.path.insert(0, str(TESTS))
 import score_candidates as scorer  # noqa: E402
 import lib.selection_core.a_share_selection_candidate_fields as a_share_selection_candidate_fields  # noqa: E402
 import lib.selection_core.a_share_selection_metrics as metrics  # noqa: E402
+import lib.selection_core.a_share_selection_provenance as provenance  # noqa: E402
 from lib.selection_core.a_share_selection_data import ACCEPTED_DATE_FORMATS, read_table  # noqa: E402
 from lib.selection_core.a_share_selection_prepare import prepare_frame  # noqa: E402
-from lib.selection_core.a_share_selection_spot import normalized_spot_view  # noqa: E402
+from lib.selection_core.a_share_selection_spot import (  # noqa: E402
+    normalized_spot_view,
+    preferred_input_symbol_map,
+)
 from lib.selection_core.a_share_selection_symbols import stock_symbol_key  # noqa: E402
 from lib.selection_core.a_share_selection_universe import apply_universe_filter  # noqa: E402
 import validate_ohlcv  # noqa: E402
@@ -64,6 +69,207 @@ def run_validate_cli(input_path: Path) -> tuple[int, str, str]:
 
 
 class AShareSelectionScriptTests(unittest.TestCase):
+    def test_latest_metric_helpers_match_full_series_metrics(self) -> None:
+        close = pd.Series(
+            [8.0 + index * 0.013 + ((index % 11) - 5) * 0.027 for index in range(260)]
+        )
+
+        expected_rsi = float(metrics.calculate_rsi(close, 14).iloc[-1])
+        expected_volatility = metrics.calculate_volatility(close, 20)
+        expected_macd, expected_signal = metrics.calculate_macd(close, 12, 26, 9)
+        actual_macd, actual_signal = metrics.calculate_latest_macd(close, 12, 26, 9)
+
+        self.assertAlmostEqual(
+            expected_rsi, metrics.calculate_latest_rsi(close, 14), places=12
+        )
+        self.assertAlmostEqual(
+            expected_volatility,
+            metrics.calculate_latest_volatility(close, 20),
+            places=12,
+        )
+        self.assertEqual(expected_macd.iloc[-2:].tolist(), actual_macd.tolist())
+        self.assertEqual(expected_signal.iloc[-2:].tolist(), actual_signal.tolist())
+
+    def test_latest_rsi_matches_legacy_zero_gain_or_loss_edges(self) -> None:
+        cases = (
+            (pd.Series([float(value) for value in range(1, 31)]), 50.0),
+            (pd.Series([10.0] * 30), 50.0),
+            (pd.Series([float(value) for value in range(30, 0, -1)]), 0.0),
+        )
+        for close, expected in cases:
+            with self.subTest(close=close.tolist()):
+                self.assertEqual(expected, metrics.calculate_rsi(close, 14).iloc[-1])
+                self.assertEqual(
+                    expected,
+                    metrics.calculate_latest_rsi(close, 14),
+                )
+
+    def test_latest_volatility_matches_legacy_error_for_too_small_window(self) -> None:
+        close = pd.Series([10.0, 10.2, 10.1, 10.4, 10.3, 10.5])
+
+        with self.assertRaisesRegex(ValueError, "min_periods 5 must be <= window 2"):
+            metrics.calculate_latest_volatility(close, 2)
+
+    def test_universe_filter_preserves_stage_counts_and_rows(self) -> None:
+        frame = pd.DataFrame(
+            [
+                {"symbol": "600001", "market": "A-share"},
+                {"symbol": "000001", "market": "A-share"},
+                {"symbol": "430001", "market": "A-share"},
+                {"symbol": "000002", "market": "HK"},
+            ]
+        )
+        config = {
+            "universe": {
+                "market": "A-share",
+                "symbol_prefix_allow_regex": "^(60|00)",
+                "symbol_prefix_exclude": ["8", "4"],
+            }
+        }
+        result, summary = apply_universe_filter(frame, config)
+        self.assertEqual(["600001", "000001"], result["symbol"].tolist())
+        self.assertEqual(
+            {
+                "market_filtered_symbols": 1,
+                "prefix_allow_filtered_symbols": 1,
+                "prefix_excluded_symbols": 0,
+            },
+            summary,
+        )
+
+    def test_validated_prepare_fast_path_matches_general_path(self) -> None:
+        frame = build_frame(days=4).sort_values(["symbol", "date"]).reset_index(
+            drop=True
+        )
+        frame["date"] = pd.to_datetime(frame["date"])
+        expected = prepare_frame(frame, pd.to_datetime)
+        actual = prepare_frame(frame, pd.to_datetime, validated=True)
+        pd.testing.assert_frame_equal(expected, actual)
+
+    def test_validated_prepare_fast_path_strips_symbol_whitespace(self) -> None:
+        frame = build_frame(days=4).sort_values(["symbol", "date"]).reset_index(
+            drop=True
+        )
+        frame["date"] = pd.to_datetime(frame["date"])
+        frame.loc[0, "symbol"] = f" {frame.loc[0, 'symbol']} "
+
+        prepared = prepare_frame(frame, pd.to_datetime, validated=True)
+
+        self.assertFalse(prepared["symbol"].str.startswith(" ").any())
+        self.assertFalse(prepared["symbol"].str.endswith(" ").any())
+
+    def test_validated_prepare_fast_path_accepts_object_text_symbols(self) -> None:
+        frame = build_frame(days=4).sort_values(["symbol", "date"]).reset_index(
+            drop=True
+        )
+        frame["symbol"] = frame["symbol"].astype(object)
+        frame["date"] = pd.to_datetime(frame["date"])
+
+        with patch(
+            "lib.selection_core.a_share_selection_prepare.pd.to_numeric",
+            side_effect=AssertionError("validated input used the general path"),
+        ):
+            prepared = prepare_frame(frame, pd.to_datetime, validated=True)
+
+        self.assertEqual(len(frame), len(prepared))
+        self.assertEqual(
+            frame["symbol"].astype(str).str.strip().tolist(),
+            prepared["symbol"].tolist(),
+        )
+        self.assertTrue(pd.api.types.is_string_dtype(prepared["symbol"]))
+
+    def test_parse_dates_fast_path_accepts_iso_and_compact_columns(self) -> None:
+        from lib.selection_core.a_share_selection_data import parse_dates
+
+        iso = pd.Series(["2026-07-10", "2026-07-11"])
+        compact = pd.Series(["20260710", "20260711"])
+        expected = pd.to_datetime(["2026-07-10", "2026-07-11"])
+        pd.testing.assert_series_equal(parse_dates(iso), pd.Series(expected))
+        pd.testing.assert_series_equal(parse_dates(compact), pd.Series(expected))
+
+    def test_provenance_aggregation_deduplicates_before_normalizing(self) -> None:
+        class DuplicateAwareSeries:
+            def drop_duplicates(self) -> list[str]:
+                return [" true "]
+
+            def __iter__(self):
+                raise AssertionError("original duplicate values should not be iterated")
+
+        self.assertTrue(provenance.aggregate_column_value(DuplicateAwareSeries()))
+
+    def test_provenance_aggregation_preserves_mixed_and_missing_semantics(
+        self,
+    ) -> None:
+        self.assertEqual("", provenance.aggregate_column_value(pd.Series([None, ""])))
+        self.assertEqual(
+            "mixed",
+            provenance.aggregate_column_value(pd.Series(["source", None, "source"])),
+        )
+        self.assertEqual(
+            "mixed",
+            provenance.aggregate_column_value(pd.Series(["source", "other"])),
+        )
+        self.assertFalse(
+            provenance.aggregate_column_value(pd.Series([False, "false", " false "]))
+        )
+
+    def test_latest_gate_view_uses_last_symbol_row_with_vectorized_coercion(
+        self,
+    ) -> None:
+        frame = pd.DataFrame(
+            [
+                {
+                    "symbol": "000001",
+                    "amount": "100",
+                    "tradestatus": "0",
+                    "isST": "1",
+                    "open": 8,
+                    "high": 9,
+                    "low": 7,
+                    "close": 8,
+                },
+                {
+                    "symbol": "000002",
+                    "amount": "invalid",
+                    "tradestatus": None,
+                    "isST": " 0 ",
+                    "open": 5,
+                    "high": 5,
+                    "low": 5,
+                    "close": 5,
+                },
+                {
+                    "symbol": "000001",
+                    "amount": "200",
+                    "tradestatus": " 1 ",
+                    "isST": None,
+                    "open": 6,
+                    "high": 6,
+                    "low": 6,
+                    "close": 6,
+                },
+            ]
+        )
+
+        latest = a_share_selection_candidate_fields.latest_gate_view(frame)
+
+        self.assertEqual(["000002", "000001"], latest["symbol"].tolist())
+        self.assertTrue(pd.isna(latest.iloc[0]["amount"]))
+        self.assertEqual(200.0, latest.iloc[1]["amount"])
+        self.assertEqual(["", "1"], latest["tradestatus"].tolist())
+        self.assertEqual(["0", ""], latest["isST"].tolist())
+        self.assertEqual([True, True], latest["one_word_bar"].tolist())
+
+    def test_preferred_input_symbol_map_preserves_first_alias_per_key(self) -> None:
+        frame = pd.DataFrame(
+            {"symbol": ["SH.600000", "600000.SH", "000001", "000001"]}
+        )
+
+        preferred = preferred_input_symbol_map(frame)
+
+        self.assertEqual("SH.600000", preferred["600000"])
+        self.assertEqual("000001", preferred["000001"])
+
     def test_validate_reader_preserves_symbol_prefix_zero(self) -> None:
         frame = build_frame(days=2)
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -251,6 +457,16 @@ class AShareSelectionScriptTests(unittest.TestCase):
         duplicate = frame.iloc[[0]].copy()
         duplicate["date"] = pd.to_datetime(duplicate["date"]).dt.strftime("%Y%m%d")
         frame = pd.concat([frame, duplicate], ignore_index=True)
+        with self.assertRaisesRegex(ValueError, "duplicate symbol/date rows"):
+            scorer.score_candidates(frame, config)
+
+    def test_score_rejects_duplicate_symbol_after_whitespace_normalization(self) -> None:
+        config = load_config("example_config.json")
+        frame = build_frame()
+        duplicate = frame.iloc[[0]].copy()
+        duplicate["symbol"] = " " + duplicate["symbol"].astype(str) + " "
+        frame = pd.concat([frame, duplicate], ignore_index=True)
+
         with self.assertRaisesRegex(ValueError, "duplicate symbol/date rows"):
             scorer.score_candidates(frame, config)
 

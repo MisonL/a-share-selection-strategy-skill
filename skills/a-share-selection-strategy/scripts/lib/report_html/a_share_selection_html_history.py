@@ -69,6 +69,22 @@ def history_selection_fields(
             "history_possibly_truncated_symbols",
             selection.get("history_possibly_truncated_symbols", ""),
         ),
+        (
+            "history_unprocessed_symbol_count",
+            selection.get("history_unprocessed_symbol_count", ""),
+        ),
+        (
+            "history_unprocessed_symbols",
+            selection.get("history_unprocessed_symbols", ""),
+        ),
+        (
+            "history_rate_limit_budget_exhausted",
+            selection.get("history_rate_limit_budget_exhausted", ""),
+        ),
+        (
+            "history_rate_limit_exhaustion_reason",
+            selection.get("history_rate_limit_exhaustion_reason", ""),
+        ),
         ("history_invalid_rows", selection.get("history_invalid_rows", "")),
         (
             "history_dropped_invalid_rows",

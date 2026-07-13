@@ -97,6 +97,149 @@ class FetchBaostockAShareTests(unittest.TestCase):
             lookup["failed_symbols"],
         )
 
+    def test_names_input_avoids_stock_basic_queries_when_complete(self) -> None:
+        fake = FakeBaostockBasic({})
+        with tempfile.TemporaryDirectory() as tmpdir:
+            names_input = Path(tmpdir) / "universe.csv"
+            names_input.write_text(
+                "symbol,name\n000001,平安银行\n600000,浦发银行\n",
+                encoding="utf-8",
+            )
+            lookup = fetcher.resolve_symbol_names(
+                fake,
+                ["000001", "600000"],
+                str(names_input),
+                "query",
+            )
+
+        self.assertEqual(0, fake.query_count)
+        self.assertEqual(2, lookup["input_name_count"])
+        self.assertEqual(0, lookup["query_count"])
+        self.assertEqual("names_input", lookup["source"])
+        self.assertEqual([], lookup["missing_symbols"])
+
+    def test_names_input_queries_only_missing_symbols(self) -> None:
+        fake = FakeBaostockBasic(
+            {"sh.600000": FakeBasicResult([["sh.600000", "浦发银行"]])}
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            names_input = Path(tmpdir) / "universe.csv"
+            names_input.write_text(
+                "symbol,name\n000001,平安银行\n", encoding="utf-8"
+            )
+            lookup = fetcher.resolve_symbol_names(
+                fake,
+                ["000001", "600000"],
+                str(names_input),
+                "query",
+            )
+
+        self.assertEqual(["sh.600000"], fake.queried_codes)
+        self.assertEqual(1, lookup["query_count"])
+        self.assertEqual(
+            {"000001": "平安银行", "600000": "浦发银行"}, lookup["names"]
+        )
+
+    def test_missing_name_fail_policy_does_not_query(self) -> None:
+        fake = FakeBaostockBasic({})
+        lookup = fetcher.resolve_symbol_names(fake, ["000001"], "", "fail")
+        metadata = metadata_for(
+            ["000001"], fetcher.pd.DataFrame([valid_row("000001", "2026-05-20")])
+        )
+        metadata.update(
+            {
+                "missing_name_policy": "fail",
+                "name_lookup_missing_symbols": lookup["missing_symbols"],
+            }
+        )
+
+        self.assertEqual(0, fake.query_count)
+        self.assertEqual(["000001"], lookup["missing_symbols"])
+        self.assertIn(
+            "name_lookup_missing_symbols=1",
+            fetcher.strict_gate_errors(metadata, fail_on_fetch_error=False),
+        )
+
+    def test_missing_name_blank_policy_is_explicitly_accepted(self) -> None:
+        fake = FakeBaostockBasic({})
+        lookup = fetcher.resolve_symbol_names(fake, ["000001"], "", "blank")
+        metadata = metadata_for(
+            ["000001"], fetcher.pd.DataFrame([valid_row("000001", "2026-05-20")])
+        )
+        metadata.update(
+            {
+                "missing_name_policy": "blank",
+                "name_lookup_missing_symbols": lookup["missing_symbols"],
+            }
+        )
+
+        self.assertEqual(["000001"], lookup["missing_symbols"])
+        self.assertNotIn(
+            "name_lookup_missing_symbols=1",
+            fetcher.strict_gate_errors(metadata, fail_on_fetch_error=True),
+        )
+
+    def test_collect_a_share_stock_symbols_excludes_funds_indices_and_b_shares(
+        self,
+    ) -> None:
+        result = FakeAllStockResult(
+            [
+                ["sz.000001", "平安银行"],
+                ["sz.001220", "源飞宠物"],
+                ["sz.300750", "宁德时代"],
+                ["sh.600000", "浦发银行"],
+                ["sh.688981", "中芯国际"],
+                ["sz.159915", "创业板ETF"],
+                ["sh.588000", "科创50ETF"],
+                ["sh.000001", "上证指数"],
+                ["sz.399001", "深证成指"],
+                ["sz.200001", "深物业B"],
+                ["sh.900901", "云赛B股"],
+                ["bj.430047", "诺思兰德"],
+            ],
+            fields=["code", "code_name"],
+        )
+
+        collected = fetcher.collect_a_share_stock_symbols(result)
+
+        self.assertEqual(
+            ["000001", "001220", "300750", "600000", "688981"],
+            collected["symbols"],
+        )
+        self.assertEqual(5, collected["symbol_count"])
+        self.assertEqual(12, collected["raw_row_count"])
+        self.assertEqual("平安银行", collected["names"]["000001"])
+        self.assertEqual("中芯国际", collected["names"]["688981"])
+        self.assertEqual(7, collected["excluded_count"])
+        self.assertTrue(fetcher.is_baostock_a_share_stock_code("sz.000001"))
+        self.assertFalse(fetcher.is_baostock_a_share_stock_code("sz.159915"))
+        self.assertFalse(fetcher.is_baostock_a_share_stock_code("sh.588000"))
+
+    def test_collect_a_share_stock_symbols_accepts_row_dicts(self) -> None:
+        rows = [
+            {"code": "sz.000001", "code_name": "平安银行"},
+            {"code": "sz.159915"},
+            {"code": "sh.600000"},
+            {"code": "bj.430047"},
+        ]
+
+        collected = fetcher.collect_a_share_stock_symbols(rows)
+
+        self.assertEqual(["000001", "600000"], collected["symbols"])
+        self.assertEqual({"000001": "平安银行"}, collected["names"])
+        self.assertEqual(4, collected["raw_row_count"])
+        self.assertEqual(2, collected["symbol_count"])
+        self.assertEqual(2, collected["excluded_count"])
+
+    def test_baostock_a_share_stock_code_filter_handles_boundaries(self) -> None:
+        self.assertFalse(fetcher.is_baostock_a_share_stock_code(""))
+        self.assertFalse(fetcher.is_baostock_a_share_stock_code("sz.12"))
+        self.assertFalse(fetcher.is_baostock_a_share_stock_code("sh.600000X"))
+        self.assertFalse(fetcher.is_baostock_a_share_stock_code("sz.600000"))
+        self.assertFalse(fetcher.is_baostock_a_share_stock_code("sh.300001"))
+        self.assertTrue(fetcher.is_baostock_a_share_stock_code("SZ.000001"))
+        self.assertTrue(fetcher.is_baostock_a_share_stock_code("SH.688981"))
+
     def test_tradability_stats_handles_missing_symbol_column(self) -> None:
         frame = fetcher.pd.DataFrame([{"tradestatus": "0", "isST": "1"}])
 
@@ -125,6 +268,23 @@ class FetchBaostockAShareTests(unittest.TestCase):
             self.assertTrue(output.exists())
             saved = json.loads(meta.read_text(encoding="utf-8"))
         self.assertEqual("baostock", saved["source"])
+
+    def test_build_metadata_includes_standalone_source_boundary_fields(self) -> None:
+        args = argparse_namespace("000001")
+        frame = fetcher.pd.DataFrame([valid_row("000001", "2026-05-20")])
+        metadata = fetcher.build_metadata(
+            args,
+            frame,
+            [fetcher.symbol_metadata_for_frame("000001", frame)],
+            [],
+        )
+
+        self.assertEqual("external_fetch", metadata["source_type"])
+        self.assertEqual("baostock_history_fetch", metadata["source_scope"])
+        self.assertTrue(metadata["real_market_data"])
+        self.assertFalse(metadata["partial_result"])
+        self.assertEqual(fetcher.CLAIM_BOUNDARY, metadata["source_claim_boundary"])
+        self.assertIn("scope is requested symbols", metadata["data_source_note"])
 
     def test_strict_failure_removes_stale_output_and_keeps_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -181,6 +341,9 @@ class FetchBaostockAShareTests(unittest.TestCase):
         )
         self.assertFalse(saved["output_written"])
         self.assertTrue(saved["metadata_output_written"])
+        self.assertTrue(saved["partial_result"])
+        self.assertEqual("baostock_history_fetch", saved["source_scope"])
+        self.assertEqual(fetcher.CLAIM_BOUNDARY, saved["source_claim_boundary"])
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn(
             "output_written=false metadata_output_written=true", stderr.getvalue()
@@ -227,6 +390,8 @@ class FetchBaostockAShareTests(unittest.TestCase):
         self.assertTrue(output_exists)
         self.assertTrue(saved["output_written"])
         self.assertEqual(["600000"], saved["empty_symbols"])
+        self.assertTrue(saved["partial_result"])
+        self.assertEqual("baostock_history_fetch", saved["source_scope"])
         self.assertTrue(stdout.getvalue().startswith("PARTIAL:"))
         self.assertIn("empty_symbols=1", stdout.getvalue())
 
@@ -307,6 +472,48 @@ class FetchBaostockAShareTests(unittest.TestCase):
         errors = fetcher.strict_gate_errors(updated, fail_on_fetch_error=True)
         self.assertIn("non_trading_rows=1", errors)
         self.assertEqual(["688981"], updated["non_trading_symbols"])
+
+    def test_non_trading_drop_policy_removes_and_records_rows(self) -> None:
+        frame = fetcher.pd.DataFrame(
+            [
+                valid_row("000001", "2026-05-20"),
+                {**valid_row("000001", "2026-05-19"), "tradestatus": "0"},
+            ]
+        )
+        result, updated = fetcher.apply_quality_policy(
+            frame,
+            metadata_for(["000001"], frame),
+            drop_invalid_rows=False,
+            non_trading_policy="drop",
+        )
+
+        self.assertEqual(["2026-05-20"], result["date"].tolist())
+        self.assertEqual(1, updated["raw_non_trading_rows"])
+        self.assertEqual(0, updated["non_trading_rows"])
+        self.assertEqual(1, updated["dropped_non_trading_rows"])
+        self.assertNotIn(
+            "non_trading_rows=1",
+            fetcher.strict_gate_errors(updated, fail_on_fetch_error=True),
+        )
+
+    def test_non_trading_keep_policy_retains_rows_without_rejection(self) -> None:
+        frame = fetcher.pd.DataFrame(
+            [{**valid_row("000001", "2026-05-20"), "tradestatus": "0"}]
+        )
+        result, updated = fetcher.apply_quality_policy(
+            frame,
+            metadata_for(["000001"], frame),
+            drop_invalid_rows=False,
+            non_trading_policy="keep",
+        )
+
+        self.assertEqual(1, len(result))
+        self.assertEqual(1, updated["non_trading_rows"])
+        self.assertEqual(0, updated["dropped_non_trading_rows"])
+        self.assertNotIn(
+            "non_trading_rows=1",
+            fetcher.strict_gate_errors(updated, fail_on_fetch_error=True),
+        )
 
     def test_strict_gate_rejects_empty_symbol(self) -> None:
         metadata = {
@@ -391,11 +598,36 @@ class FakeBasicResult:
         return self.rows[self.index]
 
 
+class FakeAllStockResult:
+    def __init__(
+        self,
+        rows: list[list[str]],
+        *,
+        fields: list[str] | None = None,
+    ) -> None:
+        self.rows = rows
+        self.fields = fields or ["code"]
+        self.index = -1
+
+    def next(self) -> bool:
+        self.index += 1
+        return self.index < len(self.rows)
+
+    def get_row_data(self) -> list[str]:
+        return self.rows[self.index]
+
+
 class FakeBaostockBasic:
     def __init__(self, results: dict[str, FakeBasicResult]) -> None:
         self.results = results
+        self.queried_codes: list[str] = []
+
+    @property
+    def query_count(self) -> int:
+        return len(self.queried_codes)
 
     def query_stock_basic(self, *, code: str) -> FakeBasicResult:
+        self.queried_codes.append(code)
         return self.results[code]
 
 
@@ -422,6 +654,12 @@ def valid_row(symbol: str, date: str) -> dict[str, str]:
 def metadata_for(symbols: list[str], frame: fetcher.pd.DataFrame) -> dict:
     return {
         "source": "baostock",
+        "source_type": "external_fetch",
+        "source_scope": "baostock_history_fetch",
+        "real_market_data": True,
+        "partial_result": False,
+        "source_claim_boundary": fetcher.CLAIM_BOUNDARY,
+        "data_source_note": fetcher.DATA_SOURCE_NOTE,
         "requested_symbols": symbols,
         "start_date": "2025-01-01",
         "end_date": "2026-05-29",
@@ -438,7 +676,22 @@ def metadata_for(symbols: list[str], frame: fetcher.pd.DataFrame) -> dict:
         "invalid_symbols": [],
         "invalid_row_examples": [],
         "dropped_invalid_rows": 0,
+        "non_trading_policy": "reject",
+        "dropped_non_trading_rows": 0,
     }
+
+
+def argparse_namespace(symbols: str):
+    return type(
+        "Args",
+        (),
+        {
+            "symbols": symbols,
+            "start_date": "2026-05-01",
+            "end_date": "2026-05-29",
+            "adjust": "3",
+        },
+    )()
 
 
 if __name__ == "__main__":

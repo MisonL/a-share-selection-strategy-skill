@@ -143,6 +143,27 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
         self.assertIn("2026-05-12_skipped_symbols=1", data["quality_errors"])
         self.assertEqual("strict_gate_failed", data["verdict"])
 
+    def test_cli_rejects_unprocessed_history_symbols(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(
+                Path(tmpdir),
+                metadata_updates={"unprocessed_symbols": ["000002"]},
+            )
+            output = Path(tmpdir) / "summary.json"
+
+            code, stdout, stderr = call_cli(
+                root,
+                output,
+                ["--expected-symbol-count", "2"],
+            )
+
+            data = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(3, code)
+        self.assertIn("ERROR_SUMMARY:", stdout)
+        self.assertIn("metadata_unprocessed_symbols=1", stderr)
+        self.assertIn("metadata_unprocessed_symbols=1", data["quality_errors"])
+
     def test_cli_rejects_backtest_rows_missing_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = build_run(Path(tmpdir))

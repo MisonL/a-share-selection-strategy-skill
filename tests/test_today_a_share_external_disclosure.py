@@ -102,7 +102,7 @@ class TodayAShareExternalDisclosureTests(unittest.TestCase):
         self.assertIn("fallback_errors=1", visible)
         self.assertIn("cannot be described as complete history", visible)
 
-    def test_summary_and_html_disclose_partial_history_empty_symbols(self) -> None:
+    def test_summary_and_html_disclose_partial_history_recovery_state(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir)
             write_partial_history_metadata(output)
@@ -119,6 +119,13 @@ class TodayAShareExternalDisclosureTests(unittest.TestCase):
         self.assertEqual("3", history["history_adjustflag"])
         self.assertEqual(1, history["history_empty_symbol_count"])
         self.assertEqual(["000001"], history["history_empty_symbols"])
+        self.assertEqual(1, history["history_unprocessed_symbol_count"])
+        self.assertEqual(["000002"], history["history_unprocessed_symbols"])
+        self.assertTrue(history["history_rate_limit_budget_exhausted"])
+        self.assertEqual(
+            "total_runtime_seconds",
+            history["history_rate_limit_exhaustion_reason"],
+        )
         self.assertIn("history_partial_result", report)
         self.assertIn(">True<", report)
         self.assertIn("history_output_written", report)
@@ -132,6 +139,9 @@ class TodayAShareExternalDisclosureTests(unittest.TestCase):
         visible = visible_before_technical_details(report)
         self.assertIn("Partial history fetch", visible)
         self.assertIn("empty_symbols=1", visible)
+        self.assertIn("unprocessed_symbols=1", visible)
+        self.assertIn("rate_limit_budget_exhausted=true", visible)
+        self.assertIn("rate_limit_exhaustion_reason=total_runtime_seconds", visible)
         self.assertIn("output_written=false", visible)
 
     def test_html_discloses_local_input_partial_metadata_before_details(self) -> None:
@@ -143,6 +153,9 @@ class TodayAShareExternalDisclosureTests(unittest.TestCase):
                 "symbol_count": 1,
                 "failed_symbols": [{"symbol": "MSFT", "error": "timeout"}],
                 "empty_symbols": [],
+                "unprocessed_symbols": ["TSLA"],
+                "rate_limit_budget_exhausted": True,
+                "rate_limit_exhaustion_reason": "total_runtime_seconds",
                 "input_partial_result": True,
                 "output_written": True,
                 "metadata_output_written": True,
@@ -154,8 +167,14 @@ class TodayAShareExternalDisclosureTests(unittest.TestCase):
         technical = report.split('<details class="technical-details">', 1)[1]
         self.assertIn("Partial local input metadata", visible)
         self.assertIn("failed_symbols=1", visible)
+        self.assertIn("unprocessed_symbols=1", visible)
+        self.assertIn("rate_limit_budget_exhausted=true", visible)
+        self.assertIn("rate_limit_exhaustion_reason=total_runtime_seconds", visible)
         self.assertIn("symbol_count=1/2", visible)
         self.assertIn("input_metadata.failed_symbols", technical)
+        self.assertIn("input_metadata.unprocessed_symbols", technical)
+        self.assertIn("input_metadata.rate_limit_budget_exhausted", technical)
+        self.assertIn("input_metadata.rate_limit_exhaustion_reason", technical)
         self.assertIn("timeout", technical)
 
     def test_html_infers_local_input_partial_from_symbol_count_mismatch(self) -> None:
@@ -265,6 +284,9 @@ def write_partial_history_metadata(output: Path) -> None:
                 ],
                 "failed_symbols": [],
                 "empty_symbols": ["000001"],
+                "unprocessed_symbols": ["000002"],
+                "rate_limit_budget_exhausted": True,
+                "rate_limit_exhaustion_reason": "total_runtime_seconds",
                 "fallback_errors": [],
                 "partial_result": True,
                 "output_written": False,

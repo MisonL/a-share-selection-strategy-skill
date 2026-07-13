@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 import pandas as pd
 
@@ -20,6 +21,14 @@ import fetch_eastmoney_a_share_spot as eastmoney  # noqa: E402
 
 
 class FetchEastmoneyAShareSpotTests(unittest.TestCase):
+    def test_page_url_sorts_by_stable_symbol_code(self) -> None:
+        query = parse_qs(urlparse(eastmoney.page_url(2, 100)).query)
+
+        self.assertEqual(["2"], query["pn"])
+        self.assertEqual(["100"], query["pz"])
+        self.assertEqual(["f12"], query["fid"])
+        self.assertIn("f3", query["fields"][0])
+
     def test_fetch_snapshot_writes_rows_and_metadata(self) -> None:
         args = eastmoney.build_parser().parse_args(
             [
@@ -37,14 +46,33 @@ class FetchEastmoneyAShareSpotTests(unittest.TestCase):
         self.assertEqual(2, len(rows))
         self.assertEqual("000001", rows[0]["symbol"])
         self.assertEqual("eastmoney", metadata["source"])
+        self.assertEqual("external_fetch", metadata["source_type"])
+        self.assertEqual("a_share_spot_snapshot", metadata["source_scope"])
+        self.assertTrue(metadata["real_market_data"])
+        self.assertIn("scope is requested pages", metadata["data_source_note"])
+        self.assertIn("stable symbol code", metadata["data_source_note"])
         self.assertEqual(1, metadata["successful_pages"])
         self.assertEqual(1, metadata["pages_successful"])
+        self.assertEqual(1, metadata["attempted_pages"])
+        self.assertFalse(metadata["stopped_early"])
+        self.assertEqual(5, metadata["stop_after_empty_failed_pages"])
+        self.assertEqual(0.0, metadata["request_interval_seconds"])
+        self.assertEqual(0.0, metadata["retry_interval_seconds"])
         self.assertEqual(0, metadata["pages_failed"])
         self.assertEqual(1, metadata["retry_attempts_per_page"])
+        self.assertEqual(1, metadata["retries"])
+        self.assertEqual([], metadata["errors"])
+        self.assertIsInstance(metadata["started_at"], str)
+        self.assertIsInstance(metadata["finished_at"], str)
+        self.assertGreaterEqual(metadata["duration_seconds"], 0.0)
         self.assertFalse(metadata["partial_result"])
         self.assertEqual(
             "requested_pages_snapshot_not_full_market_proof",
             metadata["coverage_claim"],
+        )
+        self.assertEqual(
+            "requested_pages_snapshot_not_full_market_completion",
+            metadata["source_claim_boundary"],
         )
 
     def test_cli_writes_partial_metadata_and_strict_failure(self) -> None:
@@ -78,10 +106,26 @@ class FetchEastmoneyAShareSpotTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn("coverage_claim=partial_not_full_market", stdout.getvalue())
+        self.assertIn(
+            "source_claim_boundary=partial_spot_snapshot_not_full_market_completion",
+            stdout.getvalue(),
+        )
+        self.assertIn("output_written=true", stdout.getvalue())
+        self.assertIn("metadata_output_written=true", stdout.getvalue())
         self.assertIn("partial_result=true", stderr.getvalue())
         self.assertTrue(data["partial_result"])
         self.assertEqual("partial_not_full_market", data["coverage_claim"])
+        self.assertEqual(
+            "partial_spot_snapshot_not_full_market_completion",
+            data["source_claim_boundary"],
+        )
         self.assertEqual(1, len(data["failed_pages"]))
+        self.assertEqual(1, len(data["errors"]))
+        self.assertIn("remote disconnected", data["errors"][0])
+        self.assertEqual(0, data["retries"])
+        self.assertIsInstance(data["started_at"], str)
+        self.assertIsInstance(data["finished_at"], str)
+        self.assertGreaterEqual(data["duration_seconds"], 0.0)
         self.assertIn(
             "use_partial_snapshot_only_with_partial_result_disclosure",
             data["allowed_failure_actions"],
@@ -119,7 +163,17 @@ class FetchEastmoneyAShareSpotTests(unittest.TestCase):
         self.assertTrue(stdout.getvalue().startswith("PARTIAL:"))
         self.assertIn("partial_result=true", stdout.getvalue())
         self.assertIn("coverage_claim=partial_not_full_market", stdout.getvalue())
+        self.assertIn(
+            "source_claim_boundary=partial_spot_snapshot_not_full_market_completion",
+            stdout.getvalue(),
+        )
+        self.assertIn("output_written=true", stdout.getvalue())
+        self.assertIn("metadata_output_written=true", stdout.getvalue())
         self.assertEqual("partial_not_full_market", data["coverage_claim"])
+        self.assertEqual(
+            "partial_spot_snapshot_not_full_market_completion",
+            data["source_claim_boundary"],
+        )
         self.assertTrue(output_exists)
 
     def test_cli_raw_empty_strict_failure_removes_stale_output_and_keeps_metadata(self) -> None:
@@ -159,6 +213,8 @@ class FetchEastmoneyAShareSpotTests(unittest.TestCase):
         self.assertFalse(data["output_written"])
         self.assertTrue(data["metadata_output_written"])
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
+        self.assertIn("output_written=false", stdout.getvalue())
+        self.assertIn("metadata_output_written=true", stdout.getvalue())
         self.assertIn("raw_items=0", stderr.getvalue())
         self.assertIn("output_written=false metadata_output_written=true", stderr.getvalue())
 
@@ -182,6 +238,89 @@ class FetchEastmoneyAShareSpotTests(unittest.TestCase):
         self.assertEqual(2, metadata["retry_attempts_per_page"])
         self.assertFalse(metadata["partial_result"])
 
+    def test_retry_interval_is_used_between_attempts(self) -> None:
+        args = eastmoney.build_parser().parse_args(
+            [
+                "--output",
+                "/tmp/spot.csv",
+                "--metadata-output",
+                "/tmp/meta.json",
+                "--pages",
+                "1",
+                "--retries",
+                "1",
+                "--retry-interval-seconds",
+                "0.25",
+            ]
+        )
+        sleeps = []
+        old_sleep = eastmoney.time.sleep
+        eastmoney.time.sleep = sleeps.append
+        try:
+            rows, metadata = eastmoney.fetch_snapshot(args, FailOnceOpener())
+        finally:
+            eastmoney.time.sleep = old_sleep
+
+        self.assertEqual(2, len(rows))
+        self.assertEqual([0.25], sleeps)
+        self.assertEqual(0.25, metadata["retry_interval_seconds"])
+        self.assertFalse(metadata["partial_result"])
+
+    def test_request_interval_is_used_between_pages(self) -> None:
+        args = eastmoney.build_parser().parse_args(
+            [
+                "--output",
+                "/tmp/spot.csv",
+                "--metadata-output",
+                "/tmp/meta.json",
+                "--pages",
+                "3",
+                "--request-interval-seconds",
+                "0.25",
+            ]
+        )
+        sleeps = []
+        old_sleep = eastmoney.time.sleep
+        eastmoney.time.sleep = sleeps.append
+        try:
+            rows, metadata = eastmoney.fetch_snapshot(args, FakeOpener())
+        finally:
+            eastmoney.time.sleep = old_sleep
+
+        self.assertEqual(6, len(rows))
+        self.assertEqual([0.25, 0.25], sleeps)
+        self.assertEqual(0.25, metadata["request_interval_seconds"])
+        self.assertFalse(metadata["partial_result"])
+
+    def test_fetch_snapshot_stops_early_when_initial_pages_all_fail(self) -> None:
+        args = eastmoney.build_parser().parse_args(
+            [
+                "--output",
+                "/tmp/spot.csv",
+                "--metadata-output",
+                "/tmp/meta.json",
+                "--pages",
+                "300",
+                "--retries",
+                "0",
+                "--stop-after-empty-failed-pages",
+                "3",
+            ]
+        )
+
+        rows, metadata = eastmoney.fetch_snapshot(args, AlwaysFailingOpener())
+
+        self.assertEqual([], rows)
+        self.assertEqual(300, metadata["requested_pages"])
+        self.assertEqual(3, metadata["attempted_pages"])
+        self.assertEqual(3, metadata["pages_failed"])
+        self.assertTrue(metadata["stopped_early"])
+        self.assertEqual(
+            "consecutive_failed_pages_before_any_rows",
+            metadata["stop_reason"],
+        )
+        self.assertTrue(metadata["partial_result"])
+
     def test_page_items_accepts_dict_diff_payload(self) -> None:
         data = {
             "data": {
@@ -190,6 +329,21 @@ class FetchEastmoneyAShareSpotTests(unittest.TestCase):
                     "1": {"f12": "600000"},
                     "metadata": "ignored",
                 }
+            }
+        }
+
+        rows = eastmoney.page_items(data)
+
+        self.assertEqual(["000001", "600000"], [row["f12"] for row in rows])
+
+    def test_page_items_accepts_list_diff_payload(self) -> None:
+        data = {
+            "data": {
+                "diff": [
+                    {"f12": "000001"},
+                    "ignored",
+                    {"f12": "600000"},
+                ]
             }
         }
 
@@ -228,6 +382,11 @@ class FailOnceOpener:
 class EmptyOpener:
     def __call__(self, _url: str, _timeout: float) -> bytes:
         return json.dumps({"data": {"diff": []}}).encode("utf-8")
+
+
+class AlwaysFailingOpener:
+    def __call__(self, _url: str, _timeout: float) -> bytes:
+        raise RuntimeError("remote disconnected")
 
 
 def payload() -> dict[str, object]:

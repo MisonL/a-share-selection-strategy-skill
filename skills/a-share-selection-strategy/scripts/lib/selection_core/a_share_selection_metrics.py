@@ -34,7 +34,8 @@ ONE_YEAR_TRADING_DAYS = 252
 
 
 def score_symbol(group: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any]:
-    data = apply_cleaning(group.copy(), config)
+    cleaning = config.get("cleaning", {})
+    data = apply_cleaning(group.copy(), config) if cleaning else group
     close = data["close"].astype(float)
     volume = data["volume"].astype(float)
     metrics = compute_metrics(data, close, volume, config)
@@ -100,15 +101,15 @@ def compute_metrics(
     config: dict[str, Any],
 ) -> dict[str, float]:
     windows = config["windows"]
-    rsi = calculate_rsi(close, int(windows["rsi"]))
-    macd, signal = calculate_macd(
+    rsi = calculate_latest_rsi(close, int(windows["rsi"]))
+    macd, signal = calculate_latest_macd(
         close,
         int(windows["macd_fast"]),
         int(windows["macd_slow"]),
         int(windows["macd_signal"]),
     )
     momentum = momentum_score(close, windows, config)
-    volatility = calculate_volatility(close, int(windows["volatility"]))
+    volatility = calculate_latest_volatility(close, int(windows["volatility"]))
     prediction = resolve_prediction(data, config)
     trend = prediction if not math.isnan(prediction) else clamp01(0.5 + momentum)
     risk = risk_score(volatility, config)
@@ -123,7 +124,7 @@ def compute_metrics(
     )
     total = weighted_total(trend, momentum, explosion, risk, config["weights"])
     return {
-        "rsi": float(rsi.iloc[-1]),
+        "rsi": rsi,
         "volatility": volatility,
         "macd": float(macd.iloc[-1]),
         "macd_status": macd_status(macd, signal),
@@ -200,6 +201,18 @@ def calculate_rsi(close: pd.Series, period: int) -> pd.Series:
     return (100 - (100 / (1 + rs))).fillna(50).clip(0, 100)
 
 
+def calculate_latest_rsi(close: pd.Series, period: int) -> float:
+    values = close.to_numpy(dtype=float, copy=False)
+    delta = np.diff(values)[-period:]
+    if not len(delta):
+        return 50.0
+    gain = float(np.maximum(delta, 0.0).mean())
+    loss = float(np.maximum(-delta, 0.0).mean())
+    if loss == 0.0 or not math.isfinite(loss):
+        return 50.0
+    return float(min(max(100.0 - (100.0 / (1.0 + gain / loss)), 0.0), 100.0))
+
+
 def calculate_macd(
     close: pd.Series, fast: int, slow: int, signal_window: int
 ) -> tuple[pd.Series, pd.Series]:
@@ -210,9 +223,52 @@ def calculate_macd(
     return macd, signal
 
 
+def calculate_latest_macd(
+    close: pd.Series, fast: int, slow: int, signal_window: int
+) -> tuple[pd.Series, pd.Series]:
+    values = close.to_numpy(dtype=float, copy=False)
+    if not len(values):
+        return pd.Series(dtype=float), pd.Series(dtype=float)
+    fast_alpha = 2.0 / (fast + 1.0)
+    slow_alpha = 2.0 / (slow + 1.0)
+    signal_alpha = 2.0 / (signal_window + 1.0)
+    fast_ema = slow_ema = float(values[0])
+    latest_macd = latest_signal = 0.0
+    previous_macd = previous_signal = 0.0
+    for value in values[1:]:
+        previous_macd = latest_macd
+        previous_signal = latest_signal
+        fast_ema = (1.0 - fast_alpha) * fast_ema + fast_alpha * float(value)
+        slow_ema = (1.0 - slow_alpha) * slow_ema + slow_alpha * float(value)
+        latest_macd = fast_ema - slow_ema
+        latest_signal = (
+            (1.0 - signal_alpha) * latest_signal + signal_alpha * latest_macd
+        )
+    if len(values) == 1:
+        return pd.Series([latest_macd]), pd.Series([latest_signal])
+    return (
+        pd.Series([previous_macd, latest_macd]),
+        pd.Series([previous_signal, latest_signal]),
+    )
+
+
 def calculate_volatility(close: pd.Series, window: int) -> float:
     series = close.pct_change().rolling(window, min_periods=5).std() * math.sqrt(252)
     return min(max(latest_filled(series), 0.0), 2.0)
+
+
+def calculate_latest_volatility(close: pd.Series, window: int) -> float:
+    if window < 5:
+        return calculate_volatility(close, window)
+    values = close.to_numpy(dtype=float, copy=False)
+    if len(values) < 6:
+        return calculate_volatility(close, window)
+    tail = values[-window - 1 :]
+    changes = tail[1:] / tail[:-1] - 1.0
+    value = float(np.std(changes, ddof=1) * math.sqrt(ONE_YEAR_TRADING_DAYS))
+    if math.isnan(value):
+        value = 0.0
+    return min(max(value, 0.0), 2.0)
 
 
 def momentum_score(

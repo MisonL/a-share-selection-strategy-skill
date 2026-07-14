@@ -314,7 +314,21 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
   --provenance-output "$RUN/clean/full_a_clean_pool_provenance.json"
 ```
 
-三项 `--universe-input --universe-metadata --provenance-output` 必须成组传入。它会原子写出 `full_a_clean_pool_provenance.json`，重算沪深 A 股代码集合、history 请求/实际集合、clean 剔除集合、row/symbol 计数与所有输入输出的 SHA-256；之后复核该文件时会再次从磁盘重算语义，不只信任 JSON 中的声明。`validation_status=valid` 只证明这些落地 artifact 相互一致，不能替代实时行情、prediction、券商订单、回测或最终 runner 证明。`full_market_closure_eligible=false` 时，尤其是 `clean_pool_removed_symbols_not_full_market`，必须保持 runner 的 `full_market_claim_allowed=false`；例如 5,202 -> 5,166 的 short-history 清洗并不是全 A 闭环。该 provenance 选项暂不和 `--incremental-*` 同用，避免未持久化 merged frame 被伪装为原始 history；完成增量后应先落地可独立对账的 merged history，再创建新 provenance。
+三项 `--universe-input --universe-metadata --provenance-output` 必须成组传入。它会原子写出 `full_a_clean_pool_provenance.json`，重算沪深 A 股代码集合、history 请求/实际集合、clean 剔除集合、row/symbol 计数与所有输入输出的 SHA-256；之后复核该文件时会再次从磁盘重算语义，不只信任 JSON 中的声明。为了阻止局部样本伪装为全 A，`full_market_closure_eligible=true` 还要求至少 4,000 个 symbol，并对账 baostock 的 source/type、raw/filtered/excluded 计数、错误清单、resolved attempt 和输出路径；4,000 只是保守的 sample guard，不能单靠数量替代来源和 artifact 证明。universe 的 `resolved_snapshot_date`、history metadata 的 `end_date` 与 history 实际最大交易日必须相同，并写入 provenance 的 `history.as_of_date`；每个 history symbol 的实际 `date_max` 也必须达到该日，否则记录 `history_symbols_before_as_of_date_not_full_market`。clean 必须与 history 去除明确 removed symbols 后的行、列和内容完全一致，不能只对账 symbol 集合。`validation_status=valid` 只证明这些落地 artifact 相互一致，不能替代实时行情、prediction、券商订单、回测或最终 runner 证明。`full_market_closure_eligible=false` 时，包括 `universe_breadth_below_full_a_minimum`、`history_symbols_before_as_of_date_not_full_market` 或 `clean_pool_removed_symbols_not_full_market`，必须保持 runner 的 `full_market_claim_allowed=false`；例如 5,202 -> 5,166 的 short-history 清洗并不是全 A 闭环。该 provenance 选项暂不和 `--incremental-*` 同用，避免未持久化 merged frame 被伪装为原始 history；完成增量后应先落地可独立对账的 merged history，再创建新 provenance。
+
+最终评分只有显式消费同一组原始 artifact 时才可能提升 breadth 声明。`--prices-input` 和 `--spot-input` 必须分别与 provenance 中的 `clean_prices` 和 `universe_input` 路径完全一致；同时必须启用当前 universe 过滤和 freshness 阈值，不能改用运行时重新抓取的 spot：
+
+```bash
+uv run --with pandas --with numpy --with pyarrow python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py \
+  --prices-input "$RUN/clean/prices.csv" \
+  --spot-input "$RUN/universe.csv" \
+  --full-a-provenance "$RUN/clean/full_a_clean_pool_provenance.json" \
+  --filter-prices-to-spot-universe \
+  --min-symbol-latest-date "$END_DATE" \
+  --output-dir "$RUN/final"
+```
+
+runner 会在评分前重验 provenance、路径、SHA-256、symbol 集合和 `prices_filter.json`，并强制 `--min-symbol-latest-date` 等于 provenance 的 `history.as_of_date`；传更早日期不能绕过新鲜度门禁。评分后要求 diagnostics 精确覆盖最终 prices 的全部 symbol，且 candidates 只能是其子集；评分后对账失败会删除本轮 candidates/diagnostics，并通过 `full_a_provenance_output_cleanup_errors` 披露删除失败。只有通过 4,000-symbol sample guard、逐标 freshness、history-clean 全行保真和完整 baostock metadata 合同的 `full_market_closure_eligible=true`、最终过滤零剔除且评分后对账通过时，`coverage_class=full_a_provenance_verified` 和 `full_market_claim_allowed=true` 才成立；该 true 只允许描述本轮全 A breadth，仍不能声称实时行情、模型有效、成交或收益。任何 clean 排除或 stale 剔除都保持 false，并分别记录 clean-pool 与 final-filter 数量；因此 5,202 -> 5,166 -> 5,160 的真实链路仍不是全 A 闭环。该参数不支持 `--plan-only`、`--fetch-spot` 或缺少显式过滤控制的调用。CSV 仅复制有界标量 provenance；removed symbol 明细、validation error 和 cleanup error 以 `run_manifest.json` / `summary.json` 为权威来源，避免把长列表复制到每一候选或诊断行。
 
 日常增量任务不要默认重新冷启动全量历史。先基于最新 spot 和 clean metadata 生成增量计划：
 

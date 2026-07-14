@@ -48,6 +48,10 @@
 | `coverage_class=spot_derived_limited_pool` | 本轮使用显式 spot 派生历史池上限 | 必须继续核对 `selected_symbols.json`、`history_metadata.json`、`summary.json` 后才可描述覆盖范围 |
 | `candidate_field_coverage` | 候选表中可选字段的实际写出覆盖率 | 不能写成市场覆盖或数据完整性证明 |
 | `full_market_claim_allowed=false` | runner 不允许自动宣称全市场闭环 | 必须按 `full_market_claim_boundary` 缩短结论 |
+| `full_a_provenance_validation_status!=valid` | 显式 lineage 未完成评分前后两阶段验证 | 不得把 clean-pool eligible 当作最终全市场证明 |
+| `full_a_provenance_as_of_date` | universe/history/freshness 共同对账日期 | 必须与 `prices_filter_min_symbol_latest_date` 一致，并按实际交易日披露 |
+| `history.symbols_before_as_of_date_count>0` | 至少一个 history symbol 未达到共同 as-of | `full_market_closure_eligible` 必须为 false，并披露 stale 数量 |
+| `full_a_provenance_output_cleanup_errors` 非空 | 评分后对账失败且残余输出未清理 | 必须列出路径，不得引用为本轮候选或诊断结果 |
 | 全 A / 全市场真实任务 | 全 A 严格任务汇报骨架 | 不能只报候选数，必须报股票池收口过程 |
 | `lightgbm_*` 字段 | 旧产物兼容字段 | 新报告优先引用中性的 prediction 字段 |
 | `html_report_written=true` | 人类可读 HTML 报告已写出 | 不能替代 JSON/CSV、退出码或门禁字段 |

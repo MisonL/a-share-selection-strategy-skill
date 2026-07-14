@@ -905,6 +905,7 @@ class DocumentConsistencyTests(unittest.TestCase):
             "gates/lightgbm_prediction_summary.py",
             "report_html/a_share_selection_html_report.py",
             "runner/run_today_a_share_selection_helpers.py",
+            "runner/run_today_a_share_selection_full_a_provenance.py",
             "runner/run_today_a_share_selection_history.py",
             "runner/run_today_a_share_selection_outputs.py",
             "runner/run_today_a_share_selection_prices_sidecar.py",
@@ -1258,10 +1259,23 @@ class DocumentConsistencyTests(unittest.TestCase):
             self.assertIn("--universe-input", document)
             self.assertIn("--universe-metadata", document)
             self.assertIn("--provenance-output", document)
+            self.assertIn("--full-a-provenance", document)
             self.assertIn("full_market_closure_eligible", document)
+            self.assertIn("diagnostics", document)
         self.assertIn("不能替代 runner 的 `full_market_claim_allowed`", index)
         self.assertIn("不能单独提升 runner 的 `full_market_claim_allowed`", scripts)
+        self.assertIn(
+            "lib/runner/run_today_a_share_selection_full_a_provenance.py",
+            scripts,
+        )
         self.assertIn("clean_pool_removed_symbols_not_full_market", workflow)
+        self.assertIn("4,000", workflow)
+        self.assertIn("universe_breadth_below_full_a_minimum", workflow)
+        self.assertIn("history_symbols_before_as_of_date_not_full_market", workflow)
+        self.assertIn("全行", workflow)
+        self.assertIn("history.as_of_date", workflow)
+        self.assertIn("full_a_provenance_output_cleanup_errors", workflow)
+        self.assertIn("full_a_provenance_as_of_date", index)
         self.assertIn("不能传 Eastmoney", workflow)
         self.assertIn("不能使用 Eastmoney spot metadata", script_reference)
         self.assertIn("逐原因对账", script_reference)

@@ -55,6 +55,10 @@ from lib.runner.run_today_a_share_selection_prices_sidecar import (
     build_sidecar,
     write_sidecar,
 )
+from lib.runner.run_today_a_share_selection_full_a_provenance import (
+    apply_full_a_provenance_pre_score,
+    complete_full_a_provenance,
+)
 from lib.runner.run_today_a_share_selection_provenance import annotate_run_csv_outputs
 from lib.runner.run_today_a_share_selection_validation import (
     normalize_zzshare_history_options,
@@ -104,6 +108,7 @@ def main(argv: list[str] | None = None) -> int:
         output.mkdir(parents=True, exist_ok=True)
         apply_resume_from(args)
         validate_symbols_file_static_output_collision(args, output)
+        validate_full_a_provenance_output_collision(args, output)
         clear_stale_run_outputs(args, output)
         manifest.clear()
         manifest.update(initial_manifest(args))
@@ -239,6 +244,12 @@ def run_pipeline(context: RunContext) -> None:
     if context.args.fetch_spot:
         run_fetch_spot_step(context, spot)
     prices = apply_optional_prices_filter(context, prices, spot)
+    apply_full_a_provenance_pre_score(
+        args=context.args,
+        manifest=context.manifest,
+        prices=prices,
+        spot=spot,
+    )
     if not context.args.prices_input:
         symbol_derivation_started = time.monotonic()
         symbols = history_symbols(
@@ -267,6 +278,13 @@ def run_pipeline(context: RunContext) -> None:
                 score_profile,
             ),
         ),
+    )
+    complete_full_a_provenance(
+        args=context.args,
+        manifest=context.manifest,
+        prices=prices,
+        candidates=candidates,
+        diagnostics=diagnostics,
     )
     annotate_run_csv_outputs(context.manifest, candidates, diagnostics)
 
@@ -587,6 +605,34 @@ def validate_symbols_file_output_collision(
             )
 
 
+def validate_full_a_provenance_output_collision(
+    args: argparse.Namespace, output: Path
+) -> None:
+    value = getattr(args, "full_a_provenance", None)
+    if not value:
+        return
+    source = Path(value)
+    blocked = [
+        output / "run_manifest.json",
+        output / "summary.json",
+        output / "report.html",
+        output / "candidates.csv",
+        output / "diagnostics.csv",
+        output / "prices_filter.json",
+        run_prices_path(args),
+    ]
+    spot = run_spot_path(args)
+    if spot is not None:
+        blocked.append(spot)
+    if prices_filter_requested(args):
+        blocked.append(prices_filter_output_path(args, run_prices_path(args)))
+    for path in blocked:
+        if helpers.same_path_or_existing_file(path, source):
+            raise ValueError(
+                f"--full-a-provenance must not point to runner output path: {source}"
+            )
+
+
 def validate_symbols_file_static_output_collision(
     args: argparse.Namespace, output: Path
 ) -> None:
@@ -626,6 +672,7 @@ def validate_symbols_file_static_output_collision(
 
 def validate_preflight_inputs(args: argparse.Namespace, spot: Path | None) -> None:
     validate_history_inputs(args, spot)
+    validate_full_a_provenance_options(args)
     if prices_filter_requested(args) and not args.prices_input:
         raise ValueError("prices filters require --prices-input")
     if args.filter_prices_to_spot_universe and not (args.spot_input or args.fetch_spot):
@@ -638,6 +685,29 @@ def validate_preflight_inputs(args: argparse.Namespace, spot: Path | None) -> No
         raise FileNotFoundError(f"prices input not found: {Path(args.prices_input)}")
     if args.spot_input and not Path(args.spot_input).exists():
         raise FileNotFoundError(f"spot input not found: {Path(args.spot_input)}")
+    if args.full_a_provenance and not Path(args.full_a_provenance).exists():
+        raise FileNotFoundError(
+            f"full-A provenance input not found: {Path(args.full_a_provenance)}"
+        )
+
+
+def validate_full_a_provenance_options(args: argparse.Namespace) -> None:
+    if not args.full_a_provenance:
+        return
+    if args.plan_only:
+        raise ValueError("--full-a-provenance cannot be combined with --plan-only")
+    if not args.prices_input or not args.spot_input:
+        raise ValueError(
+            "--full-a-provenance requires exact --prices-input and --spot-input artifacts"
+        )
+    if args.fetch_spot:
+        raise ValueError("--full-a-provenance cannot be combined with --fetch-spot")
+    if not args.filter_prices_to_spot_universe:
+        raise ValueError(
+            "--full-a-provenance requires --filter-prices-to-spot-universe"
+        )
+    if not args.min_symbol_latest_date:
+        raise ValueError("--full-a-provenance requires --min-symbol-latest-date")
 
 
 def run_prices_path(args: argparse.Namespace) -> Path:

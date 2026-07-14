@@ -327,6 +327,7 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
     runner_metadata = runner_metadata_stdout(view, metadata)
     spot_fallback = runner_spot_fallback_stdout(view)
     prices_filter = runner_prices_filter_stdout(view)
+    full_a_provenance = runner_full_a_provenance_stdout(manifest)
     score_profile = runner_score_profile_stdout(view)
     input_csv = input_csv_provenance_stdout(view.get("input_csv_provenance", {}))
     field_coverage = candidate_field_coverage_stdout(
@@ -346,6 +347,7 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
         f"{str(manifest.get('full_market_claim_allowed', False)).lower()} "
         "full_market_claim_boundary="
         f"{manifest.get('full_market_claim_boundary', 'not_evaluated')} "
+        f"{full_a_provenance}"
         f"prediction_mode={str(manifest['prediction_mode']).lower()} "
         f"consumes_prediction_columns={str(manifest.get('consumes_prediction_columns', False)).lower()} "
         "external_prediction_consumed="
@@ -378,6 +380,21 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
         f"{disclosure} "
         f"{field_coverage} "
         f"{paths} html_report={html_report}{html_error}"
+    )
+
+
+def runner_full_a_provenance_stdout(manifest: dict[str, Any]) -> str:
+    if not manifest.get("full_a_provenance_requested"):
+        return ""
+    return (
+        "full_a_provenance_validation_status="
+        f"{manifest.get('full_a_provenance_validation_status', 'pending')} "
+        "full_a_provenance_closure_eligible="
+        f"{str(manifest.get('full_a_provenance_closure_eligible', False)).lower()} "
+        "full_a_provenance_final_prices_symbol_count="
+        f"{int(manifest.get('full_a_provenance_final_prices_symbol_count', 0) or 0)} "
+        "full_a_provenance_as_of_date="
+        f"{manifest.get('full_a_provenance_as_of_date', '')} "
     )
 
 

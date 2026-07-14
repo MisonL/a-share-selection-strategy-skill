@@ -200,6 +200,7 @@ def clear_stale_run_outputs(args: Any, output: Path) -> None:
             args.prices_input,
             args.spot_input,
             getattr(args, "symbols_file", None),
+            getattr(args, "full_a_provenance", None),
         ]
         if value
     ]

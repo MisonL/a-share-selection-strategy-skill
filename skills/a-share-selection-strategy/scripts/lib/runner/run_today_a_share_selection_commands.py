@@ -387,6 +387,7 @@ def manifest_spot_fields(args: Any) -> dict[str, Any]:
 
 def manifest_filter_fields(args: Any) -> dict[str, Any]:
     return {
+        **full_a_manifest_fields(args),
         "filter_prices_to_spot_universe": bool(args.filter_prices_to_spot_universe),
         "prices_filter_output_format": args.prices_filter_output_format,
         "prices_filter_output_prices": "",
@@ -418,6 +419,31 @@ def manifest_filter_fields(args: Any) -> dict[str, Any]:
         "score_profile_enabled": bool(getattr(args, "score_profile", False)),
         "score_profile_output_written": False,
         "score_profile_rows": 0,
+    }
+
+
+def full_a_manifest_fields(args: Any) -> dict[str, Any]:
+    if not args.full_a_provenance:
+        return {}
+    return {
+        "full_a_provenance_requested": True,
+        "full_a_provenance_input": str(Path(args.full_a_provenance)),
+        "full_a_provenance_file_sha256": "",
+        "full_a_provenance_validation_status": "pending",
+        "full_a_provenance_validation_error": "",
+        "full_a_provenance_closure_eligible": False,
+        "full_a_provenance_boundary": "",
+        "full_a_provenance_as_of_date": "",
+        "full_a_provenance_universe_symbol_count": 0,
+        "full_a_provenance_clean_symbol_count": 0,
+        "full_a_provenance_clean_pool_removed_symbol_count": 0,
+        "full_a_provenance_final_prices_symbol_count": 0,
+        "full_a_provenance_final_filter_removed_symbol_count": 0,
+        "full_a_provenance_final_filter_removed_symbols": [],
+        "full_a_provenance_final_scoring_validated": False,
+        "full_a_provenance_candidate_symbol_count": 0,
+        "full_a_provenance_diagnostic_symbol_count": 0,
+        "full_a_provenance_output_cleanup_errors": [],
     }
 
 

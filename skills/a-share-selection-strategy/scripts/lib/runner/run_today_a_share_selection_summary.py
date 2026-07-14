@@ -58,6 +58,7 @@ def summary_view(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "advice_boundary": ADVICE_BOUNDARY,
         "recommendation_boundary": RECOMMENDATION_BOUNDARY,
         **row_count_fields(manifest, paths, score, history_selection, initialized),
+        **full_a_provenance_fields(manifest),
         **selection_failure_fields(manifest, status, history_selection),
         "candidate_field_coverage": candidate_field_coverage(
             paths["candidates"], initialized
@@ -87,6 +88,31 @@ def summary_paths(manifest: dict[str, Any]) -> dict[str, Path]:
 def normalized_input_metadata(manifest: dict[str, Any]) -> dict[str, Any]:
     metadata = manifest.get("input_metadata", {})
     return metadata if isinstance(metadata, dict) else {}
+
+
+def full_a_provenance_fields(manifest: dict[str, Any]) -> dict[str, Any]:
+    if not manifest.get("full_a_provenance_requested"):
+        return {}
+    keys = (
+        "full_a_provenance_input",
+        "full_a_provenance_file_sha256",
+        "full_a_provenance_validation_status",
+        "full_a_provenance_validation_error",
+        "full_a_provenance_closure_eligible",
+        "full_a_provenance_boundary",
+        "full_a_provenance_as_of_date",
+        "full_a_provenance_universe_symbol_count",
+        "full_a_provenance_clean_symbol_count",
+        "full_a_provenance_clean_pool_removed_symbol_count",
+        "full_a_provenance_final_prices_symbol_count",
+        "full_a_provenance_final_filter_removed_symbol_count",
+        "full_a_provenance_final_filter_removed_symbols",
+        "full_a_provenance_final_scoring_validated",
+        "full_a_provenance_candidate_symbol_count",
+        "full_a_provenance_diagnostic_symbol_count",
+        "full_a_provenance_output_cleanup_errors",
+    )
+    return {key: manifest.get(key) for key in keys}
 
 
 def summary_source(input_metadata: dict[str, Any], manifest: dict[str, Any]) -> str:

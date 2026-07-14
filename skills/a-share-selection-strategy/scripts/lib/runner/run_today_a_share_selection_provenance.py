@@ -114,6 +114,20 @@ RUN_PROVENANCE_COLUMNS = (
     "prices_filter_failure_reason",
     "prices_filter_claim_boundary",
 )
+FULL_A_PROVENANCE_COLUMNS = (
+    "full_a_provenance_validation_status",
+    "full_a_provenance_closure_eligible",
+    "full_a_provenance_boundary",
+    "full_a_provenance_as_of_date",
+    "full_a_provenance_universe_symbol_count",
+    "full_a_provenance_clean_symbol_count",
+    "full_a_provenance_clean_pool_removed_symbol_count",
+    "full_a_provenance_final_prices_symbol_count",
+    "full_a_provenance_final_filter_removed_symbol_count",
+    "full_a_provenance_final_scoring_validated",
+    "full_a_provenance_candidate_symbol_count",
+    "full_a_provenance_diagnostic_symbol_count",
+)
 OPTIONAL_METADATA_COLUMNS = ("source", "market_label_only", "source_claim_boundary")
 
 
@@ -352,6 +366,10 @@ def provenance_fields(manifest: dict[str, Any]) -> dict[str, Any]:
     for column in OPTIONAL_METADATA_COLUMNS:
         if column in metadata:
             fields[column] = metadata[column]
+    if manifest.get("full_a_provenance_requested"):
+        fields.update(
+            {column: manifest.get(column, "") for column in FULL_A_PROVENANCE_COLUMNS}
+        )
     return fields
 
 
@@ -362,6 +380,11 @@ def annotate_csv(path: Path, fields: dict[str, Any]) -> None:
     columns = [
         *fieldnames,
         *(column for column in RUN_PROVENANCE_COLUMNS if column not in fieldnames),
+        *(
+            column
+            for column in FULL_A_PROVENANCE_COLUMNS
+            if column in fields and column not in fieldnames
+        ),
     ]
     for row in rows:
         merge_provenance_fields(row, fields)

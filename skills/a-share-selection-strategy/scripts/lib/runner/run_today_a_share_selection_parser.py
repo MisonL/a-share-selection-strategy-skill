@@ -57,6 +57,15 @@ def add_core_options(parser: argparse.ArgumentParser) -> None:
             "CSV artifacts."
         ),
     )
+    parser.add_argument(
+        "--full-a-provenance",
+        help=(
+            "Optional full_a_clean_pool_provenance.json for fail-closed full-market "
+            "breadth validation. Requires exact --prices-input and --spot-input "
+            "artifacts, --filter-prices-to-spot-universe, and "
+            "--min-symbol-latest-date; incompatible with --plan-only or --fetch-spot."
+        ),
+    )
     parser.add_argument("--output-dir", required=True, help="Output run directory.")
     parser.add_argument(
         "--mode", choices=["auto", "generic", "prediction"], default="auto"

@@ -185,6 +185,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--derive-all-spot-symbols",
                 "--filter-prices-to-spot-universe",
                 "--min-symbol-latest-date",
+                "--full-a-provenance",
                 "--prices-filter-output-format",
                 "--max-history-symbols",
                 "--history-adjust",

@@ -78,7 +78,11 @@
 | `coverage_class` | 本轮覆盖等级，如本地输入、小样本、显式扩池 | `spot_derived_sample` 不能写成全 A 或扩大股票池 |
 | `full_market_claim_allowed` | runner 是否允许自动宣称全市场闭环 | `false` 时必须按边界缩短结论 |
 | `full_market_claim_boundary` | 不能外推为全市场闭环的具体原因 | 必须和候选数一起汇报 |
-| `full_market_closure_eligible` | clean-pool provenance 对 universe/history/clean artifact 的预检查结果 | 只说明清洗前后是否仍无排除；不能替代 runner 的 `full_market_claim_allowed` |
+| `full_market_closure_eligible` | clean-pool provenance 对 universe/history/clean artifact 的预检查结果 | 要求至少 4,000 个 symbol、完整 baostock metadata 合同且清洗前后无排除；仍不能替代 runner 的 `full_market_claim_allowed` |
+| `full_a_provenance_validation_status` | runner 对显式 clean-pool provenance 的两阶段验证状态 | 只有 `valid` 且最终过滤零剔除、diagnostics 全覆盖时才可能允许 breadth 声明 |
+| `full_a_provenance_as_of_date` | universe snapshot、history metadata 与 history 实际最大交易日共同确认的新鲜度日期 | 必须与最终 runner 的 `--min-symbol-latest-date` 相同；不能把请求日当成未观测到的交易日 |
+| `history.symbols_before_as_of_date_count` | history 中实际 `date_max` 未达到共同 as-of 的 symbol 数 | 正数时 `full_market_closure_eligible=false`，不得把全局最大日解释为逐标都已更新 |
+| `full_a_provenance_output_cleanup_errors` | 评分后 provenance 对账失败时未能删除的候选或诊断路径 | 非空必须披露，残余文件不得作为本轮成功产物 |
 | `prediction_input_source` | 今日 runner 是否消费外部 prediction 输入 | `not_used` 不能写成 prediction-derived 结果 |
 | `prediction_model_executed_by_runner` | 今日 runner 是否执行预测模型 | `false` 不能写成 runner 训练或执行模型 |
 | `prediction_model_executed_by_score_script` | `score_candidates.py` 是否执行预测模型 | `false` 只能说明评分消费已有预测列 |
@@ -90,6 +94,7 @@
 
 | 文件 | 用途 |
 | --- | --- |
+| [../evidence/reviews/FULL-A-PROVENANCE-RUN-2026-07-14.md](../evidence/reviews/FULL-A-PROVENANCE-RUN-2026-07-14.md) | 2026-07-14 schema v2 provenance、真实 5,202 标的最终 runner、性能与 claim=false 边界 |
 | [../evidence/reviews/FULL-A-WORKFLOW-BOTTLENECK-2026-07-09.md](../evidence/reviews/FULL-A-WORKFLOW-BOTTLENECK-2026-07-09.md) | 2026-07-09 全 A 实跑耗时、瓶颈、clean pool 和不可外推边界 |
 | [../evidence/reviews/FULL-A-WORKFLOW-BOTTLENECK-2026-07-12.md](../evidence/reviews/FULL-A-WORKFLOW-BOTTLENECK-2026-07-12.md) | 2026-07-12 全 A 实跑最新耗时、短历史恢复、评分瓶颈和字段边界 |
 | [../evidence/reviews/SKILL-SYSTEM-CLOSEOUT-2026-07-04.md](../evidence/reviews/SKILL-SYSTEM-CLOSEOUT-2026-07-04.md) | 2026-07-04 Skill 体系优化收尾、本地门禁和外部门禁边界 |

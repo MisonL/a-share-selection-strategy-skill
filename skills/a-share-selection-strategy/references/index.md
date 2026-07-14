@@ -78,6 +78,7 @@
 | `coverage_class` | 本轮覆盖等级，如本地输入、小样本、显式扩池 | `spot_derived_sample` 不能写成全 A 或扩大股票池 |
 | `full_market_claim_allowed` | runner 是否允许自动宣称全市场闭环 | `false` 时必须按边界缩短结论 |
 | `full_market_claim_boundary` | 不能外推为全市场闭环的具体原因 | 必须和候选数一起汇报 |
+| `full_market_closure_eligible` | clean-pool provenance 对 universe/history/clean artifact 的预检查结果 | 只说明清洗前后是否仍无排除；不能替代 runner 的 `full_market_claim_allowed` |
 | `prediction_input_source` | 今日 runner 是否消费外部 prediction 输入 | `not_used` 不能写成 prediction-derived 结果 |
 | `prediction_model_executed_by_runner` | 今日 runner 是否执行预测模型 | `false` 不能写成 runner 训练或执行模型 |
 | `prediction_model_executed_by_score_script` | `score_candidates.py` 是否执行预测模型 | `false` 只能说明评分消费已有预测列 |

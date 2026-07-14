@@ -83,11 +83,13 @@ class ReviewDataIntegrityRegressionTests(unittest.TestCase):
             metadata_output = root / "clean_metadata.json"
             metadata_alias = root / "metadata_alias.json"
             report_output = root / "clean_report.json"
+            provenance_output = root / "full_a_clean_pool_provenance.json"
             old_contents = {
                 output: "old-prices\n",
                 metadata_output: '{"old": "metadata"}\n',
                 metadata_alias: '{"old": "alias"}\n',
                 report_output: '{"old": "report"}\n',
+                provenance_output: '{"old": "provenance"}\n',
             }
             for path, content in old_contents.items():
                 path.write_text(content, encoding="utf-8")
@@ -96,17 +98,21 @@ class ReviewDataIntegrityRegressionTests(unittest.TestCase):
                 "metadata_output": metadata_output,
                 "metadata_alias_output": metadata_alias,
                 "report_output": report_output,
+                "provenance_output": provenance_output,
                 "history_metadata": root / "history_metadata.json",
+                "prices_input": root / "prices.csv",
                 "short_history": None,
+                "universe_input": root / "universe.csv",
+                "universe_metadata": root / "universe_metadata.json",
             }
             clean = pd.DataFrame(
                 {"symbol": ["000001"], "date": ["2026-07-09"], "close": [10.0]}
             )
             original_replace = Path.replace
 
-            def fail_report_publish(source: Path, target: Path) -> Path:
-                if Path(target) == report_output and ".stage." in source.name:
-                    raise OSError("report publish failed")
+            def fail_provenance_publish(source: Path, target: Path) -> Path:
+                if Path(target) == provenance_output and ".stage." in source.name:
+                    raise OSError("provenance publish failed")
                 return original_replace(source, target)
 
             with (
@@ -115,8 +121,13 @@ class ReviewDataIntegrityRegressionTests(unittest.TestCase):
                     "build_report",
                     return_value={"fresh": True},
                 ),
-                patch.object(Path, "replace", new=fail_report_publish),
-                self.assertRaisesRegex(OSError, "report publish failed"),
+                patch.object(
+                    clean_history_pool,
+                    "build_clean_pool_provenance",
+                    return_value={"proof": True},
+                ),
+                patch.object(Path, "replace", new=fail_provenance_publish),
+                self.assertRaisesRegex(OSError, "provenance publish failed"),
             ):
                 clean_history_pool.write_outputs(
                     paths,

@@ -19,6 +19,7 @@ from lib.gates.clean_history_pool import (
     read_json,
     validate_paths,
 )
+from lib.gates.full_a_clean_pool_provenance import build_clean_pool_provenance
 from lib.gates.incremental_history_merge import merge_incremental_history
 from lib.gates.incremental_history_execution import publish_output_pair
 
@@ -49,6 +50,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--incremental-plan", help="Incremental plan JSON.")
     parser.add_argument("--incremental-prices", help="Fetched incremental prices.")
     parser.add_argument("--incremental-metadata", help="Incremental fetch metadata JSON.")
+    parser.add_argument(
+        "--universe-input",
+        help="Explicit baostock_universe CSV or Parquet for clean-pool provenance.",
+    )
+    parser.add_argument(
+        "--universe-metadata",
+        help="Metadata paired with --universe-input for clean-pool provenance.",
+    )
+    parser.add_argument(
+        "--provenance-output",
+        help=(
+            "Optional full-A clean-pool provenance JSON. Requires --universe-input "
+            "and --universe-metadata; it does not prove final scoring or real-time data."
+        ),
+    )
     parser.add_argument("--ttl-days", type=int, default=7, help="Advisory skip TTL.")
     return parser
 
@@ -72,7 +88,14 @@ def main(argv: list[str] | None = None) -> int:
         paths["prices_input"],
     )
     write_outputs(paths, clean, clean_metadata, plan, frame, merge_report)
-    print_success(clean, plan, paths["output"], paths["metadata_output"], merge_report)
+    print_success(
+        clean,
+        plan,
+        paths["output"],
+        paths["metadata_output"],
+        paths["provenance_output"],
+        merge_report,
+    )
     return 0
 
 
@@ -91,6 +114,9 @@ def build_paths(args: argparse.Namespace) -> dict[str, Path | None]:
         "incremental_plan": optional_incremental_path(args, "incremental_plan"),
         "incremental_prices": optional_incremental_path(args, "incremental_prices"),
         "incremental_metadata": optional_incremental_path(args, "incremental_metadata"),
+        "universe_input": optional_provenance_path(args, "universe_input"),
+        "universe_metadata": optional_provenance_path(args, "universe_metadata"),
+        "provenance_output": optional_provenance_path(args, "provenance_output"),
     }
 
 
@@ -109,6 +135,22 @@ def optional_incremental_path(args: argparse.Namespace, name: str) -> Path | Non
     return Path(value) if value else None
 
 
+def optional_provenance_path(args: argparse.Namespace, name: str) -> Path | None:
+    values = [args.universe_input, args.universe_metadata, args.provenance_output]
+    if any(values) and not all(values):
+        raise ValueError(
+            "--universe-input, --universe-metadata, and --provenance-output "
+            "must be provided together"
+        )
+    if any(values) and args.incremental_plan:
+        raise ValueError(
+            "--provenance-output cannot be combined with incremental artifacts; "
+            "persist a merged history artifact before creating full-A provenance"
+        )
+    value = getattr(args, name)
+    return Path(value) if value else None
+
+
 def input_paths(paths: dict[str, Path | None]) -> list[Path | None]:
     return [
         paths["prices_input"],
@@ -117,6 +159,8 @@ def input_paths(paths: dict[str, Path | None]) -> list[Path | None]:
         paths["incremental_plan"],
         paths["incremental_prices"],
         paths["incremental_metadata"],
+        paths["universe_input"],
+        paths["universe_metadata"],
     ]
 
 
@@ -128,6 +172,8 @@ def output_paths(paths: dict[str, Path | None]) -> list[Path]:
     ]
     if paths["metadata_alias_output"]:
         outputs.insert(2, paths["metadata_alias_output"])
+    if paths["provenance_output"]:
+        outputs.append(paths["provenance_output"])
     return [path for path in outputs if path is not None]
 
 
@@ -174,11 +220,16 @@ def write_outputs(
         (staged_output_path(metadata_output, token), metadata_output),
     ]
     metadata_alias = paths["metadata_alias_output"]
+    metadata_alias_stage = None
     if metadata_alias is not None:
+        metadata_alias_stage = staged_output_path(metadata_alias, token)
         staged_outputs.append(
-            (staged_output_path(metadata_alias, token), metadata_alias)
+            (metadata_alias_stage, metadata_alias)
         )
     staged_outputs.append((staged_output_path(report_output, token), report_output))
+    provenance_output = paths.get("provenance_output")
+    if provenance_output is not None:
+        staged_outputs.append((staged_output_path(provenance_output, token), provenance_output))
     try:
         write_frame(clean, staged_outputs[0][0])
         write_json(clean_metadata, staged_outputs[1][0])
@@ -187,6 +238,32 @@ def write_outputs(
             write_json(clean_metadata, staged_outputs[next_index][0])
             next_index += 1
         write_json(report, staged_outputs[next_index][0])
+        next_index += 1
+        if provenance_output is not None:
+            provenance = build_clean_pool_provenance(
+                universe_input=required_output_path(paths, "universe_input"),
+                universe_metadata=required_output_path(paths, "universe_metadata"),
+                history_prices=required_output_path(paths, "prices_input"),
+                history_metadata=required_output_path(paths, "history_metadata"),
+                short_history=paths["short_history"],
+                clean_prices=staged_outputs[0][0],
+                clean_metadata=staged_outputs[1][0],
+                clean_metadata_alias=metadata_alias_stage,
+                clean_report=staged_outputs[next_index - 1][0],
+                display_paths={
+                    "clean_prices": output,
+                    "clean_metadata": metadata_output,
+                    **(
+                        {"clean_metadata_alias": metadata_alias}
+                        if metadata_alias
+                        else {}
+                    ),
+                    "clean_report": report_output,
+                },
+                history_frame=raw,
+                clean_frame=clean,
+            )
+            write_json(provenance, staged_outputs[next_index][0])
         publish_output_pair(staged_outputs, token)
     except Exception:
         for staged, _target in staged_outputs:
@@ -211,15 +288,20 @@ def print_success(
     plan: dict[str, Any],
     output: Path,
     metadata_output: Path,
+    provenance_output: Path | None,
     merge_report: dict[str, Any] | None,
 ) -> None:
     merge_count = 0 if merge_report is None else merge_report["planned_symbol_count"]
+    provenance_text = (
+        f"provenance_output={provenance_output} " if provenance_output is not None else ""
+    )
     print(
         "OK: clean_symbols="
         f"{clean['symbol'].nunique() if not clean.empty else 0} "
         f"removed_symbols={len(plan['remove_symbols'])} rows={len(clean)} "
         f"incremental_merged_symbols={merge_count} output={output} "
-        f"metadata_output={metadata_output} claim_boundary={CLAIM_BOUNDARY}"
+        f"metadata_output={metadata_output} {provenance_text}"
+        f"claim_boundary={CLAIM_BOUNDARY}"
     )
 
 

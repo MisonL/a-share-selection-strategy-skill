@@ -57,7 +57,7 @@
 | `portfolio_overlap_report.py` | 并发持仓、重叠和容量门禁 | 工作日日历不是交易所日历 |
 | `run_baostock_walk_forward.py` | baostock walk-forward 总控 | `--offline-plan` 不执行真实门禁 |
 | `prepare_history_retry_symbols.py` | 从 `selected_symbols.json` 和 `history_metadata.json` 汇总 failed/empty/truncated/unprocessed symbol，生成历史抓取重试清单 | 只生成 recovery plan，不证明全 A 完成 |
-| `prepare_clean_history_pool.py` | 从 history metadata 和 short-history artifact 生成 clean prices/metadata，可显式合并已抓取 delta | 只处理既有 artifact，不联网、不补齐、不证明全 A 完成 |
+| `prepare_clean_history_pool.py` | 从 history metadata 和 short-history artifact 生成 clean prices/metadata，可显式合并已抓取 delta，或将 universe/history/clean artifact 对账后原子写 provenance | provenance 只说明 clean pool 是否具备后续全市场闭环资格；不联网、不补齐、不替代最终 runner、实时行情或选股证明 |
 | `prepare_incremental_history_plan.py` | 对比当前 universe 和既有 history metadata 生成增量抓取计划 | 只生成 plan，不证明增量抓取成功 |
 | `execute_incremental_history_plan.py` | 按计划 bucket 调用单一显式 provider，落盘 checkpoint、聚合增量 artifact，并可选执行 verified merge | 不自动切源；执行完成也不等于全 A 或选股门禁完成 |
 | `summarize_walk_forward_run.py` | 汇总 walk-forward artifact | 未传 required model 参数时不能声称模型口径已验证 |
@@ -76,6 +76,8 @@
 - `a_share_selection_paths.py`
 
 `lib/gates/incremental_history_execution.py` 属于明确产物层，只能由公开 `execute_incremental_history_plan.py` 调用，用于写 bucket checkpoint、校验 CSV/metadata/摘要、原子聚合 artifact 和执行 manifest；它不是独立 CLI，也不允许隐式选择或切换数据源。
+
+`lib/gates/full_a_clean_pool_provenance.py` 是由 `prepare_clean_history_pool.py` 调用的 artifact 校验 helper。它对 universe、原始 history、clean prices/metadata/report 和可选 short-history 清单重算 symbol 集合、计数、路径和 SHA-256；它只返回证明数据，不写入、补齐或切换任何数据源，更不能单独提升 runner 的 `full_market_claim_allowed`。
 
 `lib/runner/run_today_a_share_selection_prices_sidecar.py` 属于明确产物层，只能由公开 runner 写入和校验过滤后 Parquet 的 sidecar；复用时同时校验文件指纹、实际 row/symbol/date 统计和过滤契约。它不是独立 CLI，也不获取或补齐行情。
 

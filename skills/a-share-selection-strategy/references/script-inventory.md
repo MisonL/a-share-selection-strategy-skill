@@ -35,7 +35,7 @@
 | `portfolio_equity_curve.py` | `gate_backtest_cli` | `gate_backtest` | 266 | Build a simple equal-weight equity curve from backtest CSV files. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
 | `portfolio_overlap_report.py` | `gate_backtest_cli` | `gate_backtest` | 379 | Report overlap and capacity gates from backtest CSV files. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
 | `prepare_history_retry_symbols.py` | `gate_backtest_cli` | `gate_backtest` | 231 | Prepare an auditable retry symbol list from history fetch artifacts. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
-| `prepare_clean_history_pool.py` | `gate_backtest_cli` | `gate_backtest` | 245 | Prepare clean prices and metadata from existing history artifacts; optional verified delta merge. | 保留: public recovery CLI，只处理既有 artifact，不联网、不证明全 A 完成。 |
+| `prepare_clean_history_pool.py` | `gate_backtest_cli` | `gate_backtest` | 327 | Prepare clean prices and metadata from existing history artifacts; optional verified delta merge or atomic clean-pool provenance output. | 保留: public recovery CLI，只处理既有 artifact；provenance 只校验 lineage，不联网、不提升最终全 A 声称。 |
 | `prepare_incremental_history_plan.py` | `gate_backtest_cli` | `gate_backtest` | 599 | Prepare an incremental history fetch plan from universe and metadata. | 保留: public planning CLI，只生成增量计划，不证明抓取成功。 |
 | `execute_incremental_history_plan.py` | `gate_backtest_cli` | `gate_backtest` | 212 | Execute one explicit provider across plan buckets and persist resumable artifacts. | 保留: public execution CLI，不自动切源，不证明全 A 完成。 |
 | `probe_baostock_limit_fields.py` | `gate_backtest_cli` | `gate_backtest` | 421 | Probe baostock field availability without modeling limit rules. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |

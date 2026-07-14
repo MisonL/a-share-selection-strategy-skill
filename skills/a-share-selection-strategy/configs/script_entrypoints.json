@@ -347,7 +347,8 @@
       "primary_artifacts": [
         "clean_prices.csv",
         "clean_metadata.json",
-        "clean_history_report.json"
+        "clean_history_report.json",
+        "full_a_clean_pool_provenance.json"
       ]
     },
     "prepare_incremental_history_plan.py": {

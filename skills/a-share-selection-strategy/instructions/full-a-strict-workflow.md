@@ -306,6 +306,16 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 
 `clean_history_report.json.claim_boundary` 必须保持 `clean_history_pool_from_existing_artifacts_not_full_market_proof`。`skip_records[]` 记录 `symbol/source/reason/observed_at/ttl_days`，适合作为后续显式 skip 或到期复核清单；它不是静默成功，也不是退市或不可交易的最终证明。`metadata.json` 兼容副本必须通过 `--metadata-alias-output` 显式请求，脚本不会隐式覆盖同目录文件。
 
+需要审计 clean pool 是否仍完整覆盖本轮 `baostock_universe` 时，才在上述命令中追加以下三项；`universe.csv` 和 `universe_metadata.json` 必须是 `fetch_baostock_a_share_universe.py` 或 runner `--fetch-spot baostock_universe` 同一次执行的配对产物，不能传 Eastmoney `source_scope=a_share_spot_snapshot` 文件：
+
+```bash
+  --universe-input "$RUN/universe.csv" \
+  --universe-metadata "$RUN/universe_metadata.json" \
+  --provenance-output "$RUN/clean/full_a_clean_pool_provenance.json"
+```
+
+三项 `--universe-input --universe-metadata --provenance-output` 必须成组传入。它会原子写出 `full_a_clean_pool_provenance.json`，重算沪深 A 股代码集合、history 请求/实际集合、clean 剔除集合、row/symbol 计数与所有输入输出的 SHA-256；之后复核该文件时会再次从磁盘重算语义，不只信任 JSON 中的声明。`validation_status=valid` 只证明这些落地 artifact 相互一致，不能替代实时行情、prediction、券商订单、回测或最终 runner 证明。`full_market_closure_eligible=false` 时，尤其是 `clean_pool_removed_symbols_not_full_market`，必须保持 runner 的 `full_market_claim_allowed=false`；例如 5,202 -> 5,166 的 short-history 清洗并不是全 A 闭环。该 provenance 选项暂不和 `--incremental-*` 同用，避免未持久化 merged frame 被伪装为原始 history；完成增量后应先落地可独立对账的 merged history，再创建新 provenance。
+
 日常增量任务不要默认重新冷启动全量历史。先基于最新 spot 和 clean metadata 生成增量计划：
 
 ```bash

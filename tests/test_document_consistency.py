@@ -1239,6 +1239,37 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn('"coverage_class"', provenance)
         self.assertIn('"full_market_claim_boundary"', provenance)
 
+    def test_full_a_clean_pool_provenance_contract_is_documented(self) -> None:
+        root = ROOT / "skills/a-share-selection-strategy"
+        workflow = (root / "instructions/full-a-strict-workflow.md").read_text(
+            encoding="utf-8"
+        )
+        runbook = (root / "instructions/runbook.md").read_text(encoding="utf-8")
+        script_reference = (root / "references/script-reference.md").read_text(
+            encoding="utf-8"
+        )
+        index = (root / "references/index.md").read_text(encoding="utf-8")
+        scripts = (root / "scripts/SCRIPTS.md").read_text(encoding="utf-8")
+        registry = json.loads(
+            (root / "configs/script_entrypoints.json").read_text(encoding="utf-8")
+        )
+
+        for document in [workflow, runbook, script_reference]:
+            self.assertIn("--universe-input", document)
+            self.assertIn("--universe-metadata", document)
+            self.assertIn("--provenance-output", document)
+            self.assertIn("full_market_closure_eligible", document)
+        self.assertIn("不能替代 runner 的 `full_market_claim_allowed`", index)
+        self.assertIn("不能单独提升 runner 的 `full_market_claim_allowed`", scripts)
+        self.assertIn("clean_pool_removed_symbols_not_full_market", workflow)
+        self.assertIn("不能传 Eastmoney", workflow)
+        self.assertIn("不能使用 Eastmoney spot metadata", script_reference)
+        self.assertIn("逐原因对账", script_reference)
+        self.assertIn(
+            "full_a_clean_pool_provenance.json",
+            registry["entries"]["prepare_clean_history_pool.py"]["primary_artifacts"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -223,6 +223,16 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 
 `prepare_clean_history_pool.py` 不联网、不重新取数，只基于既有 `history_metadata.json` 和短历史清单生成 clean `prices.csv`、clean metadata 和剔除报告。`metadata.json` 兼容副本必须通过 `--metadata-alias-output` 显式请求；脚本不会隐式覆盖同目录文件。`clean_history_report.json.skip_records[]` 必须保留 `symbol/source/reason/observed_at/ttl_days`，用于后续显式复核或过期重试。
 
+只有需要 clean-pool provenance 审计时，才在命令中追加以下三项；前两个文件必须来自同一次 `baostock_universe` 抓取，不能使用 Eastmoney spot metadata：
+
+```bash
+  --universe-input "$RUN/universe.csv" \
+  --universe-metadata "$RUN/universe_metadata.json" \
+  --provenance-output "$RUN/clean/full_a_clean_pool_provenance.json"
+```
+
+可选的 `--universe-input --universe-metadata --provenance-output` 必须同时出现；它会在同一次原子发布中绑定 universe、raw history、clean outputs 和可选 short-history 清单，并逐原因对账 history metadata、short-history 与 clean report。`full_a_clean_pool_provenance.json.full_market_closure_eligible=true` 只表示尚无 clean-pool 排除，仍不等于最终 runner 已完成全市场筛选、实时行情、prediction、券商订单或收益证明；有 short-history 等剔除时该字段必须为 `false`。该 provenance 模式暂不接受 `--incremental-*` 参数，避免把未持久化的内存 merge 伪装成可复核 raw artifact。
+
 增量抓取完成后，同一入口可加 `--incremental-plan --incremental-prices --incremental-metadata`，先把验证过的 delta history 合并进 clean pool，再执行原有清洗。合并会拒绝 delta metadata 中的 failed/empty/truncated/unprocessed symbol 和 `rate_limit_budget_exhausted=true`、缺失计划 symbol、未达到 target date 或超过 target date 的增量行，并记录 `incremental_merge_*` 字段；它仍然只处理已落地 artifact，不联网、不证明完整全 A 完成。
 
 全 A 增量计划：

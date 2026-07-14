@@ -174,6 +174,16 @@ def add_history_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--start-date", help="History start date.")
     parser.add_argument("--end-date", help="History end date.")
     parser.add_argument(
+        "--history-output-format",
+        choices=["csv", "parquet", "pq"],
+        default=None,
+        help=(
+            "History artifact format for --history-source baostock. Omitted "
+            "keeps the compatible CSV default; parquet/pq reduces large full-A "
+            "write and downstream read cost and requires pyarrow or fastparquet."
+        ),
+    )
+    parser.add_argument(
         "--derive-symbols-from-spot",
         action="store_true",
         help="Derive history symbols from the local or fetched spot snapshot.",

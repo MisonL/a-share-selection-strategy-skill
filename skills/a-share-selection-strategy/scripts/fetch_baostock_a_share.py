@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -31,12 +32,13 @@ FIELDS = (
 NUMERIC_COLUMNS = ["open", "high", "low", "close", "volume", "amount", "turn"]
 CLAIM_BOUNDARY = "baostock_external_api_not_broker_order_or_full_market_proof"
 DATA_SOURCE_NOTE = "baostock public API; scope is requested symbols and date range only"
+OUTPUT_FORMATS = {".csv": "csv", ".parquet": "parquet", ".pq": "parquet"}
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Fetch baostock A-share daily data into local CSV and metadata. "
+            "Fetch baostock A-share daily data into local CSV or Parquet and metadata. "
             "Exit 0 plus written files still require metadata and gate review."
         )
     )
@@ -45,7 +47,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--start-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
     parser.add_argument("--end-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
-    parser.add_argument("--output", required=True, help="Output CSV path.")
+    parser.add_argument(
+        "--output",
+        required=True,
+        help=(
+            "Output CSV or Parquet path. Parquet requires pyarrow or fastparquet."
+        ),
+    )
     parser.add_argument(
         "--metadata-output", required=True, help="Output metadata JSON path."
     )
@@ -87,9 +95,43 @@ def main(argv: list[str] | None = None) -> int:
     output = Path(args.output)
     metadata_output = Path(args.metadata_output)
     try:
-        metadata = fetch_and_write(args, output, metadata_output)
+        output_format = prices_output_format(output)
+    except ValueError as exc:
+        remove_output(output)
+        remove_output(metadata_output)
+        print(
+            f"ERROR: code=invalid_output_format output_written=false message={exc}",
+            file=sys.stderr,
+        )
+        return 2
+    if output.resolve() == metadata_output.resolve():
+        remove_output(output)
+        remove_output(metadata_output)
+        print(
+            "ERROR: code=invalid_output_path output_written=false "
+            "message=prices output and metadata output must differ",
+            file=sys.stderr,
+        )
+        return 2
+    if output_format == "parquet" and not parquet_engine_available():
+        remove_output(output)
+        remove_output(metadata_output)
+        print(
+            "ERROR: code=missing_dependency output_written=false "
+            "message=Parquet output requires pyarrow or fastparquet",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        metadata = fetch_and_write(
+            args,
+            output,
+            metadata_output,
+            output_format=output_format,
+        )
     except Exception as exc:  # noqa: BLE001
         remove_output(output)
+        remove_output(metadata_output)
         print(
             f"ERROR: code=fetch_failed output_written=false message={exc}",
             file=sys.stderr,
@@ -117,6 +159,8 @@ def fetch_and_write(
     args: argparse.Namespace,
     output: Path,
     metadata_output: Path,
+    *,
+    output_format: str,
 ) -> dict[str, Any]:
     frame, metadata = fetch_prices(args)
     frame, metadata = apply_quality_policy(
@@ -128,7 +172,19 @@ def fetch_and_write(
     metadata = output_status(
         metadata, output_written=True, metadata_output_written=True
     )
-    write_outputs(frame, metadata, output, metadata_output)
+    metadata.update(
+        {
+            "output_format": output_format,
+            "output_path": str(output),
+        }
+    )
+    write_outputs(
+        frame,
+        metadata,
+        output,
+        metadata_output,
+        output_format=output_format,
+    )
     return metadata
 
 
@@ -469,10 +525,31 @@ def write_outputs(
     metadata: dict[str, Any],
     output: Path,
     metadata_output: Path,
+    *,
+    output_format: str,
 ) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
-    frame.to_csv(output, index=False)
+    if output_format == "csv":
+        frame.to_csv(output, index=False)
+    else:
+        frame.to_parquet(output, index=False)
     write_metadata(metadata, metadata_output)
+
+
+def prices_output_format(output: Path) -> str:
+    output_format = OUTPUT_FORMATS.get(output.suffix.lower())
+    if output_format is None:
+        raise ValueError(
+            "unsupported prices output format; use .csv, .parquet, or .pq"
+        )
+    return output_format
+
+
+def parquet_engine_available() -> bool:
+    return any(
+        importlib.util.find_spec(module) is not None
+        for module in ("pyarrow", "fastparquet")
+    )
 
 
 def write_metadata(metadata: dict[str, Any], metadata_output: Path) -> None:
@@ -510,7 +587,9 @@ def print_summary(metadata: dict[str, Any], prefix: str = "OK") -> None:
         f"non_trading_rows={metadata.get('non_trading_rows', 0)} "
         f"tradestatus_missing_rows={metadata.get('tradestatus_missing_rows', 0)} "
         f"start_date={metadata['start_date']} end_date={metadata['end_date']} "
-        f"adjustflag={metadata['adjustflag']}"
+        f"adjustflag={metadata['adjustflag']} "
+        f"output_format={metadata.get('output_format', 'csv')} "
+        f"output_path={metadata.get('output_path', '')}"
     )
 
 

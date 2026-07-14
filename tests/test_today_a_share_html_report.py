@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 import tempfile
@@ -17,6 +18,11 @@ sys.path.insert(0, str(TESTS))
 
 from lib.report_html.a_share_selection_html_report import render_report  # noqa: E402
 from html_report_helpers import minimal_summary, read_report, read_summary, report_run  # noqa: E402
+
+
+HAS_PARQUET_ENGINE = any(
+    importlib.util.find_spec(name) for name in ("pyarrow", "fastparquet")
+)
 
 
 class TodayAShareHtmlReportTests(unittest.TestCase):
@@ -1491,6 +1497,73 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         payload = complete.split("data-candidate-candles>", 1)[1].split("</script>", 1)[
             0
         ]
+        candles = json.loads(payload)
+        self.assertEqual(
+            ["2026-06-04", 9.8, 10.6, 9.7, 10.1, 1200.0], candles["300001"][0]
+        )
+        self.assertEqual(
+            ["2026-06-05", 10.1, 10.8, 10.0, 10.6, 1500.0], candles["300001"][1]
+        )
+        self.assertEqual(
+            ["2026-06-05", 19.8, 20.2, 19.5, 20.0, 2100.0], candles["600000"][0]
+        )
+
+    @unittest.skipUnless(HAS_PARQUET_ENGINE, "parquet engine is required")
+    def test_complete_candidate_detail_embeds_parquet_kline_data(self) -> None:
+        import pandas as pd
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            candidates = output / "candidates.csv"
+            prices = output / "prices.parquet"
+            write_consumer_candidate_rows(candidates)
+            pd.DataFrame(
+                [
+                    {
+                        "symbol": "sz.300001",
+                        "date": "20260604",
+                        "open": 9.8,
+                        "high": 10.6,
+                        "low": 9.7,
+                        "close": 10.1,
+                        "volume": 1200,
+                    },
+                    {
+                        "symbol": "300001.SZ",
+                        "date": "2026-06-05",
+                        "open": 10.1,
+                        "high": 10.8,
+                        "low": 10.0,
+                        "close": 10.6,
+                        "volume": 1500,
+                    },
+                    {
+                        "symbol": "600000",
+                        "date": "2026-06-05",
+                        "open": 19.8,
+                        "high": 20.2,
+                        "low": 19.5,
+                        "close": 20.0,
+                        "volume": 2100,
+                    },
+                ]
+            ).to_parquet(prices, index=False)
+            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+            summary.update(
+                {
+                    "candidate_rows": 2,
+                    "candidates_output": str(candidates),
+                    "candidates_output_written": True,
+                    "prices_output": str(prices),
+                    "prices_output_written": True,
+                }
+            )
+            report = render_report(summary, {"steps": []}, language="zh")
+
+        complete = report.split('<section id="complete-candidates"', 1)[1]
+        payload = complete.split("data-candidate-candles>", 1)[1].split(
+            "</script>", 1
+        )[0]
         candles = json.loads(payload)
         self.assertEqual(
             ["2026-06-04", 9.8, 10.6, 9.7, 10.1, 1200.0], candles["300001"][0]

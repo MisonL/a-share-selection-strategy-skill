@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
+import importlib.util
 import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,6 +18,11 @@ sys.path.insert(0, str(SCRIPTS))
 
 import fetch_baostock_a_share as fetcher  # noqa: E402
 from lib.selection_core.a_share_selection_tradability import tradability_stats  # noqa: E402
+
+
+HAS_PARQUET_ENGINE = any(
+    importlib.util.find_spec(name) for name in ("pyarrow", "fastparquet")
+)
 
 
 class FetchBaostockAShareTests(unittest.TestCase):
@@ -31,6 +38,9 @@ class FetchBaostockAShareTests(unittest.TestCase):
     def test_parse_symbols_rejects_bj_prefix_instead_of_routing_to_sz(self) -> None:
         with self.assertRaisesRegex(ValueError, "bj.430047"):
             fetcher.parse_symbols("bj.430047")
+
+    def test_help_discloses_csv_and_parquet_outputs(self) -> None:
+        self.assertIn("Output CSV or Parquet path", fetcher.build_parser().format_help())
 
     def test_collect_rows_maps_ohlcv_amount_and_name(self) -> None:
         result = FakeResult(
@@ -264,10 +274,162 @@ class FetchBaostockAShareTests(unittest.TestCase):
             output = Path(tmpdir) / "prices.csv"
             meta = Path(tmpdir) / "metadata.json"
             frame = fetcher.pd.DataFrame([{"symbol": "000001"}])
-            fetcher.write_outputs(frame, metadata, output, meta)
+            fetcher.write_outputs(
+                frame,
+                metadata,
+                output,
+                meta,
+                output_format="csv",
+            )
             self.assertTrue(output.exists())
             saved = json.loads(meta.read_text(encoding="utf-8"))
         self.assertEqual("baostock", saved["source"])
+
+    @unittest.skipUnless(HAS_PARQUET_ENGINE, "parquet engine is required")
+    def test_main_writes_parquet_with_explicit_format_metadata(self) -> None:
+        for suffix in [".parquet", ".pq"]:
+            with self.subTest(suffix=suffix), tempfile.TemporaryDirectory() as tmpdir:
+                output = Path(tmpdir) / f"prices{suffix}"
+                meta = Path(tmpdir) / "metadata.json"
+                frame = fetcher.pd.DataFrame(
+                    [valid_row("000001", "2026-05-20")]
+                )
+                metadata = metadata_for(["000001"], frame)
+
+                with patch.object(
+                    fetcher, "fetch_prices", return_value=(frame, metadata)
+                ):
+                    code = fetcher.main(
+                        [
+                            "--symbols",
+                            "000001",
+                            "--start-date",
+                            "2026-05-20",
+                            "--end-date",
+                            "2026-05-20",
+                            "--output",
+                            str(output),
+                            "--metadata-output",
+                            str(meta),
+                        ]
+                    )
+
+                saved_frame = fetcher.pd.read_parquet(output)
+                saved = json.loads(meta.read_text(encoding="utf-8"))
+
+            self.assertEqual(0, code)
+            self.assertEqual(["000001"], saved_frame["symbol"].astype(str).tolist())
+            self.assertEqual("parquet", saved["output_format"])
+            self.assertEqual(str(output), saved["output_path"])
+
+    def test_main_rejects_missing_parquet_engine_before_fetch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "prices.parquet"
+            meta = Path(tmpdir) / "metadata.json"
+            output.write_text("stale\n", encoding="utf-8")
+            meta.write_text('{"stale": true}\n', encoding="utf-8")
+            stderr = StringIO()
+
+            with patch.object(
+                fetcher.importlib.util,
+                "find_spec",
+                return_value=None,
+            ), patch.object(
+                fetcher,
+                "fetch_prices",
+                side_effect=AssertionError("fetch must not run"),
+            ), redirect_stderr(stderr):
+                code = fetcher.main(
+                    [
+                        "--symbols",
+                        "000001",
+                        "--start-date",
+                        "2026-05-20",
+                        "--end-date",
+                        "2026-05-20",
+                        "--output",
+                        str(output),
+                        "--metadata-output",
+                        str(meta),
+                    ]
+                )
+
+            output_exists = output.exists()
+            metadata_exists = meta.exists()
+
+        self.assertEqual(2, code)
+        self.assertFalse(output_exists)
+        self.assertFalse(metadata_exists)
+        self.assertIn("code=missing_dependency", stderr.getvalue())
+        self.assertIn("pyarrow or fastparquet", stderr.getvalue())
+
+    def test_main_rejects_unsupported_output_before_fetch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "prices.txt"
+            meta = Path(tmpdir) / "metadata.json"
+            output.write_text("stale\n", encoding="utf-8")
+            meta.write_text('{"stale": true}\n', encoding="utf-8")
+            stderr = StringIO()
+
+            with patch.object(
+                fetcher,
+                "fetch_prices",
+                side_effect=AssertionError("fetch must not run"),
+            ), redirect_stderr(stderr):
+                code = fetcher.main(
+                    [
+                        "--symbols",
+                        "000001",
+                        "--start-date",
+                        "2026-05-20",
+                        "--end-date",
+                        "2026-05-20",
+                        "--output",
+                        str(output),
+                        "--metadata-output",
+                        str(meta),
+                    ]
+                )
+
+            output_exists = output.exists()
+            metadata_exists = meta.exists()
+
+        self.assertEqual(2, code)
+        self.assertFalse(output_exists)
+        self.assertFalse(metadata_exists)
+        self.assertIn("unsupported prices output format", stderr.getvalue())
+
+    def test_main_rejects_same_prices_and_metadata_output_before_fetch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "prices.csv"
+            output.write_text("stale\n", encoding="utf-8")
+            stderr = StringIO()
+
+            with patch.object(
+                fetcher,
+                "fetch_prices",
+                side_effect=AssertionError("fetch must not run"),
+            ), redirect_stderr(stderr):
+                code = fetcher.main(
+                    [
+                        "--symbols",
+                        "000001",
+                        "--start-date",
+                        "2026-05-20",
+                        "--end-date",
+                        "2026-05-20",
+                        "--output",
+                        str(output),
+                        "--metadata-output",
+                        str(output),
+                    ]
+                )
+
+            output_exists = output.exists()
+
+        self.assertEqual(2, code)
+        self.assertFalse(output_exists)
+        self.assertIn("prices output and metadata output must differ", stderr.getvalue())
 
     def test_build_metadata_includes_standalone_source_boundary_fields(self) -> None:
         args = argparse_namespace("000001")
@@ -342,12 +504,49 @@ class FetchBaostockAShareTests(unittest.TestCase):
         self.assertFalse(saved["output_written"])
         self.assertTrue(saved["metadata_output_written"])
         self.assertTrue(saved["partial_result"])
+        self.assertEqual("csv", saved["output_format"])
         self.assertEqual("baostock_history_fetch", saved["source_scope"])
         self.assertEqual(fetcher.CLAIM_BOUNDARY, saved["source_claim_boundary"])
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn(
             "output_written=false metadata_output_written=true", stderr.getvalue()
         )
+
+    def test_fetch_failure_removes_stale_output_and_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "prices.parquet"
+            meta = Path(tmpdir) / "metadata.json"
+            output.write_text("stale\n", encoding="utf-8")
+            meta.write_text('{"stale": true}\n', encoding="utf-8")
+            stderr = StringIO()
+
+            with patch.object(
+                fetcher,
+                "fetch_prices",
+                side_effect=RuntimeError("offline"),
+            ), redirect_stderr(stderr):
+                code = fetcher.main(
+                    [
+                        "--symbols",
+                        "000001",
+                        "--start-date",
+                        "2026-05-20",
+                        "--end-date",
+                        "2026-05-20",
+                        "--output",
+                        str(output),
+                        "--metadata-output",
+                        str(meta),
+                    ]
+                )
+
+            output_exists = output.exists()
+            metadata_exists = meta.exists()
+
+        self.assertEqual(2, code)
+        self.assertFalse(output_exists)
+        self.assertFalse(metadata_exists)
+        self.assertIn("code=fetch_failed", stderr.getvalue())
 
     def test_partial_default_stdout_discloses_partial_result(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

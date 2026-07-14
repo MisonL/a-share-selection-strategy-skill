@@ -39,8 +39,12 @@ def prices_output_path(manifest: dict[str, Any]) -> Path:
     if override:
         return Path(override)
     source = str(manifest.get("prices_input", ""))
-    suffix = tabular_suffix(source)
-    return Path(manifest["output_dir"]) / f"prices{suffix}"
+    if not source:
+        history_output_format = (
+            str(manifest.get("history_output_format", "")) or "csv"
+        )
+        return Path(manifest["output_dir"]) / f"prices.{history_output_format}"
+    return Path(manifest["output_dir"]) / f"prices{tabular_suffix(source)}"
 
 
 def spot_output_path(manifest: dict[str, Any]) -> Path | None:

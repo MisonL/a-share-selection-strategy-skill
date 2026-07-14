@@ -716,7 +716,8 @@ def validate_full_a_provenance_options(args: argparse.Namespace) -> None:
 
 def run_prices_path(args: argparse.Namespace) -> Path:
     if not args.prices_input:
-        return Path(args.output_dir) / "prices.csv"
+        output_format = args.history_output_format or "csv"
+        return Path(args.output_dir) / f"prices.{output_format}"
     return Path(args.output_dir) / f"prices{helpers.tabular_suffix(args.prices_input)}"
 
 
@@ -1113,6 +1114,8 @@ def apply_resume_defaults(args: argparse.Namespace, manifest: dict[str, Any]) ->
         return
     if current_source in {"akshare", "akshare_hk_daily", "baostock", "zzshare"}:
         inherit_resume_option(args, manifest, inherited, "history_adjust")
+    if current_source == "baostock":
+        inherit_resume_option(args, manifest, inherited, "history_output_format")
     if current_source == "zzshare":
         note_sensitive_resume_option(
             args, manifest, sensitive_options, "history_http_url"

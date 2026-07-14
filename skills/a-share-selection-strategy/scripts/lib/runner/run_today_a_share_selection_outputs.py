@@ -100,7 +100,7 @@ def write_optional_report(
             output_path=report_path,
             language=language,
         )
-    except OSError as exc:
+    except Exception as exc:  # noqa: BLE001
         record_html_report_error(summary, manifest, exc)
         return
     summary["html_report_written"] = True
@@ -121,7 +121,7 @@ def remove_optional_report(
 def record_html_report_error(
     summary: dict[str, Any],
     manifest: dict[str, Any],
-    exc: OSError,
+    exc: Exception,
 ) -> None:
     error_type = exc.__class__.__name__
     message = str(exc)

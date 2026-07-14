@@ -73,10 +73,14 @@ def candidate_candle_rows(
     if not output_written(summary, "prices_output_written"):
         return {}
     path = Path(str(summary.get("prices_output", "")))
-    if not path.is_file() or path.suffix.lower() != ".csv":
+    if not path.is_file():
         return {}
     symbol_lookup = candidate_symbol_lookup(rows)
     if not symbol_lookup:
+        return {}
+    if path.suffix.lower() in {".parquet", ".pq"}:
+        return parquet_candidate_candle_rows(path, symbol_lookup)
+    if path.suffix.lower() != ".csv":
         return {}
     with path.open(encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
@@ -93,6 +97,51 @@ def candidate_candle_rows(
             if candle is not None:
                 buckets[symbol].append(candle)
     return limited_candle_rows(buckets)
+
+
+def parquet_candidate_candle_rows(
+    path: Path,
+    symbol_lookup: dict[str, str],
+) -> dict[str, list[list[Any]]]:
+    columns = price_columns(parquet_fieldnames(path))
+    if not all(columns.get(column) for column in REQUIRED_PRICE_COLUMNS):
+        return {}
+    selected_columns = list(
+        dict.fromkeys(
+            columns[column]
+            for column in (*REQUIRED_PRICE_COLUMNS, "volume")
+            if columns.get(column)
+        )
+    )
+    import pandas as pd
+
+    frame = pd.read_parquet(path, columns=selected_columns)
+    symbol_keys = frame[columns["symbol"]].map(stock_symbol_key)
+    matched = symbol_keys.isin(symbol_lookup)
+    buckets = {symbol: [] for symbol in symbol_lookup.values()}
+    for symbol_key, row in zip(
+        symbol_keys.loc[matched],
+        frame.loc[matched].to_dict(orient="records"),
+    ):
+        candle = parse_candle_row(row, columns)
+        if candle is not None:
+            buckets[symbol_lookup[symbol_key]].append(candle)
+    return limited_candle_rows(buckets)
+
+
+def parquet_fieldnames(path: Path) -> list[str]:
+    try:
+        import pyarrow.parquet as parquet
+
+        return list(parquet.ParquetFile(path).schema.names)
+    except ImportError:
+        try:
+            import fastparquet
+        except ImportError as fastparquet_error:
+            raise RuntimeError(
+                "Parquet report input requires pyarrow or fastparquet"
+            ) from fastparquet_error
+        return list(fastparquet.ParquetFile(path).columns)
 
 
 def candidate_symbol_lookup(rows: list[dict[str, Any]]) -> dict[str, str]:

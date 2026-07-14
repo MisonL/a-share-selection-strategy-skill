@@ -13,6 +13,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -978,6 +979,44 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("report.html", summary["html_report_error"])
         self.assertFalse(manifest["html_report_written"])
         self.assertEqual("IsADirectoryError", manifest["html_report_error_type"])
+
+    @unittest.skipUnless(HAS_PARQUET_ENGINE, "parquet engine is required")
+    def test_parquet_html_read_failure_does_not_block_success_summary(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=True)
+        frame[["open", "high", "low", "close"]] = (
+            frame[["open", "high", "low", "close"]] * 0.75
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.parquet"
+            output = root / "run"
+            frame.to_parquet(prices, index=False)
+
+            with patch(
+                "lib.report_html.a_share_selection_html_report.candidate_candle_rows",
+                side_effect=RuntimeError("corrupt parquet candle input"),
+            ):
+                code, stdout, stderr = call_runner(
+                    ["--prices-input", str(prices), "--output-dir", str(output)]
+                )
+
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(0, code, stderr)
+        self.assertIn("html_report=unavailable", stdout)
+        self.assertEqual("completed", summary["status"])
+        self.assertTrue(summary["candidates_output_written"])
+        self.assertTrue(summary["diagnostics_output_written"])
+        self.assertFalse(summary["html_report_written"])
+        self.assertEqual("RuntimeError", summary["html_report_error_type"])
+        self.assertEqual(
+            "corrupt parquet candle input", summary["html_report_error"]
+        )
+        self.assertFalse(manifest["html_report_written"])
+        self.assertEqual("RuntimeError", manifest["html_report_error_type"])
 
     def test_html_report_replaces_stale_symlink_without_corrupting_csv(self) -> None:
         frame = build_frame(include_turn=True, include_tradability=True)
@@ -3603,6 +3642,8 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertTrue(stdout.startswith("PLAN_ONLY:"), stdout)
         self.assertEqual("baostock", manifest["history_source"])
         self.assertEqual("baostock", summary["history_source"])
+        self.assertEqual("csv", manifest["history_output_format"])
+        self.assertTrue(summary["prices_output"].endswith("prices.csv"))
         self.assertEqual(["<derived_from_spot_snapshot>"], manifest["history_symbols"])
         self.assertEqual(
             ["fetch_spot", "fetch_history", "validate", "score"],
@@ -3610,9 +3651,201 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         )
         self.assertIn("fetch_baostock_a_share.py", manifest["steps"][1]["command"][1])
         self.assertIn("<derived_from_spot_snapshot>", manifest["steps"][1]["command"])
+        self.assertIn(str(output / "prices.csv"), manifest["steps"][1]["command"])
         self.assertFalse(manifest["commands_executed"])
         self.assertFalse((output / "selected_symbols.json").exists())
         self.assertFalse((output / "history_metadata.json").exists())
+
+    def test_runner_plan_only_baostock_can_write_history_as_parquet(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "run"
+
+            code, stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "baostock",
+                    "--history-output-format",
+                    "parquet",
+                    "--symbols",
+                    "000001,600000",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--plan-only",
+                    "--no-html-report",
+                ]
+            )
+
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(0, code, stderr)
+        self.assertTrue(stdout.startswith("PLAN_ONLY:"), stdout)
+        self.assertEqual("parquet", manifest["history_output_format"])
+        self.assertTrue(summary["prices_output"].endswith("prices.parquet"))
+        self.assertEqual(
+            str(output / "prices.parquet"),
+            manifest["steps"][0]["command"][
+                manifest["steps"][0]["command"].index("--output") + 1
+            ],
+        )
+        self.assertIn(str(output / "prices.parquet"), manifest["steps"][1]["command"])
+        self.assertIn(str(output / "prices.parquet"), manifest["steps"][2]["command"])
+        self.assertFalse(manifest["commands_executed"])
+
+    @unittest.skipUnless(HAS_PARQUET_ENGINE, "parquet engine is required")
+    def test_runner_executes_baostock_parquet_history_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "run"
+
+            code, _stdout, stderr = call_runner_with_executor(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "baostock",
+                    "--history-output-format",
+                    "parquet",
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--no-html-report",
+                ],
+                baostock_parquet_history_executor,
+            )
+
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            parquet_exists = (output / "prices.parquet").is_file()
+            csv_exists = (output / "prices.csv").exists()
+
+        self.assertEqual(0, code, stderr)
+        self.assertTrue(parquet_exists)
+        self.assertFalse(csv_exists)
+        self.assertEqual("parquet", manifest["history_output_format"])
+        self.assertTrue(summary["prices_output"].endswith("prices.parquet"))
+        self.assertTrue(summary["prices_output_written"])
+        self.assertTrue(summary["history_output_written"])
+        self.assertEqual(1, summary["history_rows"])
+
+    def test_runner_rejects_history_output_format_for_other_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "run"
+            output.mkdir()
+            for name in ["prices.csv", "prices.parquet"]:
+                (output / name).write_text("stale\n", encoding="utf-8")
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "pytdx",
+                    "--history-output-format",
+                    "parquet",
+                    "--symbols",
+                    "000001",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--plan-only",
+                    "--no-html-report",
+                ]
+            )
+
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(2, code)
+        self.assertIn(
+            "--history-output-format requires --history-source baostock",
+            stderr,
+        )
+        self.assertEqual([], manifest["steps"])
+        self.assertFalse((output / "prices.csv").exists())
+        self.assertFalse((output / "prices.parquet").exists())
+
+    def test_runner_rejects_missing_parquet_engine_before_steps(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "run"
+
+            with patch(
+                "lib.runner.run_today_a_share_selection_history.importlib.util.find_spec",
+                return_value=None,
+            ):
+                code, _stdout, stderr = call_runner(
+                    [
+                        "--output-dir",
+                        str(output),
+                        "--history-source",
+                        "baostock",
+                        "--history-output-format",
+                        "parquet",
+                        "--symbols",
+                        "000001",
+                        "--start-date",
+                        "2025-01-01",
+                        "--end-date",
+                        "2026-01-01",
+                        "--no-html-report",
+                    ]
+                )
+
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(2, code)
+        self.assertIn(
+            "Parquet history output requires pyarrow or fastparquet",
+            stderr,
+        )
+        self.assertEqual([], manifest["steps"])
+
+    def test_runner_rejects_history_output_format_with_local_prices(self) -> None:
+        frame = build_frame(include_turn=True, include_tradability=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--history-output-format",
+                    "parquet",
+                    "--output-dir",
+                    str(output),
+                    "--no-html-report",
+                ]
+            )
+
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(2, code)
+        self.assertIn(
+            "--prices-input was provided; history fetch options would be ignored: "
+            "--history-output-format",
+            stderr,
+        )
+        self.assertEqual([], manifest["steps"])
+        self.assertFalse((output / "candidates.csv").exists())
 
     def test_runner_resume_from_uses_prior_retry_symbols(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -3625,6 +3858,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                     {
                         "output_dir": str(previous),
                         "history_source": "baostock",
+                        "history_output_format": "parquet",
                         "start_date": "2025-01-01",
                         "end_date": "2026-01-01",
                     }
@@ -3680,6 +3914,10 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(["000002", "600000"], manifest["history_symbols"])
         self.assertEqual("000002,600000", manifest["symbols"])
         self.assertEqual("baostock", manifest["history_source"])
+        self.assertEqual("parquet", manifest["history_output_format"])
+        self.assertIn(
+            "history_output_format", manifest["resume_inherited_options"]
+        )
         self.assertEqual("2025-01-01", manifest["start_date"])
         self.assertEqual("2026-01-01", manifest["end_date"])
         self.assertEqual("resume_retry_symbols", selected["source"])
@@ -3691,6 +3929,57 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         fetch_history = manifest["steps"][0]
         self.assertEqual("fetch_history", fetch_history["step"])
         self.assertIn("000002,600000", fetch_history["command"])
+        self.assertIn(str(output / "prices.parquet"), fetch_history["command"])
+
+    def test_runner_resume_rejects_invalid_history_output_format(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            previous = root / "previous"
+            output = root / "resume"
+            previous.mkdir()
+            (previous / "run_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "output_dir": str(previous),
+                        "history_source": "baostock",
+                        "history_output_format": "pickle",
+                        "start_date": "2025-01-01",
+                        "end_date": "2026-01-01",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (previous / "selected_symbols.json").write_text(
+                json.dumps({"symbols": ["000001"]}) + "\n",
+                encoding="utf-8",
+            )
+            (previous / "history_metadata.json").write_text(
+                json.dumps({"failed_symbols": ["000001"]}) + "\n",
+                encoding="utf-8",
+            )
+
+            code, _stdout, stderr = call_runner(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--resume-from",
+                    str(previous / "run_manifest.json"),
+                    "--plan-only",
+                    "--no-html-report",
+                ]
+            )
+
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(2, code)
+        self.assertIn(
+            "history-output-format must be csv, parquet, or pq",
+            stderr,
+        )
+        self.assertEqual([], manifest["steps"])
 
     def test_runner_resume_from_resolves_relative_output_dir_from_manifest(
         self,
@@ -6110,6 +6399,78 @@ def history_metadata_executor(command: list[str]) -> subprocess.CompletedProcess
             encoding="utf-8",
         )
     if script == "score_candidates.py":
+        Path(command[command.index("--output") + 1]).write_text(
+            "symbol,total_score\n000001,0.8\n",
+            encoding="utf-8",
+        )
+        Path(command[command.index("--diagnostics-output") + 1]).write_text(
+            "symbol,selection_status\n000001,selected\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            "OK: raw_symbols=1 input_symbols=1 candidates=1 effective_empty_result=false\n",
+            "",
+        )
+    return subprocess.CompletedProcess(command, 0, "", "")
+
+
+def baostock_parquet_history_executor(
+    command: list[str],
+) -> subprocess.CompletedProcess[str]:
+    script = Path(command[1]).name
+    if script == "fetch_baostock_a_share.py":
+        output = Path(command[command.index("--output") + 1])
+        metadata_output = Path(command[command.index("--metadata-output") + 1])
+        pd.DataFrame(
+            [
+                {
+                    "symbol": "000001",
+                    "date": "2026-01-01",
+                    "open": 8.0,
+                    "high": 8.1,
+                    "low": 7.9,
+                    "close": 8.0,
+                    "volume": 1000,
+                    "turn": 1.0,
+                    "tradestatus": "1",
+                    "isST": "0",
+                }
+            ]
+        ).to_parquet(output, index=False)
+        metadata_output.write_text(
+            json.dumps(
+                {
+                    "source": "baostock",
+                    "source_scope": "baostock_history_fetch",
+                    "requested_symbols": ["000001"],
+                    "rows": 1,
+                    "output_rows": 1,
+                    "symbol_count": 1,
+                    "failed_symbols": [],
+                    "empty_symbols": [],
+                    "invalid_rows": 0,
+                    "non_trading_rows": 0,
+                    "partial_result": False,
+                    "output_written": True,
+                    "metadata_output_written": True,
+                    "output_format": "parquet",
+                    "output_path": str(output),
+                    "symbols": [
+                        {
+                            "symbol": "000001",
+                            "rows": 1,
+                            "date_min": "2026-01-01",
+                            "date_max": "2026-01-01",
+                        }
+                    ],
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    elif script == "score_candidates.py":
         Path(command[command.index("--output") + 1]).write_text(
             "symbol,total_score\n000001,0.8\n",
             encoding="utf-8",

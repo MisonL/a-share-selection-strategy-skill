@@ -194,6 +194,7 @@
       "real_gate_boundary": "external_fetch_must_persist_metadata_not_full_a_high_throughput_proof",
       "primary_artifacts": [
         "prices.csv",
+        "prices.parquet",
         "metadata.json"
       ]
     },

@@ -763,6 +763,14 @@ class DocumentConsistencyTests(unittest.TestCase):
             registry["entries"]["fetch_zzshare_a_share.py"]["network_required"]
         )
         self.assertFalse(registry["entries"]["score_candidates.py"]["network_required"])
+        self.assertIn(
+            "prices.parquet",
+            registry["entries"]["fetch_baostock_a_share.py"]["primary_artifacts"],
+        )
+        self.assertNotIn(
+            "prices.parquet",
+            registry["entries"]["fetch_akshare_a_share.py"]["primary_artifacts"],
+        )
 
     def test_root_internal_helper_surface_does_not_expand(self) -> None:
         root = ROOT / "skills/a-share-selection-strategy"

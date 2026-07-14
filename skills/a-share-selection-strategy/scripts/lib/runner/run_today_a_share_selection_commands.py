@@ -459,6 +459,8 @@ def manifest_history_fields(args: Any) -> dict[str, Any]:
             getattr(args, "max_history_symbols_supplied", False)
         ),
         "history_adjust": args.history_adjust or "",
+        "history_output_format": args.history_output_format
+        or ("csv" if not args.prices_input else ""),
         "history_http_url": sanitize_text(args.history_http_url or ""),
         "history_timeout_seconds": manifest_optional(args.history_timeout_seconds),
         "history_request_interval_seconds": manifest_optional(

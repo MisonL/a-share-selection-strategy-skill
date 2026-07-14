@@ -16,6 +16,7 @@ if __name__ == "__main__":
     fail_not_cli(__file__)
 
 
+import importlib.util
 import json
 import re
 from pathlib import Path
@@ -60,6 +61,7 @@ YFINANCE_UNSUPPORTED_HISTORY_OPTIONS = [
 PYTDX_UNSUPPORTED_HISTORY_OPTIONS = [
     "history_adjust",
 ]
+HISTORY_OUTPUT_FORMATS = {"csv", "parquet", "pq"}
 
 
 def validate_history_inputs(args: Any, spot: Path | None) -> None:
@@ -111,6 +113,22 @@ def validate_history_required_inputs(args: Any, spot: Path | None) -> None:
         reject_yfinance_unsupported_history_options(args)
     if args.history_source == "pytdx":
         reject_pytdx_unsupported_history_options(args)
+    if (
+        args.history_output_format
+        and args.history_output_format not in HISTORY_OUTPUT_FORMATS
+    ):
+        raise ValueError("history-output-format must be csv, parquet, or pq")
+    if args.history_output_format and args.history_source != "baostock":
+        raise ValueError(
+            "--history-output-format requires --history-source baostock"
+        )
+    if (
+        args.history_output_format in {"parquet", "pq"}
+        and not parquet_engine_available()
+    ):
+        raise RuntimeError(
+            "Parquet history output requires pyarrow or fastparquet"
+        )
     if args.history_source != "zzshare":
         reject_zzshare_only_history_options(args)
 
@@ -124,6 +142,7 @@ def reject_ignored_history_options(args: Any) -> None:
         "start_date",
         "end_date",
         "history_adjust",
+        "history_output_format",
         *ZZSHARE_ONLY_HISTORY_OPTIONS,
     ]:
         if option_configured(getattr(args, name, None)):
@@ -185,6 +204,13 @@ def option_flags(args: Any, names: list[str]) -> list[str]:
         for name in names
         if option_configured(getattr(args, name, None))
     ]
+
+
+def parquet_engine_available() -> bool:
+    return any(
+        importlib.util.find_spec(module) is not None
+        for module in ("pyarrow", "fastparquet")
+    )
 
 
 def history_symbols(

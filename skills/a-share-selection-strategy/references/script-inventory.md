@@ -41,7 +41,7 @@
 | `probe_baostock_limit_fields.py` | `gate_backtest_cli` | `gate_backtest` | 421 | Probe baostock field availability without modeling limit rules. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
 | `probe_external_source_stability.py` | `gate_backtest_cli` | `gate_backtest` | 571 | Run repeated external source probes through the stable fetch CLIs. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
 | `run_baostock_walk_forward.py` | `gate_backtest_cli` | `gate_backtest` | 692 | Run the baostock prediction-derived walk-forward gate through existing CLIs. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
-| `run_today_a_share_selection.py` | `stable_cli` | `selection_core` | 1302 | Run an auditable local A-share selection workflow through existing CLIs. | 保留: stable public CLI，用户命令兼容路径；full-A provenance 细节由 internal runner helper 实现。 |
+| `run_today_a_share_selection.py` | `stable_cli` | `selection_core` | 1306 | Run an auditable local A-share selection workflow through existing CLIs. | 保留: stable public CLI，用户命令兼容路径；full-A provenance 细节由 internal runner helper 实现。 |
 | `score_candidates.py` | `stable_cli` | `selection_core` | 532 | Score stock candidates from local OHLCV data. | 保留: stable public CLI，用户命令兼容路径。 |
 | `slice_prices_as_of.py` | `stable_cli` | `selection_core` | 118 | Slice local OHLCV rows to an as-of date to prevent future leakage. | 保留: stable public CLI，用户命令兼容路径。 |
 | `summarize_walk_forward_run.py` | `gate_backtest_cli` | `gate_backtest` | 417 | Summarize and gate a real walk-forward run directory. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |

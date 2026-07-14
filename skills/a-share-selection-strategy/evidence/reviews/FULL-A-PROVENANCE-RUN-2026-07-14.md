@@ -60,13 +60,17 @@ provenance schema v2 同时验证：
 
 完整 runner 的主要额外成本来自 220MB history 和 53MB clean artifact 的语义复算及前后双 SHA-256，而不是 26.17 秒 score 子进程本身。曾验证单次指纹可缩短约 8 秒，但 OMP 复核复现了 fingerprint 与内容重读脱钩的替换窗口，因此最终实现保留双指纹。后续性能优化只能采用同一打开流上的 hash+parse、不可变文件句柄或等价原子快照，不能再次复用与实际解析内容脱钩的旧指纹。
 
+本轮后续优化没有改动上述 artifact 双指纹门禁，而是让最终过滤证据携带 input、spot、kept、removed 四个规范化 symbol 集合的 SHA-256。full-A runner 评分前只读取 clean/final prices 的 `symbol` 列并完成集合闭包，评分后复用已验证 final 集合的数量和哈希对账 diagnostics，避免再次读取完整 prices 表。sidecar 也保存并复算 symbol-set SHA-256；哈希缺失、格式错误、计数不一致或集合篡改都显式失败。
+
+同一机器、同一输入和同一命令的受控 A/B：旧提交 `babb74f` wall time 52.847170 秒、runner 51.691630 秒、filter 10.243202 秒、score 18.061659 秒；新实现 wall time 49.515281 秒、runner 47.355818 秒、filter 9.531669 秒、score 16.883459 秒。单次对照中 wall time 减少 3.331889 秒，约 6.3%；runner 减少 4.335812 秒，约 8.4%。两轮均输出 33 个 candidates、5,160 行 diagnostics，`full_market_claim_allowed=false`；候选和诊断的业务列逐值一致，仅三个动态输出路径字段不同。该单次 A/B 说明本机本轮有可观测收益，不承诺其他机器或后续运行的固定加速比例。
+
 ## 验证与审查
 
 - `PYTHONDONTWRITEBYTECODE=1 python3 validate_skill_changes.py`: 退出 0。
-- full unittest suite: 785 tests passed。
-- full-A provenance 定向测试: 35 tests passed，包含 content/row/column-order tamper、per-symbol stale、schema v1、双指纹 TOCTOU、runner pre/post-score 和清理失败。
-- Claude 最终复核: 两个阻塞项已关闭，无新阻塞问题。
-- OMP `newapi-responses/grok-4.5` 最终复核: 两个阻塞项已关闭，无新阻塞问题。
+- full unittest suite: 789 tests passed。
+- full-A provenance 定向测试: 38 tests passed，包含 content/row/column-order tamper、per-symbol stale、schema v1、双指纹 TOCTOU、runner pre/post-score、symbol-set SHA-256、重复读取防止和清理失败。
+- 前序 provenance 实现的 Claude 最终复核: 两个阻塞项已关闭，无新阻塞问题；本轮 symbol-set 增量以本地完整门禁和受控 A/B 验证为准。
+- 前序 provenance 实现的 OMP `newapi-responses/grok-4.5` 最终复核: 两个阻塞项已关闭，无新阻塞问题；本轮 symbol-set 增量以本地完整门禁和受控 A/B 验证为准。
 - CodeRabbit: 3 个 issues；采纳 Skill 首轮读取字段补全。未采纳 `< as_of` 建议，因为本合同要求严格等于共同 as-of，未来日期同样应 fail-closed；未采纳新 coverage class，因为有效但不满足全 A 的真实分类仍是 `local_input`。
 
 ## 结论边界

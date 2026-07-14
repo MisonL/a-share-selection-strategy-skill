@@ -16,6 +16,7 @@ if __name__ == "__main__":
     fail_not_cli(__file__)
 
 
+import hashlib
 from typing import Any
 
 
@@ -30,6 +31,11 @@ BOARD_HK_MAIN = "港股主板"
 BOARD_HK_GEM = "港股 GEM"
 BOARD_UNKNOWN = "未知"
 HK_MARKET_VALUES = {"hk", "hong kong", "hong-kong", "h-share", "港股", "香港"}
+
+
+def symbol_set_sha256(symbols: set[str]) -> str:
+    payload = "\n".join(sorted(symbols)).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def parse_six_digit_symbols(

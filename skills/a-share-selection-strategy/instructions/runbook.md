@@ -430,7 +430,7 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 
 zzshare 429 控制默认参数为 `--max-429-events 3 --max-rate-limit-sleep-seconds 120 --max-runtime-seconds 900`。若 metadata 中 `rate_limit_budget_exhausted=true`，必须保留 checkpoint 和 `unprocessed_symbols`，待冷却后显式 `--resume`；该状态不可报告为抓取成功，也不可将未处理 symbol 混入真实空结果清单。
 
-最终基于 clean prices 复跑时，如同时有当前 `spot.csv` 和目标交易日，应显式加 `--filter-prices-to-spot-universe --min-symbol-latest-date "$END_DATE"`，让 runner 剔除当前 universe 外或最新日期过期的 symbol，并把 `prices_filter_*.json`、summary、stdout 和候选/诊断 CSV provenance 作为审计证据。大 clean prices 可显式加 `--prices-filter-output-format parquet`，让过滤后的运行内 prices 以 Parquet 进入 validate/score，减少 CSV 重写和读取成本。过滤 Parquet 会同时写 `<prices>.metadata.json`，其中包含 artifact SHA-256/size/mtime、row/symbol/date 范围、过滤契约和原始 input metadata；后续复用以路径、size 和 SHA-256 判定内容身份并重算表统计，mtime 仅作审计，单独触碰文件时间不会让内容相同的 artifact 失效。sidecar 缺失、摘要不匹配、内容篡改或统计漂移都会显式失败。该过滤只处理既有文件，不证明缺失历史已补齐。
+最终基于 clean prices 复跑时，如同时有当前 `spot.csv` 和目标交易日，应显式加 `--filter-prices-to-spot-universe --min-symbol-latest-date "$END_DATE"`，让 runner 剔除当前 universe 外或最新日期过期的 symbol，并把 `prices_filter_*.json`、summary、stdout 和候选/诊断 CSV provenance 作为审计证据。大 clean prices 可显式加 `--prices-filter-output-format parquet`，让过滤后的运行内 prices 以 Parquet 进入 validate/score，减少 CSV 重写和读取成本。过滤证据会记录 input、spot、kept、removed 四个 symbol-set SHA-256；接入 full-A provenance 时，评分前读取 clean/final 的 `symbol` 列重算集合，评分后用已验证 final 集合的数量和哈希对账 diagnostics。过滤 Parquet 会同时写 `<prices>.metadata.json`，其中包含 artifact SHA-256/size/mtime、row/symbol/date 范围、symbol-set SHA-256、过滤契约和原始 input metadata；后续复用以路径、size 和 SHA-256 判定内容身份并重算表统计，mtime 仅作审计，单独触碰文件时间不会让内容相同的 artifact 失效。sidecar 缺失、摘要不匹配、内容篡改或统计漂移都会显式失败。symbol-set SHA-256 只证明 breadth 身份；该过滤只处理既有文件，不证明价格值或缺失历史已补齐。
 
 ### yfinance 通用 OHLCV
 

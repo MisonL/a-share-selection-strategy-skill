@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +19,7 @@ from lib.gates.full_a_clean_pool_lineage import (
     symbols_before_as_of_date,
     validate_clean_history_lineage,
 )
+from lib.selection_core.a_share_selection_symbols import symbol_set_sha256
 
 
 SCHEMA_VERSION = 2
@@ -759,11 +759,6 @@ def non_negative_count(metadata: dict[str, Any], key: str, label: str) -> int:
 def require_same_path(value: Any, expected: Path, label: str) -> None:
     if Path(str(value or "")).resolve() != expected.resolve():
         raise ValueError(f"{label} does not match expected artifact")
-
-
-def symbol_set_sha256(symbols: set[str]) -> str:
-    payload = "\n".join(sorted(symbols)).encode("ascii")
-    return hashlib.sha256(payload).hexdigest()
 
 
 def now_iso() -> str:

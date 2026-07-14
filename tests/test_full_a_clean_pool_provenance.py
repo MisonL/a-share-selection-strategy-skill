@@ -500,6 +500,93 @@ class FullACleanPoolProvenanceTests(unittest.TestCase):
         self.assertFalse(manifest["full_a_provenance_closure_eligible"])
         self.assertEqual(2, manifest["full_a_provenance_diagnostic_symbol_count"])
 
+    def test_runner_reads_only_two_symbol_columns_for_full_a_reconciliation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            fixture = write_runner_artifacts(root)
+            output = root / "run"
+
+            with patch.object(
+                runner_full_a,
+                "read_symbol_set",
+                wraps=runner_full_a.read_symbol_set,
+            ) as symbol_reader:
+                code, _stdout, stderr = call_full_a_runner(fixture, output)
+            manifest = read_json(output / "run_manifest.json")
+
+        self.assertEqual(0, code, stderr)
+        self.assertEqual(2, symbol_reader.call_count)
+        self.assertEqual("valid", manifest["full_a_provenance_validation_status"])
+        self.assertTrue(manifest["full_a_provenance_final_scoring_validated"])
+
+    def test_runner_rejects_tampered_filter_symbol_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            fixture = write_runner_artifacts(root)
+            output = root / "run"
+            real_filter = runner.filter_local_prices
+
+            def tampered_filter(**kwargs):
+                frame, metadata = real_filter(**kwargs)
+                metadata["prices_filter_kept_symbol_set_sha256"] = "0" * 64
+                return frame, metadata
+
+            with patch.object(
+                runner,
+                "filter_local_prices",
+                side_effect=tampered_filter,
+            ):
+                code, _stdout, stderr = call_full_a_runner(fixture, output)
+            manifest = read_json(output / "run_manifest.json")
+
+        self.assertEqual(2, code)
+        self.assertIn("prices_filter_kept_symbol_set_sha256", stderr)
+        self.assertEqual("failed", manifest["full_a_provenance_validation_status"])
+        self.assertFalse((output / "candidates.csv").exists())
+
+    def test_scoring_outputs_reject_tampered_expected_symbol_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            final_prices = root / "prices.csv"
+            diagnostics = root / "diagnostics.csv"
+            candidates = root / "candidates.csv"
+            final_prices.write_text("symbol\n000001\n", encoding="utf-8")
+            diagnostics.write_text("symbol\n000001\n", encoding="utf-8")
+            candidates.write_text("symbol\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "diagnostics symbols do not exactly cover final prices",
+            ):
+                validate_full_a_scoring_outputs(
+                    final_prices=final_prices,
+                    candidates=candidates,
+                    diagnostics=diagnostics,
+                    expected_final_symbol_count=1,
+                    expected_final_symbol_set_sha256="0" * 64,
+                )
+
+    def test_scoring_outputs_reject_incomplete_expected_symbol_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            final_prices = root / "prices.csv"
+            diagnostics = root / "diagnostics.csv"
+            candidates = root / "candidates.csv"
+            final_prices.write_text("symbol\n000001\n", encoding="utf-8")
+            diagnostics.write_text("symbol\n000001\n", encoding="utf-8")
+            candidates.write_text("symbol\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "final symbol count and SHA-256 must be provided together",
+            ):
+                validate_full_a_scoring_outputs(
+                    final_prices=final_prices,
+                    candidates=candidates,
+                    diagnostics=diagnostics,
+                    expected_final_symbol_count=1,
+                )
+
     def test_runner_keeps_claim_false_when_final_filter_removes_symbol(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -508,12 +595,26 @@ class FullACleanPoolProvenanceTests(unittest.TestCase):
             frame = pd.read_csv(fixture["prices_input"], dtype={"symbol": str})
             frame.loc[frame["symbol"] != "600001"].to_csv(final_prices, index=False)
             input_symbol_count = int(frame["symbol"].nunique())
+            input_symbols = set(frame["symbol"].astype(str))
+            kept_symbols = input_symbols - {"600001"}
             manifest = {
                 "prices_filter_spot_symbol_count": input_symbol_count,
+                "prices_filter_spot_symbol_set_sha256": (
+                    full_a_provenance.symbol_set_sha256(input_symbols)
+                ),
                 "prices_filter_input_symbol_count": input_symbol_count,
+                "prices_filter_input_symbol_set_sha256": (
+                    full_a_provenance.symbol_set_sha256(input_symbols)
+                ),
                 "prices_filter_kept_symbol_count": input_symbol_count - 1,
+                "prices_filter_kept_symbol_set_sha256": (
+                    full_a_provenance.symbol_set_sha256(kept_symbols)
+                ),
                 "prices_filter_removed_symbol_count": 1,
                 "prices_filter_removed_symbols": ["600001"],
+                "prices_filter_removed_symbol_set_sha256": (
+                    full_a_provenance.symbol_set_sha256({"600001"})
+                ),
                 "prices_filter_output_written": True,
                 "prices_filter_spot_universe": True,
                 "prices_filter_min_symbol_latest_date": "2026-07-11",

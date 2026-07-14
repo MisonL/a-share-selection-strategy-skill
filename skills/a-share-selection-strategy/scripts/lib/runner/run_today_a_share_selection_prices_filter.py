@@ -20,7 +20,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from lib.selection_core.a_share_selection_symbols import stock_symbol_key
+from lib.selection_core.a_share_selection_symbols import (
+    stock_symbol_key,
+    symbol_set_sha256,
+)
 
 
 CLAIM_BOUNDARY = "local_prices_filtered_from_existing_artifacts_not_new_history_fetch"
@@ -140,6 +143,9 @@ def filter_metadata(
     removed_stale_symbols: list[str],
 ) -> dict[str, Any]:
     removed_symbols = sorted(set(removed_universe_symbols + removed_stale_symbols))
+    input_symbols = set(price_keys)
+    kept_symbols = set(kept_keys)
+    removed_symbol_keys = input_symbols.difference(kept_symbols)
     metadata_path = output_dir / "prices_filter.json"
     return {
         "source": "prices_local_filter",
@@ -151,10 +157,16 @@ def filter_metadata(
         "prices_filter_input_rows": int(len(price_frame)),
         "prices_filter_output_rows": int(len(kept)),
         "prices_filter_spot_symbol_count": len(spot_keys),
-        "prices_filter_input_symbol_count": len(set(price_keys)),
-        "prices_filter_kept_symbol_count": len(set(kept_keys)),
+        "prices_filter_input_symbol_count": len(input_symbols),
+        "prices_filter_input_symbol_set_sha256": symbol_set_sha256(input_symbols),
+        "prices_filter_spot_symbol_set_sha256": symbol_set_sha256(spot_keys),
+        "prices_filter_kept_symbol_count": len(kept_symbols),
+        "prices_filter_kept_symbol_set_sha256": symbol_set_sha256(kept_symbols),
         "prices_filter_removed_symbol_count": len(removed_symbols),
         "prices_filter_removed_symbols": removed_symbols,
+        "prices_filter_removed_symbol_set_sha256": symbol_set_sha256(
+            removed_symbol_keys
+        ),
         "prices_filter_removed_stale_symbol_count": len(removed_stale_symbols),
         "prices_filter_removed_stale_symbols": removed_stale_symbols,
         "prices_filter_output_written": True,

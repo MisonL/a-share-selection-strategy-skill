@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import importlib.util
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
@@ -2252,6 +2253,22 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             manifest["prices_filter_metadata_output"],
         )
         self.assertEqual(1, filter_metadata["prices_filter_removed_symbol_count"])
+        self.assertEqual(
+            symbol_set_sha256({"000002", "600001"}),
+            filter_metadata["prices_filter_input_symbol_set_sha256"],
+        )
+        self.assertEqual(
+            symbol_set_sha256({"000002"}),
+            filter_metadata["prices_filter_spot_symbol_set_sha256"],
+        )
+        self.assertEqual(
+            symbol_set_sha256({"000002"}),
+            filter_metadata["prices_filter_kept_symbol_set_sha256"],
+        )
+        self.assertEqual(
+            symbol_set_sha256({"600001"}),
+            filter_metadata["prices_filter_removed_symbol_set_sha256"],
+        )
         self.assertGreaterEqual(filter_metadata["prices_filter_duration_seconds"], 0.0)
         self.assertEqual(
             filter_metadata["prices_filter_duration_seconds"],
@@ -2402,6 +2419,10 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertTrue(parquet_exists)
         self.assertEqual(1, sidecar["schema_version"])
         self.assertEqual(1, sidecar["symbol_count"])
+        self.assertEqual(
+            symbol_set_sha256({"000002"}),
+            sidecar["symbol_set_sha256"],
+        )
         self.assertEqual(
             filter_metadata["prices_filter_output_prices"],
             sidecar["filter_contract"]["prices_filter_output_prices"],
@@ -6537,6 +6558,10 @@ def history_fallback_executor(command: list[str]) -> subprocess.CompletedProcess
 def csv_rows(path: Path) -> list[dict[str, str]]:
     with path.open(encoding="utf-8", newline="") as handle:
         return list(csv.DictReader(handle))
+
+
+def symbol_set_sha256(symbols: set[str]) -> str:
+    return hashlib.sha256("\n".join(sorted(symbols)).encode("utf-8")).hexdigest()
 
 
 if __name__ == "__main__":

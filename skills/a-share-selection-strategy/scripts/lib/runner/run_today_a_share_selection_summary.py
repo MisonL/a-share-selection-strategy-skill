@@ -105,6 +105,7 @@ def full_a_provenance_fields(manifest: dict[str, Any]) -> dict[str, Any]:
         "full_a_provenance_clean_symbol_count",
         "full_a_provenance_clean_pool_removed_symbol_count",
         "full_a_provenance_final_prices_symbol_count",
+        "full_a_provenance_final_prices_symbol_set_sha256",
         "full_a_provenance_final_filter_removed_symbol_count",
         "full_a_provenance_final_filter_removed_symbols",
         "full_a_provenance_final_scoring_validated",
@@ -248,17 +249,29 @@ def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "prices_filter_spot_symbol_count": int(
             manifest.get("prices_filter_spot_symbol_count", 0) or 0
         ),
+        "prices_filter_spot_symbol_set_sha256": manifest.get(
+            "prices_filter_spot_symbol_set_sha256", ""
+        ),
         "prices_filter_input_symbol_count": int(
             manifest.get("prices_filter_input_symbol_count", 0) or 0
         ),
+        "prices_filter_input_symbol_set_sha256": manifest.get(
+            "prices_filter_input_symbol_set_sha256", ""
+        ),
         "prices_filter_kept_symbol_count": int(
             manifest.get("prices_filter_kept_symbol_count", 0) or 0
+        ),
+        "prices_filter_kept_symbol_set_sha256": manifest.get(
+            "prices_filter_kept_symbol_set_sha256", ""
         ),
         "prices_filter_removed_symbol_count": int(
             manifest.get("prices_filter_removed_symbol_count", 0) or 0
         ),
         "prices_filter_removed_symbols": manifest.get(
             "prices_filter_removed_symbols", []
+        ),
+        "prices_filter_removed_symbol_set_sha256": manifest.get(
+            "prices_filter_removed_symbol_set_sha256", ""
         ),
         "prices_filter_removed_stale_symbol_count": int(
             manifest.get("prices_filter_removed_stale_symbol_count", 0) or 0

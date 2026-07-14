@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from lib.selection_core.a_share_selection_symbols import symbol_set_sha256
+
 
 SIDECAR_SCHEMA_VERSION = 1
 CLAIM_BOUNDARY = "filtered_prices_sidecar_not_new_market_data_or_full_market_proof"
@@ -33,6 +35,7 @@ def build_sidecar(
         "artifact": artifact_fingerprint(prices),
         "rows": int(len(frame)),
         "symbol_count": frame_symbol_count(frame),
+        "symbol_set_sha256": frame_symbol_set_sha256(frame),
         "date_min": min(dates) if dates else "",
         "date_max": max(dates) if dates else "",
         "filter_contract": dict(filter_metadata),
@@ -74,10 +77,11 @@ def load_verified_sidecar(prices: Path) -> dict[str, Any]:
     if not isinstance(contract, dict):
         raise ValueError(f"filtered prices sidecar filter_contract is missing: {path}")
     actual_summary = artifact_table_summary(prices)
-    expected_summary = {
-        key: data.get(key) for key in ("rows", "symbol_count", "date_min", "date_max")
-    }
-    if expected_summary != actual_summary:
+    summary_keys = ["rows", "symbol_count", "date_min", "date_max"]
+    if "symbol_set_sha256" in data:
+        summary_keys.append("symbol_set_sha256")
+    expected_summary = {key: data.get(key) for key in summary_keys}
+    if expected_summary != {key: actual_summary[key] for key in summary_keys}:
         raise ValueError(
             f"filtered prices sidecar table statistics mismatch: {path}"
         )
@@ -99,6 +103,7 @@ def artifact_table_summary(prices: Path) -> dict[str, Any]:
     return {
         "rows": int(len(frame)),
         "symbol_count": int(symbols.nunique()),
+        "symbol_set_sha256": symbol_set_sha256(set(symbols.tolist())),
         "date_min": min(dates) if dates else "",
         "date_max": max(dates) if dates else "",
     }
@@ -127,6 +132,12 @@ def validate_filter_contract(
             raise ValueError(
                 f"filtered prices sidecar filter contract mismatch: {contract_key}"
             )
+    declared_hash = str(contract.get("prices_filter_kept_symbol_set_sha256", ""))
+    if declared_hash and declared_hash != summary["symbol_set_sha256"]:
+        raise ValueError(
+            "filtered prices sidecar filter contract mismatch: "
+            "prices_filter_kept_symbol_set_sha256"
+        )
     declared = str(contract.get("prices_filter_output_prices", "")).strip()
     if declared and Path(declared).resolve() != prices.resolve():
         raise ValueError(
@@ -176,6 +187,12 @@ def frame_symbol_count(frame: Any) -> int:
     if "symbol" not in frame or frame.empty:
         return 0
     return int(validated_symbol_series(frame, None).nunique())
+
+
+def frame_symbol_set_sha256(frame: Any) -> str:
+    if "symbol" not in frame or frame.empty:
+        return symbol_set_sha256(set())
+    return symbol_set_sha256(set(validated_symbol_series(frame, None).tolist()))
 
 
 def validated_symbol_series(frame: Any, prices: Path | None) -> Any:

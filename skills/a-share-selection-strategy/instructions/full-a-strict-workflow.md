@@ -434,6 +434,8 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 
 `--filter-prices-to-spot-universe` 和 `--min-symbol-latest-date` 只过滤已落地的 clean `prices.csv`，用于防止旧历史池混入当前 universe 外或过期 symbol；它们不会联网、不补齐缺失历史，也不能替代增量历史抓取和 metadata 复验。`--prices-filter-output-format parquet` 只改变过滤后运行内 prices 的落盘格式，减少大 CSV 重写和后续读取成本；它不改变评分口径，默认不传时仍沿用输入格式。
 
+过滤证据会同时记录 input、spot、kept 和 removed 四个规范化 symbol 集合的 SHA-256。接入 `--full-a-provenance` 时，runner 在评分前只读取 clean/final prices 的 `symbol` 列，重算集合并与过滤计数、哈希和证明绑定；评分后直接用已验证 final 集合的数量和哈希对账 diagnostics，candidates 仍必须是其子集。该优化减少大表重复读取，不减少集合校验；symbol-set SHA-256 只证明本轮 breadth 身份，不证明价格值、实时性、成交或收益。
+
 `--score-profile` 是最终轮性能排查开关，会让 runner 传递 `score_candidates.py --profile-output` 并写出 `score_profile.json`，记录 score step 的阶段耗时、输入行数、候选行数、诊断行数、input rows/s 和 scored symbols/s。该文件只用于定位本地评分瓶颈，不改变候选、诊断、排序或失败路径；默认不传时不会生成。
 
 `summary.json` 同时保留 runner 总耗时、symbol 派生、prices filter、HTML、history fetch step 和 score profile 核心吞吐；外部源实际提供时还透传 `history_requested_raw_rows/history_raw_rows/history_output_rows/history_api_request_count/history_overfetch_rows` 以及 429、network retry 和 sleep。字段不存在表示 provider 未测量，不能按 0 推断没有请求或重试。

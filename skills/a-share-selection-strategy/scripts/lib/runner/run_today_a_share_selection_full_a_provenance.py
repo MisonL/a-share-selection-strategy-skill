@@ -12,7 +12,7 @@ from lib.gates.full_a_clean_pool_provenance import (
     validate_clean_pool_provenance,
     validated_symbol_set,
 )
-from lib.gates.clean_history_pool import read_frame
+from lib.gates.clean_history_pool import pandas_module
 from lib.selection_core.a_share_selection_command_safety import sanitize_text
 
 
@@ -66,6 +66,12 @@ def complete_full_a_provenance(
             final_prices=prices,
             candidates=candidates,
             diagnostics=diagnostics,
+            expected_final_symbol_count=manifest.get(
+                "full_a_provenance_final_prices_symbol_count"
+            ),
+            expected_final_symbol_set_sha256=manifest.get(
+                "full_a_provenance_final_prices_symbol_set_sha256"
+            ),
         )
     except Exception as exc:
         record_full_a_provenance_failure(manifest, exc, OUTPUT_FAILURE_BOUNDARY)
@@ -124,8 +130,8 @@ def validate_full_a_pre_score(
         artifact_path(artifacts, "universe_input"),
         "--spot-input",
     )
-    clean_symbols = validated_symbol_set(read_frame(prices_input), "prices input")
-    final_symbols = validated_symbol_set(read_frame(final_prices), "final prices")
+    clean_symbols = read_symbol_set(prices_input, "prices input")
+    final_symbols = read_symbol_set(final_prices, "final prices")
     if not final_symbols.issubset(clean_symbols):
         raise ValueError("final prices contain symbols outside provenance clean prices")
     removed_symbols = sorted(clean_symbols.difference(final_symbols))
@@ -156,6 +162,9 @@ def validate_full_a_pre_score(
             proof["clean_pool"]["removed_symbol_count"]
         ),
         "full_a_provenance_final_prices_symbol_count": len(final_symbols),
+        "full_a_provenance_final_prices_symbol_set_sha256": symbol_set_sha256(
+            final_symbols
+        ),
         "full_a_provenance_final_filter_removed_symbol_count": len(removed_symbols),
         "full_a_provenance_final_filter_removed_symbols": removed_symbols,
         "full_a_provenance_final_scoring_validated": False,
@@ -171,13 +180,36 @@ def validate_full_a_scoring_outputs(
     final_prices: Path,
     candidates: Path,
     diagnostics: Path,
+    expected_final_symbol_count: Any = None,
+    expected_final_symbol_set_sha256: Any = None,
 ) -> dict[str, Any]:
-    final_symbols = validated_symbol_set(read_frame(final_prices), "final prices")
     diagnostic_symbols = csv_symbol_set(diagnostics, "diagnostics", allow_empty=False)
     candidate_symbols = csv_symbol_set(candidates, "candidates", allow_empty=True)
-    if diagnostic_symbols != final_symbols:
+    has_expected_count = expected_final_symbol_count is not None
+    has_expected_hash = bool(expected_final_symbol_set_sha256)
+    if has_expected_count != has_expected_hash:
+        raise ValueError(
+            "full-A final symbol count and SHA-256 must be provided together"
+        )
+    if not has_expected_count:
+        final_symbols = read_symbol_set(final_prices, "final prices")
+        expected_count = len(final_symbols)
+        expected_hash = symbol_set_sha256(final_symbols)
+    else:
+        expected_count = strict_non_negative_int(
+            expected_final_symbol_count,
+            "full_a_provenance_final_prices_symbol_count",
+        )
+        expected_hash = required_symbol_hash(
+            expected_final_symbol_set_sha256,
+            "full_a_provenance_final_prices_symbol_set_sha256",
+        )
+    if (
+        len(diagnostic_symbols) != expected_count
+        or symbol_set_sha256(diagnostic_symbols) != expected_hash
+    ):
         raise ValueError("diagnostics symbols do not exactly cover final prices")
-    if not candidate_symbols.issubset(final_symbols):
+    if not candidate_symbols.issubset(diagnostic_symbols):
         raise ValueError("candidate symbols are outside final prices")
     return {
         "full_a_provenance_validation_status": "valid",
@@ -240,6 +272,55 @@ def validate_filter_counts(
     clean_hash = str(proof["clean_pool"]["symbol_set_sha256"])
     if symbol_set_sha256(clean_symbols) != clean_hash:
         raise ValueError("prices input symbols do not match provenance clean pool")
+    expected_hashes = {
+        "prices_filter_input_symbol_set_sha256": clean_hash,
+        "prices_filter_spot_symbol_set_sha256": str(
+            proof["universe"]["symbol_set_sha256"]
+        ),
+        "prices_filter_kept_symbol_set_sha256": symbol_set_sha256(final_symbols),
+        "prices_filter_removed_symbol_set_sha256": symbol_set_sha256(
+            set(removed_symbols)
+        ),
+    }
+    for key, expected_hash in expected_hashes.items():
+        actual_hash = required_symbol_hash(manifest.get(key), key)
+        if actual_hash != expected_hash:
+            raise ValueError(f"{key} does not match full-A provenance artifacts")
+
+
+def read_symbol_set(path: Path, label: str) -> set[str]:
+    pd = pandas_module()
+    suffix = path.suffix.lower()
+    if suffix == ".csv":
+        frame = pd.read_csv(path, usecols=["symbol"], dtype={"symbol": str})
+    elif suffix in {".parquet", ".pq"}:
+        frame = pd.read_parquet(path, columns=["symbol"])
+        frame["symbol"] = frame["symbol"].astype(str)
+    else:
+        raise ValueError("unsupported prices format; use .csv, .parquet, or .pq")
+    return validated_symbol_set(frame, label)
+
+
+def required_symbol_hash(value: Any, label: str) -> str:
+    text = str(value or "").strip().lower()
+    invalid_character = any(
+        character not in "0123456789abcdef" for character in text
+    )
+    if len(text) != 64 or invalid_character:
+        raise ValueError(f"{label} must be a SHA-256 digest")
+    return text
+
+
+def strict_non_negative_int(value: Any, label: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{label} must be a non-negative integer")
+    try:
+        result = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label} must be a non-negative integer") from exc
+    if result < 0 or str(value).strip() != str(result):
+        raise ValueError(f"{label} must be a non-negative integer")
+    return result
 
 
 def pre_score_boundary(

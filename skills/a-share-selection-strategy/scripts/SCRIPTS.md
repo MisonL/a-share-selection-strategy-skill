@@ -79,9 +79,9 @@
 
 `lib/gates/full_a_clean_pool_provenance.py` 是由 `prepare_clean_history_pool.py` 调用的 artifact 校验 helper。它对 universe、原始 history、clean prices/metadata/report 和可选 short-history 清单重算 symbol 集合、计数、路径和 SHA-256；至少 4,000 个 symbol 的 sample guard 还必须与完整 baostock metadata 合同、逐标 freshness 和 history-clean 全行保真同时通过，数量本身不是完整性证明。`lib/gates/full_a_clean_pool_artifacts.py` 负责前后双指纹与路径身份，`lib/gates/full_a_clean_pool_lineage.py` 负责逐标日期与 retained row/content 对账，二者都不写 artifact。三个 helper 只返回证明数据，不写入、补齐或切换任何数据源，更不能单独提升 runner 的 `full_market_claim_allowed`。
 
-`lib/runner/run_today_a_share_selection_full_a_provenance.py` 是 runner 的内部两阶段门禁：评分前绑定 exact clean/universe 输入和 final filter，评分后对账 diagnostics/candidates；只有无任何剔除时才允许 breadth 声明，失败时清除未验证评分产物。它不是 CLI，也不改变默认 runner 输出。
+`lib/runner/run_today_a_share_selection_full_a_provenance.py` 是 runner 的内部两阶段门禁：评分前读取 clean/final prices 的 `symbol` 列，绑定 exact clean/universe 输入、过滤计数和四类 symbol-set SHA-256；评分后用已验证 final 集合的数量和哈希对账 diagnostics/candidates。只有无任何剔除时才允许 breadth 声明，失败时清除未验证评分产物。它不是 CLI，也不改变默认 runner 输出。
 
-`lib/runner/run_today_a_share_selection_prices_sidecar.py` 属于明确产物层，只能由公开 runner 写入和校验过滤后 Parquet 的 sidecar；复用时同时校验文件指纹、实际 row/symbol/date 统计和过滤契约。它不是独立 CLI，也不获取或补齐行情。
+`lib/runner/run_today_a_share_selection_prices_sidecar.py` 属于明确产物层，只能由公开 runner 写入和校验过滤后 Parquet 的 sidecar；复用时同时校验文件指纹、实际 row/symbol/date 统计、symbol-set SHA-256 和过滤契约。它不是独立 CLI，也不获取或补齐行情。
 
 直接复用 Python 代码时，需要将本目录加入 `PYTHONPATH` 或 `sys.path`。不要把内部 helper 的导入路径当成稳定 package API。
 

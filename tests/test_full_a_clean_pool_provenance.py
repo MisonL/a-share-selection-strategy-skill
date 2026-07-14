@@ -303,6 +303,25 @@ class FullACleanPoolProvenanceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "duplicate symbols"):
                 build_clean_pool_provenance(**paths)
 
+    def test_validated_symbol_set_does_not_iterate_price_rows(self) -> None:
+        frame = pd.DataFrame(
+            {
+                "symbol": pd.Series(
+                    ["000001"] * 100 + ["600001"],
+                    dtype="string[pyarrow]",
+                )
+            }
+        )
+
+        with patch.object(
+            pd.Series,
+            "__iter__",
+            side_effect=AssertionError("symbol rows must not be iterated in Python"),
+        ):
+            symbols = full_a_provenance.validated_symbol_set(frame, "prices")
+
+        self.assertEqual({"000001", "600001"}, symbols)
+
     def test_rejects_universe_snapshot_date_that_differs_from_history(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             paths = write_artifacts(Path(tmpdir))

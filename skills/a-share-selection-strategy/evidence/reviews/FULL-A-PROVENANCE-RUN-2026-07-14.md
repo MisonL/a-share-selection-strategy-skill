@@ -64,11 +64,15 @@ provenance schema v2 同时验证：
 
 同一机器、同一输入和同一命令的受控 A/B：旧提交 `babb74f` wall time 52.847170 秒、runner 51.691630 秒、filter 10.243202 秒、score 18.061659 秒；新实现 wall time 49.515281 秒、runner 47.355818 秒、filter 9.531669 秒、score 16.883459 秒。单次对照中 wall time 减少 3.331889 秒，约 6.3%；runner 减少 4.335812 秒，约 8.4%。两轮均输出 33 个 candidates、5,160 行 diagnostics，`full_market_claim_allowed=false`；候选和诊断的业务列逐值一致，仅三个动态输出路径字段不同。该单次 A/B 说明本机本轮有可观测收益，不承诺其他机器或后续运行的固定加速比例。
 
+对 1,886,135 行 clean Parquet 的按月分区临时基准没有支持立即迁移：19 个分区的最近月替换为 0.104 秒，但数据体积从 56,031,341 bytes 增至 107,702,117 bytes，全量读取从 0.204 秒增至 0.485 秒；排序后的全部 Arrow 列等价。现有流程仍会先构造完整 DataFrame，因此只改变输出目录不能消除上游计算，反而增加存储和全量读取成本。本轮不引入分区目录、目录指纹或新的兼容路径；后续只有持久增量存储能避免完整 DataFrame 时才重新评估。
+
+随后对 provenance `validated_symbol_set` 做真实热点复核。旧实现对 Pandas StringArray 逐行构造 Python set，cProfile 中 3 次调用累计约 9.17 秒。改为向量化长度、数字和沪深前缀校验，再只把唯一值转成集合；1,888,327 行、5,202 symbols 的交错 4 轮内存基准中，旧实现中位数 2.004584 秒，新实现 0.108699 秒，约 18.4 倍。新旧 clean Parquet 均为 1,886,135 行且排序后全部 Arrow 列等价；metadata/report 除 `generated_at/observed_at` 外相同。单次完整 profile wall time 受 CSV 缓存和 Parquet 写入波动影响，不据此承诺端到端固定加速。
+
 ## 验证与审查
 
 - `PYTHONDONTWRITEBYTECODE=1 python3 validate_skill_changes.py`: 退出 0。
-- full unittest suite: 789 tests passed。
-- full-A provenance 定向测试: 38 tests passed，包含 content/row/column-order tamper、per-symbol stale、schema v1、双指纹 TOCTOU、runner pre/post-score、symbol-set SHA-256、重复读取防止和清理失败。
+- full unittest suite: 790 tests passed。
+- full-A provenance 定向测试: 39 tests passed，包含 content/row/column-order tamper、per-symbol stale、schema v1、双指纹 TOCTOU、runner pre/post-score、symbol-set SHA-256、逐行迭代防止、重复读取防止和清理失败。
 - 前序 provenance 实现的 Claude 最终复核: 两个阻塞项已关闭，无新阻塞问题；本轮 symbol-set 增量以本地完整门禁和受控 A/B 验证为准。
 - 前序 provenance 实现的 OMP `newapi-responses/grok-4.5` 最终复核: 两个阻塞项已关闭，无新阻塞问题；本轮 symbol-set 增量以本地完整门禁和受控 A/B 验证为准。
 - CodeRabbit: 3 个 issues；采纳 Skill 首轮读取字段补全。未采纳 `< as_of` 建议，因为本合同要求严格等于共同 as-of，未来日期同样应 fail-closed；未采纳新 coverage class，因为有效但不满足全 A 的真实分类仍是 `local_input`。

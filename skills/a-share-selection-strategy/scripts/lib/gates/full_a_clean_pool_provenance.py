@@ -637,11 +637,15 @@ def comparable_provenance(data: dict[str, Any]) -> dict[str, Any]:
 def validated_symbol_set(frame: Any, label: str, *, require_a_share: bool = False) -> set[str]:
     if "symbol" not in frame:
         raise ValueError(f"{label} is missing symbol column")
-    symbols = {str(value).strip() for value in frame["symbol"]}
-    if "" in symbols or any(not symbol.isdigit() or len(symbol) != 6 for symbol in symbols):
+    normalized = frame["symbol"].astype(str).str.strip()
+    valid = normalized.str.len().eq(6) & normalized.str.isdigit()
+    if not bool(valid.all()):
         raise ValueError(f"{label} has invalid symbol")
-    if require_a_share and any(not symbol.startswith(A_SHARE_PREFIXES) for symbol in symbols):
+    if require_a_share and not bool(
+        normalized.str.startswith(A_SHARE_PREFIXES).all()
+    ):
         raise ValueError(f"{label} has symbol outside Shanghai/Shenzhen A shares")
+    symbols = set(normalized.unique().tolist())
     if require_a_share and len(frame) != len(symbols):
         raise ValueError(f"{label} has duplicate symbols")
     if not symbols:

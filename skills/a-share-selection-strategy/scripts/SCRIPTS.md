@@ -29,7 +29,7 @@
 | `create_demo_data.py` | 生成本地 demo CSV | demo 不是真实行情 |
 | `validate_ohlcv.py` | 校验 CSV/Parquet 行情输入 | 字段、日期、前导零、重复行、价格和历史窗口 |
 | `score_candidates.py` | 本地行情评分并输出候选 CSV；可显式写性能 profile | `effective_empty_result`、`failed_symbols`、prediction 披露字段；`--profile-output` 默认关闭 |
-| `run_today_a_share_selection.py` | 今日总控，串联取数、校验、评分、诊断和 HTML | `run_manifest.json`、`summary.json`、metadata；`--score-profile` 仅增加观测产物；`--full-a-provenance` 仅显式消费已验证 lineage 并执行最终 breadth 对账 |
+| `run_today_a_share_selection.py` | 今日总控，串联取数、校验、评分、诊断和 HTML | `run_manifest.json`、`summary.json`、metadata；Baostock history 可显式输出 Parquet，默认仍为 CSV；`--score-profile` 仅增加观测产物；`--full-a-provenance` 仅显式消费已验证 lineage 并执行最终 breadth 对账 |
 | `slice_prices_as_of.py` | 按信号日切片行情 | `actual_data_date`，不能只看退出码 |
 
 ## 取数入口
@@ -38,7 +38,7 @@
 | --- | --- | --- |
 | `fetch_eastmoney_a_share_spot.py` | 东方财富 A 股实时快照 | partial 分页不能写成全市场完成；长分页需稳定排序和 retry/page interval |
 | `fetch_baostock_a_share_universe.py` | baostock `query_all_stock` A 股 universe | 只写 symbol/name 兼容快照；支持显式日期回看和失败重试；`fetch_errors/fetch_attempts/max_attempts` 用于复盘；不是实时行情、价格、成交额或全市场完成证明 |
-| `fetch_baostock_a_share.py` | baostock A 股日线 | 可复用 `symbol/name` CSV/Parquet，缺名和非交易行策略显式；检查失败、空 symbol、无效行和可交易字段 |
+| `fetch_baostock_a_share.py` | baostock A 股日线 | prices 输出按 `.csv/.parquet/.pq` 后缀显式选择，CSV 默认兼容；可复用 `symbol/name` CSV/Parquet，缺名和非交易行策略显式；检查失败、空 symbol、无效行和可交易字段 |
 | `fetch_akshare_a_share.py` | akshare A 股日线 | fallback 成功不证明主接口稳定 |
 | `fetch_pytdx_a_share.py` | pytdx A 股日线 | 自适应近期窗口请求；no-token OHLCV/amount 补充源；只允许同 `symbol+date` 合并，缺换手率、可交易字段、官方授权和长期稳定证明 |
 | `fetch_akshare_hk_daily.py` | akshare 港股日线 | 不证明港交所日历或真实成交 |

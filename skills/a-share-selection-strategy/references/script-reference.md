@@ -90,7 +90,7 @@ Python 代码复用这些脚本时，需要将 `skills/a-share-selection-strateg
 | `fetch_baostock_a_share_universe.py` | baostock `query_all_stock` | A 股 symbol/name universe 兼容快照 | 全 A 股票池主入口；可用 `--lookback-days` 解析最近非空交易日；`--retries` 失败重试会写入 `fetch_errors/fetch_attempts/max_attempts`；配合 `--derive-all-spot-symbols` 使用 | 实时行情、价格、成交额、行业、交易所日历或实时全市场行情证明 |
 | `fetch_eastmoney_a_share_spot.py` | 东方财富公开 spot 接口 | A 股实时快照展示字段 | 全 A 当日展示增强；长分页应使用稳定 symbol 排序和显式 retry/page interval | 历史 OHLCV、长期稳定性、唯一股票池前置 |
 | `fetch_zzshare_a_share.py` | zzshare `daily(fields=all)` | A 股日线、换手、停牌/ST 相关字段 | 大范围历史 breadth、spot 派生 symbol 池历史抓取 | 无 token 长期额度、无截断、券商订单或成交能力 |
-| `fetch_baostock_a_share.py` | baostock | A 股日线、`tradestatus/isST`；可复用 `symbol/name` 输入，仅查询缺名项 | 小范围严格字段核验、walk-forward 门禁 | 全 A 首轮高吞吐抓取、直接涨跌停字段 |
+| `fetch_baostock_a_share.py` | baostock | A 股日线、`tradestatus/isST`；prices 可按 `.csv/.parquet/.pq` 后缀落盘，可复用 `symbol/name` 输入并仅查询缺名项 | 小范围严格字段核验、walk-forward 门禁；大文件本地复跑优先显式 Parquet | 全 A 首轮高吞吐抓取、直接涨跌停字段 |
 | `fetch_akshare_a_share.py` | akshare | A 股日线、成交额、换手 | A 股历史补充或交叉观察 | `stock_zh_a_hist` 主接口稳定；fallback 不能当主源成功 |
 | `fetch_pytdx_a_share.py` | pytdx | A 股日线 OHLCV、成交额；近期窗口自适应首请求并记录 raw/output/request 指标 | no-token 历史补充和对照；仅可按同一 `symbol+date` 补字段 | 换手率、停牌/ST、股票名称、独立 strict merge、官方授权、机构或商业使用权、长期稳定性 |
 | `fetch_akshare_hk_daily.py` | akshare 港股日线 | 港股 OHLCV、成交额、名称 | 港股已落地数据集审查 | A 股全市场覆盖、港交所完整日历或可交易性 |
@@ -175,10 +175,11 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 带 baostock 历史源的小样本真实任务：
 
 ```bash
-uv run --with pandas --with numpy --with baostock python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py \
+uv run --with pandas --with numpy --with pyarrow --with baostock python skills/a-share-selection-strategy/scripts/run_today_a_share_selection.py \
   --output-dir /tmp/a-share-selection-today \
   --mode auto \
   --history-source baostock \
+  --history-output-format parquet \
   --history-names-input /path/to/universe.csv \
   --history-missing-name-policy query \
   --history-baostock-non-trading-policy reject \
@@ -206,7 +207,7 @@ uv run --with pandas --with numpy --with baostock python skills/a-share-selectio
   --no-html-report
 ```
 
-`--symbols-file` 会在 manifest 中形成 `execution_path_reason=explicit_symbols_file`；`--plan-only` 只写计划 step 和审计输入快照，`commands_executed=false`；`--resume-from` 只生成 `resume_retry_symbols`，并在 `resume_inherited_options` 记录从上一轮继承的非敏感历史抓取参数，仍需重新检查新一轮 `history_metadata.json`。`history_http_url` 不从上一轮 manifest 自动继承；需要复用自定义 URL 时本轮显式传 `--history-http-url`，manifest 会用 `resume_sensitive_options_requiring_explicit_input` 提醒。
+`--symbols-file` 会在 manifest 中形成 `execution_path_reason=explicit_symbols_file`；`--plan-only` 只写计划 step 和审计输入快照，`commands_executed=false`；`--resume-from` 只生成 `resume_retry_symbols`，并在 `resume_inherited_options` 记录从上一轮继承的非敏感历史抓取参数，仍需重新检查新一轮 `history_metadata.json`。Baostock 的 `--history-output-format parquet|pq` 需要 `pyarrow` 或 `fastparquet`，会把 fetch、validate、score、summary 和 HTML 候选 K 线绑定到同一 Parquet artifact；缺引擎在 step 和联网前失败。默认仍为 CSV，其他 provider 或本地 `--prices-input` 不接受该参数。`history_http_url` 不从上一轮 manifest 自动继承；需要复用自定义 URL 时本轮显式传 `--history-http-url`，manifest 会用 `resume_sensitive_options_requiring_explicit_input` 提醒。
 
 全 A clean pool：
 

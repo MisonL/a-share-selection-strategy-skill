@@ -68,10 +68,13 @@ provenance schema v2 同时验证：
 
 随后对 provenance `validated_symbol_set` 做真实热点复核。旧实现对 Pandas StringArray 逐行构造 Python set，cProfile 中 3 次调用累计约 9.17 秒。改为向量化长度、数字和沪深前缀校验，再只把唯一值转成集合；1,888,327 行、5,202 symbols 的交错 4 轮内存基准中，旧实现中位数 2.004584 秒，新实现 0.108699 秒，约 18.4 倍。新旧 clean Parquet 均为 1,886,135 行且排序后全部 Arrow 列等价；metadata/report 除 `generated_at/observed_at` 外相同。单次完整 profile wall time 受 CSV 缓存和 Parquet 写入波动影响，不据此承诺端到端固定加速。
 
+对同一份 1,888,327 行、15 列 Baostock history 做格式 A/B：CSV 写入 14.392975 秒，Parquet 写入 0.972751 秒；三轮读取中位数分别为 3.190746 秒和 0.136589 秒，Parquet 读取约 23.36 倍。文件从 198,693,465 bytes 降至 56,074,242 bytes，减少约 71.78%。两份文件的 15 列逐值完全一致，所有 symbol 保持六位文本。原始 CSV 和 Parquet 执行 `validate_ohlcv.py` 都因相同 36 个短历史 symbol 退出 1，规范化错误文本一致；以同一 metadata 和 short-history 清单执行 `prepare_clean_history_pool.py` 后均得到 5,166 symbols / 1,886,135 rows，排序后的全部 Arrow 列一致。该结果支持 Baostock fetcher 和 runner 的显式 Parquet 输出，但只优化已抓取数据的本地落盘与读取，不缩短逐 symbol 网络请求。
+
 ## 验证与审查
 
 - `PYTHONDONTWRITEBYTECODE=1 python3 validate_skill_changes.py`: 退出 0。
-- full unittest suite: 790 tests passed。
+- full unittest suite: 804 tests passed。
+- Baostock Parquet 定向验证覆盖 fetcher 实际写入、`.parquet/.pq` 别名、非法后缀、输出路径冲突、缺少 Parquet 引擎、失败清理、runner 默认 CSV、显式 Parquet、provider 作用域、`--prices-input` 冲突、resume 继承和非法 resume 值。使用本轮 5,202-symbol `spot.csv` 的 plan-only 复验确认 fetch、validate、score 三个 step 都绑定同一 `prices.parquet`，且 `commands_executed=false`，未把计划当成联网成功。真实 Parquet HTML 抽取 33 个候选的 2,640 根 K 线耗时 1.412319 秒，候选 K 线未因格式切换丢失；Parquet K 线读取异常会写入 `html_report_error_type/html_report_error`，不阻断已完成的 candidates、diagnostics、summary 或 manifest。
 - full-A provenance 定向测试: 39 tests passed，包含 content/row/column-order tamper、per-symbol stale、schema v1、双指纹 TOCTOU、runner pre/post-score、symbol-set SHA-256、逐行迭代防止、重复读取防止和清理失败。
 - 前序 provenance 实现的 Claude 最终复核: 两个阻塞项已关闭，无新阻塞问题；本轮 symbol-set 增量以本地完整门禁和受控 A/B 验证为准。
 - 前序 provenance 实现的 OMP `newapi-responses/grok-4.5` 最终复核: 两个阻塞项已关闭，无新阻塞问题；本轮 symbol-set 增量以本地完整门禁和受控 A/B 验证为准。

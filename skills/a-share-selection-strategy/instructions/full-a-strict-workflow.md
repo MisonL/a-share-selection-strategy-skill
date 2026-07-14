@@ -84,7 +84,7 @@
 
 Pytdx 的允许补充字段只有 `open/high/low/close/volume/amount`，合并键固定为同一 `symbol+date`。provider 不返回股票名称时，`name` 保持空值并以 `name_value_policy=blank_missing_provider_name` 披露，禁止把 symbol 伪装成名称。缺少同日 `turn/tradestatus/isST/name` 时必须停止 strict merge；禁止用上一交易日、最近一条或前向填充生成新交易日 strict 字段。当前 verified merge 会拒绝 `selection_ready=false` 的 Pytdx 增量 artifact。
 
-`baostock` 历史抓取可通过 `--names-input` 复用 `query_all_stock` 形成的 `symbol/name` CSV 或 Parquet；完整覆盖时不再逐 symbol 调用 `query_stock_basic`。缺失名称必须由 `--missing-name-policy=query/fail/blank` 显式处理，非交易行必须由 `--non-trading-policy=reject/drop/keep` 显式处理；默认仍是查询缺名和拒绝非交易行。runner 同时使用 `baostock_universe` spot 与 baostock history 时自动复用本次 `spot.csv`。这能减少名称请求，但全市场 5000+ 标的会显著增加远端请求数，不改变 baostock 不适合全 A 首轮历史 breadth 的边界。如果用 `query_all_stock` 准备对照股票池，必须按沪深 A 股股票前缀过滤，只保留 `sz.000/001/002/003/300/301` 和 `sh.600/601/603/605/688/689`，排除指数、基金、ETF、B 股和北交所代码。
+`baostock` 历史抓取可通过 `--names-input` 复用 `query_all_stock` 形成的 `symbol/name` CSV 或 Parquet；完整覆盖时不再逐 symbol 调用 `query_stock_basic`。缺失名称必须由 `--missing-name-policy=query/fail/blank` 显式处理，非交易行必须由 `--non-trading-policy=reject/drop/keep` 显式处理；默认仍是查询缺名和拒绝非交易行。runner 同时使用 `baostock_universe` spot 与 baostock history 时自动复用本次 `spot.csv`。显式选择大批量 Baostock 对照或备用抓取时，可在装有 `pyarrow` 或 `fastparquet` 的环境加 `--history-output-format parquet`，降低本地写入和后续读取成本并保留 HTML 候选 K 线；缺引擎会在联网前失败，它不减少逐 symbol 远端请求。这能减少名称请求和本地 I/O。全市场 5000+ 标的会显著增加远端请求数，不改变 baostock 不适合全 A 首轮历史 breadth 的边界。如果用 `query_all_stock` 准备对照股票池，必须按沪深 A 股股票前缀过滤，只保留 `sz.000/001/002/003/300/301` 和 `sh.600/601/603/605/688/689`，排除指数、基金、ETF、B 股和北交所代码。
 
 全 A 失败恢复优先级：
 

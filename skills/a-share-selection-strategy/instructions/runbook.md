@@ -185,7 +185,7 @@ uv run --with pandas --with numpy --with pyarrow python skills/a-share-selection
   --output /tmp/a-share-selection-demo/candidates_parquet.csv
 ```
 
-当前候选输出和今日总控标准产物仍包含 CSV。`run_today_a_share_selection.py` 标准输出为 `run_manifest.json`、`summary.json`、`report.html`、`candidates.csv`、`diagnostics.csv`，并会使用 CSV 中间产物。若用户要求全链路中间完全不出现 CSV，必须先说明需要改造脚本输出、runner 固定路径、artifact validator 和测试。
+当前候选输出和今日总控标准产物仍包含 CSV。`run_today_a_share_selection.py` 标准输出为 `run_manifest.json`、`summary.json`、`report.html`、`candidates.csv`、`diagnostics.csv`；联网历史默认仍写 `prices.csv`，Baostock 可显式用 `--history-output-format parquet` 或 `pq` 改变该 history artifact。候选和诊断仍是 CSV，因此这不等于全链路完全无 CSV。
 
 ## Prediction 生成 Demo
 
@@ -271,6 +271,8 @@ uv run --with pandas --with numpy --with baostock python skills/a-share-selectio
 
 `--symbols` 接受 `000001`、`600000`、`sh.600000`、`sz.000001`，manifest 和 `selected_symbols.json` 会记录归一化后的六位代码。
 
+Baostock 大批量任务可显式加 `--history-output-format parquet`；命令环境需安装 `pyarrow` 或 `fastparquet`，缺失时 runner 会在任何 step 和联网前失败。runner 会把 fetch、validate、score、summary 和 HTML 候选 K 线全部绑定到同一 `prices.parquet`，失败任务通过 `--resume-from` 继续时也继承该格式。默认不传仍写 `prices.csv`；该选项用于降低本地 I/O，不改变联网请求数量或 Baostock 的全 A 渠道边界。其他 history source 或与 `--prices-input` 同用同样会在任何 step 执行前显式失败。
+
 ### 从快照筛选小样本历史抓取标的
 
 ```bash
@@ -313,6 +315,8 @@ uv run --with pandas --with numpy --with baostock python skills/a-share-selectio
   --metadata-output /tmp/a-share-selection-a-share/metadata.json \
   --fail-on-fetch-error
 ```
+
+`--output` 通过后缀显式选择 `.csv`、`.parquet` 或 `.pq`；现有命令和 runner 默认继续使用 CSV。需要反复执行大文件 clean/provenance 时可显式写 Parquet，metadata 会记录 `output_format/output_path`。runner 对应参数为 `--history-output-format parquet`，命令环境必须提供 `pyarrow` 或 `fastparquet`。不支持的后缀、缺少 Parquet 引擎或数据/metadata 路径冲突都会在联网前失败并清理陈旧输出；格式变化不改变数据源、字段、严格门禁或全 A 声明边界。
 
 门禁不能只看退出码，还要检查 metadata：
 

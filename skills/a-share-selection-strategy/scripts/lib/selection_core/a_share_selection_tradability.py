@@ -16,6 +16,7 @@ if __name__ == "__main__":
     fail_not_cli(__file__)
 
 
+from collections.abc import Iterable
 from typing import Any
 
 import pandas as pd
@@ -33,6 +34,7 @@ TRADABILITY_COLUMNS = [
     "turn",
 ]
 TRADABILITY_FIELDS = ["preclose", "pctChg", "tradestatus", "isST"]
+RAW_QUALITY_COUNTER_SEMANTICS = "raw_dimension_counts_not_additive"
 
 
 def prefixed_tradability_stats(frame: pd.DataFrame, prefix: str) -> dict[str, Any]:
@@ -57,6 +59,29 @@ def tradability_stats(frame: pd.DataFrame) -> dict[str, Any]:
         "st_rows": int(st_rows.sum()),
         "st_symbols": symbol_values(frame.loc[st_rows]) if has_symbol else [],
     }
+
+
+def raw_quality_counter_metadata(
+    frame: pd.DataFrame,
+    invalid_indexes: Iterable[object],
+) -> dict[str, Any]:
+    """Describe the overlap between raw invalid and non-trading diagnostics."""
+    invalid_index_set = set(invalid_indexes)
+    if frame.empty or not invalid_index_set:
+        overlap = 0
+    else:
+        invalid_mask = pd.Series(frame.index.isin(invalid_index_set), index=frame.index)
+        overlap = int((non_trading_mask(frame) & invalid_mask).sum())
+    return {
+        "raw_quality_counter_semantics": RAW_QUALITY_COUNTER_SEMANTICS,
+        "raw_invalid_non_trading_overlap_rows": overlap,
+    }
+
+
+def non_trading_mask(frame: pd.DataFrame) -> pd.Series:
+    if frame.empty or "tradestatus" not in frame:
+        return pd.Series(False, index=frame.index, dtype=bool)
+    return frame["tradestatus"].astype(str).str.strip().ne("1")
 
 
 def empty_tradability_stats(missing_rows: int) -> dict[str, Any]:

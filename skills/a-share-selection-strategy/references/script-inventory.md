@@ -25,7 +25,7 @@
 | `create_demo_data.py` | `stable_cli` | `selection_core` | 315 | Create deterministic demo OHLCV CSV files for quick-start smoke tests. | 保留: stable public CLI，用户命令兼容路径。 |
 | `fetch_akshare_a_share.py` | `fetch_cli` | `fetch` | 357 | Fetch A-share OHLCV data through akshare and save local gate files. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
 | `fetch_akshare_hk_daily.py` | `fetch_cli` | `fetch` | 408 | Fetch Hong Kong OHLCV data through akshare stock_hk_daily. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
-| `fetch_baostock_a_share.py` | `fetch_cli` | `fetch` | 514 | Fetch A-share OHLCV data through baostock and save local gate files. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
+| `fetch_baostock_a_share.py` | `fetch_cli` | `fetch` | 518 | Fetch A-share OHLCV data through baostock and save local gate files. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
 | `fetch_baostock_a_share_universe.py` | `fetch_cli` | `fetch` | 163 | Fetch baostock A-share universe into a spot-compatible CSV snapshot. | 保留: public fetch CLI，全 A 股票池主入口，支持显式日期回看和失败重试，不能写成实时行情或实时全市场完成。 |
 | `fetch_eastmoney_a_share_spot.py` | `fetch_cli` | `fetch` | 422 | Fetch Eastmoney A-share realtime spot snapshot into local CSV metadata. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
 | `fetch_pytdx_a_share.py` | `fetch_cli` | `fetch` | 171 | Fetch A-share daily OHLCV data through pytdx and save gate files. | 保留: public fetch CLI，显式 no-token 补充源；缺换手率、可交易字段、官方授权和长期稳定证明。 |

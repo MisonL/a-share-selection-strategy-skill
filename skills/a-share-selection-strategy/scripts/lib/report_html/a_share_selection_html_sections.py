@@ -1472,6 +1472,8 @@ def input_partial_alerts(summary: dict[str, Any], language: str) -> list[str]:
     if requested is None:
         requested = list_count(metadata.get("requested_symbols")) or "unknown"
     output_written = metadata_bool_text(metadata.get("output_written"))
+    raw_overlap_text = raw_quality_overlap_text(metadata)
+    quality_suffix = f" {raw_overlap_text}" if raw_overlap_text else ""
     en = (
         "Partial local input metadata; "
         f"failed_symbols={failed} empty_symbols={empty} "
@@ -1480,7 +1482,8 @@ def input_partial_alerts(summary: dict[str, Any], language: str) -> list[str]:
         f"rate_limit_budget_exhausted={str(rate_limit_exhausted).lower()} "
         f"rate_limit_exhaustion_reason={rate_limit_reason} "
         f"invalid_rows={invalid} dropped_invalid_rows={dropped} "
-        f"non_trading_rows={non_trading} tradestatus_missing_rows={missing_status} "
+        f"non_trading_rows={non_trading} tradestatus_missing_rows={missing_status}"
+        f"{quality_suffix} "
         f"symbol_count={symbol_count}/{requested} "
         f"output_written={output_written}."
     )
@@ -1492,11 +1495,37 @@ def input_partial_alerts(summary: dict[str, Any], language: str) -> list[str]:
         f"rate_limit_budget_exhausted={str(rate_limit_exhausted).lower()} "
         f"rate_limit_exhaustion_reason={rate_limit_reason} "
         f"invalid_rows={invalid} dropped_invalid_rows={dropped} "
-        f"non_trading_rows={non_trading} tradestatus_missing_rows={missing_status} "
+        f"non_trading_rows={non_trading} tradestatus_missing_rows={missing_status}"
+        f"{quality_suffix} "
         f"symbol_count={symbol_count}/{requested} "
         f"output_written={output_written}。"
     )
     return [bilingual(en, zh, language)]
+
+
+def raw_quality_overlap_text(metadata: dict[str, Any]) -> str:
+    raw_non_trading = metadata.get(
+        "input_raw_non_trading_rows", metadata.get("raw_non_trading_rows", 0)
+    )
+    raw_overlap = metadata.get(
+        "input_raw_invalid_non_trading_overlap_rows",
+        metadata.get("raw_invalid_non_trading_overlap_rows", 0),
+    )
+    try:
+        raw_overlap_count = int(raw_overlap or 0)
+    except (TypeError, ValueError):
+        return ""
+    if raw_overlap_count < 1:
+        return ""
+    semantics = metadata.get(
+        "input_raw_quality_counter_semantics",
+        metadata.get("raw_quality_counter_semantics", ""),
+    )
+    return (
+        f"raw_non_trading_rows={raw_non_trading} "
+        f"raw_invalid_non_trading_overlap_rows={raw_overlap_count} "
+        f"raw_quality_counter_semantics={semantics}"
+    )
 
 
 def local_input_partial(metadata: dict[str, Any]) -> bool:

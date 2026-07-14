@@ -108,7 +108,16 @@ class TodayAShareZzshareDisclosureTests(unittest.TestCase):
         self.assertEqual(2, metadata["invalid_rows"])
         self.assertEqual(2, metadata["input_invalid_rows"])
         self.assertEqual(1, metadata["input_dropped_invalid_rows"])
+        self.assertEqual(3, metadata["input_raw_non_trading_rows"])
+        self.assertEqual(2, metadata["input_raw_invalid_non_trading_overlap_rows"])
+        self.assertEqual(
+            "raw_dimension_counts_not_additive",
+            metadata["input_raw_quality_counter_semantics"],
+        )
         self.assertIn("invalid_rows=2 dropped_invalid_rows=1", visible)
+        self.assertIn("raw_non_trading_rows=3", visible)
+        self.assertIn("raw_invalid_non_trading_overlap_rows=2", visible)
+        self.assertIn("raw_quality_counter_semantics=raw_dimension_counts_not_additive", visible)
         self.assertIn("non_trading_rows=3", visible)
         self.assertIn("tradestatus_missing_rows=4", visible)
         self.assertIn("input_metadata.invalid_rows", technical)
@@ -207,6 +216,9 @@ def zzshare_metadata_payload() -> dict[str, object]:
             {"symbol": "000001", "date": "2026-06-05", "invalid_columns": ["turn"]}
         ],
         "dropped_invalid_rows": 1,
+        "raw_non_trading_rows": 3,
+        "raw_invalid_non_trading_overlap_rows": 2,
+        "raw_quality_counter_semantics": "raw_dimension_counts_not_additive",
         "non_trading_rows": 3,
         "non_trading_symbols": ["000001"],
         "non_trading_row_examples": [{"symbol": "000001", "date": "2026-06-05"}],

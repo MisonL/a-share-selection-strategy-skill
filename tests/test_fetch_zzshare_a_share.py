@@ -200,6 +200,11 @@ class FetchZzshareAShareTests(unittest.TestCase):
         self.assertIn("OK:", stdout.getvalue())
         self.assertEqual("drop", saved["non_trading_policy"])
         self.assertEqual(1, saved["raw_non_trading_rows"])
+        self.assertEqual(0, saved["raw_invalid_non_trading_overlap_rows"])
+        self.assertEqual(
+            "raw_dimension_counts_not_additive",
+            saved["raw_quality_counter_semantics"],
+        )
         self.assertEqual(1, saved["dropped_non_trading_rows"])
         self.assertEqual(0, saved["retained_non_trading_rows"])
         self.assertEqual(1, saved["rows"])

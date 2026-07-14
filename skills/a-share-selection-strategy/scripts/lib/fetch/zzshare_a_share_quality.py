@@ -52,6 +52,9 @@ def apply_quality_policy(
         drop_invalid_rows,
         non_trading_policy,
     )
+    metadata.update(
+        data.raw_quality_counter_metadata(frame, (item["index"] for item in invalid))
+    )
     result = (
         frame.drop(index=[item["index"] for item in invalid])
         if drop_invalid_rows

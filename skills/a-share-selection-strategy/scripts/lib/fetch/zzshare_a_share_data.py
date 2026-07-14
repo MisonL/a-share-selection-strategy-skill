@@ -89,6 +89,7 @@ def ensure_runtime_dependencies() -> None:
         {
             "pd": pandas_module,
             "prefixed_tradability_stats": tradability_module.prefixed_tradability_stats,
+            "raw_quality_counter_metadata": tradability_module.raw_quality_counter_metadata,
             "tradability_stats": tradability_module.tradability_stats,
         }
     )

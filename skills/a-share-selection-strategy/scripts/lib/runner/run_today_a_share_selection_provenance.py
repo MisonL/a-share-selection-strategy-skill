@@ -63,6 +63,9 @@ RUN_PROVENANCE_COLUMNS = (
     "history_rate_limit_exhaustion_reason",
     "history_invalid_rows",
     "history_dropped_invalid_rows",
+    "history_raw_non_trading_rows",
+    "history_raw_invalid_non_trading_overlap_rows",
+    "history_raw_quality_counter_semantics",
     "history_non_trading_rows",
     "history_non_trading_policy",
     "history_dropped_non_trading_rows",
@@ -74,6 +77,9 @@ RUN_PROVENANCE_COLUMNS = (
     "input_rate_limit_exhaustion_reason",
     "input_invalid_rows",
     "input_dropped_invalid_rows",
+    "input_raw_non_trading_rows",
+    "input_raw_invalid_non_trading_overlap_rows",
+    "input_raw_quality_counter_semantics",
     "input_non_trading_rows",
     "input_tradestatus_missing_rows",
     "history_fallback_error_count",
@@ -198,6 +204,15 @@ def provenance_fields(manifest: dict[str, Any]) -> dict[str, Any]:
         "history_dropped_invalid_rows": metadata.get(
             "history_dropped_invalid_rows", ""
         ),
+        "history_raw_non_trading_rows": metadata.get(
+            "history_raw_non_trading_rows", ""
+        ),
+        "history_raw_invalid_non_trading_overlap_rows": metadata.get(
+            "history_raw_invalid_non_trading_overlap_rows", ""
+        ),
+        "history_raw_quality_counter_semantics": metadata.get(
+            "history_raw_quality_counter_semantics", ""
+        ),
         "history_non_trading_rows": metadata.get("history_non_trading_rows", ""),
         "history_non_trading_policy": metadata.get(
             "history_non_trading_policy",
@@ -233,6 +248,15 @@ def provenance_fields(manifest: dict[str, Any]) -> dict[str, Any]:
         ),
         "input_invalid_rows": metadata.get("input_invalid_rows", ""),
         "input_dropped_invalid_rows": metadata.get("input_dropped_invalid_rows", ""),
+        "input_raw_non_trading_rows": metadata.get(
+            "input_raw_non_trading_rows", ""
+        ),
+        "input_raw_invalid_non_trading_overlap_rows": metadata.get(
+            "input_raw_invalid_non_trading_overlap_rows", ""
+        ),
+        "input_raw_quality_counter_semantics": metadata.get(
+            "input_raw_quality_counter_semantics", ""
+        ),
         "input_non_trading_rows": metadata.get("input_non_trading_rows", ""),
         "input_tradestatus_missing_rows": metadata.get(
             "input_tradestatus_missing_rows",

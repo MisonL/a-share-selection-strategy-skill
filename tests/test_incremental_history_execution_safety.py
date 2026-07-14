@@ -203,6 +203,8 @@ class IncrementalHistoryExecutionSafetyTests(unittest.TestCase):
                 "symbols": [{"symbol": "000001", "rows": 2}],
                 "non_trading_policy": "drop",
                 "raw_non_trading_rows": 3,
+                "raw_invalid_non_trading_overlap_rows": 1,
+                "raw_quality_counter_semantics": "raw_dimension_counts_not_additive",
                 "non_trading_rows": 0,
                 "dropped_non_trading_rows": 3,
                 "retained_non_trading_rows": 0,
@@ -213,6 +215,8 @@ class IncrementalHistoryExecutionSafetyTests(unittest.TestCase):
                 "symbols": [{"symbol": "600000", "rows": 2}],
                 "non_trading_policy": "drop",
                 "raw_non_trading_rows": 2,
+                "raw_invalid_non_trading_overlap_rows": 2,
+                "raw_quality_counter_semantics": "raw_dimension_counts_not_additive",
                 "non_trading_rows": 0,
                 "dropped_non_trading_rows": 2,
                 "retained_non_trading_rows": 0,
@@ -230,6 +234,11 @@ class IncrementalHistoryExecutionSafetyTests(unittest.TestCase):
 
         self.assertEqual("drop", metadata["non_trading_policy"])
         self.assertEqual(5, metadata["raw_non_trading_rows"])
+        self.assertEqual(3, metadata["raw_invalid_non_trading_overlap_rows"])
+        self.assertEqual(
+            "raw_dimension_counts_not_additive",
+            metadata["raw_quality_counter_semantics"],
+        )
         self.assertEqual(5, metadata["dropped_non_trading_rows"])
         self.assertEqual(0, metadata["non_trading_rows"])
         self.assertEqual(0, metadata["retained_non_trading_rows"])

@@ -4261,6 +4261,12 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(2, metadata["history_max_pages"])
         self.assertEqual(2, metadata["history_invalid_rows"])
         self.assertEqual(1, metadata["history_dropped_invalid_rows"])
+        self.assertEqual(3, metadata["history_raw_non_trading_rows"])
+        self.assertEqual(2, metadata["history_raw_invalid_non_trading_overlap_rows"])
+        self.assertEqual(
+            "raw_dimension_counts_not_additive",
+            metadata["history_raw_quality_counter_semantics"],
+        )
         self.assertEqual(3, metadata["history_non_trading_rows"])
         self.assertEqual(4, metadata["history_tradestatus_missing_rows"])
         self.assertEqual(1, metadata["history_possibly_truncated_symbol_count"])
@@ -4275,6 +4281,12 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(2, history["history_max_pages"])
         self.assertEqual(2, history["history_invalid_rows"])
         self.assertEqual(1, history["history_dropped_invalid_rows"])
+        self.assertEqual(3, history["history_raw_non_trading_rows"])
+        self.assertEqual(2, history["history_raw_invalid_non_trading_overlap_rows"])
+        self.assertEqual(
+            "raw_dimension_counts_not_additive",
+            history["history_raw_quality_counter_semantics"],
+        )
         self.assertIn("history_token_configured=false", stdout.getvalue())
         self.assertIn("history_fields=all", stdout.getvalue())
         self.assertIn("history_request_interval_seconds=0.0", stdout.getvalue())
@@ -4283,6 +4295,12 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("history_max_pages=2", stdout.getvalue())
         self.assertIn("history_invalid_rows=2", stdout.getvalue())
         self.assertIn("history_dropped_invalid_rows=1", stdout.getvalue())
+        self.assertIn("history_raw_non_trading_rows=3", stdout.getvalue())
+        self.assertIn("history_raw_invalid_non_trading_overlap_rows=2", stdout.getvalue())
+        self.assertIn(
+            "history_raw_quality_counter_semantics=raw_dimension_counts_not_additive",
+            stdout.getvalue(),
+        )
         self.assertNotIn("input_token_configured=unknown", stdout.getvalue())
         self.assertNotIn("input_partial_result=unknown", stdout.getvalue())
         for row in candidate_rows + diagnostic_rows:
@@ -4299,6 +4317,12 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             self.assertEqual("1", row["history_possibly_truncated_symbol_count"])
             self.assertEqual("2", row["history_invalid_rows"])
             self.assertEqual("1", row["history_dropped_invalid_rows"])
+            self.assertEqual("3", row["history_raw_non_trading_rows"])
+            self.assertEqual("2", row["history_raw_invalid_non_trading_overlap_rows"])
+            self.assertEqual(
+                "raw_dimension_counts_not_additive",
+                row["history_raw_quality_counter_semantics"],
+            )
             self.assertEqual("3", row["history_non_trading_rows"])
             self.assertEqual("4", row["history_tradestatus_missing_rows"])
 
@@ -6415,6 +6439,9 @@ def zzshare_quality_executor(command: list[str]) -> subprocess.CompletedProcess[
                     "invalid_symbols": ["000001"],
                     "invalid_row_examples": [],
                     "dropped_invalid_rows": 1,
+                    "raw_non_trading_rows": 3,
+                    "raw_invalid_non_trading_overlap_rows": 2,
+                    "raw_quality_counter_semantics": "raw_dimension_counts_not_additive",
                     "non_trading_rows": 3,
                     "non_trading_symbols": ["000001"],
                     "non_trading_row_examples": [],

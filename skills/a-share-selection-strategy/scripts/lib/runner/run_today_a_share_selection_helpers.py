@@ -494,6 +494,18 @@ def quality_counter_stdout(prefix: str, metadata: dict[str, Any]) -> list[str]:
             f"{prefix}_dropped_invalid_rows="
             f"{metadata_stdout_value(metadata.get(f'{prefix}_dropped_invalid_rows'))}"
         ),
+        (
+            f"{prefix}_raw_non_trading_rows="
+            f"{metadata_stdout_value(metadata.get(f'{prefix}_raw_non_trading_rows'))}"
+        ),
+        (
+            f"{prefix}_raw_invalid_non_trading_overlap_rows="
+            f"{metadata_stdout_value(metadata.get(f'{prefix}_raw_invalid_non_trading_overlap_rows'))}"
+        ),
+        (
+            f"{prefix}_raw_quality_counter_semantics="
+            f"{metadata_stdout_value(metadata.get(f'{prefix}_raw_quality_counter_semantics'))}"
+        ),
         f"{prefix}_non_trading_rows={metadata_stdout_value(metadata.get(f'{prefix}_non_trading_rows'))}",
         (
             f"{prefix}_tradestatus_missing_rows="

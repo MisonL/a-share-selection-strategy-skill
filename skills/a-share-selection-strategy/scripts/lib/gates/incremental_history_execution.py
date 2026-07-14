@@ -540,6 +540,7 @@ def combined_quality_metrics(items: list[dict[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key in (
         "raw_non_trading_rows",
+        "raw_invalid_non_trading_overlap_rows",
         "non_trading_rows",
         "dropped_non_trading_rows",
         "retained_non_trading_rows",
@@ -557,6 +558,15 @@ def combined_quality_metrics(items: list[dict[str, Any]]) -> dict[str, Any]:
         raise ValueError("bucket metadata non_trading_policy values differ")
     if policies:
         result["non_trading_policy"] = next(iter(policies))
+    semantics = {
+        str(item.get("raw_quality_counter_semantics", "")).strip()
+        for item in items
+        if str(item.get("raw_quality_counter_semantics", "")).strip()
+    }
+    if len(semantics) > 1:
+        raise ValueError("bucket metadata raw_quality_counter_semantics values differ")
+    if semantics:
+        result["raw_quality_counter_semantics"] = next(iter(semantics))
     return result
 
 

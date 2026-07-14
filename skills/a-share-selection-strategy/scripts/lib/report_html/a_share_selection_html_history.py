@@ -90,6 +90,18 @@ def history_selection_fields(
             "history_dropped_invalid_rows",
             selection.get("history_dropped_invalid_rows", ""),
         ),
+        (
+            "history_raw_non_trading_rows",
+            selection.get("history_raw_non_trading_rows", ""),
+        ),
+        (
+            "history_raw_invalid_non_trading_overlap_rows",
+            selection.get("history_raw_invalid_non_trading_overlap_rows", ""),
+        ),
+        (
+            "history_raw_quality_counter_semantics",
+            selection.get("history_raw_quality_counter_semantics", ""),
+        ),
         ("history_non_trading_rows", selection.get("history_non_trading_rows", "")),
         (
             "history_tradestatus_missing_rows",

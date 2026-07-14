@@ -243,6 +243,7 @@ uv run --with pandas --with numpy --with zzshare python skills/a-share-selection
 - 是否有 `non_trading_rows`
 - `history_non_trading_policy` 是 `drop`、`keep` 还是 `fail`
 - `history_dropped_non_trading_rows` 和 `history_retained_non_trading_rows`
+- `raw_non_trading_rows` 与 `invalid_rows` 是原始行的不同诊断维度，不能相加；如存在 `raw_invalid_non_trading_overlap_rows`，该值就是两者交集，`raw_quality_counter_semantics=raw_dimension_counts_not_additive` 明确该口径。
 - checkpoint 是否启用、跳过了多少已完成 symbol
 - 是否有 `st_rows`
 - 是否触发 422 / 429 / timeout

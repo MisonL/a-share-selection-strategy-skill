@@ -681,6 +681,15 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
         "history_dropped_invalid_rows": int(
             metadata.get("dropped_invalid_rows", 0) or 0
         ),
+        "history_raw_non_trading_rows": int(
+            metadata.get("raw_non_trading_rows", 0) or 0
+        ),
+        "history_raw_invalid_non_trading_overlap_rows": int(
+            metadata.get("raw_invalid_non_trading_overlap_rows", 0) or 0
+        ),
+        "history_raw_quality_counter_semantics": str(
+            metadata.get("raw_quality_counter_semantics", "")
+        ),
         "history_non_trading_rows": int(metadata.get("non_trading_rows", 0) or 0),
         "history_tradestatus_missing_rows": int(
             metadata.get("tradestatus_missing_rows", 0) or 0
@@ -972,6 +981,9 @@ def history_metadata_summary_fields(history_selection: dict[str, Any]) -> dict[s
         "history_rate_limit_exhaustion_reason",
         "history_invalid_rows",
         "history_dropped_invalid_rows",
+        "history_raw_non_trading_rows",
+        "history_raw_invalid_non_trading_overlap_rows",
+        "history_raw_quality_counter_semantics",
         "history_non_trading_rows",
         "history_non_trading_policy",
         "history_dropped_non_trading_rows",

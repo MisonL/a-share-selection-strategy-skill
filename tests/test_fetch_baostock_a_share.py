@@ -445,6 +445,12 @@ class FetchBaostockAShareTests(unittest.TestCase):
         )
         self.assertEqual(["000001"], result["symbol"].tolist())
         self.assertEqual(1, updated["dropped_invalid_rows"])
+        self.assertEqual(1, updated["raw_non_trading_rows"])
+        self.assertEqual(1, updated["raw_invalid_non_trading_overlap_rows"])
+        self.assertEqual(
+            "raw_dimension_counts_not_additive",
+            updated["raw_quality_counter_semantics"],
+        )
         self.assertIn("688981", updated["empty_symbols"])
         self.assertNotIn(
             "invalid_rows=1",

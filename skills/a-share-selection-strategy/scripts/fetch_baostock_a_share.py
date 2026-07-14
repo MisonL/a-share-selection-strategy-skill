@@ -142,6 +142,7 @@ def ensure_runtime_dependencies() -> None:
         {
             "pd": pandas_module,
             "prefixed_tradability_stats": tradability_module.prefixed_tradability_stats,
+            "raw_quality_counter_metadata": tradability_module.raw_quality_counter_metadata,
             "tradability_stats": tradability_module.tradability_stats,
         }
     )
@@ -324,6 +325,9 @@ def apply_quality_policy(
     metadata["invalid_symbols"] = sorted({item["symbol"] for item in invalid})
     metadata["invalid_row_examples"] = invalid[:10]
     metadata["dropped_invalid_rows"] = len(invalid) if drop_invalid_rows else 0
+    metadata.update(
+        raw_quality_counter_metadata(frame, (item["index"] for item in invalid))
+    )
     result = (
         frame.drop(index=[item["index"] for item in invalid])
         if drop_invalid_rows

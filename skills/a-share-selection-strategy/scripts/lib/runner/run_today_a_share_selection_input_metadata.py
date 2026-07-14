@@ -71,6 +71,9 @@ METADATA_KEYS = (
     "invalid_symbols",
     "invalid_row_examples",
     "dropped_invalid_rows",
+    "raw_non_trading_rows",
+    "raw_invalid_non_trading_overlap_rows",
+    "raw_quality_counter_semantics",
     "non_trading_rows",
     "non_trading_symbols",
     "non_trading_row_examples",
@@ -91,6 +94,10 @@ QUALITY_COUNT_KEYS = (
     "dropped_invalid_rows",
     "non_trading_rows",
     "tradestatus_missing_rows",
+)
+RAW_QUALITY_COUNT_KEYS = (
+    "raw_non_trading_rows",
+    "raw_invalid_non_trading_overlap_rows",
 )
 
 
@@ -139,6 +146,7 @@ def normalize_input_metadata(
             data.get("rate_limit_exhaustion_reason", "")
         )
     metadata.update(prefixed_quality_counts(data, "input_"))
+    metadata.update(prefixed_raw_quality_metadata(data, "input_"))
     if "requested_symbols" in data:
         metadata["input_requested_symbol_count"] = len(
             list_value(data, "requested_symbols")
@@ -248,8 +256,12 @@ def history_metadata_for_output(output_dir: Path) -> dict[str, Any]:
         ),
     }
     metadata.update(prefixed_quality_counts(data, "history_"))
+    metadata.update(prefixed_raw_quality_metadata(data, "history_"))
     for key in QUALITY_COUNT_KEYS:
         metadata.setdefault(f"history_{key}", 0)
+    for key in RAW_QUALITY_COUNT_KEYS:
+        metadata.setdefault(f"history_{key}", 0)
+    metadata.setdefault("history_raw_quality_counter_semantics", "")
     if "adjust" in data:
         metadata["history_adjust"] = data["adjust"]
     if "adjustflag" in data:
@@ -339,6 +351,18 @@ def prefixed_quality_counts(data: dict[str, Any], prefix: str) -> dict[str, int]
     for key in QUALITY_COUNT_KEYS:
         if key in data:
             result[f"{prefix}{key}"] = quality_count_value(data.get(key), key)
+    return result
+
+
+def prefixed_raw_quality_metadata(data: dict[str, Any], prefix: str) -> dict[str, Any]:
+    result = {}
+    for key in RAW_QUALITY_COUNT_KEYS:
+        if key in data:
+            result[f"{prefix}{key}"] = quality_count_value(data.get(key), key)
+    if "raw_quality_counter_semantics" in data:
+        result[f"{prefix}raw_quality_counter_semantics"] = str(
+            data.get("raw_quality_counter_semantics", "")
+        ).strip()
     return result
 
 

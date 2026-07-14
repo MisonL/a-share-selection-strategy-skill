@@ -541,6 +541,7 @@ class DocumentConsistencyTests(unittest.TestCase):
 
     def test_script_inventory_covers_root_script_registry(self) -> None:
         root = ROOT / "skills/a-share-selection-strategy"
+        scripts_root = root / "scripts"
         inventory_path = root / "references/script-inventory.md"
         inventory = inventory_path.read_text(encoding="utf-8")
         scripts_index = (root / "scripts/SCRIPTS.md").read_text(encoding="utf-8")
@@ -557,6 +558,7 @@ class DocumentConsistencyTests(unittest.TestCase):
         )
         body = rows[2:]
         inventory_by_script = {markdown_code_value(row[0]): row for row in body}
+        root_scripts = sorted(scripts_root.glob("*.py"))
 
         self.assertEqual(set(registry["entries"]), set(inventory_by_script))
         self.assertEqual(len(registry["entries"]), len(body))
@@ -567,6 +569,27 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("逐个脚本的用途、必要性和迁移判断", scripts_index)
         self.assertIn("不是常规任务启动路径", scripts_index)
         self.assertIn("审查为什么脚本多、每个脚本是否必要", references_index)
+
+        all_scripts = sorted(scripts_root.rglob("*.py"))
+        lib_scripts = sorted((scripts_root / "lib").rglob("*.py"))
+        public_count = sum(
+            bool(metadata["public_entry"])
+            for metadata in registry["entries"].values()
+        )
+        wrapper_count = sum(
+            metadata["domain"] == "compatibility_wrapper"
+            for metadata in registry["entries"].values()
+        )
+        self.assertIn(
+            f"当前根层 `.py` 共 {len(root_scripts)} 个，其中公开 CLI "
+            f"{public_count} 个、兼容 wrapper {wrapper_count} 个",
+            inventory,
+        )
+        self.assertIn(
+            f"当前整个 `scripts/` 树有 {len(all_scripts)} 个 Python 文件；"
+            f"其中 {len(lib_scripts)} 个是按领域分层的内部实现",
+            inventory,
+        )
 
         for script, metadata in registry["entries"].items():
             with self.subTest(script=script):

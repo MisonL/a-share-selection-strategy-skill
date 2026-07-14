@@ -2,7 +2,7 @@
 
 本文件用于回答“为什么 `scripts/` 下还有很多 `.py`、每个脚本是否必要”。它是审计索引，不是运行时入口，不替代 `../configs/script_entrypoints.json`，也不进入 Skill 首轮读取路径。
 
-当前根层 `.py` 共 33 个，其中公开 CLI 29 个、兼容 wrapper 4 个。`scripts/lib/` 是内部实现目录，不列入本表。判断脚本是否合理时先看 `公开 CLI 是否必须兼容` 和 `internal helper 是否还能继续下沉`，不要按文件数量直接合并。当前整个 `scripts/` 树有 113 个 Python 文件；其中 80 个是按领域分层的内部实现，不是 Agent 首轮入口。
+当前根层 `.py` 共 33 个，其中公开 CLI 29 个、兼容 wrapper 4 个。`scripts/lib/` 是内部实现目录，不列入本表。判断脚本是否合理时先看 `公开 CLI 是否必须兼容` 和 `internal helper 是否还能继续下沉`，不要按文件数量直接合并。当前整个 `scripts/` 树有 117 个 Python 文件；其中 84 个是按领域分层的内部实现，不是 Agent 首轮入口。
 
 结论：
 

@@ -1,0 +1,5 @@
+# Direct dependency versions verified by the Python 3.11 repository test gate.
+pandas==3.0.3
+numpy==2.4.6
+pyarrow==25.0.0
+pyyaml==6.0.3

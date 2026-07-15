@@ -1,0 +1,12 @@
+ID,标题,内容,验收标准,审查要求,状态,标签
+OPT-001,建立唯一任务源,"新增根目录 tasks.csv，并在 AGENTS.md 明确唯一任务驱动源和状态约束。","tasks.csv 可被标准 CSV 解析；AGENTS.md 不含任务源占位符；仅一个任务处于进行中。","检查 CSV 字段完整、状态枚举和进行中任务数量。",已完成,高优先级
+OPT-002,收口增量 artifact 导入和失败反例,"将 artifact helper 从真实所属模块直接导入，并补 allow no-trading empty 与 failed_symbols 并存时的拒绝测试。","生产和测试不依赖 incremental_history_execution 的隐式 re-export；新增反例稳定失败；相关测试通过。","核对默认 fail-closed、公开 CLI 和 metadata schema 不变。",已完成,高优先级
+OPT-003,机器化生产复杂度治理,"新增生产复杂度豁免清单并接入 validate_skill_changes.py，移除文档中已不再超限的函数登记。","所有超过 800 行生产文件和超过 80 行生产函数均被精确登记；新增或陈旧豁免会使门禁失败。","检查 AST 行数、路径覆盖、豁免理由和复审条件。",已完成,高优先级
+OPT-004,锁定 CI 直接依赖,"新增 CI constraints，固定本轮已验证的 pandas、numpy、pyarrow、pyyaml 版本，并让 GitHub Actions 使用。","CI 安装命令显式使用 constraints；缓存键包含 constraints；宽松用户 requirements 保持不变。","核对 Python 3.11 兼容边界、文档说明和依赖文件解析。",已完成,高优先级
+OPT-005,完整验证与收尾,"运行定向测试、CI 分片契约、Skill quick_validate、完整 unittest 和工作树卫生检查。","全部本地门禁通过；无 pycache、临时文件、密钥、冲突标记或 diff whitespace。","记录命令、退出码、测试总数和未执行的外部门禁。",已完成,高优先级
+CR-001,[Code Review] Claude 和 OMP 未提交变更终审,"使用本机 Claude CLI safe mode 与 OMP CLI grok-4.5 对 staged、unstaged、untracked 全部变更进行只读审计，并由 Codex 交叉验证结论。","两套 CLI 均完成并输出可追溯结论；所有发现回到具体 diff、代码和测试验证；审计报告记录版本、命令、退出码、发现和剩余边界。","检查 correctness、数据完整性、原子发布、失败语义、CI 分片、复杂度门禁、文档一致性及密钥风险；不得把 reviewer 结论直接当事实。",已完成,待审查
+OPT-006,提交已验收工作树基线,"将 OPT-001 至 OPT-005 和 CR-001 已通过验证的现有 staged、unstaged、untracked 变更形成一个可追溯基线提交，不引入新业务改动。","快速仓库门禁、git diff whitespace、任务源和缓存检查通过；提交仅包含当前已审计范围。","核对提交文件清单、837 项既有完整回归证据、Claude/OMP 审计报告和无 staged 遗留。",已完成,高优先级
+OPT-007,建立当前真实门禁唯一索引,"新增当前真实门禁状态入口，汇总最新全 A、prediction、回测和券商门禁证据，并把 AGENTS.md 和文档地图从旧历史报告路由到该入口。","当前入口明确区分 current state 与历史 evidence；所有链接可解析；不得把未复验门禁标记为通过。","检查日期、新旧证据优先级、外部门禁边界和文档一致性测试。",未开始,高优先级
+OPT-008,限制验证和 CI 等待时间,"为 validate_skill_changes.py 子进程提供显式可配置超时，并为 GitHub Actions validate job 设置宽松总超时。","超时必须显式失败且包含命令和秒数；默认值覆盖当前约 186 秒完整门禁；相关单测和 CI 文档通过。","检查不静默吞错、不误杀正常完整测试、参数边界和 subprocess timeout 行为。",未开始,高优先级
+OPT-009,增加本地精确 CI 依赖模式,"为统一验证入口增加显式 CI dependency profile，使用 constraints-ci.txt 的精确 Python 3.11 直接依赖运行完整测试，同时保留默认最新兼容依赖路径。","默认与 ci 两种模式可区分、可复现、文档化；ci 模式不再通过嵌套未固定 uv 环境覆盖精确依赖。","核对命令构造、constraints 解析、Python 版本、CI workflow 和证据措辞。",未开始,高优先级
+OPT-010,完整回归推送和远端 CI,"运行完整本地门禁和九分片契约，分批提交剩余任务，推送 main 并等待对应提交的 GitHub Actions 完成。","本地完整测试通过；工作树干净；origin/main 指向本轮最终提交；远端九分片全部成功且无开放 bot review。","记录提交、推送、CI URL、测试总数、退出码和未执行的真实外部门禁。",未开始,高优先级

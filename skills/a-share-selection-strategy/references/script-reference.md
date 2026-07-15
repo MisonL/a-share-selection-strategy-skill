@@ -37,7 +37,7 @@
 
 `compatibility_wrapper` 条目必须在 `../configs/script_entrypoints.json` 记录 `migration_target` 和 `deletion_blocker`，用于说明真实内部实现位置和根层 wrapper 的外部兼容保留原因。内部运行路径应优先导入 `lib.*`。
 
-联网取数必须先落地本地文件和 metadata，再进入 `validate_ohlcv.py`、评分和汇报。不得把在线 API 响应直接解释成已验证候选。
+联网取数必须先落地本地表格 artifact 和 metadata，再进入 `validate_ohlcv.py`、评分和汇报。表格 artifact 默认是 CSV；明确支持 Parquet 的入口可按文档显式选择 `.parquet` / `.pq`。不得把在线 API 响应直接解释成已验证候选。
 
 `run_today_a_share_selection.py --mode auto` 只选择评分口径，不自动完成全 A 工作流。全 A / 全市场 / 扩大股票池任务必须先读 `full-a-strict-workflow.md`。
 
@@ -102,7 +102,7 @@ Python 代码复用这些脚本时，需要将 `skills/a-share-selection-strateg
 
 ## 业务场景到数据源路由
 
-`../configs/source_routing.json` 是场景级路由事实源，用来回答“本地评分、定向 A 股、全 A、prediction-derived、港股、海外 ticker 或外部源探针应考虑哪些源”。它不是运行时自动选源器；`automatic_source_selection=false`、`automatic_fallback=false` 且 `runtime_cli_explicit_fallback_requires_parameter=true` 是硬边界。表内 `explicit_fallback_sources=[]` 表示该场景不推荐自动或预设备用源，不会禁用 CLI 层面的显式 fallback 参数；CLI 层面的 `--fetch-spot-fallback` 必须由用户显式传入，并披露 `fetch_spot_fallback_used` 和 `fetch_spot_primary_failure`。
+`../configs/source_routing.json` 是场景级路由事实源，用来回答“本地评分、定向 A 股、全 A、prediction-derived、港股、海外 ticker 或外部源探针应考虑哪些源”。它不是运行时自动选源器；`automatic_source_selection=false`、`automatic_fallback=false` 且 `runtime_cli_explicit_fallback_requires_parameter=true` 是硬边界。联网源必须同时落地可复核的表格 artifact 和 metadata，不把格式限定为 CSV；只有入口明确声明支持时才可写 Parquet。表内 `explicit_fallback_sources=[]` 表示该场景不推荐自动或预设备用源，不会禁用 CLI 层面的显式 fallback 参数；CLI 层面的 `--fetch-spot-fallback` 必须由用户显式传入，并披露 `fetch_spot_fallback_used` 和 `fetch_spot_primary_failure`。全 A 增量路径必须先由 `prepare_incremental_history_plan.py` 生成计划，再由 `execute_incremental_history_plan.py` 使用一个显式 provider 执行；路由表列出二者不表示自动编排或自动切源。
 
 | 业务场景 | 主源 | 显式备用 | 补充或对照 | 边界 |
 | --- | --- | --- | --- | --- |
@@ -236,7 +236,7 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 
 增量抓取完成后，同一入口可加 `--incremental-plan --incremental-prices --incremental-metadata`，先把验证过的 delta history 合并进 clean pool，再执行原有清洗。合并会拒绝 delta metadata 中的 failed/empty/truncated/unprocessed symbol 和 `rate_limit_budget_exhausted=true`、缺失计划 symbol、未达到 target date 或超过 target date 的增量行，并记录 `incremental_merge_*` 字段；它仍然只处理已落地 artifact，不联网、不证明完整全 A 完成。
 
-全 A 增量计划：
+全 A 增量计划。完整抓取后仍少于阈值的次新股应通过 `prepare_clean_history_pool.py --short-history-output <path> --min-history-rows <rows>` 从已落地 effective history 生成审计清单并显式排除，不能反复抓取或降低 validate 阈值。短历史派生不接受同轮 `--incremental-*` 内存合并，必须先持久化 merge 结果：
 
 ```bash
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/prepare_incremental_history_plan.py \
@@ -249,7 +249,7 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
   --symbols-output "$RUN/incremental/incremental_history_symbols.txt"
 ```
 
-`prepare_incremental_history_plan.py` 会读取 clean prices 的 `symbol/date` 两列并与 metadata 的 `rows/date_min/date_max` 对账；漂移或重复 symbol metadata 时显式失败。metadata 不存在、`rows <= 0`、`date_max` 为空、失败/空/截断/unprocessed 或少于 `--min-history-rows` 的 symbol 归入 full fetch，有效但 `date_max < target_end_date` 的 symbol 归入 delta fetch；无法解释原因的 `partial_result` 或限流耗尽状态、未清除 invalid rows、缺失 tradestatus 或 `output_written=false` 会直接失败。只有 `source_scope=clean_history_pool` 且带正数剔除原因的审计子集可以保留原始 partial/限流事实并继续。历史池中不属于当前 universe 的旧证券允许保留，但会以 `prices_extra_symbols` 审计。`fetch_buckets[]` 按 `fetch_mode/reason/start_date/end_date` 稳定分组，且必须与 `fetch_symbols` 一一对账；full bucket 的 `start_date` 为空，后续执行器必须显式提供完整历史起始日。`claim_boundary=incremental_history_plan_only_not_history_fetch_success`，因此该文件不能证明抓取成功；后续仍需逐 bucket 抓取并重新验证 metadata。
+`prepare_incremental_history_plan.py` 会读取 clean prices 的 `symbol/date` 两列并与 metadata 的 `rows/date_min/date_max` 对账；漂移或重复 symbol metadata 时显式失败。metadata 不存在、`rows <= 0`、`date_max` 为空、失败/空/截断/unprocessed 或少于 `--min-history-rows` 的 symbol 归入 full fetch，有效但 `date_max < target_end_date` 的 symbol 归入 delta fetch；无法解释原因的 `partial_result` 或限流耗尽状态、未清除 invalid rows、缺失 tradestatus 或 `output_written=false` 会直接失败。只有 `source_scope=clean_history_pool` 且带正数剔除原因的审计子集可以保留原始 partial/限流事实并继续。历史池中不属于当前 universe 的旧证券允许保留，但会以 `prices_extra_symbols` 审计。`fetch_buckets[]` 按 `fetch_mode/reason/start_date/end_date` 稳定分组，且必须与 `fetch_symbols` 一一对账；`--max-bucket-symbols` 默认 200，用于限制单次故障和重跑范围。full bucket 的 `start_date` 为空，后续执行器必须显式提供完整历史起始日。`claim_boundary=incremental_history_plan_only_not_history_fetch_success`，因此该文件不能证明抓取成功；后续仍需逐 bucket 抓取并重新验证 metadata。
 
 按 bucket 执行计划：
 
@@ -263,6 +263,10 @@ uv run --with pandas --with numpy --with zzshare python skills/a-share-selection
 ```
 
 一次执行只使用一个显式 provider，不自动切源。每个 bucket 分别保存 symbols、prices、metadata、SHA-256 和执行状态；任一命令非零、artifact 缺失、CSV 内容与计划/metadata 不一致或质量门禁失败都会停止并将 manifest 标记为 `partial`。`--resume` 只跳过状态为 complete、execution contract digest 一致且文件摘要和 artifact 校验仍通过的 bucket；计划的生成时间、耗时和吞吐等观测字段不参与 digest。全部 bucket 成功后，聚合 CSV 和 metadata 先写暂存文件再成对发布，失败会保留既有两份最终产物并标记 `failed_stage=aggregate_outputs`。零 bucket 计划显式记录 `no_op=true`、移除陈旧聚合产物，也不允许继续 verified merge。如同时提供 `--base-prices --base-metadata --merged-output --merged-metadata-output --merge-report-output`，入口会调用现有 verified incremental merge；这些参数必须成组提供。
+
+聚合 metadata 的 `requested_symbol_count` 表示本轮计划 symbol 数，`symbol_count` 表示实际产生至少一行可合并历史的 symbol 数；聚合层不得用后者冒充请求数。`partial_result=false` 只表示没有未审计缺口，机器字段 `partial_result_semantics=false_means_no_unaudited_gaps_audited_no_trading_updates_disclosed_separately` 固定该含义。经审计的停牌空更新仍必须读取 `no_trading_update_symbols`，不能把 false 解释为全部 symbol 已产生目标日价格；存在该列表而缺失语义字段时，metadata 必须判为不完整；verified merge 会继续保存该语义字段。
+
+使用 Baostock 执行同一计划时，将依赖改为 `--with baostock`、provider 改为 `baostock`。若同轮 universe artifact 含完整 `symbol/name`，应显式追加 `--baostock-names-input "$RUN/spot.csv" --baostock-missing-name-policy fail`，并按任务边界选择 `--baostock-non-trading-policy reject|drop|keep`。需要让当日全非交易 symbol 保留 base 历史时，必须显式传完整三项组合：`--baostock-non-trading-policy drop`、`--baostock-drop-invalid-rows`、`--baostock-allow-non-trading-empty`；缺少任一项不得放行 empty。该状态单独写入 `no_trading_update_symbols`，不能解释为达到目标日的价格更新。名称输入与 name policy 是独立契约，提供名称输入时 bucket 门禁仍按显式策略处理名称查询失败或缺失。这些输入和策略会进入 execution contract，不会被其他 provider 接受。
 
 zzshare fetch 默认启用有界 429 控制：`--max-429-events 3`、`--max-rate-limit-sleep-seconds 120`、`--max-runtime-seconds 900`。控制器替代 SDK 内部不可控重试，按 `Retry-After` 维护全局 cooldown；预算耗尽时先 flush 当前 checkpoint，再停止调度并以非零退出。metadata 会记录 `rate_limit_429_events`、`rate_limit_sleep_seconds`、`rate_limit_retry_after_seconds`、`rate_limit_budget_exhausted`、`rate_limit_exhaustion_reason` 和 `unprocessed_symbols`。未调度 symbol 不得计为真实空结果，也不得自动切换数据源。
 

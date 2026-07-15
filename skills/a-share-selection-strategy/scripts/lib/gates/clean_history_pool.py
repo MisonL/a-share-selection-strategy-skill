@@ -25,6 +25,70 @@ from typing import Any
 CLAIM_BOUNDARY = "clean_history_pool_from_existing_artifacts_not_full_market_proof"
 
 
+def derive_short_history_data(
+    frame: Any,
+    min_history_rows: int,
+    source_prices: Path,
+) -> dict[str, Any]:
+    """Derive a persisted short-history audit from the effective prices frame."""
+    if min_history_rows < 1:
+        raise ValueError("min_history_rows must be positive")
+    if "symbol" not in frame or "date" not in frame:
+        raise ValueError("prices input must contain symbol and date columns")
+
+    from lib.selection_core.a_share_selection_data import parse_dates  # noqa: PLC0415
+
+    dates = parse_dates(frame["date"])
+    if dates.isna().any():
+        raise ValueError("prices input has invalid dates")
+    raw_symbols = frame["symbol"]
+    if raw_symbols.isna().any():
+        raise ValueError("prices input has missing symbols")
+    normalized_symbols = raw_symbols.astype(str).str.strip()
+    invalid_symbols = ~normalized_symbols.str.fullmatch(r"\d{6}")
+    if invalid_symbols.any():
+        examples = normalized_symbols.loc[invalid_symbols].drop_duplicates().head(20)
+        raise ValueError(
+            f"prices input has invalid symbols: {examples.tolist()}"
+        )
+    working = frame.assign(_symbol=normalized_symbols, _date=dates)
+    duplicates = working.duplicated(["_symbol", "_date"], keep=False)
+    if duplicates.any():
+        examples = (
+            working.loc[duplicates, ["_symbol", "_date"]]
+            .drop_duplicates()
+            .head(20)
+            .to_dict("records")
+        )
+        raise ValueError(f"prices input has duplicate symbol/date rows: {examples}")
+    symbols: list[dict[str, Any]] = []
+    for symbol, group in working.groupby("_symbol", sort=True):
+        rows = int(len(group))
+        if rows >= min_history_rows:
+            continue
+        symbols.append(
+            {
+                "symbol": str(symbol),
+                "rows": rows,
+                "min_history_rows": min_history_rows,
+                "date_min": str(group["_date"].min().date()),
+                "date_max": str(group["_date"].max().date()),
+            }
+        )
+    return {
+        "source": "derived_from_effective_history_artifact",
+        "claim_boundary": CLAIM_BOUNDARY,
+        "source_prices": str(source_prices),
+        "min_history_rows": min_history_rows,
+        "short_history_symbol_count": len(symbols),
+        "symbols": symbols,
+        "next_action": (
+            "review these symbols, then rerun with the clean prices artifact or "
+            "extend the history window"
+        ),
+    }
+
+
 def build_clean_plan(
     metadata: dict[str, Any],
     short_data: dict[str, Any],

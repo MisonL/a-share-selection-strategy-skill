@@ -377,6 +377,7 @@ def apply_quality_policy(
     ensure_runtime_dependencies()
     invalid = invalid_row_details(frame)
     metadata = dict(metadata)
+    metadata["raw_symbols"] = list(metadata.get("symbols", []))
     metadata["invalid_rows"] = len(invalid)
     metadata["invalid_symbols"] = sorted({item["symbol"] for item in invalid})
     metadata["invalid_row_examples"] = invalid[:10]
@@ -391,11 +392,26 @@ def apply_quality_policy(
     )
     if non_trading_policy not in {"reject", "drop", "keep"}:
         raise ValueError(f"unsupported non-trading-policy: {non_trading_policy}")
+    raw_non_trading_mask = non_trading_row_mask(frame)
     non_trading_mask = non_trading_row_mask(result)
     dropped_non_trading = int(non_trading_mask.sum()) if non_trading_policy == "drop" else 0
     if dropped_non_trading:
         result = result.loc[~non_trading_mask]
     result = result.reset_index(drop=True)
+    empty_after_quality = set(
+        empty_symbols(
+            [
+                symbol_metadata_for_frame(symbol, result)
+                for symbol in metadata["requested_symbols"]
+            ]
+        )
+    )
+    metadata["non_trading_only_empty_symbols"] = sorted(
+        symbol
+        for symbol in empty_after_quality
+        if not frame.loc[frame["symbol"].eq(symbol)].empty
+        and bool(raw_non_trading_mask.loc[frame["symbol"].eq(symbol)].all())
+    )
     metadata["non_trading_policy"] = non_trading_policy
     metadata["dropped_non_trading_rows"] = dropped_non_trading
     metadata["rows"] = int(len(result))

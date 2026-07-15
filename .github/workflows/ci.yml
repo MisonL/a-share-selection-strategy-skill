@@ -7,29 +7,33 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - core
+          - providers
+          - gates
+          - report
+          - runner-core
+          - runner-providers
+          - runner-artifacts
+          - runner-plan-resume
+          - runner-universe
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            skills/a-share-selection-strategy/requirements.txt
+            skills/a-share-selection-strategy/requirements-parquet.txt
+            skills/a-share-selection-strategy/constraints-ci.txt
       - name: Install dependencies
-        run: python3 -m pip install -r skills/a-share-selection-strategy/requirements-parquet.txt
-      - name: Validate JSON files
-        run: |
-          for file in skills/a-share-selection-strategy/evals/*.json skills/a-share-selection-strategy/configs/*.json; do
-            python3 -m json.tool "$file" >/tmp/"$(basename "$file")"
-          done
-      - name: Validate agent manifest
-        run: |
-          python3 - <<'PY'
-          import yaml
-          from pathlib import Path
-          assert yaml.safe_load(Path("skills/a-share-selection-strategy/agents/openai.yaml").read_text())["interface"]["display_name"]
-          PY
-      - name: Compile scripts
-        run: |
-          PYTHONPYCACHEPREFIX=/tmp/a-share-selection-pycache python3 -m compileall -q skills/a-share-selection-strategy/scripts
-      - name: Run tests
-        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+        run: python3 -m pip install -c skills/a-share-selection-strategy/constraints-ci.txt -r skills/a-share-selection-strategy/requirements-parquet.txt
       - name: Run repo health checks
+        if: matrix.shard == 'core'
         run: python3 validate_skill_changes.py --skip-skill-validate --skip-tests
+      - name: Run test shard
+        run: PYTHONDONTWRITEBYTECODE=1 python3 tests/run_unittest_shard.py "${{ matrix.shard }}"

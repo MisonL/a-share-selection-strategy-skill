@@ -21,6 +21,8 @@ import time
 from typing import Any
 
 from lib.gates.clean_history_pool import clean_symbol_summaries, metadata_symbol_map
+from lib.gates.incremental_history_artifacts import PARTIAL_RESULT_SEMANTICS
+from lib.gates.incremental_history_plan import strict_raw_symbol_map
 
 
 INCREMENTAL_MERGE_BOUNDARY = (
@@ -48,14 +50,27 @@ def merge_incremental_history(
     planned = unique_symbols(plan.get("fetch_symbols", []))
     if not planned:
         raise ValueError("incremental plan has no fetch_symbols")
-    validate_incremental_metadata(incremental_metadata, planned)
+    no_trading_updates = validate_incremental_metadata(
+        incremental_metadata,
+        planned,
+        target=target,
+    )
     validate_provider_merge_contract(incremental_metadata)
     base_normalized = normalize_history_frame(base, "base prices")
     delta_normalized = normalize_history_frame(incremental, "incremental prices")
     validate_matching_columns(base_normalized, delta_normalized)
     delta_symbols = unique_symbols(delta_normalized["symbol"].tolist())
-    validate_planned_symbol_coverage(planned, delta_symbols)
-    validate_incremental_dates(delta_normalized, planned, target)
+    validate_planned_symbol_coverage(
+        planned,
+        delta_symbols,
+        allowed_missing=no_trading_updates,
+    )
+    validate_incremental_dates(
+        delta_normalized,
+        planned,
+        target,
+        allowed_stale=no_trading_updates,
+    )
     merged, overlap_rows = merge_frames(base_normalized, delta_normalized)
     duration = round(max(time.monotonic() - started, 0.0), 6)
     report = incremental_merge_report(
@@ -66,6 +81,7 @@ def merge_incremental_history(
         target,
         overlap_rows,
         duration,
+        no_trading_updates,
     )
     metadata = merged_history_metadata(
         base_metadata,
@@ -131,21 +147,102 @@ def normalize_date_series(series: Any, label: str) -> Any:
     return parsed.dt.strftime("%Y-%m-%d")
 
 
-def validate_incremental_metadata(metadata: dict[str, Any], planned: list[str]) -> None:
+def validate_incremental_metadata(
+    metadata: dict[str, Any],
+    planned: list[str],
+    *,
+    target: str | None = None,
+) -> list[str]:
     for key in ("output_written", "metadata_output_written"):
         if metadata.get(key) is not True:
             raise ValueError(f"incremental history metadata requires {key}=true")
+    no_trading_updates = validated_no_trading_update_symbols(
+        metadata,
+        planned,
+        target=target,
+    )
     for key in FETCH_FAILURE_LISTS:
         values = metadata_symbols(metadata.get(key, []))
+        if key == "empty_symbols":
+            values = sorted(set(values) - set(no_trading_updates))
         if values:
             raise ValueError(f"incremental history metadata has {key}: {values[:20]}")
     if metadata.get("rate_limit_budget_exhausted") is True:
         raise ValueError("incremental history metadata exhausted its rate-limit budget")
-    if int(metadata.get("invalid_rows", 0) or 0) != 0:
-        raise ValueError("incremental history metadata has invalid_rows")
+    invalid_rows = int(metadata.get("invalid_rows", 0) or 0)
+    dropped_invalid_rows = int(metadata.get("dropped_invalid_rows", 0) or 0)
+    if invalid_rows != dropped_invalid_rows:
+        raise ValueError(
+            "incremental history metadata invalid_rows and dropped_invalid_rows "
+            "do not match"
+        )
+    if metadata.get("partial_result") is True:
+        raise ValueError("incremental history metadata has partial_result=true")
+    partial_semantics = str(metadata.get("partial_result_semantics", "")).strip()
+    if no_trading_updates and partial_semantics != PARTIAL_RESULT_SEMANTICS:
+        raise ValueError(
+            "incremental no-trading updates require "
+            f"partial_result_semantics={PARTIAL_RESULT_SEMANTICS}"
+        )
+    if partial_semantics and partial_semantics != PARTIAL_RESULT_SEMANTICS:
+        raise ValueError("incremental history metadata partial_result_semantics is invalid")
     requested = unique_symbols(metadata.get("requested_symbols", []))
     if requested and requested != planned:
         raise ValueError("incremental metadata requested_symbols do not match plan")
+    return no_trading_updates
+
+
+def validated_no_trading_update_symbols(
+    metadata: dict[str, Any],
+    planned: list[str],
+    *,
+    target: str | None,
+) -> list[str]:
+    empty = metadata_symbols(metadata.get("empty_symbols", []))
+    declared = metadata_symbols(metadata.get("no_trading_update_symbols", []))
+    audited = metadata_symbols(metadata.get("non_trading_only_empty_symbols", []))
+    if not empty and not declared and not audited:
+        return []
+    if empty != declared or empty != audited:
+        raise ValueError(
+            "incremental no-trading update symbols must match audited empty symbols"
+        )
+    if str(metadata.get("provider", "")).strip().lower() != "baostock":
+        raise ValueError(
+            "incremental no-trading updates require provider=baostock"
+        )
+    if target is None:
+        raise ValueError("incremental no-trading updates require target_end_date")
+    unexpected = sorted(set(empty) - set(planned))
+    if unexpected:
+        raise ValueError(
+            f"incremental no-trading update symbols are unplanned: {unexpected[:20]}"
+        )
+    raw_records = metadata.get("raw_symbols")
+    if not isinstance(raw_records, list):
+        raise ValueError("incremental no-trading updates require raw_symbols")
+    raw_by_symbol = strict_raw_symbol_map(
+        raw_records,
+        label="incremental raw_symbols",
+    )
+    normalized_target = normalize_date(target)
+    for symbol in empty:
+        record = raw_by_symbol.get(symbol)
+        try:
+            rows = int(record.get("rows", 0) or 0) if record is not None else 0
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"incremental no-trading raw rows are invalid: {symbol}"
+            ) from exc
+        if rows <= 0:
+            raise ValueError(
+                f"incremental no-trading update lacks raw rows: {symbol}"
+            )
+        if normalize_date(record.get("date_max", "")) != normalized_target:
+            raise ValueError(
+                f"incremental no-trading update does not reach target: {symbol}"
+            )
+    return empty
 
 
 def validate_provider_merge_contract(metadata: dict[str, Any]) -> None:
@@ -158,10 +255,15 @@ def validate_provider_merge_contract(metadata: dict[str, Any]) -> None:
     )
 
 
-def validate_planned_symbol_coverage(planned: list[str], delta_symbols: list[str]) -> None:
+def validate_planned_symbol_coverage(
+    planned: list[str],
+    delta_symbols: list[str],
+    *,
+    allowed_missing: list[str] | None = None,
+) -> None:
     planned_set = set(planned)
     delta_set = set(delta_symbols)
-    missing = sorted(planned_set - delta_set)
+    missing = sorted(planned_set - delta_set - set(allowed_missing or []))
     unexpected = sorted(delta_set - planned_set)
     if missing:
         raise ValueError(f"incremental prices missing planned symbols: {missing[:20]}")
@@ -169,9 +271,20 @@ def validate_planned_symbol_coverage(planned: list[str], delta_symbols: list[str
         raise ValueError(f"incremental prices has unplanned symbols: {unexpected[:20]}")
 
 
-def validate_incremental_dates(frame: Any, planned: list[str], target: str) -> None:
+def validate_incremental_dates(
+    frame: Any,
+    planned: list[str],
+    target: str,
+    *,
+    allowed_stale: list[str] | None = None,
+) -> None:
     date_max = frame.groupby("symbol")["date"].max()
-    stale = [symbol for symbol in planned if str(date_max.get(symbol, "")) < target]
+    allowed = set(allowed_stale or [])
+    stale = [
+        symbol
+        for symbol in planned
+        if symbol not in allowed and str(date_max.get(symbol, "")) < target
+    ]
     if stale:
         raise ValueError(
             f"incremental prices do not reach target_end_date for symbols: {stale[:20]}"
@@ -214,6 +327,7 @@ def incremental_merge_report(
     target: str,
     overlap_rows: int,
     duration: float,
+    no_trading_updates: list[str],
 ) -> dict[str, Any]:
     input_rows = int(len(base) + len(incremental))
     return {
@@ -222,6 +336,8 @@ def incremental_merge_report(
         "target_end_date": target,
         "planned_symbol_count": len(planned),
         "planned_symbols": planned,
+        "no_trading_update_symbol_count": len(no_trading_updates),
+        "no_trading_update_symbols": no_trading_updates,
         "base_rows": int(len(base)),
         "incremental_rows": int(len(incremental)),
         "merged_rows": int(len(merged)),
@@ -246,9 +362,22 @@ def merged_history_metadata(
 ) -> dict[str, Any]:
     combined = dict(base)
     prior_symbols = metadata_symbol_map(base)
-    prior_symbols.update(metadata_symbol_map(incremental))
+    prior_symbols.update(
+        {
+            symbol: record
+            for symbol, record in metadata_symbol_map(incremental).items()
+            if int(record.get("rows", 0) or 0) > 0
+        }
+    )
     symbol_metadata = {"symbols": list(prior_symbols.values())}
     combined.update(metadata_fields(merged, planned, report))
+    incremental_partial_semantics = str(
+        incremental.get("partial_result_semantics", "")
+    ).strip()
+    if incremental_partial_semantics:
+        combined["incremental_partial_result_semantics"] = (
+            incremental_partial_semantics
+        )
     combined["symbols"] = (
         clean_symbol_summaries(merged, symbol_metadata)
         if compute_symbol_summaries
@@ -266,6 +395,8 @@ def merged_history_metadata(
 
 
 def metadata_fields(merged: Any, planned: list[str], report: dict[str, Any]) -> dict[str, Any]:
+    date_min = str(merged["date"].min()) if not merged.empty else ""
+    date_max = str(merged["date"].max()) if not merged.empty else ""
     return {
         "source_scope": "incremental_history_merged_pool",
         "source_claim_boundary": INCREMENTAL_MERGE_BOUNDARY,
@@ -273,6 +404,12 @@ def metadata_fields(merged: Any, planned: list[str], report: dict[str, Any]) -> 
         "incremental_merge_target_end_date": report["target_end_date"],
         "incremental_merge_planned_symbols": planned,
         "incremental_merge_planned_symbol_count": len(planned),
+        "incremental_no_trading_update_symbol_count": report[
+            "no_trading_update_symbol_count"
+        ],
+        "incremental_no_trading_update_symbols": report[
+            "no_trading_update_symbols"
+        ],
         "incremental_merge_rows": report["incremental_rows"],
         "incremental_merge_overlap_rows_replaced": report["overlap_rows_replaced"],
         "incremental_merge_duration_seconds": report["merge_duration_seconds"],
@@ -280,6 +417,9 @@ def metadata_fields(merged: Any, planned: list[str], report: dict[str, Any]) -> 
             "merge_input_rows_per_second"
         ],
         "incremental_merge_claim_boundary": INCREMENTAL_MERGE_BOUNDARY,
+        "date_min": date_min,
+        "date_max": date_max,
+        "end_date": report["target_end_date"],
         "rows": int(len(merged)),
         "symbol_count": int(merged["symbol"].nunique()),
         "output_written": True,

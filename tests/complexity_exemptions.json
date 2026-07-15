@@ -1,0 +1,68 @@
+{
+  "schema_version": 2,
+  "claim_boundary": "temporary_test_file_complexity_exemptions_not_permanent_waivers",
+  "hard_line_threshold": 1000,
+  "exemptions": {
+    "test_a_share_selection_scripts.py": {
+      "reason": "Core CLI behavior shares frame builders and artifact assertions across validation and scoring scenarios.",
+      "split_boundary": "Separate validation contracts from scoring and provenance contracts after shared fixtures move to a support module.",
+      "reassess_when": "the next core validation or scoring behavior is added"
+    },
+    "test_document_consistency.py": {
+      "reason": "Repository-wide registries and documentation contracts intentionally share one loaded skill topology.",
+      "split_boundary": "Separate structure, routing, and artifact registries after a shared registry loader is introduced.",
+      "reassess_when": "another machine-readable registry is added or this file reaches 1600 lines"
+    },
+    "test_fetch_zzshare_a_share.py": {
+      "reason": "Provider pagination, rate-limit, checkpoint, and metadata tests share one deterministic fake client.",
+      "split_boundary": "Separate transport controls from artifact and checkpoint contracts after the fake client becomes shared support.",
+      "reassess_when": "zzshare transport or checkpoint behavior changes"
+    },
+    "test_full_a_clean_pool_provenance.py": {
+      "reason": "The provenance gate tests reuse one artifact graph and tamper matrix across pre-score and post-score checks.",
+      "split_boundary": "Separate artifact construction, tamper rejection, and runner closure after extracting the graph fixture.",
+      "reassess_when": "another provenance or closure contract changes, or this file reaches 1400 lines"
+    },
+    "test_recovery_and_safety_helpers.py": {
+      "reason": "Recovery planning, incremental execution, and verified merge tests share resumable bucket fixtures and safety helpers.",
+      "split_boundary": "Separate retry planning, clean-pool merge, and bucket execution after moving shared bucket fixtures to support code.",
+      "reassess_when": "another incremental provider or recovery state is added, or this file reaches 2200 lines"
+    },
+    "test_today_a_share_html_report.py": {
+      "reason": "Static report sections share candidate fixtures, localization assertions, and consumer-view helpers imported by disclosure tests.",
+      "split_boundary": "Separate localization, candidate tables, K-line data, and disclosure views after stabilizing a shared report fixture API.",
+      "reassess_when": "a report section or candidate data contract changes"
+    },
+    "test_today_a_share_selection_runner.py": {
+      "reason": "Runner integration scenarios share command executors, output fixtures, and failure cleanup assertions across the same public CLI.",
+      "split_boundary": "Separate input, provider, recovery, provenance, and output closure scenarios after extracting runner executor support.",
+      "reassess_when": "a runner option, provider, or output artifact is added"
+    }
+  },
+  "reassessments": {
+    "test_document_consistency.py": {
+      "assessed_on": "2026-07-15",
+      "trigger": "The production complexity exemption manifest introduced another machine-readable repository registry.",
+      "decision": "Keep the cohesive repository topology tests together while production complexity enforcement moves into the root validator.",
+      "next_trigger": "another machine-readable registry is added or this file reaches 1600 lines"
+    },
+    "test_full_a_clean_pool_provenance.py": {
+      "assessed_on": "2026-07-15",
+      "trigger": "Short-history display-path binding expanded the atomic provenance closure contract.",
+      "decision": "Keep the shared artifact graph intact because the change adds path identity without a new schema object.",
+      "next_trigger": "another provenance or closure contract changes, or this file reaches 1400 lines"
+    },
+    "test_recovery_and_safety_helpers.py": {
+      "assessed_on": "2026-07-15",
+      "trigger": "Baostock audited no-trading recovery added another incremental execution state.",
+      "decision": "Bucket-specific scenarios now live in the dedicated incremental execution safety suite; retain shared planning fixtures until the next state.",
+      "next_trigger": "another incremental provider or recovery state is added, or this file reaches 2200 lines"
+    },
+    "test_today_a_share_selection_runner.py": {
+      "assessed_on": "2026-07-15",
+      "trigger": "CI runtime review found the cohesive runner suite was the dominant serial shard bottleneck.",
+      "decision": "Keep shared integration fixtures in one source file and execute deterministic method-level shards; physical splitting remains deferred until runner executor support is extracted.",
+      "next_trigger": "a runner option, provider, or output artifact is added"
+    }
+  }
+}

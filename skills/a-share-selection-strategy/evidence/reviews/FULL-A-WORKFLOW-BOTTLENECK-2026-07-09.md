@@ -175,7 +175,7 @@ P5 verification:
 5. Baostock history 可复用 universe 的 `symbol/name`，只查询缺失名称，并显式支持 `reject/drop/keep` 非交易行策略。
 6. Pytdx 近期窗口首请求按日期跨度自适应缩小，后续按实际返回行数推进 offset，并记录 request/raw/output/overfetch。一次真实探针抓取 `000001` 的 `2026-07-09` 至 `2026-07-10`：请求 16 行、返回 16 行、输出 2 行、1 次 API 请求、约 7.5 秒、窗口完整。该结果只证明本次路径；Pytdx 仍缺 `turn/tradestatus/isST/name`，不能独立进入 strict 评分 merge。
 7. runner、计划、bucket fetch、merge、filter、validate、score 和 report 已补充耗时、吞吐、retry、sleep、cache/reuse、raw/output 等观测字段。复用 bucket 的本轮耗时为 0，原始抓取成本另行保留。
-8. 当前 `scripts/` 树共有 113 个 Python 文件；根层 33 个，其中 29 个 public CLI、4 个 compatibility wrapper，内部 80 个按领域分层。Agent 默认入口仍只有 `validate_ohlcv.py`、`score_candidates.py` 和 `run_today_a_share_selection.py`。超过 800 行的声明式 HTML、summary 投影和 runner 编排文件已由动态文档测试锁定并记录职责豁免，不按行数机械拆分。
+8. 截至 2026-07-12 本节闭环时，`scripts/` 树共有 113 个 Python 文件；根层 33 个，其中 29 个 public CLI、4 个 compatibility wrapper，内部 80 个按领域分层。Agent 默认入口仍只有 `validate_ohlcv.py`、`score_candidates.py` 和 `run_today_a_share_selection.py`。超过 800 行的声明式 HTML、summary 投影和 runner 编排文件已由动态文档测试锁定并记录职责豁免，不按行数机械拆分。后续实时数量以 `references/script-inventory.md` 的动态一致性门禁为准。
 
 本地验证：
 

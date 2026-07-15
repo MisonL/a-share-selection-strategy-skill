@@ -651,6 +651,9 @@ class FetchBaostockAShareTests(unittest.TestCase):
             updated["raw_quality_counter_semantics"],
         )
         self.assertIn("688981", updated["empty_symbols"])
+        self.assertEqual(["688981"], updated["non_trading_only_empty_symbols"])
+        self.assertEqual(2, len(updated["raw_symbols"]))
+        self.assertEqual("2025-09-01", updated["raw_symbols"][1]["date_max"])
         self.assertNotIn(
             "invalid_rows=1",
             fetcher.strict_gate_errors(updated, fail_on_fetch_error=True),

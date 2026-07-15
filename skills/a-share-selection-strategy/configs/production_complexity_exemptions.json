@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "claim_boundary": "production_complexity_exemptions_not_permanent_waivers",
+  "thresholds": {
+    "file_lines": 800,
+    "function_non_empty_lines": 80
+  },
+  "file_exemptions": {
+    "lib/report_html/a_share_selection_html_candidate_master.py": {
+      "reason": "Candidate detail markup remains one display-layer contract.",
+      "responsibility": "Render candidate master table and detail dialog without changing candidate facts.",
+      "reassess_when": "a stable candidate detail component boundary gains browser regression coverage"
+    },
+    "lib/report_html/a_share_selection_html_scripts.py": {
+      "reason": "The file contains one static-report interaction program emitted as JavaScript text.",
+      "responsibility": "Provide offline report interactions without changing the report data model.",
+      "reassess_when": "an interaction group can be extracted with identical generated JavaScript tests"
+    },
+    "lib/report_html/a_share_selection_html_sections.py": {
+      "reason": "The file contains declarative HTML section renderers sharing one localization contract.",
+      "responsibility": "Compose report sections without moving selection or gate decisions into the display layer.",
+      "reassess_when": "a section family has an independent input contract and HTML regression coverage"
+    },
+    "lib/runner/run_today_a_share_selection_summary.py": {
+      "reason": "The file is the compatibility projection for summary, stdout, and CSV provenance fields.",
+      "responsibility": "Preserve the versionless public summary schema while grouping stable field views.",
+      "reassess_when": "a summary subview receives an explicit versioned schema boundary"
+    },
+    "run_today_a_share_selection.py": {
+      "reason": "The public runner keeps one auditable CLI and failure cleanup sequence.",
+      "responsibility": "Orchestrate existing internal runner modules without adding another user entrypoint.",
+      "reassess_when": "an orchestration stage can move behind a tested internal interface without changing step order"
+    }
+  },
+  "function_exemptions": {
+    "lib/report_html/a_share_selection_html_candidate_master.py::candidate_stock_dialog": {
+      "reason": "The function is a declarative dialog markup template.",
+      "responsibility": "Render one candidate detail dialog structure.",
+      "reassess_when": "stable dialog subcomponents have HTML and browser regression tests"
+    },
+    "lib/report_html/a_share_selection_html_history.py::history_selection_fields": {
+      "reason": "The function is a declarative ordered field list.",
+      "responsibility": "Define history evidence labels and display order.",
+      "reassess_when": "history field groups become independent user views"
+    },
+    "lib/runner/run_today_a_share_selection_helpers.py::runner_disclosure_stdout": {
+      "reason": "The function is a declarative stdout compatibility projection.",
+      "responsibility": "Emit stable machine-readable runner disclosure fields.",
+      "reassess_when": "stdout field groups gain explicit compatibility tests and separate schemas"
+    },
+    "lib/runner/run_today_a_share_selection_input_metadata.py::history_metadata_for_output": {
+      "reason": "The function is a provider metadata projection with explicit optional fields.",
+      "responsibility": "Normalize history metadata for runner outputs without changing provider evidence.",
+      "reassess_when": "provider-neutral and provider-specific projections have separate schema tests"
+    },
+    "lib/runner/run_today_a_share_selection_parser.py::add_history_options": {
+      "reason": "The function centrally declares one argparse option group.",
+      "responsibility": "Define history-source CLI arguments and help text.",
+      "reassess_when": "history options gain an independently tested parser contract"
+    },
+    "lib/runner/run_today_a_share_selection_provenance.py::provenance_fields": {
+      "reason": "The function is a declarative provenance field mapping.",
+      "responsibility": "Project manifest and metadata facts into CSV provenance fields.",
+      "reassess_when": "provenance groups become versioned schema objects"
+    }
+  }
+}

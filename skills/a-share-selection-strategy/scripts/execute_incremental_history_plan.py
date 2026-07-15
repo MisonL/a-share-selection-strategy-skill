@@ -49,6 +49,33 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--zzshare-max-429-events", type=positive_int)
     parser.add_argument("--zzshare-max-runtime-seconds", type=positive_float)
     parser.add_argument("--zzshare-progress-interval", type=non_negative_int)
+    parser.add_argument(
+        "--baostock-names-input",
+        help="Optional CSV or Parquet symbol/name artifact for Baostock buckets.",
+    )
+    parser.add_argument(
+        "--baostock-missing-name-policy",
+        choices=("query", "fail", "blank"),
+        help="Explicit Baostock policy for symbols absent from --baostock-names-input.",
+    )
+    parser.add_argument(
+        "--baostock-non-trading-policy",
+        choices=("reject", "drop", "keep"),
+        help="Explicit Baostock policy for tradestatus values other than 1.",
+    )
+    parser.add_argument(
+        "--baostock-drop-invalid-rows",
+        action="store_true",
+        help="Explicitly drop invalid Baostock rows instead of failing the bucket.",
+    )
+    parser.add_argument(
+        "--baostock-allow-non-trading-empty",
+        action="store_true",
+        help=(
+            "Allow only explicitly audited Baostock symbols with no trading row "
+            "through the target date to retain their base history."
+        ),
+    )
     parser.add_argument("--base-prices")
     parser.add_argument("--base-metadata")
     parser.add_argument("--merged-output")
@@ -101,6 +128,29 @@ def build_config(
         raise ValueError(
             "verified merge is not valid when the plan has no fetch buckets"
         )
+    baostock_names_input = validate_provider_options(args)
+    return {
+        "plan_path": plan_path,
+        "provider": args.provider,
+        "full_start_date": str(args.full_start_date or ""),
+        "output_dir": output_dir,
+        "prices_output": output_dir / "incremental_prices.csv",
+        "metadata_output": output_dir / "incremental_metadata.json",
+        "manifest_output": output_dir / "execution_manifest.json",
+        "resume": bool(args.resume),
+        "checkpoint_batch_size": args.checkpoint_batch_size,
+        **provider_config_fields(args, baostock_names_input),
+        "python_executable": default_python(),
+        "scripts_dir": default_scripts_dir(),
+    }
+
+
+def validate_provider_options(args: argparse.Namespace) -> Path | None:
+    validate_zzshare_options(args)
+    return validate_baostock_options(args)
+
+
+def validate_zzshare_options(args: argparse.Namespace) -> None:
     zzshare_options_supplied = args.zzshare_non_trading_policy != "fail" or any(
         value is not None
         for value in (
@@ -116,16 +166,55 @@ def build_config(
         raise ValueError(
             "zzshare-specific options are only valid with --provider zzshare"
         )
+
+
+def validate_baostock_options(args: argparse.Namespace) -> Path | None:
+    baostock_options_supplied = bool(args.baostock_names_input) or any(
+        value is not None
+        for value in (
+            args.baostock_missing_name_policy,
+            args.baostock_non_trading_policy,
+        )
+    ) or bool(args.baostock_drop_invalid_rows)
+    baostock_options_supplied = baostock_options_supplied or bool(
+        args.baostock_allow_non_trading_empty
+    )
+    if args.provider != "baostock" and baostock_options_supplied:
+        raise ValueError(
+            "baostock-specific options are only valid with --provider baostock"
+        )
+    if args.baostock_missing_name_policy and not args.baostock_names_input:
+        raise ValueError(
+            "--baostock-missing-name-policy requires --baostock-names-input"
+        )
+    if args.baostock_allow_non_trading_empty:
+        if args.baostock_non_trading_policy != "drop":
+            raise ValueError(
+                "--baostock-allow-non-trading-empty requires "
+                "--baostock-non-trading-policy drop"
+            )
+        if not args.baostock_drop_invalid_rows:
+            raise ValueError(
+                "--baostock-allow-non-trading-empty requires "
+                "--baostock-drop-invalid-rows"
+            )
+    baostock_names_input = (
+        Path(args.baostock_names_input).resolve()
+        if args.baostock_names_input
+        else None
+    )
+    if baostock_names_input is not None and not baostock_names_input.is_file():
+        raise FileNotFoundError(
+            f"baostock names input not found: {baostock_names_input}"
+        )
+    return baostock_names_input
+
+
+def provider_config_fields(
+    args: argparse.Namespace,
+    baostock_names_input: Path | None,
+) -> dict[str, object]:
     return {
-        "plan_path": plan_path,
-        "provider": args.provider,
-        "full_start_date": str(args.full_start_date or ""),
-        "output_dir": output_dir,
-        "prices_output": output_dir / "incremental_prices.csv",
-        "metadata_output": output_dir / "incremental_metadata.json",
-        "manifest_output": output_dir / "execution_manifest.json",
-        "resume": bool(args.resume),
-        "checkpoint_batch_size": args.checkpoint_batch_size,
         "zzshare_non_trading_policy": args.zzshare_non_trading_policy,
         "zzshare_request_interval_seconds": args.zzshare_request_interval_seconds,
         "zzshare_max_concurrent_symbol_requests": args.zzshare_max_concurrent_symbol_requests,
@@ -133,8 +222,13 @@ def build_config(
         "zzshare_max_429_events": args.zzshare_max_429_events,
         "zzshare_max_runtime_seconds": args.zzshare_max_runtime_seconds,
         "zzshare_progress_interval": args.zzshare_progress_interval,
-        "python_executable": default_python(),
-        "scripts_dir": default_scripts_dir(),
+        "baostock_names_input": baostock_names_input,
+        "baostock_missing_name_policy": args.baostock_missing_name_policy,
+        "baostock_non_trading_policy": args.baostock_non_trading_policy,
+        "baostock_drop_invalid_rows": bool(args.baostock_drop_invalid_rows),
+        "baostock_allow_non_trading_empty": bool(
+            args.baostock_allow_non_trading_empty
+        ),
     }
 
 

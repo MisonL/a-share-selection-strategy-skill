@@ -1,5 +1,11 @@
 # AGENTS.md
 
+## 任务跟踪
+
+- 根目录 `tasks.csv` 是本仓库唯一任务驱动源；临时计划和审查报告不得替代其状态。
+- 状态仅使用 `未开始`、`进行中`、`已完成`。每次只允许一个任务处于 `进行中`。
+- 修改任务前先锁定对应行，完成验收和审查要求后再标记 `已完成`。
+
 ## 沟通和边界
 
 - 全程使用中文沟通。
@@ -63,6 +69,10 @@ PY
 PYTHONPYCACHEPREFIX=/tmp/a-share-selection-pycache python3 -m compileall -q skills/a-share-selection-strategy/scripts
 PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy --with pyarrow python -m unittest discover -s tests -v
 ```
+
+CI 会用 `tests/run_unittest_shard.py` 按职责分配普通测试文件，并将 `test_today_a_share_selection_runner.py` 按方法互斥分片；该脚本会校验全集覆盖和无重复。本地交付前仍需运行上面的完整 unittest，不能只依赖单个分片。
+
+CI 直接依赖约束位于 `skills/a-share-selection-strategy/constraints-ci.txt`，仅用于固定仓库测试的已验证组合；面向使用者的 `requirements*.txt` 继续保留最低版本范围，两者不能混作发布兼容性声明。
 
 如需校验 Skill 结构，将 `QUICK_VALIDATE` 替换成本机 skill-creator 的 `quick_validate.py` 路径：
 

@@ -465,6 +465,52 @@ class FullACleanPoolProvenanceTests(unittest.TestCase):
         self.assertEqual(EXCLUSION_BOUNDARY, checked["full_market_closure_boundary"])
         self.assertEqual(["300001"], checked["clean_pool"]["removed_symbols"])
 
+    def test_cli_atomically_publishes_derived_short_history_with_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            paths = write_artifacts(root)
+            output = root / "clean-output.csv"
+            metadata = root / "clean-metadata.json"
+            report = root / "clean-report.json"
+            short_history = root / "short-history.json"
+            provenance = root / "clean-provenance.json"
+
+            code = clean_pool.main(
+                [
+                    "--prices-input",
+                    str(paths["history_prices"]),
+                    "--history-metadata",
+                    str(paths["history_metadata"]),
+                    "--short-history-output",
+                    str(short_history),
+                    "--min-history-rows",
+                    "2",
+                    "--output",
+                    str(output),
+                    "--metadata-output",
+                    str(metadata),
+                    "--report-output",
+                    str(report),
+                    "--universe-input",
+                    str(paths["universe_input"]),
+                    "--universe-metadata",
+                    str(paths["universe_metadata"]),
+                    "--provenance-output",
+                    str(provenance),
+                ]
+            )
+            checked = validate_clean_pool_provenance(provenance)
+            short_data = json.loads(short_history.read_text(encoding="utf-8"))
+            report_data = json.loads(report.read_text(encoding="utf-8"))
+
+        self.assertEqual(0, code)
+        self.assertEqual(0, short_data["short_history_symbol_count"])
+        self.assertEqual(str(short_history), report_data["short_history"])
+        self.assertEqual(
+            str(short_history.resolve()),
+            checked["artifacts"]["short_history"]["path"],
+        )
+
     def test_runner_allows_full_market_claim_after_exact_final_scoring_validation(
         self,
     ) -> None:

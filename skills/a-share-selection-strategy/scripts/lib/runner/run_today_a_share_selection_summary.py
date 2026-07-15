@@ -175,6 +175,19 @@ def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         and step.get("returncode") not in step.get("allowed_returncodes", [])
     ]
     return {
+        **run_status_fields(manifest, status),
+        **history_request_fields(manifest),
+        **prices_filter_artifact_fields(manifest),
+        **prices_filter_coverage_fields(manifest),
+        **prices_filter_status_fields(manifest),
+        **score_runtime_fields(manifest),
+        **spot_fetch_fields(manifest),
+        **execution_decision_fields(manifest, failed),
+    }
+
+
+def run_status_fields(manifest: dict[str, Any], status: str) -> dict[str, Any]:
+    return {
         "runner": manifest["runner"],
         "status": status,
         "execution_mode": manifest.get("execution_mode", "execute"),
@@ -188,6 +201,11 @@ def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:
             "resume_sensitive_options_requiring_explicit_input",
             [],
         ),
+    }
+
+
+def history_request_fields(manifest: dict[str, Any]) -> dict[str, Any]:
+    return {
         "history_source": manifest.get("history_source", ""),
         "history_limit": manifest.get("history_limit", ""),
         "history_max_pages": manifest.get("history_max_pages", ""),
@@ -212,6 +230,11 @@ def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:
             manifest.get("history_resume_from_checkpoint", False)
         ),
         "history_progress_interval": manifest.get("history_progress_interval", ""),
+    }
+
+
+def prices_filter_artifact_fields(manifest: dict[str, Any]) -> dict[str, Any]:
+    return {
         "filter_prices_to_spot_universe": bool(
             manifest.get("filter_prices_to_spot_universe", False)
         ),
@@ -246,6 +269,11 @@ def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "prices_filter_output_rows": int(
             manifest.get("prices_filter_output_rows", 0) or 0
         ),
+    }
+
+
+def prices_filter_coverage_fields(manifest: dict[str, Any]) -> dict[str, Any]:
+    return {
         "prices_filter_spot_symbol_count": int(
             manifest.get("prices_filter_spot_symbol_count", 0) or 0
         ),
@@ -279,6 +307,11 @@ def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "prices_filter_removed_stale_symbols": manifest.get(
             "prices_filter_removed_stale_symbols", []
         ),
+    }
+
+
+def prices_filter_status_fields(manifest: dict[str, Any]) -> dict[str, Any]:
+    return {
         "prices_filter_output_written": bool(
             manifest.get("prices_filter_output_written", False)
         ),
@@ -292,6 +325,11 @@ def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "prices_filter_claim_boundary": manifest.get(
             "prices_filter_claim_boundary", ""
         ),
+    }
+
+
+def score_runtime_fields(manifest: dict[str, Any]) -> dict[str, Any]:
+    return {
         "score_profile_output": manifest.get("score_profile_output", ""),
         "score_profile_enabled": bool(manifest.get("score_profile_enabled", False)),
         "score_profile_output_written": bool(
@@ -320,6 +358,11 @@ def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:
             "",
         ),
         "history_timeout_seconds": manifest.get("history_timeout_seconds", ""),
+    }
+
+
+def spot_fetch_fields(manifest: dict[str, Any]) -> dict[str, Any]:
+    return {
         "fetch_spot": manifest.get("fetch_spot", ""),
         "fetch_spot_fallback": manifest.get("fetch_spot_fallback", ""),
         "spot_fallback_lookback_days": manifest.get("spot_fallback_lookback_days", ""),
@@ -334,6 +377,13 @@ def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:
         "fetch_spot_primary_failure": manifest.get("fetch_spot_primary_failure", {}),
         "spot_pages": manifest.get("spot_pages", ""),
         "spot_page_size": manifest.get("spot_page_size", ""),
+    }
+
+
+def execution_decision_fields(
+    manifest: dict[str, Any], failed: list[dict[str, Any]]
+) -> dict[str, Any]:
+    return {
         "planned_parameters": planned_parameters(manifest),
         "execution_path": manifest.get("execution_path", "unresolved"),
         "execution_path_reason": manifest.get("execution_path_reason", ""),
@@ -626,16 +676,27 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
     metadata = read_json_if_exists(metadata_path)
     metadata_exists = metadata_path.is_file()
     selected_symbols = selected_symbol_values(selected_data, manifest)
-    failed_symbols = metadata_list(metadata, "failed_symbols")
-    empty_symbols = metadata_list(metadata, "empty_symbols")
-    truncated_symbols = metadata_list(metadata, "possibly_truncated_symbols")
-    unprocessed_symbols = metadata_list(metadata, "unprocessed_symbols")
-    fallback_errors = metadata_list(metadata, "fallback_errors")
-    date_range = history_date_range_view(metadata, manifest)
-    fetch_duration = executed_step_duration(manifest, "fetch_history")
-    history_rows = int(metadata.get("rows", 0) or 0)
-    history_symbols = int(metadata.get("symbol_count", 0) or 0)
     view = {
+        **history_selection_source_fields(
+            selected_data,
+            selected_symbols,
+            manifest,
+        ),
+        **history_performance_fields(metadata, manifest),
+        **history_quality_fields(metadata, metadata_exists),
+        **history_date_range_view(metadata, manifest),
+        **history_selection_path_fields(selected_path, metadata_path),
+    }
+    add_optional_history_fields(view, metadata)
+    return view
+
+
+def history_selection_source_fields(
+    selected_data: dict[str, Any],
+    selected_symbols: list[str],
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    return {
         "source": selected_data.get("source", ""),
         "preflight_stage": selected_data.get("preflight_stage", ""),
         "selection_failed": bool(selected_data.get("selection_failed", False)),
@@ -650,6 +711,16 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
         "max_history_symbols": history_limit_value(selected_data, manifest),
         "history_symbol_limit_source": history_limit_source(selected_data, manifest),
         "allow_partial_history": bool(manifest.get("allow_partial_history", False)),
+    }
+
+
+def history_performance_fields(
+    metadata: dict[str, Any], manifest: dict[str, Any]
+) -> dict[str, Any]:
+    fetch_duration = executed_step_duration(manifest, "fetch_history")
+    history_rows = int(metadata.get("rows", 0) or 0)
+    history_symbols = int(metadata.get("symbol_count", 0) or 0)
+    return {
         "history_partial_result": history_partial_result(metadata),
         "history_rows": history_rows,
         "history_fetch_duration_seconds": fetch_duration,
@@ -686,6 +757,18 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
         "history_network_retry_sleep_seconds": float(
             metadata.get("network_retry_sleep_seconds", 0) or 0
         ),
+    }
+
+
+def history_quality_fields(
+    metadata: dict[str, Any], metadata_exists: bool
+) -> dict[str, Any]:
+    failed_symbols = metadata_list(metadata, "failed_symbols")
+    empty_symbols = metadata_list(metadata, "empty_symbols")
+    truncated_symbols = metadata_list(metadata, "possibly_truncated_symbols")
+    unprocessed_symbols = metadata_list(metadata, "unprocessed_symbols")
+    fallback_errors = metadata_list(metadata, "fallback_errors")
+    return {
         "history_metadata_symbol_count": int(metadata.get("symbol_count", 0) or 0),
         "history_requested_symbol_count": len(
             metadata_list(metadata, "requested_symbols")
@@ -736,12 +819,23 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
         "history_metadata_fallback_error_count": len(fallback_errors),
         "history_metadata_fallback_errors": fallback_errors,
         "history_metadata_symbol_providers": symbol_providers(metadata),
-        **date_range,
+    }
+
+
+def history_selection_path_fields(
+    selected_path: Path, metadata_path: Path
+) -> dict[str, Any]:
+    return {
         "selected_symbols_output": str(selected_path),
         "selected_symbols_output_written": selected_path.is_file(),
         "history_metadata_output": str(metadata_path),
         "history_metadata_file_exists": metadata_path.is_file(),
     }
+
+
+def add_optional_history_fields(
+    view: dict[str, Any], metadata: dict[str, Any]
+) -> None:
     if "adjust" in metadata:
         view["history_adjust"] = metadata["adjust"]
     if "adjustflag" in metadata:
@@ -775,7 +869,6 @@ def history_selection_view(manifest: dict[str, Any]) -> dict[str, Any]:
     ):
         if source_key in metadata:
             view[view_key] = metadata[source_key]
-    return view
 
 
 def candidate_field_coverage(path: Path, initialized: bool) -> dict[str, Any]:

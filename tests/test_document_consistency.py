@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import csv
 import json
 import re
 import subprocess
@@ -78,6 +79,62 @@ def calls_module_attribute(node: ast.AST, module: str, attribute: str) -> bool:
 
 
 class DocumentConsistencyTests(unittest.TestCase):
+    def test_large_test_files_have_explicit_complexity_exemptions(self) -> None:
+        tests_root = ROOT / "tests"
+        manifest = json.loads(
+            (tests_root / "complexity_exemptions.json").read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(
+            {
+                "schema_version",
+                "claim_boundary",
+                "hard_line_threshold",
+                "exemptions",
+                "reassessments",
+            },
+            set(manifest),
+        )
+        self.assertEqual(2, manifest["schema_version"])
+        self.assertEqual(
+            "temporary_test_file_complexity_exemptions_not_permanent_waivers",
+            manifest["claim_boundary"],
+        )
+        self.assertEqual(1000, manifest["hard_line_threshold"])
+
+        oversized = {
+            path.name
+            for path in tests_root.glob("test_*.py")
+            if len(path.read_text(encoding="utf-8").splitlines())
+            >= manifest["hard_line_threshold"]
+        }
+        exemptions = manifest["exemptions"]
+        self.assertEqual(oversized, set(exemptions))
+        for path, metadata in exemptions.items():
+            with self.subTest(path=path):
+                self.assertEqual(
+                    {"reason", "split_boundary", "reassess_when"},
+                    set(metadata),
+                )
+                for value in metadata.values():
+                    self.assertIsInstance(value, str)
+                    self.assertGreaterEqual(len(value.strip()), 24)
+        reassessments = manifest["reassessments"]
+        self.assertTrue(set(reassessments).issubset(exemptions))
+        for path, metadata in reassessments.items():
+            with self.subTest(reassessment=path):
+                self.assertEqual(
+                    {"assessed_on", "trigger", "decision", "next_trigger"},
+                    set(metadata),
+                )
+                self.assertRegex(metadata["assessed_on"], r"^\d{4}-\d{2}-\d{2}$")
+                for key in ("trigger", "decision", "next_trigger"):
+                    self.assertGreaterEqual(len(metadata[key].strip()), 24)
+                self.assertEqual(
+                    metadata["next_trigger"],
+                    exemptions[path]["reassess_when"],
+                )
+
     def test_skill_resources_use_semantic_directories(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         skill = (ROOT / "skills/a-share-selection-strategy/SKILL.md").read_text(
@@ -415,7 +472,7 @@ class DocumentConsistencyTests(unittest.TestCase):
             },
             set(routing),
         )
-        self.assertEqual(1, routing["schema_version"])
+        self.assertEqual(2, routing["schema_version"])
         self.assertEqual(
             "scenario_source_routing_only_not_runtime_auto_selection_or_fallback",
             routing["claim_boundary"],
@@ -426,7 +483,7 @@ class DocumentConsistencyTests(unittest.TestCase):
                 "automatic_fallback": False,
                 "runtime_cli_explicit_fallback_requires_parameter": True,
                 "explicit_fallback_sources_do_not_disable_cli_fallback_parameter": True,
-                "network_sources_must_persist_csv_and_metadata": True,
+                "network_sources_must_persist_tabular_artifact_and_metadata": True,
                 "local_validation_does_not_prove_real_external_gates": True,
             },
             routing["routing_policy"],
@@ -478,6 +535,7 @@ class DocumentConsistencyTests(unittest.TestCase):
                 for entrypoint in metadata["stable_entrypoints"]:
                     self.assertIn(entrypoint, allowed_entrypoints)
                     self.assertTrue(entrypoints["entries"][entrypoint]["public_entry"])
+                    self.assertTrue(entrypoints["entries"][entrypoint]["skill_route"])
                 for key in [
                     "description",
                     "reporting_boundary",
@@ -490,6 +548,10 @@ class DocumentConsistencyTests(unittest.TestCase):
         full_a = routing["scenarios"]["full_a_strict_scan"]
         self.assertEqual(["baostock_universe", "zzshare_history"], full_a["primary_sources"])
         self.assertEqual([], full_a["explicit_fallback_sources"])
+        self.assertIn(
+            "execute_incremental_history_plan.py",
+            full_a["stable_entrypoints"],
+        )
         self.assertEqual(
             1,
             full_a["default_controls"]["zzshare_history"][
@@ -847,7 +909,9 @@ class DocumentConsistencyTests(unittest.TestCase):
                     300,
                 )
                 relative = path.relative_to(scripts_root).as_posix()
-                self.assertIn(relative, docs)
+                table_row = f"| `{relative}` |"
+                self.assertIn(table_row, scripts_index)
+                self.assertIn(table_row, inventory)
 
         self.assertIn("维护热点", scripts_index)
         self.assertIn("不是当前必须拆分的阻塞项", scripts_index)
@@ -857,6 +921,20 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("summary/stdout/CSV provenance 字段", docs)
         self.assertIn("步骤顺序", docs)
         self.assertIn("职责豁免", docs)
+
+        complexity_manifest = json.loads(
+            (root / "configs/production_complexity_exemptions.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            "production_complexity_exemptions_not_permanent_waivers",
+            complexity_manifest["claim_boundary"],
+        )
+        self.assertEqual(
+            {path.relative_to(scripts_root).as_posix() for path in hotspots},
+            set(complexity_manifest["file_exemptions"]),
+        )
 
         long_functions = []
         for path in scripts_root.rglob("*.py"):
@@ -932,6 +1010,7 @@ class DocumentConsistencyTests(unittest.TestCase):
         artifact_layers = {
             "fetch/zzshare_a_share_checkpoint.py",
             "fetch/zzshare_a_share_quality.py",
+            "gates/incremental_history_artifacts.py",
             "gates/incremental_history_execution.py",
             "gates/lightgbm_prediction_summary.py",
             "report_html/a_share_selection_html_report.py",
@@ -1087,6 +1166,28 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("历史源与上一轮一致", docs)
         self.assertIn("manifest 所在目录", docs)
 
+    def test_incremental_docs_define_aggregation_and_baostock_empty_contract(self) -> None:
+        root = ROOT / "skills/a-share-selection-strategy"
+        docs = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in [
+                root / "instructions/full-a-strict-workflow.md",
+                root / "instructions/runbook.md",
+                root / "references/script-reference.md",
+            ]
+        )
+        self.assertIn("`requested_symbol_count` 表示本轮计划 symbol 数", docs)
+        self.assertIn("`symbol_count` 表示实际产生至少一行可合并历史的 symbol 数", docs)
+        self.assertIn(
+            "false_means_no_unaudited_gaps_audited_no_trading_updates_disclosed_separately",
+            docs,
+        )
+        self.assertIn(
+            "--baostock-non-trading-policy drop`、`--baostock-drop-invalid-rows`、`--baostock-allow-non-trading-empty`",
+            docs,
+        )
+        self.assertIn("名称输入与 name policy 是独立契约", docs)
+
     def test_unified_validation_entry_is_documented(self) -> None:
         root = ROOT / "skills/a-share-selection-strategy"
         closeout = root / "evidence/reviews/SKILL-SYSTEM-CLOSEOUT-2026-07-04.md"
@@ -1139,6 +1240,8 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("full unittest suite", result.stdout)
         self.assertIn("YAML agent manifest parse", result.stdout)
         self.assertIn("text whitespace and conflict marker scan", result.stdout)
+        self.assertIn("task tracking contract", result.stdout)
+        self.assertIn("production complexity contract", result.stdout)
         self.assertIn("External gates not run", result.stdout)
         self.assertIn('glob("*.yaml")', validator)
         self.assertIn("no YAML agent manifest files found", validator)
@@ -1180,6 +1283,59 @@ class DocumentConsistencyTests(unittest.TestCase):
         ]:
             with self.subTest(path=path):
                 self.assertIn(path, closeout_text)
+
+    def test_task_tracking_file_is_the_single_machine_checked_source(self) -> None:
+        tasks_path = ROOT / "tasks.csv"
+        with tasks_path.open(encoding="utf-8", newline="") as handle:
+            tasks = list(csv.DictReader(handle))
+        agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        validator = (ROOT / "validate_skill_changes.py").read_text(encoding="utf-8")
+
+        self.assertTrue(tasks)
+        self.assertEqual(
+            ["ID", "标题", "内容", "验收标准", "审查要求", "状态", "标签"],
+            list(tasks[0]),
+        )
+        self.assertLessEqual(sum(row["状态"] == "进行中" for row in tasks), 1)
+        self.assertIn("`tasks.csv` 是本仓库唯一任务驱动源", agents)
+        self.assertIn('TASKS_FILE = ROOT / "tasks.csv"', validator)
+        self.assertIn("check_task_tracking", validator)
+
+    def test_ci_direct_dependency_constraints_are_exact_and_documented(self) -> None:
+        root = ROOT / "skills/a-share-selection-strategy"
+        requirements = "\n".join(
+            [
+                (root / "requirements.txt").read_text(encoding="utf-8"),
+                (root / "requirements-parquet.txt").read_text(encoding="utf-8"),
+            ]
+        )
+        constraints = (root / "constraints-ci.txt").read_text(encoding="utf-8")
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        docs = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in [ROOT / "README.md", ROOT / "AGENTS.md"]
+        )
+
+        expected = {"pandas", "numpy", "pyarrow", "pyyaml"}
+        pinned = {}
+        for line in constraints.splitlines():
+            text = line.strip()
+            if not text or text.startswith("#"):
+                continue
+            name, separator, version = text.partition("==")
+            self.assertEqual("==", separator)
+            self.assertTrue(name)
+            self.assertTrue(version)
+            pinned[name.lower()] = version
+
+        self.assertEqual(expected, set(pinned))
+        self.assertIn("pandas>=", requirements)
+        self.assertIn("numpy>=", requirements)
+        self.assertIn("pyarrow>=", requirements)
+        self.assertIn("pyyaml>=", requirements)
+        self.assertIn("-c skills/a-share-selection-strategy/constraints-ci.txt", workflow)
+        self.assertIn("constraints-ci.txt", workflow)
+        self.assertIn("CI 直接依赖约束", docs)
 
     def test_skill_docs_define_agent_execution_and_recovery_protocol(self) -> None:
         skill = (ROOT / "skills/a-share-selection-strategy/SKILL.md").read_text(

@@ -36,6 +36,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--history-metadata", required=True)
     parser.add_argument("--min-history-rows", type=positive_int, default=120)
+    parser.add_argument(
+        "--max-bucket-symbols",
+        type=positive_int,
+        default=200,
+        help="Maximum symbols per resumable fetch bucket. Default: 200.",
+    )
     parser.add_argument("--target-end-date", required=True, help="YYYY-MM-DD.")
     parser.add_argument("--output", required=True, help="Plan JSON output.")
     parser.add_argument(
@@ -67,6 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         target,
         price_stats=price_stats,
         min_history_rows=args.min_history_rows,
+        max_bucket_symbols=args.max_bucket_symbols,
     )
     plan["prices_input"] = str(prices_input.resolve())
     plan["history_metadata_input"] = str(metadata_input.resolve())
@@ -97,6 +104,7 @@ def build_incremental_plan(
     *,
     price_stats: dict[str, dict[str, Any]] | None = None,
     min_history_rows: int = 1,
+    max_bucket_symbols: int = 200,
 ) -> dict[str, Any]:
     if min_history_rows < 1:
         raise ValueError("min_history_rows must be positive")
@@ -132,22 +140,53 @@ def build_incremental_plan(
             fetch_records.append(record)
     fetch_symbols = [record["symbol"] for record in fetch_records]
     refresh = refresh_summary(fetch_records, target_end_date)
-    buckets = build_fetch_buckets(fetch_records, target_end_date)
+    buckets = build_fetch_buckets(
+        fetch_records,
+        target_end_date,
+        max_bucket_symbols=max_bucket_symbols,
+    )
     validate_bucket_coverage(fetch_symbols, buckets)
+    return incremental_plan_document(
+        universe=universe,
+        metadata_symbol_count=len(existing),
+        price_stats=price_stats,
+        target_end_date=target_end_date,
+        min_history_rows=min_history_rows,
+        max_bucket_symbols=max_bucket_symbols,
+        fetch_records=fetch_records,
+        fetch_symbols=fetch_symbols,
+        buckets=buckets,
+        categories=categories,
+        refresh=refresh,
+    )
+
+
+def incremental_plan_document(
+    *,
+    universe: list[str],
+    metadata_symbol_count: int,
+    price_stats: dict[str, dict[str, Any]] | None,
+    target_end_date: str,
+    min_history_rows: int,
+    max_bucket_symbols: int,
+    fetch_records: list[dict[str, Any]],
+    fetch_symbols: list[str],
+    buckets: list[dict[str, Any]],
+    categories: dict[str, list[str]],
+    refresh: dict[str, Any],
+) -> dict[str, Any]:
+    extra_symbols = sorted(set(price_stats or {}).difference(universe))
     return {
         "source": "incremental_history_plan",
         "claim_boundary": CLAIM_BOUNDARY,
         "generated_at": now_iso(),
         "target_end_date": target_end_date,
         "min_history_rows": min_history_rows,
+        "max_bucket_symbols": max_bucket_symbols,
         "universe_symbol_count": len(universe),
-        "metadata_symbol_count": len(existing),
-        "prices_extra_symbols": sorted(
-            set(price_stats or {}).difference(universe)
-        ),
-        "prices_extra_symbol_count": len(
-            set(price_stats or {}).difference(universe)
-        ),
+        "metadata_symbol_count": metadata_symbol_count,
+        "prices_extra_symbols": extra_symbols,
+        "prices_extra_symbol_count": len(extra_symbols),
         "fetch_symbols": fetch_symbols,
         "fetch_symbol_count": len(fetch_symbols),
         "fetch_records": fetch_records,

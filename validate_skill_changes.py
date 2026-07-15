@@ -8,7 +8,9 @@ market data, real prediction, broker, or live backtest gates.
 from __future__ import annotations
 
 import argparse
+import ast
 from collections.abc import Callable
+import csv
 from dataclasses import dataclass
 import json
 import os
@@ -20,8 +22,12 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parent
+TASKS_FILE = ROOT / "tasks.csv"
 SKILL_ROOT = ROOT / "skills" / "a-share-selection-strategy"
 SCRIPTS = SKILL_ROOT / "scripts"
+PRODUCTION_COMPLEXITY_MANIFEST = (
+    SKILL_ROOT / "configs" / "production_complexity_exemptions.json"
+)
 DEFAULT_QUICK_VALIDATE = (
     Path.home()
     / ".codex"
@@ -96,9 +102,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def build_checks(args: argparse.Namespace) -> list[Check]:
     checks = [
+        Check("task tracking contract", check_task_tracking),
         Check("JSON configs and evals parse", check_json_files),
         Check("YAML agent manifest parse", check_yaml_agent_manifest),
         Check("scripts compileall", check_compileall),
+        Check("production complexity contract", check_production_complexity),
     ]
     if not args.skip_skill_validate:
         checks.append(Check("skill quick_validate", lambda: check_skill_validate(args)))
@@ -113,6 +121,34 @@ def build_checks(args: argparse.Namespace) -> list[Check]:
     if not args.skip_tests:
         checks.append(Check("full unittest suite", check_unittest))
     return checks
+
+
+def check_task_tracking() -> None:
+    required_fields = ["ID", "标题", "内容", "验收标准", "审查要求", "状态", "标签"]
+    allowed_statuses = {"未开始", "进行中", "已完成"}
+    with TASKS_FILE.open(encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames != required_fields:
+            raise RuntimeError("tasks.csv fields do not match the task contract")
+        rows = list(reader)
+    if not rows:
+        raise RuntimeError("tasks.csv must contain at least one task")
+    identifiers = []
+    in_progress = 0
+    for row_number, row in enumerate(rows, start=2):
+        for field in required_fields:
+            value = row.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise RuntimeError(f"tasks.csv row {row_number} missing {field}")
+        status = row["状态"]
+        if status not in allowed_statuses:
+            raise RuntimeError(f"tasks.csv row {row_number} has invalid status: {status}")
+        identifiers.append(row["ID"])
+        in_progress += status == "进行中"
+    if len(identifiers) != len(set(identifiers)):
+        raise RuntimeError("tasks.csv task IDs must be unique")
+    if in_progress > 1:
+        raise RuntimeError("tasks.csv permits at most one in-progress task")
 
 
 def check_json_files() -> None:
@@ -157,6 +193,104 @@ def check_compileall() -> None:
         [sys.executable, "-m", "compileall", "-q", str(SCRIPTS)],
         env=env,
     )
+
+
+def check_production_complexity() -> None:
+    manifest = json.loads(PRODUCTION_COMPLEXITY_MANIFEST.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict):
+        raise RuntimeError("production complexity manifest must be a JSON object")
+    if manifest.get("schema_version") != 1:
+        raise RuntimeError("production complexity manifest schema_version must be 1")
+    if manifest.get("claim_boundary") != (
+        "production_complexity_exemptions_not_permanent_waivers"
+    ):
+        raise RuntimeError("production complexity manifest claim_boundary is invalid")
+    thresholds = manifest.get("thresholds")
+    if thresholds != {"file_lines": 800, "function_non_empty_lines": 80}:
+        raise RuntimeError("production complexity thresholds are invalid")
+
+    file_exemptions = required_mapping(manifest, "file_exemptions")
+    function_exemptions = required_mapping(manifest, "function_exemptions")
+    actual_files, actual_functions = production_complexity_excesses(
+        file_line_threshold=thresholds["file_lines"],
+        function_line_threshold=thresholds["function_non_empty_lines"],
+    )
+    validate_exact_exemption_set("file", set(file_exemptions), actual_files)
+    validate_exact_exemption_set(
+        "function",
+        set(function_exemptions),
+        actual_functions,
+    )
+    validate_exemption_records(file_exemptions, "file")
+    validate_exemption_records(function_exemptions, "function")
+
+
+def required_mapping(data: dict[str, object], key: str) -> dict[str, object]:
+    value = data.get(key)
+    if not isinstance(value, dict):
+        raise RuntimeError(f"production complexity {key} must be an object")
+    return value
+
+
+def production_complexity_excesses(
+    *,
+    file_line_threshold: int,
+    function_line_threshold: int,
+) -> tuple[set[str], set[str]]:
+    large_files: set[str] = set()
+    long_functions: set[str] = set()
+    for path in sorted(SCRIPTS.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        lines = source.splitlines()
+        relative = path.relative_to(SCRIPTS).as_posix()
+        if len(lines) > file_line_threshold:
+            large_files.add(relative)
+        tree = ast.parse(source, filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            non_empty_lines = sum(
+                bool(line.strip())
+                for line in lines[node.lineno - 1 : node.end_lineno]
+            )
+            if non_empty_lines > function_line_threshold:
+                long_functions.add(f"{relative}::{node.name}")
+    return large_files, long_functions
+
+
+def validate_exact_exemption_set(
+    label: str,
+    declared: set[str],
+    actual: set[str],
+) -> None:
+    missing = sorted(actual - declared)
+    stale = sorted(declared - actual)
+    problems = []
+    if missing:
+        problems.append(f"missing {label} exemptions: {missing}")
+    if stale:
+        problems.append(f"stale {label} exemptions: {stale}")
+    if problems:
+        raise RuntimeError("; ".join(problems))
+
+
+def validate_exemption_records(records: dict[str, object], label: str) -> None:
+    required_fields = ("reason", "responsibility", "reassess_when")
+    for identifier, record in records.items():
+        if not isinstance(identifier, str) or not identifier.strip():
+            raise RuntimeError(f"production complexity {label} identifier is invalid")
+        if not isinstance(record, dict):
+            raise RuntimeError(
+                f"production complexity {label} exemption must be an object: "
+                f"{identifier}"
+            )
+        for field in required_fields:
+            value = record.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise RuntimeError(
+                    f"production complexity {label} exemption missing {field}: "
+                    f"{identifier}"
+                )
 
 
 def check_skill_validate(args: argparse.Namespace) -> None:
@@ -217,7 +351,7 @@ def text_hygiene_paths() -> list[Path]:
     for directory in [ROOT / ".github", SKILL_ROOT, ROOT / "tests"]:
         if directory.is_dir():
             paths.extend(path for path in directory.rglob("*") if path.is_file())
-    for name in ["AGENTS.md", "README.md", "validate_skill_changes.py"]:
+    for name in ["AGENTS.md", "README.md", "tasks.csv", "validate_skill_changes.py"]:
         path = ROOT / name
         if path.is_file():
             paths.append(path)
@@ -249,7 +383,7 @@ def secret_scan_paths() -> list[Path]:
     for directory in [ROOT / ".github", SKILL_ROOT, ROOT / "tests"]:
         if directory.is_dir():
             paths.extend(path for path in directory.rglob("*") if path.is_file())
-    for name in ["AGENTS.md", "README.md", "validate_skill_changes.py"]:
+    for name in ["AGENTS.md", "README.md", "tasks.csv", "validate_skill_changes.py"]:
         path = ROOT / name
         if path.is_file():
             paths.append(path)

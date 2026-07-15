@@ -8,12 +8,16 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+import pandas as pd
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = ROOT / "skills" / "a-share-selection-strategy"
 SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import prepare_clean_history_pool  # noqa: E402
+from lib.gates.clean_history_pool import derive_short_history_data  # noqa: E402
 from lib.selection_core.a_share_selection_command_safety import (  # noqa: E402
     SENSITIVE_FLAG_NAMES,
     sanitize_command,
@@ -22,9 +26,11 @@ from lib.selection_core.a_share_selection_command_safety import (  # noqa: E402
 from prepare_clean_history_pool import build_clean_plan  # noqa: E402
 from prepare_history_retry_symbols import build_retry_plan  # noqa: E402
 from prepare_incremental_history_plan import build_incremental_plan  # noqa: E402
-from lib.gates.incremental_history_execution import (  # noqa: E402
+from lib.gates.incremental_history_artifacts import (  # noqa: E402
     combine_csv,
     combine_metadata,
+)
+from lib.gates.incremental_history_execution import (  # noqa: E402
     execute_plan,
 )
 from lib.gates.incremental_history_merge import (  # noqa: E402
@@ -532,6 +538,55 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
                 ["600000"],
             )
 
+    def test_incremental_merge_rejects_unknown_partial_result_semantics(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "incremental history metadata partial_result_semantics is invalid",
+        ):
+            validate_incremental_metadata(
+                {
+                    "output_written": True,
+                    "metadata_output_written": True,
+                    "requested_symbols": ["600000"],
+                    "failed_symbols": [],
+                    "empty_symbols": [],
+                    "possibly_truncated_symbols": [],
+                    "unprocessed_symbols": [],
+                    "partial_result_semantics": "unknown",
+                },
+                ["600000"],
+            )
+
+    def test_incremental_merge_requires_semantics_for_no_trading_updates(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "incremental no-trading updates require partial_result_semantics",
+        ):
+            validate_incremental_metadata(
+                {
+                    "provider": "baostock",
+                    "output_written": True,
+                    "metadata_output_written": True,
+                    "requested_symbols": ["600000"],
+                    "failed_symbols": [],
+                    "empty_symbols": ["600000"],
+                    "non_trading_only_empty_symbols": ["600000"],
+                    "no_trading_update_symbols": ["600000"],
+                    "possibly_truncated_symbols": [],
+                    "unprocessed_symbols": [],
+                    "raw_symbols": [
+                        {
+                            "symbol": "600000",
+                            "rows": 1,
+                            "date_min": "2026-07-09",
+                            "date_max": "2026-07-09",
+                        }
+                    ],
+                },
+                ["600000"],
+                target="2026-07-09",
+            )
+
     def test_build_retry_plan_excludes_unselected_metadata_symbols(self) -> None:
         plan = build_retry_plan(
             selected_data={"selected_symbols": ["000001", "000002"]},
@@ -784,6 +839,152 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
             report["claim_boundary"],
         )
 
+    def test_prepare_clean_history_pool_derives_and_publishes_short_history(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "prices.csv"
+            metadata = root / "history_metadata.json"
+            output = root / "clean" / "prices.csv"
+            metadata_output = root / "clean" / "history_metadata.json"
+            report_output = root / "clean" / "clean_history_report.json"
+            short_output = root / "clean" / "short_history_symbols.json"
+            prices.write_text(
+                "symbol,date,close\n"
+                "000001,2026-07-08,10.0\n"
+                "000001,2026-07-09,10.2\n"
+                "001220,2026-07-09,6.1\n",
+                encoding="utf-8",
+            )
+            metadata.write_text(
+                json.dumps(
+                    {
+                        "source": "baostock",
+                        "rows": 3,
+                        "symbol_count": 2,
+                        "requested_symbols": ["000001", "001220"],
+                        "empty_symbols": [],
+                        "failed_symbols": [],
+                        "possibly_truncated_symbols": [],
+                        "unprocessed_symbols": [],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPTS / "prepare_clean_history_pool.py"),
+                    "--prices-input",
+                    str(prices),
+                    "--history-metadata",
+                    str(metadata),
+                    "--short-history-output",
+                    str(short_output),
+                    "--min-history-rows",
+                    "2",
+                    "--output",
+                    str(output),
+                    "--metadata-output",
+                    str(metadata_output),
+                    "--report-output",
+                    str(report_output),
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            short_data = json.loads(short_output.read_text(encoding="utf-8"))
+            report = json.loads(report_output.read_text(encoding="utf-8"))
+            clean_metadata = json.loads(metadata_output.read_text(encoding="utf-8"))
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(1, short_data["short_history_symbol_count"])
+        self.assertEqual(
+            {
+                "symbol": "001220",
+                "rows": 1,
+                "min_history_rows": 2,
+                "date_min": "2026-07-09",
+                "date_max": "2026-07-09",
+            },
+            short_data["symbols"][0],
+        )
+        self.assertEqual(str(prices), short_data["source_prices"])
+        self.assertEqual(str(short_output), report["short_history"])
+        self.assertEqual(["001220"], report["reason_symbols"]["short_history"])
+        self.assertEqual(["001220"], clean_metadata["clean_pool_removed_symbols"])
+
+    def test_prepare_clean_history_pool_requires_paired_short_history_options(self) -> None:
+        parser = prepare_clean_history_pool.build_parser()
+        base = [
+            "--prices-input",
+            "prices.csv",
+            "--history-metadata",
+            "metadata.json",
+            "--output",
+            "clean.csv",
+            "--metadata-output",
+            "clean.json",
+            "--report-output",
+            "report.json",
+        ]
+
+        args = parser.parse_args(base + ["--short-history-output", "short.json"])
+        with self.assertRaisesRegex(ValueError, "requires --min-history-rows"):
+            prepare_clean_history_pool.validate_short_history_options(args)
+        args = parser.parse_args(base + ["--min-history-rows", "120"])
+        with self.assertRaisesRegex(ValueError, "requires --short-history-output"):
+            prepare_clean_history_pool.validate_short_history_options(args)
+        args = parser.parse_args(
+            base
+            + [
+                "--short-history-output",
+                "short.json",
+                "--min-history-rows",
+                "120",
+                "--incremental-plan",
+                "plan.json",
+                "--incremental-prices",
+                "delta.csv",
+                "--incremental-metadata",
+                "delta.json",
+            ]
+        )
+        with self.assertRaisesRegex(ValueError, "persisted effective history artifact"):
+            prepare_clean_history_pool.validate_short_history_options(args)
+
+    def test_derive_short_history_uses_supported_numeric_date_format(self) -> None:
+        result = derive_short_history_data(
+            pd.DataFrame(
+                {
+                    "symbol": ["001220"],
+                    "date": [20260714],
+                }
+            ),
+            120,
+            Path("prices.parquet"),
+        )
+
+        self.assertEqual("2026-07-14", result["symbols"][0]["date_min"])
+        self.assertEqual("2026-07-14", result["symbols"][0]["date_max"])
+
+    def test_derive_short_history_rejects_duplicate_symbol_dates(self) -> None:
+        with self.assertRaisesRegex(ValueError, "duplicate symbol/date"):
+            derive_short_history_data(
+                pd.DataFrame(
+                    {
+                        "symbol": ["001220", "001220"],
+                        "date": ["2026-07-14", "2026-07-14"],
+                    }
+                ),
+                120,
+                Path("prices.parquet"),
+            )
+
     def test_prepare_clean_history_pool_rejects_duplicate_metadata_alias_output(
         self,
     ) -> None:
@@ -969,6 +1170,9 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
         self.assertIn("incremental_merged_symbols=1", result.stdout)
         self.assertIn("600000,2026-07-09,8.8", output_rows)
         self.assertEqual(4, merged_metadata["rows"])
+        self.assertEqual("2026-07-08", merged_metadata["date_min"])
+        self.assertEqual("2026-07-09", merged_metadata["date_max"])
+        self.assertEqual("2026-07-09", merged_metadata["end_date"])
         self.assertGreaterEqual(
             report["incremental_merge"]["merge_duration_seconds"], 0.0
         )

@@ -347,6 +347,7 @@
       "real_gate_boundary": "clean_history_pool_from_existing_artifacts_not_full_market_proof",
       "primary_artifacts": [
         "clean_prices.csv",
+        "clean_prices.parquet",
         "clean_metadata.json",
         "clean_history_report.json",
         "full_a_clean_pool_provenance.json"

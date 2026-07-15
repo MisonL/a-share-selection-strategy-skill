@@ -1,12 +1,12 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "claim_boundary": "scenario_source_routing_only_not_runtime_auto_selection_or_fallback",
   "routing_policy": {
     "automatic_source_selection": false,
     "automatic_fallback": false,
     "runtime_cli_explicit_fallback_requires_parameter": true,
     "explicit_fallback_sources_do_not_disable_cli_fallback_parameter": true,
-    "network_sources_must_persist_csv_and_metadata": true,
+    "network_sources_must_persist_tabular_artifact_and_metadata": true,
     "local_validation_does_not_prove_real_external_gates": true
   },
   "scenarios": {
@@ -84,7 +84,8 @@
         "fetch_eastmoney_a_share_spot.py",
         "run_today_a_share_selection.py",
         "prepare_clean_history_pool.py",
-        "prepare_incremental_history_plan.py"
+        "prepare_incremental_history_plan.py",
+        "execute_incremental_history_plan.py"
       ],
       "required_fields": [
         "symbol",

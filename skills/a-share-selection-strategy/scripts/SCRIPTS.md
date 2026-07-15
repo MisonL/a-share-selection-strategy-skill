@@ -57,8 +57,8 @@
 | `portfolio_overlap_report.py` | 并发持仓、重叠和容量门禁 | 工作日日历不是交易所日历 |
 | `run_baostock_walk_forward.py` | baostock walk-forward 总控 | `--offline-plan` 不执行真实门禁 |
 | `prepare_history_retry_symbols.py` | 从 `selected_symbols.json` 和 `history_metadata.json` 汇总 failed/empty/truncated/unprocessed symbol，生成历史抓取重试清单 | 只生成 recovery plan，不证明全 A 完成 |
-| `prepare_clean_history_pool.py` | 从 history metadata 和 short-history artifact 生成 clean prices/metadata，可显式合并已抓取 delta，或将 universe/history/clean artifact 对账后原子写 provenance | provenance 只说明 clean pool 是否具备后续全市场闭环资格；不联网、不补齐、不替代最终 runner、实时行情或选股证明 |
-| `prepare_incremental_history_plan.py` | 对比当前 universe 和既有 history metadata 生成增量抓取计划 | 只生成 plan，不证明增量抓取成功 |
+| `prepare_clean_history_pool.py` | 从 history metadata 和 short-history artifact 生成 clean prices/metadata；也可从已落地 effective history 显式推导短历史清单、合并已抓取 delta，或原子写 provenance | 短历史派生不与同轮内存增量合并共用；推导清单和 provenance 都只说明 artifact lineage，不联网、不补齐、不替代最终 runner、实时行情或选股证明 |
+| `prepare_incremental_history_plan.py` | 对比当前 universe 和既有 history metadata 生成有界、可恢复的增量抓取计划 | 只生成 plan，不证明增量抓取成功；默认每 bucket 最多 200 个 symbol |
 | `execute_incremental_history_plan.py` | 按计划 bucket 调用单一显式 provider，落盘 checkpoint、聚合增量 artifact，并可选执行 verified merge | 不自动切源；执行完成也不等于全 A 或选股门禁完成 |
 | `summarize_walk_forward_run.py` | 汇总 walk-forward artifact | 未传 required model 参数时不能声称模型口径已验证 |
 | `validate_walk_forward_manifest.py` | 校验 runner manifest | 不替代 artifact 内容复验 |
@@ -75,7 +75,7 @@
 - `a_share_selection_config.py`
 - `a_share_selection_paths.py`
 
-`lib/gates/incremental_history_execution.py` 属于明确产物层，只能由公开 `execute_incremental_history_plan.py` 调用，用于写 bucket checkpoint、校验 CSV/metadata/摘要、原子聚合 artifact 和执行 manifest；它不是独立 CLI，也不允许隐式选择或切换数据源。
+`lib/gates/incremental_history_execution.py` 只负责计划执行、resume、provider command 和 manifest 状态；`lib/gates/incremental_history_artifacts.py` 负责 bucket CSV/metadata 校验、聚合和原子发布。二者只能由公开 `execute_incremental_history_plan.py` 调用，都不是独立 CLI，也不允许隐式选择或切换数据源。
 
 `lib/gates/full_a_clean_pool_provenance.py` 是由 `prepare_clean_history_pool.py` 调用的 artifact 校验 helper。它对 universe、原始 history、clean prices/metadata/report 和可选 short-history 清单重算 symbol 集合、计数、路径和 SHA-256；至少 4,000 个 symbol 的 sample guard 还必须与完整 baostock metadata 合同、逐标 freshness 和 history-clean 全行保真同时通过，数量本身不是完整性证明。`lib/gates/full_a_clean_pool_artifacts.py` 负责前后双指纹与路径身份，`lib/gates/full_a_clean_pool_lineage.py` 负责逐标日期与 retained row/content 对账，二者都不写 artifact。三个 helper 只返回证明数据，不写入、补齐或切换任何数据源，更不能单独提升 runner 的 `full_market_claim_allowed`。
 
@@ -103,6 +103,8 @@ HTML 报告模块已下沉到 `lib/report_html/`。`a_share_selection_html_secti
 
 上述超过 800 行的文件已记录职责豁免。豁免原因不是忽略复杂度，而是当前内容分别属于声明式展示、字段投影或单入口编排；按固定行数机械拆分会扩大跨文件跳转和兼容回归面。只有形成可命名的独立职责，并有对应 artifact/HTML 契约测试时才继续拆分。
 
+机器可校验的精确豁免集合位于 `../configs/production_complexity_exemptions.json`。`validate_skill_changes.py` 会按生产文件总行数和函数非空行数重算当前集合；新增超限、漏登记或已经不再超限的陈旧豁免都会失败。
+
 超过 80 行但仍保持内聚的函数也必须显式登记。当前豁免只适用于声明式构造，不适用于网络循环、状态机、失败处理或评分执行流：
 
 | 函数 | 声明式职责 | 后续治理条件 |
@@ -113,8 +115,6 @@ HTML 报告模块已下沉到 `lib/report_html/`。`a_share_selection_html_secti
 | `history_metadata_for_output()` | 将 provider metadata 投影为 runner 字段 | provider-neutral 与 provider-specific 字段形成稳定边界时拆分 |
 | `add_history_options()` | 集中声明 history argparse 参数 | 参数组拥有独立 parser 合约时拆分 |
 | `provenance_fields()` | 定义 provenance 字段映射 | 字段组形成稳定 schema 子对象时拆分 |
-| `history_selection_view()` | 定义 summary 的 history selection 投影 | summary schema 可按子视图版本化时拆分 |
-| `run_identity()` | 定义 summary 的运行身份字段投影 | identity schema 可独立版本化时拆分 |
 
 ## 判定规则
 

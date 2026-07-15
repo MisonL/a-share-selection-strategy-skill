@@ -83,6 +83,7 @@ def build_clean_pool_provenance(
     clean_metadata_alias: Path | None = None,
     clean_report: Path,
     short_history: Path | None = None,
+    short_history_display_path: Path | None = None,
     display_paths: dict[str, Path] | None = None,
     history_frame: Any | None = None,
     clean_frame: Any | None = None,
@@ -98,6 +99,7 @@ def build_clean_pool_provenance(
         clean_metadata=clean_metadata,
         clean_report=clean_report,
         short_history=short_history,
+        short_history_display_path=short_history_display_path,
         history_frame=history_frame,
         clean_frame=clean_frame,
     )
@@ -142,6 +144,7 @@ def validate_provenance_inputs(
     clean_metadata: Path,
     clean_report: Path,
     short_history: Path | None,
+    short_history_display_path: Path | None = None,
     history_frame: Any | None,
     clean_frame: Any | None,
 ) -> ValidatedProvenanceInputs:
@@ -178,6 +181,7 @@ def validate_provenance_inputs(
         history_metadata=history_metadata,
         history_meta=history_meta,
         short_history=short_history,
+        short_history_display_path=short_history_display_path,
         short_data=short_data,
         history_symbols=history_symbols,
         history=history,
@@ -442,6 +446,7 @@ def validate_clean_pool(
     history_metadata: Path,
     history_meta: dict[str, Any],
     short_history: Path | None,
+    short_history_display_path: Path | None,
     short_data: dict[str, Any],
     history_symbols: set[str],
     history: Any,
@@ -461,7 +466,11 @@ def validate_clean_pool(
     require_same_path(report.get("history_metadata"), history_metadata, "clean report history metadata")
     recorded_short_history = str(report.get("short_history", "") or "").strip()
     if short_history is not None:
-        require_same_path(report.get("short_history"), short_history, "clean report short history")
+        require_same_path(
+            report.get("short_history"),
+            short_history_display_path or short_history,
+            "clean report short history",
+        )
     elif recorded_short_history:
         raise ValueError("clean report short history is not bound by provenance")
     removed = metadata_symbols(clean_meta.get("clean_pool_removed_symbols", []))

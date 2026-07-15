@@ -94,6 +94,8 @@
 
 | 文件 | 用途 |
 | --- | --- |
+| [../evidence/reviews/CLAUDE-OMP-UNCOMMITTED-REVIEW-2026-07-15.md](../evidence/reviews/CLAUDE-OMP-UNCOMMITTED-REVIEW-2026-07-15.md) | 2026-07-15 Claude、OMP 和 Codex 对未提交变更的只读终审、交叉验证和剩余边界 |
+| [../evidence/reviews/FULL-A-INCREMENTAL-BAOSTOCK-2026-07-15.md](../evidence/reviews/FULL-A-INCREMENTAL-BAOSTOCK-2026-07-15.md) | 2026-07-15 Baostock 全 A 增量分桶实测、短历史清洗、最终评分和 claim boundary |
 | [../evidence/reviews/FULL-A-PROVENANCE-RUN-2026-07-14.md](../evidence/reviews/FULL-A-PROVENANCE-RUN-2026-07-14.md) | 2026-07-14 schema v2 provenance、真实 5,202 标的最终 runner、性能与 claim=false 边界 |
 | [../evidence/reviews/FULL-A-WORKFLOW-BOTTLENECK-2026-07-09.md](../evidence/reviews/FULL-A-WORKFLOW-BOTTLENECK-2026-07-09.md) | 2026-07-09 全 A 实跑耗时、瓶颈、clean pool 和不可外推边界 |
 | [../evidence/reviews/FULL-A-WORKFLOW-BOTTLENECK-2026-07-12.md](../evidence/reviews/FULL-A-WORKFLOW-BOTTLENECK-2026-07-12.md) | 2026-07-12 全 A 实跑最新耗时、短历史恢复、评分瓶颈和字段边界 |

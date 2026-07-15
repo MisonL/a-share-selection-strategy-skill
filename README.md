@@ -143,6 +143,10 @@ python3 validate_skill_changes.py
 
 该入口只覆盖本地仓库门禁，不证明真实行情、真实 prediction、券商订单或真实回测门禁通过。需要拆开执行或替换本机 `quick_validate.py` 时，使用 [runbook 验证命令](skills/a-share-selection-strategy/instructions/runbook.md#验证命令)。
 
+CI 使用 `tests/run_unittest_shard.py` 按职责分配普通测试文件，并对 `test_today_a_share_selection_runner.py` 做方法级互斥分片；本地统一门禁仍以完整 `python -m unittest discover -s tests -v` 为准。分片脚本会校验覆盖全集、无重复，并在测试文件或 runner 方法变化时拒绝静默漏测。
+
+CI 直接依赖约束保存在 `skills/a-share-selection-strategy/constraints-ci.txt`，用于复现当前 Python 3.11 测试组合。`requirements*.txt` 仍表达使用者最低版本范围，不因 CI pin 而缩窄公开安装边界。
+
 ## 授权
 
 本仓库使用 MIT License，详见 [LICENSE](LICENSE)。

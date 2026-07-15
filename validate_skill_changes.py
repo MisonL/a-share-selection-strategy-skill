@@ -452,6 +452,8 @@ def check_unittest(dependency_profile: str = "latest") -> None:
 
 
 def unittest_command(dependency_profile: str) -> list[str]:
+    if dependency_profile not in {"latest", "ci"}:
+        raise ValueError(f"unknown dependency profile: {dependency_profile}")
     command = [uv_command(), "run"]
     if dependency_profile == "latest":
         command.extend(
@@ -466,8 +468,6 @@ def unittest_command(dependency_profile: str) -> list[str]:
                 str(CI_CONSTRAINTS.relative_to(ROOT)),
             ]
         )
-    else:
-        raise ValueError(f"unknown dependency profile: {dependency_profile}")
     command.extend(
         ["python", "-m", "unittest", "discover", "-s", "tests", "-v"]
     )

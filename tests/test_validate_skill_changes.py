@@ -60,7 +60,14 @@ class ValidateSkillChangesTests(unittest.TestCase):
         self.assertEqual(["python", "-m", "unittest"], command[6:9])
 
     def test_unittest_command_rejects_unknown_dependency_profile(self) -> None:
-        with self.assertRaisesRegex(ValueError, "unknown dependency profile"):
+        with (
+            patch.object(
+                validate_skill_changes,
+                "uv_command",
+                side_effect=AssertionError("uv must not be resolved"),
+            ),
+            self.assertRaisesRegex(ValueError, "unknown dependency profile"),
+        ):
             validate_skill_changes.unittest_command("unsupported")
 
     def test_positive_float_rejects_non_positive_timeout(self) -> None:

@@ -11,7 +11,7 @@
 - 全程使用中文沟通。
 - 不得伪造行情、候选股、LightGBM prediction、回测收益或联网结果。
 - 本仓库脚本以 CLI 为稳定入口；Python API 复用时需自行将 `skills/a-share-selection-strategy/scripts/` 加入 `PYTHONPATH` 或 `sys.path`。
-- 真实行情接入、真实 LightGBM prediction 生成、真实策略回测是外部门禁，不能用本地 smoke test 代替；当前真实门禁优先级以 `skills/a-share-selection-strategy/evidence/reviews/REAL-SCENARIO-GATES-2026-05-30.md` 为准。
+- 真实行情接入、真实 LightGBM prediction 生成、真实策略回测是外部门禁，不能用本地 smoke test 代替；当前状态统一从 `skills/a-share-selection-strategy/evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md` 进入，再回到其引用的 dated evidence。
 - 当前仓库声明 MIT License，详见 `LICENSE`；不要替用户添加或推断额外授权条款。
 
 ## 文档入口
@@ -21,7 +21,8 @@
 | 文档地图和历史报告索引 | `skills/a-share-selection-strategy/references/index.md` |
 | Agent 调用规则和任务路由 | `skills/a-share-selection-strategy/SKILL.md` |
 | 输出汇报模板 | `skills/a-share-selection-strategy/templates/output-templates.md` |
-| 历史真实门禁 | `skills/a-share-selection-strategy/evidence/reviews/REAL-SCENARIO-GATES-2026-05-30.md` |
+| 当前真实门禁状态 | `skills/a-share-selection-strategy/evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md` |
+| 历史真实门禁证据 | `skills/a-share-selection-strategy/evidence/reviews/REAL-SCENARIO-GATES-2026-05-30.md` |
 
 ## 输入数据要求
 

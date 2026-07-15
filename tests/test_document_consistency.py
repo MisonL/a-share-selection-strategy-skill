@@ -166,6 +166,35 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("MIT License", readme)
         self.assertNotIn("当前仓库未声明许可证", agents)
 
+    def test_current_real_gate_index_is_the_single_current_entry(self) -> None:
+        root = ROOT / "skills/a-share-selection-strategy"
+        agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        index = (root / "references/index.md").read_text(encoding="utf-8")
+        current_path = root / "evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md"
+        current = current_path.read_text(encoding="utf-8")
+
+        self.assertIn(str(current_path.relative_to(ROOT)), agents)
+        self.assertNotIn("当前真实门禁优先级以", agents)
+        self.assertIn(
+            "../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md",
+            index,
+        )
+        for value in [
+            "verified_limited_scope",
+            "verified_small_scope_only",
+            "verified_fixed_scope_only",
+            "not_proven",
+            "not_run",
+            "full_market_claim_allowed=false",
+            "真实 LightGBM prediction-derived",
+            "券商订单、真实成交、滑点和真实资金容量",
+            "本地验证边界",
+        ]:
+            with self.subTest(value=value):
+                self.assertIn(value, current)
+        for target in markdown_link_targets(current):
+            self.assertTrue((current_path.parent / target).is_file(), target)
+
     def test_core_skill_markdown_links_resolve_to_existing_files(self) -> None:
         docs = [
             ROOT / "skills/a-share-selection-strategy/SKILL.md",

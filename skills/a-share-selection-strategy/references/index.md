@@ -95,6 +95,7 @@
 | 文件 | 用途 |
 | --- | --- |
 | [../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md](../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md) | 当前真实门禁唯一人工入口，汇总最新证据、有限范围状态和仍未证明项 |
+| [../evidence/reviews/SKILL-OPTIMIZATION-CLOSEOUT-2026-07-15.md](../evidence/reviews/SKILL-OPTIMIZATION-CLOSEOUT-2026-07-15.md) | 2026-07-15 Skill 优化提交边界、双依赖 profile 完整回归、CI 分片合同和远端 pending 边界 |
 | [../evidence/reviews/CLAUDE-OMP-UNCOMMITTED-REVIEW-2026-07-15.md](../evidence/reviews/CLAUDE-OMP-UNCOMMITTED-REVIEW-2026-07-15.md) | 2026-07-15 Claude、OMP 和 Codex 对未提交变更的只读终审、交叉验证和剩余边界 |
 | [../evidence/reviews/FULL-A-INCREMENTAL-BAOSTOCK-2026-07-15.md](../evidence/reviews/FULL-A-INCREMENTAL-BAOSTOCK-2026-07-15.md) | 2026-07-15 Baostock 全 A 增量分桶实测、短历史清洗、最终评分和 claim boundary |
 | [../evidence/reviews/FULL-A-PROVENANCE-RUN-2026-07-14.md](../evidence/reviews/FULL-A-PROVENANCE-RUN-2026-07-14.md) | 2026-07-14 schema v2 provenance、真实 5,202 标的最终 runner、性能与 claim=false 边界 |

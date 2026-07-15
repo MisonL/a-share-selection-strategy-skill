@@ -108,6 +108,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_COMMAND_TIMEOUT_SECONDS,
         help=(
             "Maximum seconds for each validator subprocess; defaults to 600. "
+            "Module availability probes use the lower of this value and 10 seconds. "
             "Timeouts fail the validation gate explicitly."
         ),
     )

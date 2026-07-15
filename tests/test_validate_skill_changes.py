@@ -109,6 +109,26 @@ class ValidateSkillChangesTests(unittest.TestCase):
         ):
             validate_skill_changes.python_module_available("yaml")
 
+    def test_python_module_probe_honors_lower_user_timeout(self) -> None:
+        completed = subprocess.CompletedProcess([], 0)
+        with (
+            patch.object(validate_skill_changes, "COMMAND_TIMEOUT_SECONDS", 3.0),
+            patch.object(
+                validate_skill_changes.subprocess,
+                "run",
+                return_value=completed,
+            ) as run,
+        ):
+            self.assertTrue(validate_skill_changes.python_module_available("yaml"))
+
+        self.assertEqual(3.0, run.call_args.kwargs["timeout"])
+
+    def test_timeout_help_discloses_module_probe_cap(self) -> None:
+        help_text = validate_skill_changes.build_parser().format_help()
+
+        self.assertIn("Module availability probes use the", help_text)
+        self.assertIn("lower of this value and 10 seconds.", help_text)
+
     def test_task_tracking_check_accepts_single_in_progress_task(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tasks = Path(tmpdir) / "tasks.csv"

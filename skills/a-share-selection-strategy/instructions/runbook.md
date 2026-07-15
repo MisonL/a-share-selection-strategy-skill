@@ -648,7 +648,7 @@ uv run --with pandas python skills/a-share-selection-strategy/scripts/summarize_
 python3 validate_skill_changes.py
 ```
 
-每个验证子进程默认超时 600 秒。只有明确需要更长或更短的本地观察窗口时才传 `--command-timeout-seconds N`；超时会显式失败并打印对应命令，不会跳过该门禁。GitHub Actions 每个分片 job 的总超时为 15 分钟，该值是防止无限等待的控制上限，不是性能 SLA。
+常规验证子进程默认超时 600 秒。只有明确需要更长或更短的本地观察窗口时才传 `--command-timeout-seconds N`；Python 模块可用性探针使用 `min(N, 10)` 秒，自定义小于 10 秒的值仍会收紧探针。任何超时都会显式失败并打印对应命令，不会跳过该门禁。GitHub Actions 每个分片 job 的总超时为 15 分钟，该值是防止无限等待的控制上限，不是性能 SLA。
 
 默认 `--dependency-profile latest` 会使用当前可解析的最新兼容 `pandas/numpy/pyarrow` 运行完整测试。提交前或排查 CI 差异时，使用以下命令精确复现 Python 3.11 和 `constraints-ci.txt` 中的直接依赖组合：
 

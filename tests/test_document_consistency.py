@@ -1429,6 +1429,7 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("--command-timeout-seconds", validator)
         self.assertIn("validation command timed out", validator)
         self.assertIn("默认超时 600 秒", docs)
+        self.assertIn("模块可用性探针使用 `min(N, 10)` 秒", docs)
         self.assertIn("总超时为 15 分钟", docs)
         self.assertIn("不是性能 SLA", docs)
 

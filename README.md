@@ -141,7 +141,7 @@ prediction-derived 输入必须包含：
 python3 validate_skill_changes.py
 ```
 
-每个验证子进程默认最多运行 600 秒；需要调整时显式传入 `--command-timeout-seconds N`。超时会使门禁失败并输出对应命令和秒数，不会静默跳过。
+常规验证子进程默认最多运行 600 秒；需要调整时显式传入 `--command-timeout-seconds N`。Python 模块可用性探针使用 `min(N, 10)` 秒，避免轻量导入检查长时间阻塞；自定义小于 10 秒的值仍会收紧探针。任何超时都会使门禁失败并输出对应命令和秒数，不会静默跳过。
 
 默认 `--dependency-profile latest` 使用当前可解析的最新兼容 `pandas/numpy/pyarrow` 运行完整测试，用于发现上游兼容性漂移。需要在本机精确复现 GitHub CI 的 Python 3.11 直接依赖组合时运行：
 

@@ -1366,6 +1366,27 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("constraints-ci.txt", workflow)
         self.assertIn("CI 直接依赖约束", docs)
 
+    def test_validation_timeouts_are_bounded_and_documented(self) -> None:
+        root = ROOT / "skills/a-share-selection-strategy"
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        validator = (ROOT / "validate_skill_changes.py").read_text(encoding="utf-8")
+        docs = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in [
+                ROOT / "README.md",
+                ROOT / "AGENTS.md",
+                root / "instructions/runbook.md",
+            ]
+        )
+
+        self.assertIn("timeout-minutes: 15", workflow)
+        self.assertIn("DEFAULT_COMMAND_TIMEOUT_SECONDS = 600.0", validator)
+        self.assertIn("--command-timeout-seconds", validator)
+        self.assertIn("validation command timed out", validator)
+        self.assertIn("默认超时 600 秒", docs)
+        self.assertIn("总超时为 15 分钟", docs)
+        self.assertIn("不是性能 SLA", docs)
+
     def test_skill_docs_define_agent_execution_and_recovery_protocol(self) -> None:
         skill = (ROOT / "skills/a-share-selection-strategy/SKILL.md").read_text(
             encoding="utf-8"

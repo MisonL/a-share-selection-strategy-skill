@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -24,6 +25,44 @@ def task_csv_row(task_id: str, status: str) -> str:
 
 
 class ValidateSkillChangesTests(unittest.TestCase):
+    def test_positive_float_rejects_non_positive_timeout(self) -> None:
+        self.assertEqual(12.5, validate_skill_changes.positive_float("12.5"))
+        with self.assertRaisesRegex(
+            validate_skill_changes.argparse.ArgumentTypeError,
+            "greater than zero",
+        ):
+            validate_skill_changes.positive_float("0")
+
+    def test_run_command_reports_timeout_without_swallowing_it(self) -> None:
+        timeout = subprocess.TimeoutExpired(["fake-command"], 600)
+        with (
+            patch.object(
+                validate_skill_changes.subprocess,
+                "run",
+                side_effect=timeout,
+            ),
+            self.assertRaisesRegex(
+                RuntimeError,
+                r"timed out after 600 seconds: fake-command",
+            ),
+        ):
+            validate_skill_changes.run_command(["fake-command"])
+
+    def test_python_module_probe_reports_bounded_timeout(self) -> None:
+        timeout = subprocess.TimeoutExpired(["python", "-c", "import yaml"], 10)
+        with (
+            patch.object(
+                validate_skill_changes.subprocess,
+                "run",
+                side_effect=timeout,
+            ),
+            self.assertRaisesRegex(
+                RuntimeError,
+                r"timed out after 10 seconds: .*import yaml",
+            ),
+        ):
+            validate_skill_changes.python_module_available("yaml")
+
     def test_task_tracking_check_accepts_single_in_progress_task(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tasks = Path(tmpdir) / "tasks.csv"

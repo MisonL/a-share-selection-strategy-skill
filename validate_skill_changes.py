@@ -37,6 +37,8 @@ DEFAULT_QUICK_VALIDATE = (
     / "scripts"
     / "quick_validate.py"
 )
+DEFAULT_COMMAND_TIMEOUT_SECONDS = 600.0
+COMMAND_TIMEOUT_SECONDS = DEFAULT_COMMAND_TIMEOUT_SECONDS
 # Keep the historical leaked-key probe split so this file does not match itself.
 SECRET_RE = re.compile(r"sk-[A-Za-z0-9_-]{16,}" + "|" + "96" + "e6cc2e")
 
@@ -48,7 +50,9 @@ class Check:
 
 
 def main(argv: list[str] | None = None) -> int:
+    global COMMAND_TIMEOUT_SECONDS
     args = build_parser().parse_args(argv)
+    COMMAND_TIMEOUT_SECONDS = args.command_timeout_seconds
     checks = build_checks(args)
     if args.list:
         print("Local validation gates:")
@@ -97,7 +101,23 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="List planned local gates without executing them.",
     )
+    parser.add_argument(
+        "--command-timeout-seconds",
+        type=positive_float,
+        default=DEFAULT_COMMAND_TIMEOUT_SECONDS,
+        help=(
+            "Maximum seconds for each validator subprocess; defaults to 600. "
+            "Timeouts fail the validation gate explicitly."
+        ),
+    )
     return parser
+
+
+def positive_float(value: str) -> float:
+    parsed = float(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("timeout must be greater than zero")
+    return parsed
 
 
 def build_checks(args: argparse.Namespace) -> list[Check]:
@@ -452,21 +472,44 @@ def uv_command() -> str:
 
 
 def python_module_available(module: str) -> bool:
-    return (
-        subprocess.run(
-            [sys.executable, "-c", f"import {module}"],
-            cwd=ROOT,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        ).returncode
-        == 0
-    )
+    command = [sys.executable, "-c", f"import {module}"]
+    timeout_seconds = min(COMMAND_TIMEOUT_SECONDS, 10.0)
+    try:
+        return (
+            subprocess.run(
+                command,
+                cwd=ROOT,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=timeout_seconds,
+            ).returncode
+            == 0
+        )
+    except subprocess.TimeoutExpired as exc:
+        rendered = " ".join(command)
+        raise RuntimeError(
+            "validation command timed out "
+            f"after {timeout_seconds:g} seconds: {rendered}"
+        ) from exc
 
 
 def run_command(command: list[str], env: dict[str, str] | None = None) -> None:
     print("$ " + " ".join(command))
-    subprocess.run(command, cwd=ROOT, env=env, check=True)
+    try:
+        subprocess.run(
+            command,
+            cwd=ROOT,
+            env=env,
+            check=True,
+            timeout=COMMAND_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        rendered = " ".join(command)
+        raise RuntimeError(
+            "validation command timed out "
+            f"after {COMMAND_TIMEOUT_SECONDS:g} seconds: {rendered}"
+        ) from exc
 
 
 if __name__ == "__main__":

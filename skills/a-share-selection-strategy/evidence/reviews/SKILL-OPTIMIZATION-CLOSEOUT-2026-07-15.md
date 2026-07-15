@@ -8,6 +8,7 @@
 - `81c566f docs: establish current real gate index`
 - `a667ee6 ci: bound validation execution time`
 - `8d672f5 test: add exact CI dependency profile`
+- `ee45600 test: validate dependency profile before uv lookup`
 
 当前真实外部门禁统一从 `CURRENT-REAL-SCENARIO-GATES.md` 进入；dated evidence 保留原始范围和结论。
 
@@ -57,7 +58,23 @@ PYTHONDONTWRITEBYTECODE=1 python3 validate_skill_changes.py --dependency-profile
 
 ## 远端状态
 
-本报告首次写入时本轮提交尚未推送，远端九分片状态为 `pending`。在对应 GitHub Actions 完成前不得写成远端已验证。
+首次推送 `a37e3e6` 后，GitHub Actions run [29408375775](https://github.com/MisonL/a-share-selection-strategy-skill/actions/runs/29408375775) 返回 failure：八个分片通过，`core` 分片在无 uv 的 pip CI 环境中运行未知 dependency profile 反例时，`uv_command()` 抢先抛出 `FileNotFoundError`，没有到达预期的 `ValueError`。该失败没有重跑掩盖。
+
+`ee45600` 将 profile 值校验移到 uv 查找之前，并补充“uv 不得被解析”的回归断言。本地在移除 uv 的 PATH 下通过目标测试，完整 `core` 分片 `236/236` 通过。
+
+修复后的 GitHub Actions run [29408814425](https://github.com/MisonL/a-share-selection-strategy-skill/actions/runs/29408814425) 为 success，以下九个 matrix job 全部完成且通过：
+
+- `core`
+- `providers`
+- `gates`
+- `report`
+- `runner-core`
+- `runner-providers`
+- `runner-artifacts`
+- `runner-plan-resume`
+- `runner-universe`
+
+核查时仓库没有开放 PR，因此没有待处理 bot review。最终任务状态提交仍需再次通过对应 GitHub Actions，不能用本次实现提交的成功替代后续提交状态。
 
 ## 未执行的外部门禁
 

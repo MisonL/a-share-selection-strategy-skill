@@ -426,6 +426,8 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
   --symbols-output "$RUN/incremental/incremental_history_symbols.txt"
 ```
 
+`prepare_clean_history_pool.py --output <path>.parquet` 会按 `--output` 后缀写 Parquet，`.parquet` 或 `.pq` 均可；运行环境必须提供 `pyarrow` 或 `fastparquet`。这是 clean pool CLI 自身的输出路径，不使用 runner 的 `--prices-filter-output-format`。它只改变 clean prices 文件格式，metadata、report 和可选 provenance 仍按原合同写 JSON；默认示例仍写 CSV，不能解释为严格全链路无 CSV。
+
 对已经落地的 merged history，可用 `prepare_clean_history_pool.py --short-history-output <path> --min-history-rows <rows>`，在同一次原子发布中从 effective prices frame 推导并持久化短历史清单。该参数不接受同轮 `--incremental-*` 内存合并，必须先持久化 merge 结果，确保清单中的 `source_prices` 精确绑定实际输入。该路径只做显式、可审计排除，不会降低 validate 门禁，也不能证明重新取数成功。
 
 `full_market_closure_eligible=true` 还要求至少 4,000 个 symbol、完整 baostock metadata 对账、每个 history symbol 达到共同 `as_of_date`，并且 clean 与 history 去除 removed symbols 后全行全列等价；该下限只用于拒绝局部样本，不能独立证明全市场。下文“上游零排除”同时包含 breadth、逐标 freshness、lineage 和 metadata 门禁通过，不是只检查 clean 删除数。

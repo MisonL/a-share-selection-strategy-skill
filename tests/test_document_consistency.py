@@ -1238,6 +1238,26 @@ class DocumentConsistencyTests(unittest.TestCase):
                 ]:
                     self.assertIn(contract, document)
 
+    def test_clean_pool_parquet_output_is_documented(self) -> None:
+        root = ROOT / "skills/a-share-selection-strategy"
+        documents = {
+            "runbook": root / "instructions/runbook.md",
+            "script-reference": root / "references/script-reference.md",
+        }
+
+        for name, path in documents.items():
+            text = path.read_text(encoding="utf-8")
+            with self.subTest(document=name):
+                for contract in [
+                    "`prepare_clean_history_pool.py --output <path>.parquet`",
+                    "`.parquet` 或 `.pq`",
+                    "`pyarrow` 或 `fastparquet`",
+                    "不使用 runner 的 `--prices-filter-output-format`",
+                    "默认示例仍写 CSV",
+                    "不能解释为严格全链路无 CSV",
+                ]:
+                    self.assertIn(contract, text)
+
     def test_unified_validation_entry_is_documented(self) -> None:
         root = ROOT / "skills/a-share-selection-strategy"
         closeout = root / "evidence/reviews/SKILL-SYSTEM-CLOSEOUT-2026-07-04.md"

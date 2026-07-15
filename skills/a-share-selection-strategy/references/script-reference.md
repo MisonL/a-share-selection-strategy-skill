@@ -222,7 +222,9 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
   --report-output "$RUN/clean/clean_history_report.json"
 ```
 
-`prepare_clean_history_pool.py` 不联网、不重新取数，只基于既有 `history_metadata.json` 和短历史清单生成 clean `prices.csv`、clean metadata 和剔除报告。`metadata.json` 兼容副本必须通过 `--metadata-alias-output` 显式请求；脚本不会隐式覆盖同目录文件。`clean_history_report.json.skip_records[]` 必须保留 `symbol/source/reason/observed_at/ttl_days`，用于后续显式复核或过期重试。
+`prepare_clean_history_pool.py` 不联网、不重新取数，只基于既有 `history_metadata.json` 和短历史清单生成 clean prices、clean metadata 和剔除报告。`metadata.json` 兼容副本必须通过 `--metadata-alias-output` 显式请求；脚本不会隐式覆盖同目录文件。`clean_history_report.json.skip_records[]` 必须保留 `symbol/source/reason/observed_at/ttl_days`，用于后续显式复核或过期重试。
+
+`prepare_clean_history_pool.py --output <path>.parquet` 会按 `--output` 后缀写 Parquet，`.parquet` 或 `.pq` 均可；运行环境必须提供 `pyarrow` 或 `fastparquet`。这是 clean pool CLI 自身的输出路径，不使用 runner 的 `--prices-filter-output-format`。它只改变 clean prices 文件格式，metadata、report 和可选 provenance 仍按原合同写 JSON；默认示例仍写 CSV，不能解释为严格全链路无 CSV。
 
 只有需要 clean-pool provenance 审计时，才在命令中追加以下三项；前两个文件必须来自同一次 `baostock_universe` 抓取，不能使用 Eastmoney spot metadata：
 

@@ -74,7 +74,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 validate_skill_changes.py --dependency-profile
 - `runner-plan-resume`
 - `runner-universe`
 
-核查时仓库没有开放 PR，因此没有待处理 bot review。最终任务状态提交仍需再次通过对应 GitHub Actions，不能用本次实现提交的成功替代后续提交状态。
+任务状态收口提交 `9695b15` 对应的 GitHub Actions run [29409160399](https://github.com/MisonL/a-share-selection-strategy-skill/actions/runs/29409160399) 也为 success，九个 matrix job 全部完成且通过。核查时仓库没有开放 PR，因此没有待处理 bot review。
 
 ## 未执行的外部门禁
 

@@ -1308,6 +1308,7 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn('ROOT / ".github"', validator)
         self.assertIn("Local validation gates:", result.stdout)
         self.assertIn("full unittest suite", result.stdout)
+        self.assertIn("Skill frontmatter contract", result.stdout)
         self.assertIn("YAML agent manifest parse", result.stdout)
         self.assertIn("text whitespace and conflict marker scan", result.stdout)
         self.assertIn("task tracking contract", result.stdout)
@@ -1342,6 +1343,20 @@ class DocumentConsistencyTests(unittest.TestCase):
             "python3 validate_skill_changes.py --skip-skill-validate --skip-tests",
             workflow,
         )
+        self.assertIn(
+            "Repository-owned Skill frontmatter contract still runs",
+            workflow,
+        )
+        for document in [readme_text, agents_text, runbook_text]:
+            with self.subTest(frontmatter_document=document[:32]):
+                self.assertIn(
+                    "仓库自有的 `SKILL.md` frontmatter 合同",
+                    document,
+                )
+                self.assertIn(
+                    "`--skip-skill-validate` 只跳过本机 `quick_validate.py`",
+                    document,
+                )
         self.assertIn("Run repo health checks", workflow)
         for path in [
             "configs/data_sources.json",

@@ -658,6 +658,8 @@ python3 validate_skill_changes.py --dependency-profile ci
 
 `ci` profile 直接创建完整 unittest 子进程，不从当前虚拟环境继承同名 Python 包。GitHub Actions 已在 job 安装阶段通过同一 constraints 固定依赖，随后直接运行测试分片，不再嵌套 uv。
 
+统一入口始终执行仓库自有的 `SKILL.md` frontmatter 合同，覆盖 YAML mapping、允许字段、必需 `name/description`、名称格式和 description 边界。`--skip-skill-validate` 只跳过本机 `quick_validate.py` 附加兼容检查，不会跳过该仓库门禁。
+
 该入口只覆盖本地仓库门禁，不证明真实行情、真实 prediction、券商订单或真实回测门禁通过。若需要拆开执行，对应命令如下:
 
 以下拆分命令是 `validate_skill_changes.py` 的人工展开视图；新增或调整本地门禁时，先更新仓库根验证脚本，再同步本节。
@@ -666,6 +668,20 @@ python3 validate_skill_changes.py --dependency-profile ci
 for file in skills/a-share-selection-strategy/evals/*.json skills/a-share-selection-strategy/configs/*.json; do
   python3 -m json.tool "$file" >/tmp/"$(basename "$file")"
 done
+uv run --with pyyaml python - <<'PY'
+from pathlib import Path
+import yaml
+from validate_skill_changes import (
+    extract_skill_frontmatter,
+    validate_skill_frontmatter_data,
+)
+path = Path("skills/a-share-selection-strategy/SKILL.md")
+frontmatter = extract_skill_frontmatter(
+    path.read_text(encoding="utf-8"),
+    source=str(path),
+)
+validate_skill_frontmatter_data(yaml.safe_load(frontmatter), source=str(path))
+PY
 uv run --with pyyaml python - <<'PY'
 import yaml
 from pathlib import Path

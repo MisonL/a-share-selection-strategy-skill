@@ -24,6 +24,7 @@ import sys
 ROOT = Path(__file__).resolve().parent
 TASKS_FILE = ROOT / "tasks.csv"
 SKILL_ROOT = ROOT / "skills" / "a-share-selection-strategy"
+SKILL_FILE = SKILL_ROOT / "SKILL.md"
 SCRIPTS = SKILL_ROOT / "scripts"
 PRODUCTION_COMPLEXITY_MANIFEST = (
     SKILL_ROOT / "configs" / "production_complexity_exemptions.json"
@@ -40,6 +41,16 @@ DEFAULT_QUICK_VALIDATE = (
 )
 DEFAULT_COMMAND_TIMEOUT_SECONDS = 600.0
 COMMAND_TIMEOUT_SECONDS = DEFAULT_COMMAND_TIMEOUT_SECONDS
+SKILL_FRONTMATTER_ALLOWED_FIELDS = {
+    "name",
+    "description",
+    "license",
+    "allowed-tools",
+    "metadata",
+}
+SKILL_NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+SKILL_NAME_MAX_LENGTH = 64
+SKILL_DESCRIPTION_MAX_LENGTH = 1024
 # Keep the historical leaked-key probe split so this file does not match itself.
 SECRET_RE = re.compile(r"sk-[A-Za-z0-9_-]{16,}" + "|" + "96" + "e6cc2e")
 
@@ -90,7 +101,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--skip-skill-validate",
         action="store_true",
-        help="Explicitly skip skill quick_validate when that local tool is unavailable.",
+        help=(
+            "Skip only the machine-local skill-creator quick_validate.py check; "
+            "the repository-owned SKILL.md frontmatter contract always runs."
+        ),
     )
     parser.add_argument(
         "--skip-tests",
@@ -135,6 +149,7 @@ def build_checks(args: argparse.Namespace) -> list[Check]:
     checks = [
         Check("task tracking contract", check_task_tracking),
         Check("JSON configs and evals parse", check_json_files),
+        Check("Skill frontmatter contract", check_skill_frontmatter_contract),
         Check("YAML agent manifest parse", check_yaml_agent_manifest),
         Check("scripts compileall", check_compileall),
         Check("production complexity contract", check_production_complexity),
@@ -196,6 +211,78 @@ def check_json_files() -> None:
         json.loads(path.read_text(encoding="utf-8"))
 
 
+def check_skill_frontmatter_contract() -> None:
+    code = (
+        "import yaml\n"
+        "from pathlib import Path\n"
+        "from validate_skill_changes import (\n"
+        "    extract_skill_frontmatter,\n"
+        "    validate_skill_frontmatter_data,\n"
+        ")\n"
+        f"source = {str(SKILL_FILE)!r}\n"
+        "text = Path(source).read_text(encoding='utf-8')\n"
+        "frontmatter = extract_skill_frontmatter(text, source=source)\n"
+        "data = yaml.safe_load(frontmatter)\n"
+        "validate_skill_frontmatter_data(data, source=source)\n"
+    )
+    run_pyyaml_code(code)
+
+
+def extract_skill_frontmatter(text: str, *, source: str) -> str:
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].rstrip("\r\n") != "---":
+        raise RuntimeError(f"{source}: missing frontmatter delimiters")
+    for index, line in enumerate(lines[1:], start=1):
+        if line.rstrip("\r\n") == "---":
+            return "".join(lines[1:index])
+    raise RuntimeError(f"{source}: missing frontmatter delimiters")
+
+
+def validate_skill_frontmatter_data(data: object, *, source: str) -> None:
+    if not isinstance(data, dict):
+        raise RuntimeError(f"{source}: expected mapping root")
+
+    unexpected = sorted(
+        (key for key in data if key not in SKILL_FRONTMATTER_ALLOWED_FIELDS),
+        key=lambda key: (type(key).__name__, repr(key)),
+    )
+    if unexpected:
+        raise RuntimeError(f"{source}: unexpected fields: {unexpected}")
+    for field in ("name", "description"):
+        if field not in data:
+            raise RuntimeError(f"{source}: missing {field}")
+
+    name = data["name"]
+    if not isinstance(name, str):
+        raise RuntimeError(f"{source}: name must be a string")
+    if not name:
+        raise RuntimeError(f"{source}: name must not be empty")
+    if name != name.strip():
+        raise RuntimeError(f"{source}: name must not have surrounding whitespace")
+    if len(name) > SKILL_NAME_MAX_LENGTH:
+        raise RuntimeError(
+            f"{source}: name exceeds {SKILL_NAME_MAX_LENGTH} characters"
+        )
+    if SKILL_NAME_RE.fullmatch(name) is None:
+        raise RuntimeError(
+            f"{source}: name must use lowercase letters, digits, and single hyphens"
+        )
+
+    description = data["description"]
+    if not isinstance(description, str):
+        raise RuntimeError(f"{source}: description must be a string")
+    normalized_description = description.strip()
+    if not normalized_description:
+        raise RuntimeError(f"{source}: description must not be empty")
+    if len(normalized_description) > SKILL_DESCRIPTION_MAX_LENGTH:
+        raise RuntimeError(
+            f"{source}: description exceeds "
+            f"{SKILL_DESCRIPTION_MAX_LENGTH} characters"
+        )
+    if "<" in normalized_description or ">" in normalized_description:
+        raise RuntimeError(f"{source}: description must not contain angle brackets")
+
+
 def check_yaml_agent_manifest() -> None:
     manifests = sorted((SKILL_ROOT / "agents").glob("*.yaml"))
     if not manifests:
@@ -216,10 +303,19 @@ def check_yaml_agent_manifest() -> None:
         "        if not isinstance(value, str) or not value.strip():\n"
         "            raise RuntimeError(f'{manifest}: missing interface.{key}')\n"
     )
+    run_pyyaml_code(code)
+
+
+def run_pyyaml_code(code: str) -> None:
+    env = os.environ.copy()
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
     if python_module_available("yaml"):
-        run_command([sys.executable, "-c", code])
+        run_command([sys.executable, "-c", code], env=env)
         return
-    run_command([uv_command(), "run", "--with", "pyyaml", "python", "-c", code])
+    run_command(
+        [uv_command(), "run", "--with", "pyyaml", "python", "-c", code],
+        env=env,
+    )
 
 
 def check_compileall() -> None:

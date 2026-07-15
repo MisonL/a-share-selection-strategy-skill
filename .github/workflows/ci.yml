@@ -35,6 +35,8 @@ jobs:
         run: python3 -m pip install -c skills/a-share-selection-strategy/constraints-ci.txt -r skills/a-share-selection-strategy/requirements-parquet.txt
       - name: Run repo health checks
         if: matrix.shard == 'core'
+        # Repository-owned Skill frontmatter contract still runs; only the
+        # machine-local skill-creator quick_validate.py check is skipped.
         run: python3 validate_skill_changes.py --skip-skill-validate --skip-tests
       - name: Run test shard
         run: PYTHONDONTWRITEBYTECODE=1 python3 tests/run_unittest_shard.py "${{ matrix.shard }}"

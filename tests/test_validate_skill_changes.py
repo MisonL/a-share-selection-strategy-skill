@@ -25,6 +25,164 @@ def task_csv_row(task_id: str, status: str) -> str:
 
 
 class ValidateSkillChangesTests(unittest.TestCase):
+    def test_skill_frontmatter_contract_accepts_supported_fields(self) -> None:
+        validate_skill_changes.validate_skill_frontmatter_data(
+            {
+                "name": "a-share-selection-strategy",
+                "description": "Select and validate A-share candidates.",
+                "license": "MIT",
+                "allowed-tools": "Bash",
+                "metadata": {"category": "finance"},
+            },
+            source="SKILL.md",
+        )
+
+    def test_skill_frontmatter_contract_rejects_non_mapping_root(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "expected mapping root"):
+            validate_skill_changes.validate_skill_frontmatter_data(
+                ["name", "description"],
+                source="SKILL.md",
+            )
+
+    def test_skill_frontmatter_contract_rejects_unknown_fields(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, r"unexpected fields: \['version'\]"):
+            validate_skill_changes.validate_skill_frontmatter_data(
+                {
+                    "name": "a-share-selection-strategy",
+                    "description": "Select A-share candidates.",
+                    "version": "1",
+                },
+                source="SKILL.md",
+            )
+
+    def test_skill_frontmatter_contract_reports_non_string_unknown_fields(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(RuntimeError, "unexpected fields"):
+            validate_skill_changes.validate_skill_frontmatter_data(
+                {
+                    "name": "a-share-selection-strategy",
+                    "description": "Select A-share candidates.",
+                    1: "invalid",
+                    "version": "1",
+                },
+                source="SKILL.md",
+            )
+
+    def test_skill_frontmatter_contract_requires_name_and_description(self) -> None:
+        for missing in ["name", "description"]:
+            data = {
+                "name": "a-share-selection-strategy",
+                "description": "Select A-share candidates.",
+            }
+            del data[missing]
+            with (
+                self.subTest(missing=missing),
+                self.assertRaisesRegex(RuntimeError, f"missing {missing}"),
+            ):
+                validate_skill_changes.validate_skill_frontmatter_data(
+                    data,
+                    source="SKILL.md",
+                )
+
+    def test_skill_frontmatter_contract_rejects_invalid_names(self) -> None:
+        invalid_names = [
+            (1, "name must be a string"),
+            ("", "name must not be empty"),
+            (" a-share", "name must not have surrounding whitespace"),
+            (
+                "a" * 65,
+                "name exceeds 64 characters",
+            ),
+            (
+                "A-share",
+                "name must use lowercase letters, digits, and single hyphens",
+            ),
+            (
+                "a_share",
+                "name must use lowercase letters, digits, and single hyphens",
+            ),
+            (
+                "-a-share",
+                "name must use lowercase letters, digits, and single hyphens",
+            ),
+            (
+                "a-share-",
+                "name must use lowercase letters, digits, and single hyphens",
+            ),
+            (
+                "a--share",
+                "name must use lowercase letters, digits, and single hyphens",
+            ),
+        ]
+        for name, message in invalid_names:
+            with (
+                self.subTest(name=name),
+                self.assertRaisesRegex(RuntimeError, message),
+            ):
+                validate_skill_changes.validate_skill_frontmatter_data(
+                    {"name": name, "description": "Select A-share candidates."},
+                    source="SKILL.md",
+                )
+
+    def test_skill_frontmatter_contract_rejects_invalid_descriptions(self) -> None:
+        invalid_descriptions = [
+            (1, "description must be a string"),
+            (" ", "description must not be empty"),
+            ("Use <private> data.", "description must not contain angle brackets"),
+            (
+                "x" * 1025,
+                "description exceeds 1024 characters",
+            ),
+        ]
+        for description, message in invalid_descriptions:
+            with (
+                self.subTest(description=description),
+                self.assertRaisesRegex(RuntimeError, message),
+            ):
+                validate_skill_changes.validate_skill_frontmatter_data(
+                    {
+                        "name": "a-share-selection-strategy",
+                        "description": description,
+                    },
+                    source="SKILL.md",
+                )
+
+    def test_skill_frontmatter_extraction_requires_opening_and_closing_delimiters(
+        self,
+    ) -> None:
+        self.assertEqual(
+            "name: example\ndescription: Example skill.\n",
+            validate_skill_changes.extract_skill_frontmatter(
+                "---\nname: example\ndescription: Example skill.\n---\n# Body\n",
+                source="SKILL.md",
+            ),
+        )
+        for text in [
+            "name: example\ndescription: Example skill.\n",
+            "---\nname: example\ndescription: Example skill.\n",
+        ]:
+            with (
+                self.subTest(text=text),
+                self.assertRaisesRegex(RuntimeError, "frontmatter delimiters"),
+            ):
+                validate_skill_changes.extract_skill_frontmatter(
+                    text,
+                    source="SKILL.md",
+                )
+
+    def test_repo_frontmatter_gate_is_not_skipped_with_external_validator(
+        self,
+    ) -> None:
+        args = validate_skill_changes.build_parser().parse_args(
+            ["--skip-skill-validate", "--skip-tests"]
+        )
+
+        names = [check.name for check in validate_skill_changes.build_checks(args)]
+
+        self.assertIn("Skill frontmatter contract", names)
+        self.assertNotIn("skill quick_validate", names)
+
     def test_unittest_command_latest_profile_keeps_compatibility_path(self) -> None:
         with patch.object(validate_skill_changes, "uv_command", return_value="uv"):
             command = validate_skill_changes.unittest_command("latest")
@@ -128,6 +286,13 @@ class ValidateSkillChangesTests(unittest.TestCase):
 
         self.assertIn("Module availability probes use the", help_text)
         self.assertIn("lower of this value and 10 seconds.", help_text)
+
+    def test_skip_skill_validate_help_preserves_repo_frontmatter_gate(self) -> None:
+        help_text = validate_skill_changes.build_parser().format_help()
+
+        self.assertIn("Skip only the machine-local skill-creator", help_text)
+        self.assertIn("repository-owned SKILL.md", help_text)
+        self.assertIn("frontmatter contract always runs.", help_text)
 
     def test_task_tracking_check_accepts_single_in_progress_task(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -283,6 +448,27 @@ class ValidateSkillChangesTests(unittest.TestCase):
 
         self.assertEqual(1, len(commands))
         self.assertEqual(["uv", "run", "--with", "pyyaml", "python"], commands[0][:5])
+
+    def test_pyyaml_subprocess_disables_repository_bytecode_writes(self) -> None:
+        calls: list[tuple[list[str], dict[str, str] | None]] = []
+
+        with (
+            patch.object(
+                validate_skill_changes,
+                "python_module_available",
+                return_value=True,
+            ),
+            patch.object(
+                validate_skill_changes,
+                "run_command",
+                side_effect=lambda command, env=None: calls.append((command, env)),
+            ),
+        ):
+            validate_skill_changes.run_pyyaml_code("import yaml\n")
+
+        self.assertEqual(1, len(calls))
+        self.assertIsNotNone(calls[0][1])
+        self.assertEqual("1", calls[0][1]["PYTHONDONTWRITEBYTECODE"])
 
     def test_pycache_check_reports_without_deleting_repository_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

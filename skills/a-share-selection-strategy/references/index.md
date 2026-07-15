@@ -95,6 +95,7 @@
 | 文件 | 用途 |
 | --- | --- |
 | [../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md](../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md) | 当前真实门禁唯一人工入口，汇总最新证据、有限范围状态和仍未证明项 |
+| [../evidence/reviews/CLAUDE-OMP-SYSTEM-REVIEW-2026-07-15.md](../evidence/reviews/CLAUDE-OMP-SYSTEM-REVIEW-2026-07-15.md) | 2026-07-15 Claude、OMP 和 Codex 对当前 Skill 体系及 `09efee4..2a7c321` 的复核、分歧裁定和待修文档合同 |
 | [../evidence/reviews/SKILL-OPTIMIZATION-CLOSEOUT-2026-07-15.md](../evidence/reviews/SKILL-OPTIMIZATION-CLOSEOUT-2026-07-15.md) | 2026-07-15 Skill 优化提交边界、双依赖 profile 完整回归、CI 分片合同和远端 pending 边界 |
 | [../evidence/reviews/CLAUDE-OMP-UNCOMMITTED-REVIEW-2026-07-15.md](../evidence/reviews/CLAUDE-OMP-UNCOMMITTED-REVIEW-2026-07-15.md) | 2026-07-15 Claude、OMP 和 Codex 对未提交变更的只读终审、交叉验证和剩余边界 |
 | [../evidence/reviews/FULL-A-INCREMENTAL-BAOSTOCK-2026-07-15.md](../evidence/reviews/FULL-A-INCREMENTAL-BAOSTOCK-2026-07-15.md) | 2026-07-15 Baostock 全 A 增量分桶实测、短历史清洗、最终评分和 claim boundary |

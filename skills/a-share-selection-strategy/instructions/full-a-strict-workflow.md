@@ -368,7 +368,7 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
   --report-output "$RUN/clean_merged/clean_history_report.json"
 ```
 
-增量合并会强制检查 delta metadata 无 `failed/empty/possibly_truncated/unprocessed` 且 `rate_limit_budget_exhausted=false`，计划内 symbol 都在增量 prices 中出现，且每个 symbol 的最新日期达到 `target_end_date`；重复的 `symbol/date` 行由增量结果覆盖并记录 `overlap_rows_replaced`。该步骤只合并已落地 artifact，不联网、不证明未来稳定性。
+增量合并会强制拒绝 delta metadata 中的 `failed/possibly_truncated/unprocessed`、未经审计的 `empty` 和 `rate_limit_budget_exhausted=true`。普通 empty、缺失计划 symbol 或最新日期未达到 `target_end_date` 仍然失败。唯一例外是严格审计的 Baostock no-trading empty：三个集合必须满足 `empty_symbols == no_trading_update_symbols == non_trading_only_empty_symbols`，`partial_result_semantics` 必须为固定值，且必须同时满足 `provider=baostock`、`raw_symbols.rows > 0`、`date_max=target_end_date`。只有这类 symbol 可以不出现在 delta prices，merge 保留 base，最终 freshness 仍不通过；除此之外，所有计划 symbol 都必须出现在 delta prices 且达到目标日。重复的 `symbol/date` 行由增量结果覆盖并记录 `overlap_rows_replaced`。该步骤只合并已落地 artifact，不联网、不证明未来稳定性。
 
 过滤输出为 Parquet 时，runner 必须同时写 `<prices>.metadata.json` sidecar。sidecar 记录 artifact 路径、SHA-256、size、mtime、rows、symbols、日期范围、过滤契约与原始 input metadata；内容身份由路径、size 和 SHA-256 锁定，mtime 仅供审计。复用时必须先验证 sidecar 并重算表统计；摘要不匹配、sidecar 缺失、内容篡改、统计漂移或 input metadata 结构损坏时不得继续评分，单独触碰 mtime 不应让内容相同的 artifact 失效。
 

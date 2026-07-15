@@ -1197,12 +1197,17 @@ class DocumentConsistencyTests(unittest.TestCase):
 
     def test_incremental_docs_define_aggregation_and_baostock_empty_contract(self) -> None:
         root = ROOT / "skills/a-share-selection-strategy"
+        workflow = (root / "instructions/full-a-strict-workflow.md").read_text(
+            encoding="utf-8"
+        )
+        script_reference = (root / "references/script-reference.md").read_text(
+            encoding="utf-8"
+        )
         docs = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in [
-                root / "instructions/full-a-strict-workflow.md",
-                root / "instructions/runbook.md",
-                root / "references/script-reference.md",
+            [
+                workflow,
+                (root / "instructions/runbook.md").read_text(encoding="utf-8"),
+                script_reference,
             ]
         )
         self.assertIn("`requested_symbol_count` 表示本轮计划 symbol 数", docs)
@@ -1216,6 +1221,22 @@ class DocumentConsistencyTests(unittest.TestCase):
             docs,
         )
         self.assertIn("名称输入与 name policy 是独立契约", docs)
+        for name, document in [
+            ("full-a-strict-workflow", workflow),
+            ("script-reference", script_reference),
+        ]:
+            with self.subTest(document=name):
+                for contract in [
+                    "`empty_symbols == no_trading_update_symbols == non_trading_only_empty_symbols`",
+                    "false_means_no_unaudited_gaps_audited_no_trading_updates_disclosed_separately",
+                    "`provider=baostock`",
+                    "`date_max=target_end_date`",
+                    "不出现在 delta prices",
+                    "merge 保留 base",
+                    "普通 empty",
+                    "最终 freshness 仍不通过",
+                ]:
+                    self.assertIn(contract, document)
 
     def test_unified_validation_entry_is_documented(self) -> None:
         root = ROOT / "skills/a-share-selection-strategy"

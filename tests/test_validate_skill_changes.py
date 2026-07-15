@@ -25,6 +25,44 @@ def task_csv_row(task_id: str, status: str) -> str:
 
 
 class ValidateSkillChangesTests(unittest.TestCase):
+    def test_unittest_command_latest_profile_keeps_compatibility_path(self) -> None:
+        with patch.object(validate_skill_changes, "uv_command", return_value="uv"):
+            command = validate_skill_changes.unittest_command("latest")
+        self.assertEqual(
+            [
+                "uv",
+                "run",
+                "--with",
+                "pandas",
+                "--with",
+                "numpy",
+                "--with",
+                "pyarrow",
+            ],
+            command[:8],
+        )
+        self.assertEqual(["python", "-m", "unittest"], command[8:11])
+
+    def test_unittest_command_ci_profile_uses_exact_python_constraints(self) -> None:
+        with patch.object(validate_skill_changes, "uv_command", return_value="uv"):
+            command = validate_skill_changes.unittest_command("ci")
+        self.assertEqual(
+            [
+                "uv",
+                "run",
+                "--python",
+                "3.11",
+                "--with-requirements",
+                "skills/a-share-selection-strategy/constraints-ci.txt",
+            ],
+            command[:6],
+        )
+        self.assertEqual(["python", "-m", "unittest"], command[6:9])
+
+    def test_unittest_command_rejects_unknown_dependency_profile(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unknown dependency profile"):
+            validate_skill_changes.unittest_command("unsupported")
+
     def test_positive_float_rejects_non_positive_timeout(self) -> None:
         self.assertEqual(12.5, validate_skill_changes.positive_float("12.5"))
         with self.assertRaisesRegex(
@@ -41,6 +79,7 @@ class ValidateSkillChangesTests(unittest.TestCase):
                 "run",
                 side_effect=timeout,
             ),
+            patch("builtins.print"),
             self.assertRaisesRegex(
                 RuntimeError,
                 r"timed out after 600 seconds: fake-command",

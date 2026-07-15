@@ -648,6 +648,14 @@ python3 validate_skill_changes.py
 
 每个验证子进程默认超时 600 秒。只有明确需要更长或更短的本地观察窗口时才传 `--command-timeout-seconds N`；超时会显式失败并打印对应命令，不会跳过该门禁。GitHub Actions 每个分片 job 的总超时为 15 分钟，该值是防止无限等待的控制上限，不是性能 SLA。
 
+默认 `--dependency-profile latest` 会使用当前可解析的最新兼容 `pandas/numpy/pyarrow` 运行完整测试。提交前或排查 CI 差异时，使用以下命令精确复现 Python 3.11 和 `constraints-ci.txt` 中的直接依赖组合：
+
+```bash
+python3 validate_skill_changes.py --dependency-profile ci
+```
+
+`ci` profile 直接创建完整 unittest 子进程，不从当前虚拟环境继承同名 Python 包。GitHub Actions 已在 job 安装阶段通过同一 constraints 固定依赖，随后直接运行测试分片，不再嵌套 uv。
+
 该入口只覆盖本地仓库门禁，不证明真实行情、真实 prediction、券商订单或真实回测门禁通过。若需要拆开执行，对应命令如下:
 
 以下拆分命令是 `validate_skill_changes.py` 的人工展开视图；新增或调整本地门禁时，先更新仓库根验证脚本，再同步本节。

@@ -105,13 +105,14 @@
 本轮实现完成后使用仓库统一入口执行完整本地门禁：
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy --with pyarrow python validate_skill_changes.py
+PYTHONDONTWRITEBYTECODE=1 python3 validate_skill_changes.py --dependency-profile ci
 ```
 
 - Skill `quick_validate` 通过。
 - JSON、YAML、compileall、diff whitespace、冲突标记、密钥和 `__pycache__` 检查通过。
-- 在 Python 3.11 和 `constraints-ci.txt` 的精确直接依赖版本下，串行 unittest 共 837 项，全部通过；测试阶段 181.010 秒，统一入口总耗时 185.85 秒。
-- CI 分片集合与完整 discovery 的 837 个 test ID 全集完全相等且无重复；九个分片均在同一精确依赖环境通过。
-- 分片测试数分别为：`core` 228、`providers` 155、`gates` 235、`report` 70、`runner-core` 40、`runner-providers` 28、`runner-artifacts` 28、`runner-plan-resume` 28、`runner-universe` 25。
+- `--dependency-profile ci` 直接使用 Python 3.11 和 `constraints-ci.txt` 的精确直接依赖版本创建 unittest 子进程，不从调用者环境继承同名包。
+- 串行 unittest 共 845 项，全部通过；测试阶段 327.255 秒，统一入口总耗时 369.27 秒。
+- CI 分片集合与完整 discovery 的 845 个 test ID 全集完全相等且无重复；九个分片均可在同一精确依赖环境构造。
+- 分片测试数分别为：`core` 236、`providers` 155、`gates` 235、`report` 70、`runner-core` 40、`runner-providers` 28、`runner-artifacts` 28、`runner-plan-resume` 28、`runner-universe` 25。
 - 分片墙钟时间会受并行负载、文件缓存和本机状态影响，本轮只将它用于验证分片边界和 CI 可执行性，不外推为 GitHub Actions SLA 或业务流程 SLA。
 - 本轮仓库回归没有重新联网执行全 A 行情抓取，也没有执行真实 LightGBM prediction、样本外回测或券商门禁；前文真实场景数据来自已记录的 2026-07-15 运行和离线 artifact 重放。

@@ -28,6 +28,7 @@ SCRIPTS = SKILL_ROOT / "scripts"
 PRODUCTION_COMPLEXITY_MANIFEST = (
     SKILL_ROOT / "configs" / "production_complexity_exemptions.json"
 )
+CI_CONSTRAINTS = SKILL_ROOT / "constraints-ci.txt"
 DEFAULT_QUICK_VALIDATE = (
     Path.home()
     / ".codex"
@@ -110,6 +111,15 @@ def build_parser() -> argparse.ArgumentParser:
             "Timeouts fail the validation gate explicitly."
         ),
     )
+    parser.add_argument(
+        "--dependency-profile",
+        choices=("latest", "ci"),
+        default="latest",
+        help=(
+            "Dependency environment for the full unittest subprocess: latest "
+            "compatible packages or the exact Python 3.11 CI constraints."
+        ),
+    )
     return parser
 
 
@@ -139,7 +149,12 @@ def build_checks(args: argparse.Namespace) -> list[Check]:
         ]
     )
     if not args.skip_tests:
-        checks.append(Check("full unittest suite", check_unittest))
+        checks.append(
+            Check(
+                f"full unittest suite ({args.dependency_profile} dependencies)",
+                lambda: check_unittest(args.dependency_profile),
+            )
+        )
     return checks
 
 
@@ -430,29 +445,33 @@ def managed_pycache_dirs() -> list[Path]:
     return sorted(set(paths))
 
 
-def check_unittest() -> None:
+def check_unittest(dependency_profile: str = "latest") -> None:
     env = os.environ.copy()
     env["PYTHONDONTWRITEBYTECODE"] = "1"
-    run_command(
-        [
-            uv_command(),
-            "run",
-            "--with",
-            "pandas",
-            "--with",
-            "numpy",
-            "--with",
-            "pyarrow",
-            "python",
-            "-m",
-            "unittest",
-            "discover",
-            "-s",
-            "tests",
-            "-v",
-        ],
-        env=env,
+    run_command(unittest_command(dependency_profile), env=env)
+
+
+def unittest_command(dependency_profile: str) -> list[str]:
+    command = [uv_command(), "run"]
+    if dependency_profile == "latest":
+        command.extend(
+            ["--with", "pandas", "--with", "numpy", "--with", "pyarrow"]
+        )
+    elif dependency_profile == "ci":
+        command.extend(
+            [
+                "--python",
+                "3.11",
+                "--with-requirements",
+                str(CI_CONSTRAINTS.relative_to(ROOT)),
+            ]
+        )
+    else:
+        raise ValueError(f"unknown dependency profile: {dependency_profile}")
+    command.extend(
+        ["python", "-m", "unittest", "discover", "-s", "tests", "-v"]
     )
+    return command
 
 
 def uv_command() -> str:

@@ -1365,6 +1365,10 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("-c skills/a-share-selection-strategy/constraints-ci.txt", workflow)
         self.assertIn("constraints-ci.txt", workflow)
         self.assertIn("CI 直接依赖约束", docs)
+        self.assertIn("--dependency-profile ci", docs)
+        self.assertIn("--dependency-profile", (ROOT / "validate_skill_changes.py").read_text(encoding="utf-8"))
+        self.assertIn("--with-requirements", (ROOT / "validate_skill_changes.py").read_text(encoding="utf-8"))
+        self.assertNotIn("uv run", workflow.split("Run test shard", 1)[1])
 
     def test_validation_timeouts_are_bounded_and_documented(self) -> None:
         root = ROOT / "skills/a-share-selection-strategy"

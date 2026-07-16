@@ -170,6 +170,9 @@ class DocumentConsistencyTests(unittest.TestCase):
         root = ROOT / "skills/a-share-selection-strategy"
         agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
         index = (root / "references/index.md").read_text(encoding="utf-8")
+        full_a_workflow = (
+            root / "instructions/full-a-strict-workflow.md"
+        ).read_text(encoding="utf-8")
         current_path = root / "evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md"
         current = current_path.read_text(encoding="utf-8")
 
@@ -178,6 +181,10 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn(
             "../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md",
             index,
+        )
+        self.assertIn(
+            "../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md",
+            full_a_workflow,
         )
         for value in [
             "verified_limited_scope",
@@ -370,6 +377,7 @@ class DocumentConsistencyTests(unittest.TestCase):
     def test_script_entrypoint_registry_covers_root_scripts(self) -> None:
         root = ROOT / "skills/a-share-selection-strategy"
         scripts_root = root / "scripts"
+        scripts_doc = (scripts_root / "SCRIPTS.md").read_text(encoding="utf-8")
         registry = json.loads(
             (root / "configs/script_entrypoints.json").read_text(encoding="utf-8")
         )
@@ -382,6 +390,12 @@ class DocumentConsistencyTests(unittest.TestCase):
             "script_entrypoint_registry_only_not_runtime_dispatch_or_cli_contract_replacement",
             registry["claim_boundary"],
         )
+        self.assertNotIn(
+            "本文件是 `scripts/` 目录入口分层的唯一事实源",
+            scripts_doc,
+        )
+        self.assertIn("机器分类事实源", scripts_doc)
+        self.assertIn("人类和 Agent 的解释层", scripts_doc)
 
     def test_script_inventory_covers_root_script_registry(self) -> None:
         root = ROOT / "skills/a-share-selection-strategy"

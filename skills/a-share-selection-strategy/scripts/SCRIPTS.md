@@ -1,10 +1,10 @@
 # 脚本清单
 
-本文件是 `scripts/` 目录入口分层的唯一事实源。看到脚本文件时，先按“稳定 CLI / 取数入口 / 门禁回测入口 / 内部 helper”四类判断，不要按文件数量或 `__main__` 保护猜入口。
+本文件是 `scripts/` 目录入口分层面向人类和 Agent 的解释层。看到脚本文件时，先按“稳定 CLI / 取数入口 / 门禁回测入口 / 内部 helper”四类判断，不要按文件数量或 `__main__` 保护猜入口。
 
 配置文件的权威路径在 `../configs/`；旧命令传入的 `scripts/*.json` 会由 CLI 自动回退到 `../configs/`。
 
-脚本入口机器注册表见 `../configs/script_entrypoints.json`。本文件是人类和 Agent 的解释层，注册表是测试校验用事实源；它只用于审计根层 `.py` 是否被归类，不是运行时 dispatcher，也不替代 CLI 合约。注册表 v2 额外标注 `visibility`、`kind`、`stability`、`domain` 和 `skill_route`；`skill_route=false` 的 internal helper 不进入 Agent 默认路由。
+脚本入口机器注册表见 `../configs/script_entrypoints.json`，它是入口机器分类事实源。本文件负责解释用途和选择规则；注册表只用于审计根层 `.py` 是否被归类，不是运行时 dispatcher，也不替代 CLI 合约。注册表 v2 额外标注 `visibility`、`kind`、`stability`、`domain` 和 `skill_route`；`skill_route=false` 的 internal helper 不进入 Agent 默认路由。
 
 根层 `.py` 路径保持兼容；部分内部 helper 的真实实现已迁入 `lib/`，根层同名文件只做 re-export 和直接执行 fail-fast。用户命令仍使用本文件列出的根层 CLI，不直接调用 `lib/`。
 

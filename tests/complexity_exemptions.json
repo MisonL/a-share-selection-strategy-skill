@@ -31,7 +31,7 @@
     "test_today_a_share_html_report.py": {
       "reason": "Static report sections share candidate fixtures, localization assertions, and consumer-view helpers imported by disclosure tests.",
       "split_boundary": "Separate localization, candidate tables, K-line data, and disclosure views after stabilizing a shared report fixture API.",
-      "reassess_when": "a report section or candidate data contract changes"
+      "reassess_when": "a report section or candidate data contract changes, or a productized visual shell test exceeds 80 lines"
     },
     "test_today_a_share_selection_runner.py": {
       "reason": "Runner integration scenarios share command executors, output fixtures, and failure cleanup assertions across the same public CLI.",
@@ -57,6 +57,12 @@
       "trigger": "Baostock audited no-trading recovery added another incremental execution state.",
       "decision": "Bucket-specific scenarios now live in the dedicated incremental execution safety suite; retain shared planning fixtures until the next state.",
       "next_trigger": "another incremental provider or recovery state is added, or this file reaches 2200 lines"
+    },
+    "test_today_a_share_html_report.py": {
+      "assessed_on": "2026-07-16",
+      "trigger": "The productized visual shell contract accumulated 173 assertions in one 455-line test method.",
+      "decision": "Extract one immutable report fixture and split structure, styling, responsive, candidate-detail, and accessibility contracts into focused methods without changing assertions.",
+      "next_trigger": "a report section or candidate data contract changes, or a productized visual shell test exceeds 80 lines"
     },
     "test_today_a_share_selection_runner.py": {
       "assessed_on": "2026-07-15",

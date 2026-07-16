@@ -1815,20 +1815,8 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             report.index("这里保留每只股票的规则结果"), report.index(diagnostics_detail)
         )
 
-    def test_report_uses_productized_visual_shell(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output = Path(tmpdir)
-            candidates = output / "candidates.csv"
-            write_consumer_candidate_rows(candidates)
-            summary = minimal_summary(tmpdir, output / "diagnostics.csv")
-            summary.update(
-                {
-                    "candidate_rows": 2,
-                    "candidates_output": str(candidates),
-                    "candidates_output_written": True,
-                }
-            )
-            report = render_report(summary, {"steps": []}, language="en")
+    def test_report_uses_productized_visual_shell_structure(self) -> None:
+        report = productized_visual_shell_report()
 
         self.assertNotIn('class="hero executive-hero"', report)
         self.assertIn('class="overview-shell"', report)
@@ -1857,6 +1845,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn('class="selection-flow"', report)
         self.assertIn('<button type="button" class="flow-step input"', report)
         self.assertIn("Clickable details", report)
+
+    def test_report_uses_productized_visual_shell_tokens(self) -> None:
+        report = productized_visual_shell_report()
+
         self.assertIn(".overview-shell", report)
         self.assertIn(
             ".overview-lead,.overview-title,.overview-facts,.overview-metrics,.overview-flow,.overview-preview,.overview-open{min-width:0}",
@@ -1927,6 +1919,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         )
         self.assertNotIn("grid-template-columns:repeat(7,max-content)", report)
         self.assertNotIn(".flow-arrow{width:88px", report)
+
+    def test_report_uses_productized_visual_shell_drawer_styles(self) -> None:
+        report = productized_visual_shell_report()
+
         self.assertIn(".pipeline-card:hover,.pipeline-card:focus-visible", report)
         self.assertIn(".flow-step:hover,.flow-step:focus-visible", report)
         self.assertIn(".insight-drawer[hidden]{display:none}", report)
@@ -1953,6 +1949,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             ".candidate-cards[data-preview-table] th:nth-last-child(2),.candidate-cards[data-preview-table] td:nth-last-child(2){width:88px}",
             report,
         )
+
+    def test_report_uses_productized_visual_shell_desktop_layout(self) -> None:
+        report = productized_visual_shell_report()
+
         self.assertIn("@media(max-width:1500px)", report)
         self.assertIn(
             '.overview-shell{display:grid;grid-template-columns:minmax(0,1fr) minmax(520px,1fr);grid-template-areas:"lead facts" "preview flow" "open open";gap:12px;align-items:start}',
@@ -2007,6 +2007,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn(
             '.stock-tech-card[data-status="negative"] strong{color:#991b1b}', report
         )
+
+    def test_report_uses_productized_visual_shell_controls(self) -> None:
+        report = productized_visual_shell_report()
+
         self.assertIn(
             ".stock-dialog-close:hover,.stock-dialog-close:focus-visible{outline:2px solid #1b75d0;outline-offset:2px",
             report,
@@ -2051,6 +2055,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             ".stock-technical-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}",
             report,
         )
+
+    def test_report_uses_productized_visual_shell_responsive_layout(self) -> None:
+        report = productized_visual_shell_report()
+
         self.assertIn("@media(max-width:1100px)", report)
         self.assertIn("@media(max-width:640px)", report)
         self.assertIn("@media(max-width:520px)", report)
@@ -2106,6 +2114,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             ".hero-fact-card{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))",
             report,
         )
+
+    def test_report_uses_productized_visual_shell_responsive_pipeline(self) -> None:
+        report = productized_visual_shell_report()
+
         self.assertIn(".pipeline-card:nth-child(2n){border-right:0}", report)
         self.assertIn(
             ".hero-fact-card,.pipeline-metrics{grid-template-columns:1fr}", report
@@ -2131,6 +2143,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             ".pipeline-icon.circle::before{width:8px;height:8px;box-shadow:-9px 0 0 #fff,9px 0 0 #fff,0 12px 0 4px #fff}",
             report,
         )
+
+    def test_report_uses_productized_visual_shell_candidate_detail(self) -> None:
+        report = productized_visual_shell_report()
+
         self.assertIn(
             ".pipeline-copy{display:grid;grid-template-columns:minmax(0,max-content) minmax(0,max-content) minmax(0,1fr);align-items:center;column-gap:10px;min-width:0}",
             report,
@@ -2208,6 +2224,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             '.field-coverage-chip[data-field-missing="true"]{background:#fffaf2;box-shadow:var(--hairline-warn),var(--surface-highlight),0 3px 10px rgba(217,119,6,.045)}',
             report,
         )
+
+    def test_report_uses_productized_visual_shell_candidate_actions(self) -> None:
+        report = productized_visual_shell_report()
+
         self.assertIn(
             ".stock-action-section{background:#f8fbff;box-shadow:var(--hairline-blue),var(--surface-highlight),0 4px 12px rgba(27,117,208,.045)}",
             report,
@@ -2236,6 +2256,10 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             "@media(hover:none){.candidate-open-button,.candidate-download-link,.candidate-toolbar input,.candidate-toolbar select,.candidate-toolbar button,.candidate-pager button,.candidate-pager select,.stock-dialog-close,.stock-action-grid button,.detail-action-button{min-height:44px}}",
             report,
         )
+
+    def test_report_uses_productized_visual_shell_accessibility_scripts(self) -> None:
+        report = productized_visual_shell_report()
+
         self.assertNotIn("scroll-behavior:smooth", report)
         self.assertNotIn("scrollIntoView", report)
         self.assertIn("function initInsightDrawer()", report)
@@ -2623,6 +2647,22 @@ def write_consumer_candidate_rows(path: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
+
+
+def productized_visual_shell_report() -> str:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output = Path(tmpdir)
+        candidates = output / "candidates.csv"
+        write_consumer_candidate_rows(candidates)
+        summary = minimal_summary(tmpdir, output / "diagnostics.csv")
+        summary.update(
+            {
+                "candidate_rows": 2,
+                "candidates_output": str(candidates),
+                "candidates_output_written": True,
+            }
+        )
+        return render_report(summary, {"steps": []}, language="en")
 
 
 if __name__ == "__main__":

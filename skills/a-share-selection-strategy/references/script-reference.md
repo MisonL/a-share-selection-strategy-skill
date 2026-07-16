@@ -71,13 +71,13 @@ Python 代码复用这些脚本时，需要将 `skills/a-share-selection-strateg
 | 本地校验、评分、clean pool、增量计划 | `uv run --with pandas --with numpy python ...` |
 | 全 A 股票池 universe | `uv run --with baostock python skills/a-share-selection-strategy/scripts/fetch_baostock_a_share_universe.py --lookback-days 7 --retries 1 --retry-interval-seconds 1 ...` |
 | 全 A 实时展示增强 | `python skills/a-share-selection-strategy/scripts/fetch_eastmoney_a_share_spot.py ...` |
-| 全 A zzshare 历史 breadth | `uv run --with pandas --with numpy --with zzshare python ...` |
-| baostock 小范围核验 | `uv run --with pandas --with numpy --with baostock python ...` |
+| 全 A ZZShare 冷启动或增量 breadth | `uv run --with pandas --with numpy --with zzshare python ...` |
+| 全 A Baostock 分桶增量或小范围核验 | `uv run --with pandas --with numpy --with baostock python ...` |
 | akshare A 股或港股补充 | `uv run --with pandas --with numpy --with akshare python ...` |
 | pytdx A 股补充 | `uv run --with pandas --with numpy --with pytdx python ...` |
 | yfinance 海外 ticker 补充 | `uv run --with pandas --with numpy --with yfinance python ...` |
 
-这些依赖按场景显式安装，不要求用户默认全装。`baostock_universe` 是当前全 A 股票池主入口；`eastmoney` spot 入口只依赖标准库，适合补实时展示字段但不作为唯一全 A 股票池前置；`zzshare` 是当前全 A 历史主路径；`baostock`、`akshare`、`pytdx` 和 `yfinance` 是补充或核验源，不是静默 fallback。
+这些依赖按场景显式安装，不要求用户默认全装。`baostock_universe` 是当前全 A 股票池主入口；`eastmoney` spot 入口只依赖标准库，适合补实时展示字段但不作为唯一全 A 股票池前置。全 A 历史必须显式选择一个历史 provider：ZZShare 冷启动或增量 breadth，或 Baostock 分桶增量 breadth；列出两个选项不表示自动选源、优先级或静默 fallback。`akshare`、`pytdx` 和 `yfinance` 仍是补充或核验源。
 
 上表里的 `--lookback-days 7` 是非交易日或收盘后人工复验时的显式示例；`fetch_baostock_a_share_universe.py`、runner `--fetch-spot baostock_universe` 和 runner 显式 fallback 的日期回看默认值都是 0。
 
@@ -89,8 +89,8 @@ Python 代码复用这些脚本时，需要将 `skills/a-share-selection-strateg
 | --- | --- | --- | --- | --- |
 | `fetch_baostock_a_share_universe.py` | baostock `query_all_stock` | A 股 symbol/name universe 兼容快照 | 全 A 股票池主入口；可用 `--lookback-days` 解析最近非空交易日；`--retries` 失败重试会写入 `fetch_errors/fetch_attempts/max_attempts`；配合 `--derive-all-spot-symbols` 使用 | 实时行情、价格、成交额、行业、交易所日历或实时全市场行情证明 |
 | `fetch_eastmoney_a_share_spot.py` | 东方财富公开 spot 接口 | A 股实时快照展示字段 | 全 A 当日展示增强；长分页应使用稳定 symbol 排序和显式 retry/page interval | 历史 OHLCV、长期稳定性、唯一股票池前置 |
-| `fetch_zzshare_a_share.py` | zzshare `daily(fields=all)` | A 股日线、换手、停牌/ST 相关字段 | 大范围历史 breadth、spot 派生 symbol 池历史抓取 | 无 token 长期额度、无截断、券商订单或成交能力 |
-| `fetch_baostock_a_share.py` | baostock | A 股日线、`tradestatus/isST`；prices 可按 `.csv/.parquet/.pq` 后缀落盘，可复用 `symbol/name` 输入并仅查询缺名项 | 小范围严格字段核验、walk-forward 门禁；大文件本地复跑优先显式 Parquet | 全 A 首轮高吞吐抓取、直接涨跌停字段 |
+| `fetch_zzshare_a_share.py` | zzshare `daily(fields=all)` | A 股日线、换手、停牌/ST 相关字段 | 全 A 冷启动或增量历史 breadth、spot 派生 symbol 池历史抓取 | 无 token 长期额度、无截断、券商订单或成交能力 |
+| `fetch_baostock_a_share.py` | baostock | A 股日线、`tradestatus/isST`；prices 可按 `.csv/.parquet/.pq` 后缀落盘，可复用 `symbol/name` 输入并仅查询缺名项 | 全 A 分桶增量或小范围严格字段核验；大文件本地复跑优先显式 Parquet | 冷启动全 A 吞吐、长期稳定性、直接涨跌停字段 |
 | `fetch_akshare_a_share.py` | akshare | A 股日线、成交额、换手 | A 股历史补充或交叉观察 | `stock_zh_a_hist` 主接口稳定；fallback 不能当主源成功 |
 | `fetch_pytdx_a_share.py` | pytdx | A 股日线 OHLCV、成交额；近期窗口自适应首请求并记录 raw/output/request 指标 | no-token 历史补充和对照；仅可按同一 `symbol+date` 补字段 | 换手率、停牌/ST、股票名称、独立 strict merge、官方授权、机构或商业使用权、长期稳定性 |
 | `fetch_akshare_hk_daily.py` | akshare 港股日线 | 港股 OHLCV、成交额、名称 | 港股已落地数据集审查 | A 股全市场覆盖、港交所完整日历或可交易性 |
@@ -102,13 +102,13 @@ Python 代码复用这些脚本时，需要将 `skills/a-share-selection-strateg
 
 ## 业务场景到数据源路由
 
-`../configs/source_routing.json` 是场景级路由事实源，用来回答“本地评分、定向 A 股、全 A、prediction-derived、港股、海外 ticker 或外部源探针应考虑哪些源”。它不是运行时自动选源器；`automatic_source_selection=false`、`automatic_fallback=false` 且 `runtime_cli_explicit_fallback_requires_parameter=true` 是硬边界。联网源必须同时落地可复核的表格 artifact 和 metadata，不把格式限定为 CSV；只有入口明确声明支持时才可写 Parquet。表内 `explicit_fallback_sources=[]` 表示该场景不推荐自动或预设备用源，不会禁用 CLI 层面的显式 fallback 参数；CLI 层面的 `--fetch-spot-fallback` 必须由用户显式传入，并披露 `fetch_spot_fallback_used` 和 `fetch_spot_primary_failure`。全 A 增量路径必须先由 `prepare_incremental_history_plan.py` 生成计划，再由 `execute_incremental_history_plan.py` 使用一个显式 provider 执行；路由表列出二者不表示自动编排或自动切源。
+`../configs/source_routing.json` 是场景级路由事实源，用来回答“本地评分、定向 A 股、全 A、prediction-derived、港股、海外 ticker 或外部源探针应考虑哪些源”。它不是运行时自动选源器；`automatic_source_selection=false`、`automatic_fallback=false` 且 `runtime_cli_explicit_fallback_requires_parameter=true` 是硬边界。联网源必须同时落地可复核的表格 artifact 和 metadata，不把格式限定为 CSV；只有入口明确声明支持时才可写 Parquet。表内 `explicit_fallback_sources=[]` 表示该场景不推荐自动或预设备用源，不会禁用 CLI 层面的显式 fallback 参数；CLI 层面的 `--fetch-spot-fallback` 必须由用户显式传入，并披露 `fetch_spot_fallback_used` 和 `fetch_spot_primary_failure`。全 A 的 `history_provider_options` 要求显式选择 ZZShare 或 Baostock，一次增量执行只使用一个 provider；不表示自动选源、优先级或自动切换。`hard_stop_conditions` 必须先修复，`recovery_or_reporting_conditions` 允许进入 clean pool、审计 no-trading empty 或缩短声明。全 A 增量路径必须先由 `prepare_incremental_history_plan.py` 生成计划，再由 `execute_incremental_history_plan.py` 使用一个显式 provider 执行。
 
 | 业务场景 | 主源 | 显式备用 | 补充或对照 | 边界 |
 | --- | --- | --- | --- | --- |
 | 本地评分 | 本地 `prices.csv` / Parquet | 无 | 无 | 只证明本地 artifact 评分，不证明真实取数 |
 | 定向 A 股真实任务 | `baostock_history` | 无 | `zzshare_history`、`akshare_a_share`、`pytdx_history` | 只覆盖显式 symbol 池，不外推全 A |
-| 全 A 严格扫描 | `baostock_universe` + `zzshare_history` | 无 | `eastmoney_spot`、`baostock_history`、`akshare_a_share`、`pytdx_history` | 当前口径是沪深 A 股股票池（前缀过滤，不含北交所）；Eastmoney 只补实时展示字段；失败不能阻断 universe + history 主路径，也不能声称实时全市场完成 |
+| 全 A 严格扫描 | `baostock_universe` + 显式 `zzshare_history` 或 `baostock_history` | 无 | `eastmoney_spot`、`akshare_a_share`、`pytdx_history` | 当前口径是沪深 A 股股票池（前缀过滤，不含北交所）；一次只选一个历史 provider；Eastmoney 失败不能阻断 universe + history 路径，也不能声称实时全市场完成 |
 | prediction-derived A 股 | 外部或本地生成的 prediction 输入 | 无 | `zzshare_history`、`baostock_history` 只能补行情字段 | 行情源不能伪造 prediction |
 | 港股数据集审查 | `akshare_hk_daily` | 无 | 无 | 不参与 A 股全市场路径 |
 | 海外 ticker 审查 | `yfinance` | 无 | 无 | market 只是标签，不证明交易所日历 |

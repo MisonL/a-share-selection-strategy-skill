@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "claim_boundary": "capability_registry_only_not_runtime_source_selection_or_stability_proof",
   "sources": {
     "eastmoney_spot": {
@@ -17,9 +17,10 @@
         "spot_industry"
       ],
       "full_a_role": "supplemental_realtime_display_enrichment",
-      "full_a_stop_conditions": [
-        "partial_result=true",
-        "output_written=false"
+      "full_a_hard_stop_conditions": [],
+      "full_a_recovery_or_reporting_conditions": [
+        "partial_result_true",
+        "output_written_false"
       ],
       "cannot_prove": [
         "historical_ohlcv",
@@ -48,11 +49,16 @@
         "isST",
         "name"
       ],
-      "full_a_role": "preferred_history_breadth_after_universe",
-      "full_a_stop_conditions": [
+      "full_a_role": "explicit_full_a_history_provider_cold_start_or_incremental",
+      "full_a_hard_stop_conditions": [
         "failed_symbols_nonempty",
+        "possibly_truncated_symbols_nonempty",
+        "unprocessed_symbols_nonempty",
+        "rate_limit_budget_exhausted_true"
+      ],
+      "full_a_recovery_or_reporting_conditions": [
         "empty_symbols_nonempty",
-        "possibly_truncated_symbols_nonempty"
+        "short_history_symbols_nonempty"
       ],
       "cannot_prove": [
         "unlimited_free_quota",
@@ -63,7 +69,7 @@
     "baostock_history": {
       "entry": "fetch_baostock_a_share.py",
       "service": "baostock",
-      "role": "strict_small_pool_history_validation",
+      "role": "a_share_history_with_tradability_fields",
       "requires_token": false,
       "token_environment_variable": "",
       "primary_fields": [
@@ -80,14 +86,21 @@
         "isST",
         "name"
       ],
-      "full_a_role": "clean_pool_review_not_first_round_breadth",
-      "full_a_stop_conditions": [
+      "full_a_role": "explicit_full_a_history_provider_bucketed_incremental",
+      "full_a_hard_stop_conditions": [
         "failed_symbols_nonempty",
-        "empty_symbols_nonempty",
-        "name_lookup_failed_symbols_nonempty"
+        "unaudited_empty_symbols_nonempty",
+        "name_lookup_failed_symbols_nonempty",
+        "unprocessed_symbols_nonempty",
+        "invalid_rows_not_dropped"
+      ],
+      "full_a_recovery_or_reporting_conditions": [
+        "audited_no_trading_empty_symbols_nonempty",
+        "short_history_symbols_nonempty"
       ],
       "cannot_prove": [
-        "full_a_first_round_throughput",
+        "cold_start_full_a_history_throughput",
+        "long_term_stability",
         "query_all_stock_prefix_filter_is_not_exchange_calendar_or_listing_status_proof",
         "limit_up_down_rules",
         "broker_order_or_fill"
@@ -106,10 +119,13 @@
       "full_a_role": "primary_universe_symbol_pool_for_history_breadth",
       "date_resolution": "explicit_lookback_until_nonempty_records_requested_and_resolved_snapshot_dates",
       "retry_policy": "explicit_retries_recorded_as_fetch_errors_fetch_attempts_and_max_attempts",
-      "full_a_stop_conditions": [
-        "partial_result=true",
-        "output_written=false",
-        "raw_items=0"
+      "full_a_hard_stop_conditions": [
+        "partial_result_true",
+        "output_written_false",
+        "raw_items_zero"
+      ],
+      "full_a_recovery_or_reporting_conditions": [
+        "date_fallback_used_true"
       ],
       "cannot_prove": [
         "realtime_quote",
@@ -136,7 +152,8 @@
         "turn"
       ],
       "full_a_role": "supplemental_cross_check_only",
-      "full_a_stop_conditions": [
+      "full_a_hard_stop_conditions": [],
+      "full_a_recovery_or_reporting_conditions": [
         "failed_symbols_nonempty",
         "empty_symbols_nonempty",
         "fallback_errors_nonempty"
@@ -179,7 +196,10 @@
         "strict_fields_same_date_required": true,
         "selection_ready": false
       },
-      "full_a_stop_conditions": [
+      "full_a_hard_stop_conditions": [
+        "supplemental_strict_merge_contract_unsatisfied"
+      ],
+      "full_a_recovery_or_reporting_conditions": [
         "failed_symbols_nonempty",
         "empty_symbols_nonempty",
         "invalid_rows_not_dropped",
@@ -211,7 +231,8 @@
         "name"
       ],
       "full_a_role": "not_a_share_full_market_path",
-      "full_a_stop_conditions": [],
+      "full_a_hard_stop_conditions": [],
+      "full_a_recovery_or_reporting_conditions": [],
       "cannot_prove": [
         "a_share_full_market_coverage",
         "hkex_complete_calendar",
@@ -232,7 +253,8 @@
         "volume"
       ],
       "full_a_role": "not_a_share_full_market_path",
-      "full_a_stop_conditions": [],
+      "full_a_hard_stop_conditions": [],
+      "full_a_recovery_or_reporting_conditions": [],
       "cannot_prove": [
         "a_share_turnover",
         "a_share_tradability_fields",

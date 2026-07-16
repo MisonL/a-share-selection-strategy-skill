@@ -47,7 +47,7 @@
 | --- | --- | --- | --- |
 | 1 | 全 A 股票池快照 | `fetch_baostock_a_share_universe.py` | `spot.csv`、`spot_metadata.json` |
 | 2 | 可选实时展示增强 | `fetch_eastmoney_a_share_spot.py` | `eastmoney_spot.csv`、`eastmoney_spot_metadata.json` |
-| 3 | 第一轮历史抓取 | `run_today_a_share_selection.py` 或 `fetch_zzshare_a_share.py` | `selected_symbols.json`、`history_metadata.json`、`summary.json` |
+| 3 | 历史抓取（显式 provider） | 冷启动可用 `run_today_a_share_selection.py`；增量先计划再执行 | `selected_symbols.json`、`history_metadata.json`、`summary.json` 或增量 manifest |
 | 4 | 清洗与复跑 | 同上，基于清洗后的 symbol 集 | `prices.csv`、`history_metadata.json` |
 | 5 | 最终评分与展示 | `run_today_a_share_selection.py --prices-input ...` | `run_manifest.json`、`summary.json`、`diagnostics.csv`、`candidates.csv`、`report.html` |
 
@@ -57,8 +57,8 @@
 | --- | --- | --- | --- | --- |
 | 全 A 股票池快照 | `baostock_universe` | `query_all_stock` 可直接形成沪深 A 股 symbol/name 池 | 不是实时 quote，不含价格、成交额或行业 | 不能写成实时全市场行情 |
 | 实时展示增强 | `eastmoney` spot | 有价格、涨跌幅、成交额和行业展示字段 | 分页失败、`partial_result=true`、公开网页接口不稳定 | 不能作为唯一全 A 股票池前置或历史事实源 |
-| 小范围严格可交易字段 | `baostock` history | 有 `tradestatus/isST` | 大范围易卡顿，慢 | 不适合直接跑全 A 广度 |
-| 大范围历史 breadth | `zzshare` history | 适合更大 symbol 池 | 422 参数上限、429 限流、截断风险 | 不适合无批次控制地盲跑 |
+| 冷启动或增量历史 breadth | `zzshare` history | 有完整 strict 字段，可 checkpoint | 422 参数上限、429 限流、截断风险 | 不适合无批次控制地盲跑 |
+| 分桶增量历史 breadth | `baostock` history | 有 `tradestatus/isST`，可复用 universe 名称 | 逐 symbol I/O，冷启动全 A 吞吐未证明 | 必须分桶并显式审计 no-trading empty |
 | 预测列生成 | 本地 `generate_lightgbm_predictions.py` | 可审计 | 不证明模型质量 | 不替代全市场取数 |
 
 ## 数据源能力矩阵
@@ -67,8 +67,8 @@
 | --- | --- | --- | --- | --- |
 | `baostock_universe` | 全 A 股票池主入口 | `symbol/name` | 免费登录接口；`query_all_stock` 只证明本次返回的代码列表；当日为空时可显式 `--lookback-days` 回看最近非空日期；登录或查询失败可显式重试并记录 `fetch_errors/fetch_attempts/max_attempts` | 适合作为历史 breadth 的 symbol 池；不能当实时行情、价格、成交额或行业证明 |
 | `eastmoney` spot | 实时展示增强和对照快照 | `symbol/name/spot_price/spot_pct_chg/spot_amount/spot_industry` | 无 token，但公开网页接口分页可能断连 | 成功时可补展示字段；`partial_result=true` 时不能写成实时全市场扫描完成 |
-| `zzshare` history | 大范围历史 breadth | OHLCV、`preclose/pctChg/turn/tradestatus/isST/name` | token 只从 `ZZSHARE_TOKEN` 读取；无 token 成功不证明额度或长期稳定 | 首选历史 breadth；必须批次控制并检查截断、失败和空 symbol |
-| `baostock` history | 小范围严格核验 | OHLCV、`preclose/pctChg/turn/tradestatus/isST`、`query_stock_basic` 名称 | 免费登录接口，但逐 symbol 名称和历史请求较多 | 不作为全 A 首轮历史源；适合 clean pool 复核 |
+| `zzshare` history | 冷启动或增量历史 breadth | OHLCV、`preclose/pctChg/turn/tradestatus/isST/name` | token 只从 `ZZSHARE_TOKEN` 读取；无 token 成功不证明额度或长期稳定 | 显式 provider 选项；必须控制批次并检查截断、失败和空 symbol |
+| `baostock` history | 分桶增量历史 breadth 或小范围核验 | OHLCV、`preclose/pctChg/turn/tradestatus/isST`、`query_stock_basic` 名称 | 免费登录接口，但逐 symbol 历史请求较多；冷启动全 A 吞吐未证明 | 显式 provider 选项；增量必须分桶并审计 no-trading empty |
 | `akshare` A 股 | 备选历史源 | OHLCV、`amount/turn` | 开源接口聚合；`stock_zh_a_hist` 失败会 fallback 到 `stock_zh_a_daily` | 只作补充；fallback 成功不能写成主接口稳定 |
 | `pytdx` A 股 | no-token 历史补充 | OHLCV、`amount` | 可 pip 安装且无 token；但 PyPI license 为 UNKNOWN；近期窗口自适应请求，截断写入 metadata | 只作显式补充和对照；`selection_ready=false`，缺 `turn/tradestatus/isST/name`，不替代全 A 主路径 |
 | `akshare_hk_daily` | 港股补充 | 港股 OHLCV、`amount/name` | 开源接口聚合 | 不参与 A 股全市场路径 |
@@ -77,22 +77,24 @@
 对全 A 场景，默认策略是：
 
 1. `baostock_universe` 负责沪深 A 股股票池快照：`--fetch-spot baostock_universe --derive-all-spot-symbols` 或先单独落地 `fetch_baostock_a_share_universe.py` 产物。它按前缀过滤排除北交所和非股票证券，不提供实时价格、成交额或行业字段。
-2. `eastmoney` 只作为实时展示增强或对照快照；如果它失败或 `partial_result=true`，不能声称实时全市场完成，但不应阻断基于 `baostock_universe` 和 `zzshare` 的历史 breadth。
-3. `zzshare` 负责大范围历史抓取。
-4. `baostock` history 只用于小范围严格核验、字段探针或对照，不作为全市场默认历史源。
+2. `eastmoney` 只作为实时展示增强或对照快照；如果它失败或 `partial_result=true`，不能声称实时全市场完成，但不应阻断基于 `baostock_universe` 和已显式选择历史 provider 的历史 breadth。
+3. 全 A 历史必须显式选择一个历史 provider，不存在运行时自动默认或自动切源：ZZShare 冷启动或增量 breadth，或 Baostock 分桶增量 breadth。
+4. `source_routing.json.history_provider_options` 只声明可选 provider，不表示自动选源、优先级或 fallback；一次增量执行仍只能使用一个显式 provider。
 5. `akshare`、`pytdx`、`akshare_hk_daily` 和 `yfinance` 只能作为补充源或跨市场扩展，不替代全 A 主路径。
 
 Pytdx 的允许补充字段只有 `open/high/low/close/volume/amount`，合并键固定为同一 `symbol+date`。provider 不返回股票名称时，`name` 保持空值并以 `name_value_policy=blank_missing_provider_name` 披露，禁止把 symbol 伪装成名称。缺少同日 `turn/tradestatus/isST/name` 时必须停止 strict merge；禁止用上一交易日、最近一条或前向填充生成新交易日 strict 字段。当前 verified merge 会拒绝 `selection_ready=false` 的 Pytdx 增量 artifact。
 
-`baostock` 历史抓取可通过 `--names-input` 复用 `query_all_stock` 形成的 `symbol/name` CSV 或 Parquet；完整覆盖时不再逐 symbol 调用 `query_stock_basic`。缺失名称必须由 `--missing-name-policy=query/fail/blank` 显式处理，非交易行必须由 `--non-trading-policy=reject/drop/keep` 显式处理；默认仍是查询缺名和拒绝非交易行。runner 同时使用 `baostock_universe` spot 与 baostock history 时自动复用本次 `spot.csv`。显式选择大批量 Baostock 对照或备用抓取时，可在装有 `pyarrow` 或 `fastparquet` 的环境加 `--history-output-format parquet`，降低本地写入和后续读取成本并保留 HTML 候选 K 线；缺引擎会在联网前失败，它不减少逐 symbol 远端请求。这能减少名称请求和本地 I/O。全市场 5000+ 标的会显著增加远端请求数，不改变 baostock 不适合全 A 首轮历史 breadth 的边界。如果用 `query_all_stock` 准备对照股票池，必须按沪深 A 股股票前缀过滤，只保留 `sz.000/001/002/003/300/301` 和 `sh.600/601/603/605/688/689`，排除指数、基金、ETF、B 股和北交所代码。
+`baostock` 历史抓取可通过 `--names-input` 复用 `query_all_stock` 形成的 `symbol/name` CSV 或 Parquet；完整覆盖时不再逐 symbol 调用 `query_stock_basic`。缺失名称必须由 `--missing-name-policy=query/fail/blank` 显式处理，非交易行必须由 `--non-trading-policy=reject/drop/keep` 显式处理；默认仍是查询缺名和拒绝非交易行。runner 同时使用 `baostock_universe` spot 与 baostock history 时自动复用本次 `spot.csv`。显式选择大批量 Baostock 增量抓取时，可在装有 `pyarrow` 或 `fastparquet` 的环境加 `--history-output-format parquet`，降低本地写入和后续读取成本并保留 HTML 候选 K 线；缺引擎会在联网前失败，它不减少逐 symbol 远端请求。全市场 5000+ 标的会显著增加远端请求数；分桶只限制故障和恢复范围，不消除逐 symbol I/O。2026-07-15 的 limited-scope 证据证明 200-symbol 分桶增量可完成本轮 5,200-symbol 计划，但不证明冷启动全 A 吞吐、未来稳定性或默认 SLA。如果用 `query_all_stock` 准备股票池，必须按沪深 A 股股票前缀过滤，只保留 `sz.000/001/002/003/300/301` 和 `sh.600/601/603/605/688/689`，排除指数、基金、ETF、B 股和北交所代码。
 
 全 A 失败恢复优先级：
 
 1. `baostock_universe` strict 失败或 `partial_result=true`：先按 metadata 中的 `fetch_errors/fetch_attempts/max_attempts` 定位登录、日期或过滤问题；必要时显式增加 `--lookback-days`、`--retries` 和 `--retry-interval-seconds` 后重跑。不得改用旧缓存伪造当前股票池。
 2. `eastmoney` spot strict 失败或 `partial_result=true`：只影响实时展示增强和实时全市场声称；若任务不要求实时 quote 字段，可以继续使用已落地的 `baostock_universe` 股票池，但报告必须披露 Eastmoney 失败和缺少实时展示字段。
 3. `zzshare` history 出现 `failed_symbols`、`empty_symbols`、`possibly_truncated_symbols`、`unprocessed_symbols` 或 `rate_limit_budget_exhausted=true`：先降批次、加间隔、缩短窗口或按恢复清单复跑；未处理 symbol 不能混入真实空结果。
-4. `baostock` 大批量变慢或名称查询失败：缩回为 clean pool 复核，不把它提升为全 A 首轮历史源。
+4. `baostock` 分桶增量出现 failed、未审计 empty、缺名、未处理或未丢弃无效行：修复对应 bucket 后显式 resume；不得把失败 bucket 当成 clean pool。
 5. `akshare` fallback、`pytdx` 缺换手率/可交易字段或 yfinance 空结果：只记录为外部源观察，不提升为主路径成功证据。
+
+`source_routing.json` 的 `hard_stop_conditions` 表示必须先修复输入、provider 或未审计缺口；`recovery_or_reporting_conditions` 表示可以进入 clean pool、审计 no-trading empty 或缩短最终声明。普通 empty 没有 clean-pool/no-trading 审计时仍是硬停止；`full_market_claim_allowed=false` 只阻止全市场闭环声明，不把已经完成并可审计的有限范围评分改写成整轮失败。
 
 数据源能力的机器可读注册表是 `configs/data_sources.json`，业务场景源路由的机器可读注册表是 `configs/source_routing.json`。二者只用于审计和文档一致性检查，不代表 runner 会自动选源、自动 fallback 或证明长期稳定。未显式传 `--fetch-spot-fallback` 时不得声称自动切换；传了该参数时，必须披露 `fetch_spot_fallback_used` 和 `fetch_spot_primary_failure`。
 

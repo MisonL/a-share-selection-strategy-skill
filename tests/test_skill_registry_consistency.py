@@ -57,7 +57,7 @@ class SkillRegistryConsistencyTests(unittest.TestCase):
         )
 
         self.assertEqual({"schema_version", "claim_boundary", "sources"}, set(registry))
-        self.assertEqual(1, registry["schema_version"])
+        self.assertEqual(2, registry["schema_version"])
         self.assertIsInstance(registry["sources"], dict)
         self.assertTrue(registry["sources"])
         expected_metadata_keys = {
@@ -68,7 +68,8 @@ class SkillRegistryConsistencyTests(unittest.TestCase):
             "token_environment_variable",
             "primary_fields",
             "full_a_role",
-            "full_a_stop_conditions",
+            "full_a_hard_stop_conditions",
+            "full_a_recovery_or_reporting_conditions",
             "cannot_prove",
         }
         optional_metadata_keys = {
@@ -93,7 +94,11 @@ class SkillRegistryConsistencyTests(unittest.TestCase):
                 self.assertIsInstance(metadata["requires_token"], bool)
                 self.assertIsInstance(metadata["token_environment_variable"], str)
                 self.assertIsInstance(metadata["primary_fields"], list)
-                self.assertIsInstance(metadata["full_a_stop_conditions"], list)
+                self.assertIsInstance(metadata["full_a_hard_stop_conditions"], list)
+                self.assertIsInstance(
+                    metadata["full_a_recovery_or_reporting_conditions"],
+                    list,
+                )
                 self.assertIsInstance(metadata["cannot_prove"], list)
                 for key in ["service", "role", "full_a_role"]:
                     self.assertIsInstance(metadata[key], str)
@@ -112,6 +117,44 @@ class SkillRegistryConsistencyTests(unittest.TestCase):
         self.assertIn(
             "primary_full_a_universe_availability",
             registry["sources"]["eastmoney_spot"]["cannot_prove"],
+        )
+        self.assertEqual(
+            "explicit_full_a_history_provider_cold_start_or_incremental",
+            registry["sources"]["zzshare_history"]["full_a_role"],
+        )
+        self.assertEqual(
+            "explicit_full_a_history_provider_bucketed_incremental",
+            registry["sources"]["baostock_history"]["full_a_role"],
+        )
+        self.assertIn(
+            "empty_symbols_nonempty",
+            registry["sources"]["zzshare_history"][
+                "full_a_recovery_or_reporting_conditions"
+            ],
+        )
+        self.assertNotIn(
+            "empty_symbols_nonempty",
+            registry["sources"]["zzshare_history"][
+                "full_a_hard_stop_conditions"
+            ],
+        )
+        self.assertIn(
+            "audited_no_trading_empty_symbols_nonempty",
+            registry["sources"]["baostock_history"][
+                "full_a_recovery_or_reporting_conditions"
+            ],
+        )
+        self.assertIn(
+            "unaudited_empty_symbols_nonempty",
+            registry["sources"]["baostock_history"][
+                "full_a_hard_stop_conditions"
+            ],
+        )
+        self.assertEqual(
+            [],
+            registry["sources"]["eastmoney_spot"][
+                "full_a_hard_stop_conditions"
+            ],
         )
 
     def test_source_routing_registry_is_strict_and_documented(self) -> None:
@@ -144,7 +187,7 @@ class SkillRegistryConsistencyTests(unittest.TestCase):
             },
             set(routing),
         )
-        self.assertEqual(2, routing["schema_version"])
+        self.assertEqual(3, routing["schema_version"])
         self.assertEqual(
             "scenario_source_routing_only_not_runtime_auto_selection_or_fallback",
             routing["claim_boundary"],
@@ -189,10 +232,15 @@ class SkillRegistryConsistencyTests(unittest.TestCase):
             "supplemental_sources",
             "stable_entrypoints",
             "required_fields",
-            "stop_conditions",
+            "hard_stop_conditions",
+            "recovery_or_reporting_conditions",
             "reporting_boundary",
         }
-        optional_keys = {"default_controls", "supplemental_merge_contracts"}
+        optional_keys = {
+            "default_controls",
+            "history_provider_options",
+            "supplemental_merge_contracts",
+        }
         for scenario, metadata in routing["scenarios"].items():
             with self.subTest(scenario=scenario):
                 self.assertEqual(set(), set(metadata) - scenario_keys - optional_keys)
@@ -204,6 +252,8 @@ class SkillRegistryConsistencyTests(unittest.TestCase):
                 ]:
                     for source in metadata[key]:
                         self.assertIn(source, allowed_sources)
+                for source in metadata.get("history_provider_options", []):
+                    self.assertIn(source, allowed_sources)
                 for entrypoint in metadata["stable_entrypoints"]:
                     self.assertIn(entrypoint, allowed_entrypoints)
                     self.assertTrue(entrypoints["entries"][entrypoint]["public_entry"])
@@ -215,12 +265,20 @@ class SkillRegistryConsistencyTests(unittest.TestCase):
                     self.assertIsInstance(metadata[key], str)
                     self.assertTrue(metadata[key])
                 self.assertTrue(metadata["required_fields"])
-                self.assertTrue(metadata["stop_conditions"])
+                self.assertTrue(metadata["hard_stop_conditions"])
+                self.assertIsInstance(
+                    metadata["recovery_or_reporting_conditions"],
+                    list,
+                )
 
         full_a = routing["scenarios"]["full_a_strict_scan"]
         self.assertEqual(
-            ["baostock_universe", "zzshare_history"],
+            ["baostock_universe"],
             full_a["primary_sources"],
+        )
+        self.assertEqual(
+            ["zzshare_history", "baostock_history"],
+            full_a["history_provider_options"],
         )
         self.assertEqual([], full_a["explicit_fallback_sources"])
         self.assertIn(
@@ -253,7 +311,37 @@ class SkillRegistryConsistencyTests(unittest.TestCase):
         )
         self.assertIn("eastmoney_spot", full_a["supplemental_sources"])
         self.assertIn("pytdx_history", full_a["supplemental_sources"])
+        self.assertNotIn("baostock_history", full_a["supplemental_sources"])
         self.assertNotIn("pytdx_history", full_a["primary_sources"])
+        self.assertEqual(
+            {
+                "universe_partial_result_true",
+                "history_failed_symbols_nonempty",
+                "history_unprocessed_symbols_nonempty",
+                "possibly_truncated_symbols_nonempty",
+                "rate_limit_budget_exhausted_true",
+                "history_empty_symbols_without_clean_pool_or_no_trading_audit",
+            },
+            set(full_a["hard_stop_conditions"]),
+        )
+        self.assertEqual(
+            {
+                "history_empty_symbols_with_clean_pool_or_no_trading_audit",
+                "short_history_symbols_nonempty",
+                "audited_no_trading_update_symbols_nonempty",
+                "full_market_claim_allowed_false",
+            },
+            set(full_a["recovery_or_reporting_conditions"]),
+        )
+        for text in [
+            "显式选择一个历史 provider",
+            "ZZShare 冷启动或增量 breadth",
+            "Baostock 分桶增量 breadth",
+            "hard_stop_conditions",
+            "recovery_or_reporting_conditions",
+            "不表示自动选源",
+        ]:
+            self.assertIn(text, docs)
         pytdx_contract = full_a["supplemental_merge_contracts"]["pytdx_history"]
         self.assertEqual(["symbol", "date"], pytdx_contract["join_keys"])
         self.assertTrue(pytdx_contract["strict_fields_same_date_required"])

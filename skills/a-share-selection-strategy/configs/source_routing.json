@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "claim_boundary": "scenario_source_routing_only_not_runtime_auto_selection_or_fallback",
   "routing_policy": {
     "automatic_source_selection": false,
@@ -29,11 +29,12 @@
         "close",
         "volume"
       ],
-      "stop_conditions": [
+      "hard_stop_conditions": [
         "input_provenance_unknown",
         "validate_ohlcv_failed",
         "output_written_false"
       ],
+      "recovery_or_reporting_conditions": [],
       "reporting_boundary": "local_input_scoring_not_real_market_fetch_or_full_market_scan"
     },
     "targeted_a_share_real_task": {
@@ -59,23 +60,26 @@
         "close",
         "volume"
       ],
-      "stop_conditions": [
+      "hard_stop_conditions": [
         "failed_symbols_nonempty",
         "empty_symbols_nonempty",
         "strict_gate_failed"
       ],
+      "recovery_or_reporting_conditions": [],
       "reporting_boundary": "explicit_symbol_pool_only_not_full_a_scan"
     },
     "full_a_strict_scan": {
       "description": "Full A-share or broad-market real scan with explicit universe, history breadth, recovery, and final scoring gates.",
       "primary_sources": [
-        "baostock_universe",
-        "zzshare_history"
+        "baostock_universe"
+      ],
+      "history_provider_options": [
+        "zzshare_history",
+        "baostock_history"
       ],
       "explicit_fallback_sources": [],
       "supplemental_sources": [
         "eastmoney_spot",
-        "baostock_history",
         "akshare_a_share",
         "pytdx_history"
       ],
@@ -128,11 +132,18 @@
           "forbid_previous_date_strict_field_fill": true
         }
       },
-      "stop_conditions": [
+      "hard_stop_conditions": [
         "universe_partial_result_true",
         "history_failed_symbols_nonempty",
-        "history_empty_symbols_nonempty",
+        "history_unprocessed_symbols_nonempty",
         "possibly_truncated_symbols_nonempty",
+        "rate_limit_budget_exhausted_true",
+        "history_empty_symbols_without_clean_pool_or_no_trading_audit"
+      ],
+      "recovery_or_reporting_conditions": [
+        "history_empty_symbols_with_clean_pool_or_no_trading_audit",
+        "short_history_symbols_nonempty",
+        "audited_no_trading_update_symbols_nonempty",
         "full_market_claim_allowed_false"
       ],
       "reporting_boundary": "full_a_claim_requires_current_artifacts_and_no_partial_history"
@@ -157,12 +168,13 @@
         "symbol",
         "date"
       ],
-      "stop_conditions": [
+      "hard_stop_conditions": [
         "prediction_column_missing",
         "market_not_a_share",
         "turn_missing",
         "prediction_model_provenance_missing"
       ],
+      "recovery_or_reporting_conditions": [],
       "reporting_boundary": "prediction_profile_requires_real_prediction_input_not_generic_score"
     },
     "hong_kong_dataset_review": {
@@ -185,10 +197,11 @@
         "close",
         "volume"
       ],
-      "stop_conditions": [
+      "hard_stop_conditions": [
         "failed_symbols_nonempty",
         "empty_symbols_nonempty"
       ],
+      "recovery_or_reporting_conditions": [],
       "reporting_boundary": "hong_kong_dataset_not_a_share_full_market_path"
     },
     "overseas_ticker_review": {
@@ -211,11 +224,12 @@
         "close",
         "volume"
       ],
-      "stop_conditions": [
+      "hard_stop_conditions": [
         "failed_symbols_nonempty",
         "empty_symbols_nonempty",
         "market_label_only_misused_as_calendar_proof"
       ],
+      "recovery_or_reporting_conditions": [],
       "reporting_boundary": "overseas_ticker_history_not_a_share_or_exchange_calendar_proof"
     },
     "external_source_probe": {
@@ -239,11 +253,12 @@
         "checks",
         "long_term_stability_claim"
       ],
-      "stop_conditions": [
+      "hard_stop_conditions": [
         "source_passed_runs_less_than_runs",
         "metadata_missing",
         "long_term_stability_claim_not_not_proven"
       ],
+      "recovery_or_reporting_conditions": [],
       "reporting_boundary": "short_window_current_parameters_only_not_long_term_stability"
     }
   }

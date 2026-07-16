@@ -1967,8 +1967,14 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
             sources["zzshare_history"]["token_environment_variable"],
         )
         self.assertIn(
-            "partial_result=true",
-            sources["eastmoney_spot"]["full_a_stop_conditions"],
+            "partial_result_true",
+            sources["eastmoney_spot"][
+                "full_a_recovery_or_reporting_conditions"
+            ],
+        )
+        self.assertNotIn(
+            "partial_result_true",
+            sources["eastmoney_spot"]["full_a_hard_stop_conditions"],
         )
         self.assertEqual(
             "not_a_share_full_market_path",

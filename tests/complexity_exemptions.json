@@ -9,9 +9,9 @@
       "reassess_when": "the next core validation or scoring behavior is added"
     },
     "test_document_consistency.py": {
-      "reason": "Repository-wide registries and documentation contracts intentionally share one loaded skill topology.",
-      "split_boundary": "Separate structure, routing, and artifact registries after a shared registry loader is introduced.",
-      "reassess_when": "another machine-readable registry is added or this file reaches 1600 lines"
+      "reason": "Repository-wide navigation, script topology, and artifact documentation contracts share common Markdown parsing helpers.",
+      "split_boundary": "Separate another cohesive contract family after its assertions and fixtures can move without cross-file imports.",
+      "reassess_when": "another contract family adds 200 lines or this file reaches 1500 lines"
     },
     "test_fetch_zzshare_a_share.py": {
       "reason": "Provider pagination, rate-limit, checkpoint, and metadata tests share one deterministic fake client.",
@@ -41,10 +41,10 @@
   },
   "reassessments": {
     "test_document_consistency.py": {
-      "assessed_on": "2026-07-15",
-      "trigger": "The production complexity exemption manifest introduced another machine-readable repository registry.",
-      "decision": "Keep the cohesive repository topology tests together while production complexity enforcement moves into the root validator.",
-      "next_trigger": "another machine-readable registry is added or this file reaches 1600 lines"
+      "assessed_on": "2026-07-16",
+      "trigger": "The file was within 13 lines of its 1600-line trigger before adding new source-routing contract coverage.",
+      "decision": "Move data-source and source-routing registry tests into test_skill_registry_consistency.py while retaining navigation and artifact documentation contracts.",
+      "next_trigger": "another contract family adds 200 lines or this file reaches 1500 lines"
     },
     "test_full_a_clean_pool_provenance.py": {
       "assessed_on": "2026-07-15",

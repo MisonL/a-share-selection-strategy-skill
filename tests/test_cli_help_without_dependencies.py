@@ -159,6 +159,8 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--baostock-universe-lookback-days",
                 "--akshare-symbols",
                 "--pytdx-symbols",
+                "--pytdx-host",
+                "--pytdx-port",
                 "--yfinance-symbols",
                 "--baostock-symbols",
                 "--zzshare-symbols",
@@ -443,6 +445,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             "probe_external_source_stability.py": [
                 "eastmoney, baostock_universe, akshare, pytdx, yfinance, baostock, and zzshare",
                 "long_term_stability_claim=not_proven",
+                "--pytdx-host",
                 "--zzshare-symbols",
             ],
         }

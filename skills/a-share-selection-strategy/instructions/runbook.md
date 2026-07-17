@@ -367,7 +367,7 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
   --input /tmp/a-share-selection-pytdx/prices.csv
 ```
 
-pytdx 入口通过 TDX 兼容行情服务器抓取日线 OHLCV，不需要 token；但 PyPI license metadata 为 UNKNOWN，包内 README 明确是个人协议研究/习作边界，机构或商业使用权、长期稳定性和官方数据授权都不能由本仓库证明。近期窗口的首请求会按起始日距当前日自适应缩小，未触达起始边界时后续恢复整页并按实际返回行数累计 offset；达到 `max-pages` 仍未触达时写入 `possibly_truncated_symbols`。优先检查 `requested_raw_rows/raw_rows/output_rows/overfetch_rows/api_request_count`。
+pytdx 入口通过 TDX 兼容行情服务器抓取日线 OHLCV，不需要 token；当前默认 endpoint 是 `180.153.18.170:7709`。选择依据是 [2026-07-17 的外部源稳定性诊断](../evidence/reviews/EXTERNAL-SOURCE-STABILITY-2026-07-17.md) 中旧默认 `218.6.170.47:7709` 的 `0/3` 严格失败和显式新 host 的成功；[新默认值短窗口复验](../evidence/reviews/PYTDX-DEFAULT-ENDPOINT-2026-07-17.md) 仅记录改后复验。它不是可用性、授权或长期稳定性承诺。需要诊断其他 endpoint 时，必须显式传 `--host HOST --port PORT`，并保留 metadata 中的 `host/port`；脚本不会自动轮换 host、重试另一个 host 或切换数据源。PyPI license metadata 为 UNKNOWN，包内 README 明确是个人协议研究/习作边界，机构或商业使用权、长期稳定性和官方数据授权都不能由本仓库证明。近期窗口的首请求会按起始日距当前日自适应缩小，未触达起始边界时后续恢复整页并按实际返回行数累计 offset；达到 `max-pages` 仍未触达时写入 `possibly_truncated_symbols`。优先检查 `requested_raw_rows/raw_rows/output_rows/overfetch_rows/api_request_count`。
 
 pytdx 输出缺 `turn/tradestatus/isST/name`，provider 不返回名称时 `name` 保持空值并记录 `name_value_policy=blank_missing_provider_name`，不得把 symbol 写成名称。`selection_ready=false`，只能作为 no-token OHLCV/amount 补充或对照，不能替代 zzshare 全 A 历史 breadth、baostock 严格可交易字段核验或 prediction-derived 口径。补充字段的 join key 只能是同一 `symbol+date`；不得按 symbol 使用最近一条 strict 字段、前向填充或把旧交易日 strict 字段拼到新交易日。当前没有同日 strict companion 的 Pytdx 增量 verified merge 会显式失败。
 
@@ -526,7 +526,7 @@ uv run --with pandas --with numpy --with akshare --with yfinance --with baostock
 
 读取 `summary.json` 时必须检查 `summary.sources.*.all_passed`、逐次 `metadata`、`checks` 和 `long_term_stability_claim=not_proven`。连续复验通过只说明当前窗口、参数和网络环境下通过，不能写成公网数据源长期稳定。
 
-探针的 `--baostock-universe-lookback-days` 默认值是 7，只用于提高外部源短窗口观察的非空概率；这不改变 `fetch_baostock_a_share_universe.py` 和 runner 的生产默认值 0。
+探针的 `--baostock-universe-lookback-days` 默认值是 7，只用于提高外部源短窗口观察的非空概率；这不改变 `fetch_baostock_a_share_universe.py` 和 runner 的生产默认值 0。探针的 `--pytdx-host/--pytdx-port` 默认与 `fetch_pytdx_a_share.py` 相同。只有要审计指定 endpoint 时才显式传入它们；它们不会启用 host 轮换、自动 source fallback 或改变 Pytdx 的字段、授权和 `selection_ready=false` 边界。
 
 最小单轮探针的解释规则：
 

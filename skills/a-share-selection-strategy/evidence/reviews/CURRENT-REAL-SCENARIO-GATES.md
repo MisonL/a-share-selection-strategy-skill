@@ -22,7 +22,7 @@
 | 真实 LightGBM prediction-derived | `verified_small_scope_only` | [REAL-SCENARIO-GATES-2026-05-30.md](REAL-SCENARIO-GATES-2026-05-30.md) | Baostock 真实行情上已有 2-symbol 最新日和 12-symbol、3 个信号日的 prediction 生成与评分证据 | 未证明全市场 prediction 质量、训练窗口无泄漏、长期稳定性或样本外收益 |
 | 本地样本外回测和组合容量 | `verified_fixed_scope_only` | [CURRENT-GATES-CLOSEOUT-2026-06-08.md](CURRENT-GATES-CLOSEOUT-2026-06-08.md) | 固定 40-symbol、6 个信号日、48 个完成交易的本地 artifact 和容量门禁通过 | 未证明全市场收益、真实成交、券商容量、真实涨跌停规则或长期稳定性 |
 | 真实涨跌停和完整可交易规则 | `not_proven` | [CURRENT-GATES-CLOSEOUT-2026-06-08.md](CURRENT-GATES-CLOSEOUT-2026-06-08.md) | `preclose/pctChg/tradestatus/isST` 可作为控制和诊断字段 | 直接涨跌停字段不可用，`limit_rules_model=not_modeled`，不得推导为规则门禁通过 |
-| 外部数据源长期稳定性、额度和授权 | `not_proven` | [EXTERNAL-SOURCE-STABILITY-2026-07-17.md](EXTERNAL-SOURCE-STABILITY-2026-07-17.md) | 仅证明当前网络和参数下的 3 次短窗口探测：21 次调用中 15 次通过；Eastmoney spot 与默认 Pytdx 均 0/3，Akshare 的内部 provider fallback 被显式记录 | 不证明任一源长期稳定、未来免费、授权持续有效、默认或替代 Pytdx host 长期可用，或可自动 fallback |
+| 外部数据源长期稳定性、额度和授权 | `not_proven` | [EXTERNAL-SOURCE-STABILITY-2026-07-17.md](EXTERNAL-SOURCE-STABILITY-2026-07-17.md)、[PYTDX-DEFAULT-ENDPOINT-2026-07-17.md](PYTDX-DEFAULT-ENDPOINT-2026-07-17.md) | 仅证明当前网络和参数下的 3 次短窗口探测：21 次调用中 15 次通过，Eastmoney spot 与旧默认 Pytdx 均为 0/3，Akshare 的内部 provider fallback 被显式记录；后续独立复验的新 Pytdx 默认 endpoint 单 symbol 3/3 和两 symbol 请求通过，不属于上述 21 次统计 | 不证明任一源长期稳定、未来免费、授权持续有效、默认或替代 Pytdx host 长期可用，或可自动 fallback |
 | 券商订单、真实成交、滑点和真实资金容量 | `not_run` | [REAL-SCENARIO-GATES-2026-05-30.md](REAL-SCENARIO-GATES-2026-05-30.md) | 无 | 未接入真实券商门禁；任何本地 sizing、订单字段或 backtest 都不能替代 |
 
 ## 状态更新规则

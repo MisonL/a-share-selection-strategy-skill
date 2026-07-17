@@ -24,6 +24,27 @@ import lib.fetch.pytdx_a_share as pytdx_helpers  # noqa: E402
 
 
 class FetchPytdxAShareTests(unittest.TestCase):
+    def test_fetch_cli_defaults_to_current_verified_endpoint(self) -> None:
+        args = fetcher.build_parser().parse_args(
+            [
+                "--symbols",
+                "000001",
+                "--start-date",
+                "2026-01-01",
+                "--end-date",
+                "2026-01-02",
+                "--output",
+                "/tmp/prices.csv",
+                "--metadata-output",
+                "/tmp/metadata.json",
+            ]
+        )
+
+        self.assertEqual("180.153.18.170", args.host)
+        self.assertEqual(7709, args.port)
+        self.assertEqual(args.host, pytdx_helpers.DEFAULT_HOST)
+        self.assertEqual(args.port, pytdx_helpers.DEFAULT_PORT)
+
     def test_recent_window_uses_bounded_first_request(self) -> None:
         count = pytdx_helpers.initial_request_count(
             "2026-07-10", 800, today=date(2026, 7, 12)

@@ -195,6 +195,9 @@ class DocumentConsistencyTests(unittest.TestCase):
             "full_market_claim_allowed=false",
             "真实 LightGBM prediction-derived",
             "券商订单、真实成交、滑点和真实资金容量",
+            "Eastmoney spot 与旧默认 Pytdx 均为 0/3",
+            "后续独立复验的新 Pytdx 默认 endpoint",
+            "不属于上述 21 次统计",
             "本地验证边界",
         ]:
             with self.subTest(value=value):
@@ -364,6 +367,8 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("fallback_errors", runbook)
         self.assertIn("market_label_only=true", runbook)
         self.assertIn("long_term_stability_claim", runbook)
+        self.assertIn("选择依据是 [2026-07-17 的外部源稳定性诊断]", runbook)
+        self.assertIn("仅记录改后复验", runbook)
 
     def test_script_entrypoint_registry_covers_root_scripts(self) -> None:
         root = ROOT / "skills/a-share-selection-strategy"

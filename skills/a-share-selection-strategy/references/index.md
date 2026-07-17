@@ -95,6 +95,7 @@
 | 文件 | 用途 |
 | --- | --- |
 | [../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md](../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md) | 当前真实门禁唯一人工入口，汇总最新证据、有限范围状态和仍未证明项 |
+| [../evidence/reviews/PYTDX-DEFAULT-ENDPOINT-2026-07-17.md](../evidence/reviews/PYTDX-DEFAULT-ENDPOINT-2026-07-17.md) | 2026-07-17 Pytdx 默认 endpoint 调整、三次新默认真实复验、两 symbol 复验、第三方依赖警告和不外推边界 |
 | [../evidence/reviews/EXTERNAL-SOURCE-STABILITY-2026-07-17.md](../evidence/reviews/EXTERNAL-SOURCE-STABILITY-2026-07-17.md) | 2026-07-17 七个外部 source 的三次短窗口探测、Eastmoney/Pytdx 失败关闭、Akshare provider observation 和 Pytdx 显式 host 诊断 |
 | [../evidence/reviews/CLAUDE-OMP-REMAINING-OPTIMIZATION-REVIEW-2026-07-15.md](../evidence/reviews/CLAUDE-OMP-REMAINING-OPTIMIZATION-REVIEW-2026-07-15.md) | 2026-07-15 Claude、OMP 和 Codex 对剩余 Skill 优化项的只读复核、分歧裁定及远端 frontmatter 门禁建议 |
 | [../evidence/reviews/CLAUDE-OMP-SYSTEM-REVIEW-2026-07-15.md](../evidence/reviews/CLAUDE-OMP-SYSTEM-REVIEW-2026-07-15.md) | 2026-07-15 Claude、OMP 和 Codex 对当前 Skill 体系及 `09efee4..2a7c321` 的复核、分歧裁定和待修文档合同 |

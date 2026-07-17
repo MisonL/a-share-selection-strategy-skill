@@ -12,6 +12,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from lib.fetch.pytdx_a_share import DEFAULT_HOST, DEFAULT_PORT
+
 
 SCRIPTS = Path(__file__).resolve().parent
 Executor = Callable[[list[str], float | None], subprocess.CompletedProcess[str]]
@@ -54,9 +56,25 @@ def build_parser() -> argparse.ArgumentParser:
             "long_term_stability_claim=not_proven."
         )
     )
+    add_core_arguments(parser)
+    add_eastmoney_arguments(parser)
+    add_baostock_universe_arguments(parser)
+    add_akshare_arguments(parser)
+    add_pytdx_arguments(parser)
+    add_yfinance_arguments(parser)
+    add_command_timeout_argument(parser)
+    add_baostock_arguments(parser)
+    add_zzshare_arguments(parser)
+    return parser
+
+
+def add_core_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--summary-output", required=True)
     parser.add_argument("--iterations", type=positive_int, default=3)
+
+
+def add_eastmoney_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--eastmoney-pages", type=positive_int, default=1)
     parser.add_argument("--eastmoney-page-size", type=positive_int, default=100)
     parser.add_argument("--eastmoney-timeout-seconds", type=float, default=10.0)
@@ -71,6 +89,9 @@ def build_parser() -> argparse.ArgumentParser:
         type=non_negative_float,
         default=0.0,
     )
+
+
+def add_baostock_universe_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--baostock-universe-lookback-days",
         type=non_negative_int,
@@ -87,28 +108,57 @@ def build_parser() -> argparse.ArgumentParser:
         type=non_negative_float,
         default=1.0,
     )
+
+
+def add_akshare_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--akshare-symbols", default="000001")
     parser.add_argument("--akshare-start-date", default="2025-09-01")
     parser.add_argument("--akshare-end-date", default="2026-05-29")
+
+
+def add_pytdx_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--pytdx-symbols", default="000001")
+    parser.add_argument(
+        "--pytdx-host",
+        default=DEFAULT_HOST,
+        help="Explicit Pytdx TDX host. Default matches fetch_pytdx_a_share.py.",
+    )
+    parser.add_argument(
+        "--pytdx-port",
+        type=positive_int,
+        default=DEFAULT_PORT,
+        help="Explicit Pytdx TDX port. Default matches fetch_pytdx_a_share.py.",
+    )
     parser.add_argument("--pytdx-start-date", default="2026-01-01")
     parser.add_argument("--pytdx-end-date", default="2026-01-10")
     parser.add_argument("--pytdx-timeout-seconds", type=float, default=10.0)
     parser.add_argument("--pytdx-max-pages", type=positive_int, default=1)
+
+
+def add_yfinance_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--yfinance-symbols", default="AAPL,MSFT")
     parser.add_argument("--yfinance-start-date", default="2024-01-01")
     parser.add_argument("--yfinance-end-date", default="2026-05-29")
     parser.add_argument("--yfinance-timeout-seconds", type=float, default=10.0)
+
+
+def add_command_timeout_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--command-timeout-seconds",
         type=float,
         default=120.0,
         help="Maximum seconds for each fetch command. Use 0 to disable.",
     )
+
+
+def add_baostock_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--baostock-symbols", default="000001,600000")
     parser.add_argument("--baostock-start-date", default="2024-01-01")
     parser.add_argument("--baostock-end-date", default="2026-05-29")
     parser.add_argument("--baostock-adjust", default="3")
+
+
+def add_zzshare_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--zzshare-symbols", default="000001,600000")
     parser.add_argument("--zzshare-start-date", default="2024-01-01")
     parser.add_argument("--zzshare-end-date", default="2026-05-29")
@@ -120,7 +170,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--zzshare-limit", type=positive_int, default=1000)
     parser.add_argument("--zzshare-max-pages", type=positive_int, default=10)
-    return parser
 
 
 def positive_int(value: str) -> int:
@@ -286,6 +335,8 @@ def pytdx_spec(args: argparse.Namespace, iteration_dir: Path) -> SourceSpec:
             "--end-date", args.pytdx_end_date,
             "--output", output,
             "--metadata-output", metadata,
+            "--host", args.pytdx_host,
+            "--port", args.pytdx_port,
             "--timeout-seconds", args.pytdx_timeout_seconds,
             "--max-pages", args.pytdx_max_pages,
             "--fail-on-fetch-error",

@@ -28,7 +28,7 @@ DATA_SOURCE_NOTE = (
     "license metadata is UNKNOWN and provider stability/commercial-use rights "
     "are not proven"
 )
-DEFAULT_HOST = "218.6.170.47"
+DEFAULT_HOST = "180.153.18.170"
 DEFAULT_PORT = 7709
 TDX_DAILY_CATEGORY = 9
 OUTPUT_COLUMNS = [

@@ -16,6 +16,7 @@ SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import probe_external_source_stability as probe  # noqa: E402
+from lib.fetch.pytdx_a_share import DEFAULT_HOST, DEFAULT_PORT  # noqa: E402
 
 
 class ExternalSourceStabilityProbeTests(unittest.TestCase):
@@ -89,6 +90,35 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
 
         self.assertNotIn("--fail-on-fetch-error", specs["akshare"].command)
         self.assertIn("--retry-interval-seconds", specs["eastmoney_spot"].command)
+
+    def test_pytdx_probe_defaults_and_explicit_endpoint_are_forwarded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir)
+            defaults = probe.build_parser().parse_args(
+                ["--output-dir", str(output / "runs"), "--summary-output", str(output / "summary.json")]
+            )
+            self.assertEqual(DEFAULT_HOST, defaults.pytdx_host)
+            self.assertEqual(DEFAULT_PORT, defaults.pytdx_port)
+            default_specs = {
+                spec.name: spec
+                for spec in probe.source_specs(defaults, output / "runs" / "iteration-default")
+            }
+
+            args = args_for(output)
+            args.pytdx_host = "198.51.100.42"
+            args.pytdx_port = 7710
+            specs = {
+                spec.name: spec
+                for spec in probe.source_specs(args, output / "runs" / "iteration-1")
+            }
+
+        default_command = default_specs["pytdx"].command
+        self.assertEqual(DEFAULT_HOST, default_command[default_command.index("--host") + 1])
+        self.assertEqual(str(DEFAULT_PORT), default_command[default_command.index("--port") + 1])
+
+        command = specs["pytdx"].command
+        self.assertEqual("198.51.100.42", command[command.index("--host") + 1])
+        self.assertEqual("7710", command[command.index("--port") + 1])
 
     def test_baostock_adjustflag_must_match_requested_adjust(self) -> None:
         command = ["python", "fetch_baostock_a_share.py", "--adjust", "2"]

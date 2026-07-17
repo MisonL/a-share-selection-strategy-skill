@@ -49,7 +49,7 @@ python3 skills/a-share-selection-strategy/scripts/probe_external_source_stabilit
 
 ## Pytdx 显式 Host 诊断
 
-默认 Pytdx 失败后，单独执行了显式 host 诊断，产物位于 `/tmp/a-share-selection-p3-external-20260717/pytdx-explicit/`。该诊断不属于上述 7-source Harness 的 21 次统计，也没有修改当前代码默认值。
+默认 Pytdx 失败后，单独执行了显式 host 诊断，产物位于 `/tmp/a-share-selection-p3-external-20260717/pytdx-explicit/`。该诊断不属于上述 7-source Harness 的 21 次统计；在本报告所记录的 pre-change 代码状态下，默认值仍为 `218.6.170.47:7709`。后续默认值调整及其复验以 [PYTDX-DEFAULT-ENDPOINT-2026-07-17.md](PYTDX-DEFAULT-ENDPOINT-2026-07-17.md) 为准。
 
 - 显式 `--host 180.153.18.170 --port 7709`，对 `000001` 的三次单 symbol 请求均成功：每次 13 行、`failed_symbols=[]`、`empty_symbols=[]`。
 - 同一 host 对 `000001,600000` 的两 symbol 请求成功：共 26 行，每个 symbol 13 行，`api_request_count=2`，窗口完整。

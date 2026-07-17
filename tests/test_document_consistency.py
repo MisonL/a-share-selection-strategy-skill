@@ -202,18 +202,9 @@ class DocumentConsistencyTests(unittest.TestCase):
         for target in markdown_link_targets(current):
             self.assertTrue((current_path.parent / target).is_file(), target)
 
-    def test_core_skill_markdown_links_resolve_to_existing_files(self) -> None:
-        docs = [
-            ROOT / "skills/a-share-selection-strategy/SKILL.md",
-            ROOT / "skills/a-share-selection-strategy/scripts/SCRIPTS.md",
-            ROOT / "skills/a-share-selection-strategy/references/index.md",
-            ROOT / "skills/a-share-selection-strategy/references/script-reference.md",
-            ROOT / "skills/a-share-selection-strategy/instructions/runbook.md",
-            ROOT
-            / "skills/a-share-selection-strategy/instructions/full-a-strict-workflow.md",
-        ]
-
-        for document in docs:
+    def test_skill_markdown_links_resolve_to_existing_files(self) -> None:
+        skill_root = ROOT / "skills/a-share-selection-strategy"
+        for document in sorted(skill_root.rglob("*.md")):
             text = document.read_text(encoding="utf-8")
             for target in markdown_link_targets(text):
                 if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", target):

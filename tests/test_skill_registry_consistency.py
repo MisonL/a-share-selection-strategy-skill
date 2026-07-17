@@ -175,6 +175,7 @@ class SkillRegistryConsistencyTests(unittest.TestCase):
                 root / "references/index.md",
                 root / "references/script-reference.md",
                 root / "instructions/full-a-strict-workflow.md",
+                root / "instructions/runbook.md",
             ]
         )
 
@@ -342,6 +343,20 @@ class SkillRegistryConsistencyTests(unittest.TestCase):
             "不表示自动选源",
         ]:
             self.assertIn(text, docs)
+        runbook = (root / "instructions/runbook.md").read_text(encoding="utf-8")
+        for text in [
+            "全 A 历史必须显式选择一个历史 provider",
+            "ZZShare 冷启动或增量 breadth",
+            "Baostock 分桶增量 breadth",
+        ]:
+            with self.subTest(runbook_provider_contract=text):
+                self.assertIn(text, runbook)
+        for text in [
+            "`zzshare` 是当前全 A 历史主路径",
+            "全 A clean pool 复核才优先考虑它",
+        ]:
+            with self.subTest(runbook_stale_provider_contract=text):
+                self.assertNotIn(text, runbook)
         pytdx_contract = full_a["supplemental_merge_contracts"]["pytdx_history"]
         self.assertEqual(["symbol", "date"], pytdx_contract["join_keys"])
         self.assertTrue(pytdx_contract["strict_fields_same_date_required"])

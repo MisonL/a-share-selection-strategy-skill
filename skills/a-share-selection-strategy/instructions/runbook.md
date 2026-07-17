@@ -85,15 +85,15 @@ python3 -m venv /tmp/a-share-selection-skill-venv
 | 本地校验、评分、clean pool、增量计划 | `uv run --with pandas --with numpy python ...` |
 | 全 A 股票池 universe | `uv run --with baostock python skills/a-share-selection-strategy/scripts/fetch_baostock_a_share_universe.py --lookback-days 7 --retries 1 --retry-interval-seconds 1 ...` |
 | 全 A 实时展示增强 | `python skills/a-share-selection-strategy/scripts/fetch_eastmoney_a_share_spot.py ...` |
-| 全 A zzshare 历史 breadth | `uv run --with pandas --with numpy --with zzshare python ...` |
-| baostock 小范围核验 | `uv run --with pandas --with numpy --with baostock python ...` |
+| 全 A ZZShare 冷启动或增量 breadth | `uv run --with pandas --with numpy --with zzshare python ...` |
+| 全 A Baostock 分桶增量 breadth 或小范围核验 | `uv run --with pandas --with numpy --with baostock python ...` |
 | akshare A 股或港股补充 | `uv run --with pandas --with numpy --with akshare python ...` |
 | pytdx A 股补充 | `uv run --with pandas --with numpy --with pytdx python ...` |
 | yfinance 海外 ticker 补充 | `uv run --with pandas --with numpy --with yfinance python ...` |
 
 `fetch_baostock_a_share_universe.py` 与 `run_today_a_share_selection.py --fetch-spot baostock_universe` 默认都不做日期回看；`--lookback-days 7` 或 runner 的 `--spot-fallback-lookback-days 7` 是显式选择。若 `date_fallback_used=true`，必须同时披露 `resolved_snapshot_date`，不能写成当日股票池。
 
-依赖按场景显式安装，不默认全装。`baostock_universe` 是当前全 A 股票池主入口；`eastmoney` spot 无第三方包依赖，只用于实时展示增强或对照快照；`zzshare` 是当前全 A 历史主路径；`baostock`、`akshare`、`pytdx` 和 `yfinance` 只作为补充或核验源，不作为静默 fallback。
+依赖按场景显式安装，不默认全装。`baostock_universe` 是当前全 A 股票池主入口；`eastmoney` spot 无第三方包依赖，只用于实时展示增强或对照快照。全 A 历史必须显式选择一个历史 provider：ZZShare 冷启动或增量 breadth，或 Baostock 分桶增量 breadth。列出两个 provider 不表示自动选源、默认优先级或静默 fallback；`akshare`、`pytdx` 和 `yfinance` 仍只作为补充或核验源。
 
 完全离线环境必须提前准备解释器、wheelhouse 或包缓存。依赖失败时应显式报告，不能改用 mock 数据或跳过依赖。
 若只做离线只读测试且本机已有依赖缓存，可把下面的 `uv run --with ...` 改成 `uv run --offline --with ...`；缓存缺依赖时应报告环境问题，而不是联网或改用模拟成功。
@@ -536,7 +536,7 @@ uv run --with pandas --with numpy --with akshare --with yfinance --with baostock
 - `pytdx` 成功时也只说明 no-token 小样本日线可用；该入口缺 `turn/tradestatus/isST/name`，不能作为全 A 主历史源。
 - `zzshare.token_configured=false` 且成功时，只能说明无 token 小样本可用，不能证明大批量额度或长期稳定。
 - `yfinance.market_label_only=true` 时，`market` 只是输出标签，不能当作交易所、日历或真实市场归属证明。
-- `baostock` 通过小样本门禁时，仍不代表适合全 A 首轮历史抓取；全 A clean pool 复核才优先考虑它。若用 `query_all_stock` 准备对照股票池，必须先按沪深 A 股股票前缀过滤，排除指数、基金、ETF、B 股和北交所代码。
+- `baostock` 通过小样本门禁时，仍不代表冷启动全 A 历史吞吐、长期稳定性或全市场闭环；全 A 分桶增量可将它作为显式 provider，但必须审计 no-trading empty、共同目标日期和最终 freshness。若用 `query_all_stock` 准备对照股票池，必须先按沪深 A 股股票前缀过滤，排除指数、基金、ETF、B 股和北交所代码。
 - 任何源的 `long_term_stability_claim` 都必须保持 `not_proven`，除非有独立长期监控和明确验收窗口。
 
 ## P1 组合容量门禁

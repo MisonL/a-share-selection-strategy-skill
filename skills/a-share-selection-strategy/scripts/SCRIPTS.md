@@ -64,7 +64,7 @@
 | `validate_walk_forward_manifest.py` | 校验 runner manifest | 不替代 artifact 内容复验 |
 | `validate_walk_forward_artifacts.py` | 校验 walk-forward artifact 内容 | `capacity_gate_pass=false` 仍是容量门禁失败 |
 | `probe_baostock_limit_fields.py` | baostock 涨跌停字段探测 | 字段可取不等于涨跌停规则已建模 |
-| `probe_external_source_stability.py` | 外部源稳定性观察 | 覆盖 eastmoney、baostock_universe、akshare、pytdx、yfinance、baostock、zzshare；短窗口通过不证明长期稳定 |
+| `probe_external_source_stability.py` | 外部源稳定性观察 | 覆盖 eastmoney、baostock_universe、akshare、pytdx、yfinance、baostock、zzshare；可选紧凑归档由 `lib/gates/external_source_evidence_archive.py` 负责；短窗口通过不证明长期稳定 |
 
 ## 内部 helper
 

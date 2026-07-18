@@ -90,17 +90,45 @@ class DocumentConsistencyTests(unittest.TestCase):
                 "schema_version",
                 "claim_boundary",
                 "hard_line_threshold",
+                "reassessment_line_thresholds",
                 "exemptions",
                 "reassessments",
             },
             set(manifest),
         )
-        self.assertEqual(2, manifest["schema_version"])
+        self.assertEqual(3, manifest["schema_version"])
         self.assertEqual(
             "temporary_test_file_complexity_exemptions_not_permanent_waivers",
             manifest["claim_boundary"],
         )
         self.assertEqual(1000, manifest["hard_line_threshold"])
+
+        thresholds = manifest["reassessment_line_thresholds"]
+        self.assertEqual({"test_today_a_share_selection_runner.py"}, set(thresholds))
+        for path, threshold in thresholds.items():
+            with self.subTest(threshold_path=path):
+                self.assertIsInstance(threshold, int)
+                self.assertGreater(threshold, 0)
+                self.assertLess(
+                    len((tests_root / path).read_text(encoding="utf-8").splitlines()),
+                    threshold,
+                    f"{path} reached its explicit reassessment threshold of {threshold} lines",
+                )
+        runner_reassessment = (
+            "a runner option, provider, or output artifact is added, or this file reaches 7000 lines"
+        )
+        self.assertEqual(
+            runner_reassessment,
+            manifest["exemptions"]["test_today_a_share_selection_runner.py"][
+                "reassess_when"
+            ],
+        )
+        self.assertEqual(
+            runner_reassessment,
+            manifest["reassessments"]["test_today_a_share_selection_runner.py"][
+                "next_trigger"
+            ],
+        )
 
         oversized = {
             path.name
@@ -367,8 +395,31 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("fallback_errors", runbook)
         self.assertIn("market_label_only=true", runbook)
         self.assertIn("long_term_stability_claim", runbook)
+        self.assertIn("--archive-dir", runbook)
+        self.assertIn("code=archive_failed", runbook)
+        self.assertIn("A_SHARE_SELECTION_EVIDENCE_ROOT", runbook)
+        self.assertIn("不要把 `~/.cache` 当成持久证据根目录", runbook)
+        self.assertIn("owner-only `0700`", runbook)
+        self.assertIn("archive_manifest.json", runbook)
+        self.assertIn("SHA-256", runbook)
+        self.assertIn("也不能是符号链接", runbook)
+        self.assertIn("metadata 键名和值中的敏感字符串", runbook)
+        self.assertIn("脱敏后重名键会保留为稳定的 distinct 字段", runbook)
+        self.assertIn("原始 `/tmp` 路径作为本轮 provenance", runbook)
+        self.assertIn("绝不复制价格 CSV、Parquet", runbook)
+        self.assertIn("不改变数据源路由、自动 fallback、host rotation", runbook)
         self.assertIn("选择依据是 [2026-07-17 的外部源稳定性诊断]", runbook)
         self.assertIn("仅记录改后复验", runbook)
+
+    def test_readme_documents_local_shard_as_iterative_only(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+        self.assertIn("python tests/run_unittest_shard.py gates", readme)
+        self.assertIn("它只用于开发反馈", readme)
+        self.assertIn(
+            "python3 validate_skill_changes.py --dependency-profile ci",
+            readme,
+        )
 
     def test_script_entrypoint_registry_covers_root_scripts(self) -> None:
         root = ROOT / "skills/a-share-selection-strategy"
@@ -465,6 +516,8 @@ class DocumentConsistencyTests(unittest.TestCase):
                     self.assertIn("blocker", row[5])
                 if metadata["domain"] == "report_html":
                     self.assertIn("展示层", row[5])
+
+        self.assertIn("lib/gates/external_source_evidence_archive.py", scripts_index)
 
         for path in (root / "scripts/lib").glob("*.py"):
             self.assertNotIn(f"`lib/{path.name}`", inventory)
@@ -802,6 +855,7 @@ class DocumentConsistencyTests(unittest.TestCase):
         artifact_layers = {
             "fetch/zzshare_a_share_checkpoint.py",
             "fetch/zzshare_a_share_quality.py",
+            "gates/external_source_evidence_archive.py",
             "gates/incremental_history_artifacts.py",
             "gates/incremental_history_execution.py",
             "gates/lightgbm_prediction_summary.py",
@@ -1203,11 +1257,13 @@ class DocumentConsistencyTests(unittest.TestCase):
         )
 
         self.assertIn("timeout-minutes: 15", workflow)
-        self.assertIn("DEFAULT_COMMAND_TIMEOUT_SECONDS = 600.0", validator)
+        self.assertIn("DEFAULT_COMMAND_TIMEOUT_SECONDS = 900.0", validator)
         self.assertIn("--command-timeout-seconds", validator)
         self.assertIn("validation command timed out", validator)
-        self.assertIn("默认超时 600 秒", docs)
+        self.assertIn("默认超时 900 秒", docs)
         self.assertIn("模块可用性探针使用 `min(N, 10)` 秒", docs)
+        self.assertIn("`SIGTERM` 后 `SIGKILL`", docs)
+        self.assertIn("即使主进程先退出", docs)
         self.assertIn("总超时为 15 分钟", docs)
         self.assertIn("不是性能 SLA", docs)
 

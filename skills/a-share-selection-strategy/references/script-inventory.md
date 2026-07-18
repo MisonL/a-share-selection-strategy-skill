@@ -2,7 +2,7 @@
 
 本文件用于回答“为什么 `scripts/` 下还有很多 `.py`、每个脚本是否必要”。它是审计索引，不是运行时入口，不替代 `../configs/script_entrypoints.json`，也不进入 Skill 首轮读取路径。
 
-当前根层 `.py` 共 33 个，其中公开 CLI 29 个、兼容 wrapper 4 个。`scripts/lib/` 是内部实现目录，不列入本表。判断脚本是否合理时先看 `公开 CLI 是否必须兼容` 和 `internal helper 是否还能继续下沉`，不要按文件数量直接合并。当前整个 `scripts/` 树有 118 个 Python 文件；其中 85 个是按领域分层的内部实现，不是 Agent 首轮入口。
+当前根层 `.py` 共 33 个，其中公开 CLI 29 个、兼容 wrapper 4 个。`scripts/lib/` 是内部实现目录，不列入本表。判断脚本是否合理时先看 `公开 CLI 是否必须兼容` 和 `internal helper 是否还能继续下沉`，不要按文件数量直接合并。当前整个 `scripts/` 树有 119 个 Python 文件；其中 86 个是按领域分层的内部实现，不是 Agent 首轮入口。
 
 结论：
 
@@ -39,7 +39,7 @@
 | `prepare_incremental_history_plan.py` | `gate_backtest_cli` | `gate_backtest` | 638 | Prepare a bounded, resumable incremental history fetch plan from universe and metadata. | 保留: public planning CLI，只生成增量计划，不证明抓取成功。 |
 | `execute_incremental_history_plan.py` | `gate_backtest_cli` | `gate_backtest` | 306 | Execute one explicit provider across bounded plan buckets and persist resumable artifacts. | 保留: public execution CLI，不自动切源，不证明全 A 完成。 |
 | `probe_baostock_limit_fields.py` | `gate_backtest_cli` | `gate_backtest` | 421 | Probe baostock field availability without modeling limit rules. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
-| `probe_external_source_stability.py` | `gate_backtest_cli` | `gate_backtest` | 622 | Run repeated external source probes through the stable fetch CLIs. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
+| `probe_external_source_stability.py` | `gate_backtest_cli` | `gate_backtest` | 758 | Run repeated external source probes through the stable fetch CLIs. | 保留: public gate/backtest CLI，输出是诊断或门禁证据；紧凑归档实现位于 `lib/gates/`，不扩大 CLI 职责。 |
 | `run_baostock_walk_forward.py` | `gate_backtest_cli` | `gate_backtest` | 692 | Run the baostock prediction-derived walk-forward gate through existing CLIs. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
 | `run_today_a_share_selection.py` | `stable_cli` | `selection_core` | 1309 | Run an auditable local A-share selection workflow through existing CLIs. | 保留: stable public CLI，用户命令兼容路径；full-A provenance 细节由 internal runner helper 实现。 |
 | `score_candidates.py` | `stable_cli` | `selection_core` | 532 | Score stock candidates from local OHLCV data. | 保留: stable public CLI，用户命令兼容路径。 |

@@ -508,10 +508,13 @@ uv run --with pandas --with numpy --with baostock python skills/a-share-selectio
 
 ```bash
 RUN_DIR=/tmp/a-share-selection-p3-external-$(date -u +%Y%m%dT%H%M%SZ)
+EVIDENCE_ROOT="${A_SHARE_SELECTION_EVIDENCE_ROOT:-$HOME/Documents/a-share-selection-evidence}"
+ARCHIVE_DIR="$EVIDENCE_ROOT/$(basename "$RUN_DIR")"
 uv run --with pandas --with numpy --with akshare --with yfinance --with baostock --with zzshare --with pytdx \
   python skills/a-share-selection-strategy/scripts/probe_external_source_stability.py \
     --output-dir "$RUN_DIR/runs" \
     --summary-output "$RUN_DIR/summary.json" \
+    --archive-dir "$ARCHIVE_DIR" \
     --iterations 3 \
     --eastmoney-pages 1 \
     --eastmoney-retries 5 \
@@ -525,6 +528,8 @@ uv run --with pandas --with numpy --with akshare --with yfinance --with baostock
 ```
 
 读取 `summary.json` 时必须检查 `summary.sources.*.all_passed`、逐次 `metadata`、`checks` 和 `long_term_stability_claim=not_proven`。连续复验通过只说明当前窗口、参数和网络环境下通过，不能写成公网数据源长期稳定。
+
+`--archive-dir` 是默认关闭的紧凑持久证据归档。选择受备份策略保护的调用方目录，不要把 `~/.cache` 当成持久证据根目录。目标必须不存在，也不能是符号链接，且不得与 `--output-dir` 或 `--summary-output` 重叠；归档失败会以 `code=archive_failed` 非零退出。在 POSIX 环境，成功归档目录权限为 owner-only `0700`，`archive_manifest.json` 记录每个 payload 的 SHA-256、字节数和每条 summary result 到 archive copy 的映射；复核时先验证该清单，再读 `summary.json`。归档仅保存 `summary.json`、每次请求的 `metadata.json`（存在时）和 `stdout.txt`/`stderr.txt`；写入前会脱敏命令、日志，以及 metadata 键名和值中的敏感字符串；脱敏后重名键会保留为稳定的 distinct 字段。summary 保留原始 `/tmp` 路径作为本轮 provenance，`archive_manifest.json` 才是归档副本的映射。绝不复制价格 CSV、Parquet 或其他行情输出。它只让已完成窗口可在 `/tmp` 清理后复核，不改变数据源路由、自动 fallback、host rotation 或真实门禁结论。
 
 探针的 `--baostock-universe-lookback-days` 默认值是 7，只用于提高外部源短窗口观察的非空概率；这不改变 `fetch_baostock_a_share_universe.py` 和 runner 的生产默认值 0。探针的 `--pytdx-host/--pytdx-port` 默认与 `fetch_pytdx_a_share.py` 相同。只有要审计指定 endpoint 时才显式传入它们；它们不会启用 host 轮换、自动 source fallback 或改变 Pytdx 的字段、授权和 `selection_ready=false` 边界。
 
@@ -648,7 +653,7 @@ uv run --with pandas python skills/a-share-selection-strategy/scripts/summarize_
 python3 validate_skill_changes.py
 ```
 
-常规验证子进程默认超时 600 秒。只有明确需要更长或更短的本地观察窗口时才传 `--command-timeout-seconds N`；Python 模块可用性探针使用 `min(N, 10)` 秒，自定义小于 10 秒的值仍会收紧探针。任何超时都会显式失败并打印对应命令，不会跳过该门禁。GitHub Actions 每个分片 job 的总超时为 15 分钟，该值是防止无限等待的控制上限，不是性能 SLA。
+常规验证子进程默认超时 900 秒。只有明确需要更长或更短的本地观察窗口时才传 `--command-timeout-seconds N`；Python 模块可用性探针使用 `min(N, 10)` 秒，自定义小于 10 秒的值仍会收紧探针。任何超时都会显式失败、打印对应命令；在 POSIX 上验证器会以 `SIGTERM` 后 `SIGKILL` 回收其创建的新会话进程组，即使主进程先退出也不跳过同组后台子进程清理。GitHub Actions 每个分片 job 的总超时为 15 分钟，该值是防止无限等待的控制上限，不是性能 SLA。
 
 默认 `--dependency-profile latest` 会使用当前可解析的最新兼容 `pandas/numpy/pyarrow` 运行完整测试。提交前或排查 CI 差异时，使用以下命令精确复现 Python 3.11 和 `constraints-ci.txt` 中的直接依赖组合：
 

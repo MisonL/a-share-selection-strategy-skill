@@ -1,7 +1,10 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "claim_boundary": "temporary_test_file_complexity_exemptions_not_permanent_waivers",
   "hard_line_threshold": 1000,
+  "reassessment_line_thresholds": {
+    "test_today_a_share_selection_runner.py": 7000
+  },
   "exemptions": {
     "test_a_share_selection_scripts.py": {
       "reason": "Core CLI behavior shares frame builders and artifact assertions across validation and scoring scenarios.",
@@ -36,7 +39,7 @@
     "test_today_a_share_selection_runner.py": {
       "reason": "Runner integration scenarios share command executors, output fixtures, and failure cleanup assertions across the same public CLI.",
       "split_boundary": "Separate input, provider, recovery, provenance, and output closure scenarios after extracting runner executor support.",
-      "reassess_when": "a runner option, provider, or output artifact is added"
+      "reassess_when": "a runner option, provider, or output artifact is added, or this file reaches 7000 lines"
     }
   },
   "reassessments": {
@@ -68,7 +71,7 @@
       "assessed_on": "2026-07-15",
       "trigger": "CI runtime review found the cohesive runner suite was the dominant serial shard bottleneck.",
       "decision": "Keep shared integration fixtures in one source file and execute deterministic method-level shards; physical splitting remains deferred until runner executor support is extracted.",
-      "next_trigger": "a runner option, provider, or output artifact is added"
+      "next_trigger": "a runner option, provider, or output artifact is added, or this file reaches 7000 lines"
     }
   }
 }

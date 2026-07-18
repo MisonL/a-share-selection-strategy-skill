@@ -153,6 +153,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
             "probe_external_source_stability.py": {
                 "--output-dir",
                 "--summary-output",
+                "--archive-dir",
                 "--iterations",
                 "--eastmoney-pages",
                 "--eastmoney-retry-interval-seconds",
@@ -447,6 +448,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "long_term_stability_claim=not_proven",
                 "--pytdx-host",
                 "--zzshare-symbols",
+                "Price outputs are never archived",
             ],
         }
         for script_name, expected_texts in cases.items():

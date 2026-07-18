@@ -103,6 +103,43 @@ SENSITIVE_COMPACT_QUERY_KEY_PHRASES = {
     "accesskey",
     "apikey",
 }
+SENSITIVE_MAPPING_VALUE_KEYS = {
+    "access_key",
+    "access_token",
+    "api_key",
+    "apikey",
+    "authorization",
+    "bearer_token",
+    "client_secret",
+    "cookie",
+    "credential",
+    "credentials",
+    "id_token",
+    "key",
+    "password",
+    "passphrase",
+    "private_key",
+    "proxy_authorization",
+    "refresh_token",
+    "secret",
+    "session",
+    "session_id",
+    "set_cookie",
+    "sig",
+    "signature",
+    "token",
+}
+SENSITIVE_MAPPING_VALUE_KEY_COMPONENTS = {
+    "authorization",
+    "cookie",
+    "credential",
+    "password",
+    "passphrase",
+    "secret",
+    "session",
+    "signature",
+    "token",
+}
 
 
 def sanitize_command(command: list[Any]) -> list[str]:
@@ -239,6 +276,30 @@ def is_sensitive_query_key(key: str) -> bool:
         or any(phrase in normalized for phrase in SENSITIVE_QUERY_KEY_PHRASES)
         or any(phrase in compact for phrase in SENSITIVE_COMPACT_QUERY_KEY_PHRASES)
     )
+
+
+def is_sensitive_mapping_value_key(key: object) -> bool:
+    if not isinstance(key, str):
+        return False
+    normalized = normalize_query_key(key)
+    return (
+        normalized in SENSITIVE_MAPPING_VALUE_KEYS
+        or is_sensitive_query_key(key)
+        or bool(set(normalized.split("_")) & SENSITIVE_MAPPING_VALUE_KEY_COMPONENTS)
+    )
+
+
+def sanitize_mapping_key(key: object) -> str:
+    raw_key = str(key)
+    sanitized = sanitize_text(raw_key)
+    if sanitized != raw_key:
+        return sanitized
+    normalized = normalize_query_key(raw_key)
+    if normalized in SENSITIVE_MAPPING_VALUE_KEYS or normalized == "token_configured":
+        return sanitized
+    if is_sensitive_mapping_value_key(raw_key):
+        return f"{REDACTED} key"
+    return sanitized
 
 
 def normalize_query_key(key: str) -> str:

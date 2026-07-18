@@ -7,12 +7,26 @@ import argparse
 from collections.abc import Callable
 from dataclasses import dataclass
 import json
+import math
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
+from lib.gates.external_source_evidence_archive import (
+    archive_evidence,
+    paths_overlap,
+    validate_archive_destination,
+    write_json,
+)
 from lib.fetch.pytdx_a_share import DEFAULT_HOST, DEFAULT_PORT
+from lib.selection_core.a_share_selection_command_safety import (
+    REDACTED,
+    is_sensitive_mapping_value_key,
+    sanitize_command,
+    sanitize_mapping_key,
+    sanitize_text,
+)
 
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -31,13 +45,53 @@ class SourceSpec:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     manifest = initial_manifest(args)
+    output_dir = Path(args.output_dir)
+    summary_output = Path(args.summary_output)
+    if args.archive_dir:
+        try:
+            validate_archive_destination(
+                Path(args.archive_dir),
+                output_dir,
+                summary_output,
+            )
+        except Exception as exc:  # noqa: BLE001
+            output_written, write_error = write_failure_summary(
+                manifest,
+                summary_output,
+                archive_dir=Path(args.archive_dir),
+            )
+            print(
+                "ERROR: code=archive_failed "
+                f"output_written={str(output_written).lower()} message={exc}"
+                f"{format_summary_write_error(write_error)}",
+                file=sys.stderr,
+            )
+            return 2
     try:
-        run_probe(args, output_dir=Path(args.output_dir), manifest=manifest, executor=run_command)
-        write_json(manifest, Path(args.summary_output))
+        run_probe(args, output_dir=output_dir, manifest=manifest, executor=run_command)
+        write_json(manifest, summary_output)
     except Exception as exc:  # noqa: BLE001
-        write_json(manifest, Path(args.summary_output))
-        print(f"ERROR: code=probe_failed output_written=true message={exc}", file=sys.stderr)
+        output_written, write_error = write_failure_summary(
+            manifest,
+            summary_output,
+            archive_dir=Path(args.archive_dir) if args.archive_dir else None,
+        )
+        print(
+            "ERROR: code=probe_failed "
+            f"output_written={str(output_written).lower()} message={exc}"
+            f"{format_summary_write_error(write_error)}",
+            file=sys.stderr,
+        )
         return 2
+    if args.archive_dir:
+        try:
+            archive_evidence(manifest, Path(args.archive_dir))
+        except Exception as exc:  # noqa: BLE001
+            print(
+                f"ERROR: code=archive_failed output_written=true message={exc}",
+                file=sys.stderr,
+            )
+            return 2
     errors = strict_errors(manifest)
     if errors:
         print_summary(manifest, prefix="ERROR_SUMMARY")
@@ -45,6 +99,33 @@ def main(argv: list[str] | None = None) -> int:
         return 3
     print_summary(manifest)
     return 0
+
+
+def write_failure_summary(
+    manifest: dict[str, Any],
+    summary_output: Path,
+    *,
+    archive_dir: Path | None,
+) -> tuple[bool, str | None]:
+    if archive_dir is not None:
+        try:
+            archive = archive_dir.resolve()
+            summary = summary_output.resolve()
+        except (OSError, RuntimeError):
+            return False, None
+        if paths_overlap(archive, summary):
+            return False, None
+    try:
+        write_json(manifest, summary_output)
+    except OSError as exc:
+        return False, str(exc)
+    return True, None
+
+
+def format_summary_write_error(write_error: str | None) -> str:
+    if write_error is None:
+        return ""
+    return f" summary_write_error={write_error}"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -71,13 +152,20 @@ def build_parser() -> argparse.ArgumentParser:
 def add_core_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--summary-output", required=True)
+    parser.add_argument(
+        "--archive-dir",
+        help=(
+            "Optional fresh directory for compact durable evidence: summary, metadata, "
+            "stdout, and stderr only. Price outputs are never archived."
+        ),
+    )
     parser.add_argument("--iterations", type=positive_int, default=3)
 
 
 def add_eastmoney_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--eastmoney-pages", type=positive_int, default=1)
     parser.add_argument("--eastmoney-page-size", type=positive_int, default=100)
-    parser.add_argument("--eastmoney-timeout-seconds", type=float, default=10.0)
+    parser.add_argument("--eastmoney-timeout-seconds", type=positive_float, default=10.0)
     parser.add_argument("--eastmoney-retries", type=non_negative_int, default=5)
     parser.add_argument(
         "--eastmoney-retry-interval-seconds",
@@ -131,7 +219,7 @@ def add_pytdx_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--pytdx-start-date", default="2026-01-01")
     parser.add_argument("--pytdx-end-date", default="2026-01-10")
-    parser.add_argument("--pytdx-timeout-seconds", type=float, default=10.0)
+    parser.add_argument("--pytdx-timeout-seconds", type=positive_float, default=10.0)
     parser.add_argument("--pytdx-max-pages", type=positive_int, default=1)
 
 
@@ -139,13 +227,13 @@ def add_yfinance_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--yfinance-symbols", default="AAPL,MSFT")
     parser.add_argument("--yfinance-start-date", default="2024-01-01")
     parser.add_argument("--yfinance-end-date", default="2026-05-29")
-    parser.add_argument("--yfinance-timeout-seconds", type=float, default=10.0)
+    parser.add_argument("--yfinance-timeout-seconds", type=positive_float, default=10.0)
 
 
 def add_command_timeout_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--command-timeout-seconds",
-        type=float,
+        type=non_negative_float,
         default=120.0,
         help="Maximum seconds for each fetch command. Use 0 to disable.",
     )
@@ -162,7 +250,7 @@ def add_zzshare_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--zzshare-symbols", default="000001,600000")
     parser.add_argument("--zzshare-start-date", default="2024-01-01")
     parser.add_argument("--zzshare-end-date", default="2026-05-29")
-    parser.add_argument("--zzshare-timeout-seconds", type=float, default=10.0)
+    parser.add_argument("--zzshare-timeout-seconds", type=positive_float, default=10.0)
     parser.add_argument(
         "--zzshare-request-interval-seconds",
         type=non_negative_float,
@@ -188,8 +276,15 @@ def non_negative_int(value: str) -> int:
 
 def non_negative_float(value: str) -> float:
     parsed = float(value)
-    if parsed < 0:
-        raise argparse.ArgumentTypeError("value must be non-negative")
+    if not math.isfinite(parsed) or parsed < 0:
+        raise argparse.ArgumentTypeError("value must be a finite non-negative number")
+    return parsed
+
+
+def positive_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise argparse.ArgumentTypeError("value must be a finite positive number")
     return parsed
 
 
@@ -225,6 +320,8 @@ def run_probe(args: argparse.Namespace, *, output_dir: Path, manifest: dict[str,
 
 def command_timeout(args: argparse.Namespace) -> float | None:
     timeout = float(args.command_timeout_seconds)
+    if not math.isfinite(timeout) or timeout < 0:
+        raise ValueError("command timeout must be a finite non-negative number")
     if timeout <= 0:
         return None
     return timeout
@@ -426,16 +523,60 @@ def source_record(
     passed = result.returncode == 0 and all(item["passed"] for item in required_checks(checks))
     return {
         "source": spec.name,
-        "command": spec.command,
+        "command": sanitize_command(spec.command),
         "returncode": result.returncode,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
+        "stdout": sanitize_text(decode_timeout_output(result.stdout)),
+        "stderr": sanitize_text(decode_timeout_output(result.stderr)),
         "output": str(spec.output_path),
         "metadata_output": str(spec.metadata_path),
-        "metadata": metadata,
+        "metadata": sanitize_persisted_value(metadata),
         "checks": checks,
         "passed": passed,
     }
+
+
+def sanitize_persisted_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return sanitize_text(value)
+    if isinstance(value, list):
+        return [sanitize_persisted_value(item) for item in value]
+    if isinstance(value, dict):
+        return sanitize_persisted_mapping(value)
+    return value
+
+
+def sanitize_persisted_mapping(value: dict[Any, Any]) -> dict[str, Any]:
+    entries = []
+    for key, item in value.items():
+        raw_key = str(key)
+        sanitized_key = sanitize_mapping_key(raw_key)
+        sanitized_value = (
+            REDACTED
+            if sensitive_persisted_mapping_value(raw_key, item)
+            else sanitize_persisted_value(item)
+        )
+        entries.append((sanitized_key, raw_key, sanitized_value))
+    entries.sort(key=lambda entry: (entry[0], entry[1]))
+
+    sanitized: dict[str, Any] = {}
+    for sanitized_key, _raw_key, sanitized_value in entries:
+        sanitized[unique_persisted_mapping_key(sanitized_key, sanitized)] = sanitized_value
+    return sanitized
+
+
+def sensitive_persisted_mapping_value(key: str, value: Any) -> bool:
+    if key == "token_configured" and isinstance(value, bool):
+        return False
+    return is_sensitive_mapping_value_key(key)
+
+
+def unique_persisted_mapping_key(key: str, existing: dict[str, Any]) -> str:
+    candidate = key
+    duplicate_number = 2
+    while candidate in existing:
+        candidate = f"{key} [duplicate {duplicate_number}]"
+        duplicate_number += 1
+    return candidate
 
 
 def source_checks(source: str, metadata: dict[str, Any], command: list[str] | None = None) -> list[dict[str, Any]]:
@@ -600,11 +741,6 @@ def initial_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "results": [],
         "summary": {},
     }
-
-
-def write_json(data: dict[str, Any], path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
 
 
 def print_summary(manifest: dict[str, Any], prefix: str = "OK") -> None:

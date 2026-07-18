@@ -141,7 +141,7 @@ prediction-derived 输入必须包含：
 python3 validate_skill_changes.py
 ```
 
-常规验证子进程默认最多运行 600 秒；需要调整时显式传入 `--command-timeout-seconds N`。Python 模块可用性探针使用 `min(N, 10)` 秒，避免轻量导入检查长时间阻塞；自定义小于 10 秒的值仍会收紧探针。任何超时都会使门禁失败并输出对应命令和秒数，不会静默跳过。
+常规验证子进程默认最多运行 900 秒；需要调整时显式传入 `--command-timeout-seconds N`。Python 模块可用性探针使用 `min(N, 10)` 秒，避免轻量导入检查长时间阻塞；自定义小于 10 秒的值仍会收紧探针。任何超时都会使门禁失败并输出对应命令和秒数；在 POSIX 上会以 `SIGTERM` 后 `SIGKILL` 清理验证器创建的新会话进程组，即使主进程先退出也不会静默跳过或遗留同组后台测试。
 
 默认 `--dependency-profile latest` 使用当前可解析的最新兼容 `pandas/numpy/pyarrow` 运行完整测试，用于发现上游兼容性漂移。需要在本机精确复现 GitHub CI 的 Python 3.11 直接依赖组合时运行：
 
@@ -156,6 +156,14 @@ python3 validate_skill_changes.py --dependency-profile ci
 该入口只覆盖本地仓库门禁，不证明真实行情、真实 prediction、券商订单或真实回测门禁通过。需要拆开执行或替换本机 `quick_validate.py` 时，使用 [runbook 验证命令](skills/a-share-selection-strategy/instructions/runbook.md#验证命令)。
 
 CI 使用 `tests/run_unittest_shard.py` 按职责分配普通测试文件，并对 `test_today_a_share_selection_runner.py` 做方法级互斥分片；本地统一门禁仍以完整 `python -m unittest discover -s tests -v` 为准。分片脚本会校验覆盖全集、无重复，并在测试文件或 runner 方法变化时拒绝静默漏测。
+
+迭代单个职责分片时可运行以下命令缩短本地反馈；它只用于开发反馈，交付前仍必须运行完整 `python3 validate_skill_changes.py --dependency-profile ci`：
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 uv run --python 3.11 \
+  --with-requirements skills/a-share-selection-strategy/constraints-ci.txt \
+  python tests/run_unittest_shard.py gates
+```
 
 GitHub Actions 每个分片 job 的总超时为 15 分钟，用于阻止依赖安装或测试异常无限等待；该上限不是性能 SLA。
 

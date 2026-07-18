@@ -13,10 +13,12 @@ from collections.abc import Callable
 import csv
 from dataclasses import dataclass
 import json
+import math
 import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import subprocess
 import sys
 
@@ -39,7 +41,7 @@ DEFAULT_QUICK_VALIDATE = (
     / "scripts"
     / "quick_validate.py"
 )
-DEFAULT_COMMAND_TIMEOUT_SECONDS = 600.0
+DEFAULT_COMMAND_TIMEOUT_SECONDS = 900.0
 COMMAND_TIMEOUT_SECONDS = DEFAULT_COMMAND_TIMEOUT_SECONDS
 SKILL_FRONTMATTER_ALLOWED_FIELDS = {
     "name",
@@ -121,7 +123,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=positive_float,
         default=DEFAULT_COMMAND_TIMEOUT_SECONDS,
         help=(
-            "Maximum seconds for each validator subprocess; defaults to 600. "
+            "Maximum seconds for each validator subprocess; defaults to 900. "
             "Module availability probes use the lower of this value and 10 seconds. "
             "Timeouts fail the validation gate explicitly."
         ),
@@ -140,8 +142,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 def positive_float(value: str) -> float:
     parsed = float(value)
-    if parsed <= 0:
-        raise argparse.ArgumentTypeError("timeout must be greater than zero")
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise argparse.ArgumentTypeError(
+            "timeout must be a finite number greater than zero"
+        )
     return parsed
 
 
@@ -427,6 +431,8 @@ def validate_exemption_records(records: dict[str, object], label: str) -> None:
 
 def check_skill_validate(args: argparse.Namespace) -> None:
     quick_validate = quick_validate_path(args.quick_validate)
+    env = os.environ.copy()
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
     run_command(
         [
             uv_command(),
@@ -436,7 +442,8 @@ def check_skill_validate(args: argparse.Namespace) -> None:
             "python",
             str(quick_validate),
             str(SKILL_ROOT),
-        ]
+        ],
+        env=env,
     )
 
 
@@ -590,19 +597,15 @@ def uv_command() -> str:
 def python_module_available(module: str) -> bool:
     command = [sys.executable, "-c", f"import {module}"]
     timeout_seconds = min(COMMAND_TIMEOUT_SECONDS, 10.0)
+    popen_options = process_popen_options()
+    popen_options.update(
+        {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    )
+    process = subprocess.Popen(command, **popen_options)
     try:
-        return (
-            subprocess.run(
-                command,
-                cwd=ROOT,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-                timeout=timeout_seconds,
-            ).returncode
-            == 0
-        )
+        return process.wait(timeout=timeout_seconds) == 0
     except subprocess.TimeoutExpired as exc:
+        terminate_process_group(process)
         rendered = " ".join(command)
         raise RuntimeError(
             "validation command timed out "
@@ -612,20 +615,81 @@ def python_module_available(module: str) -> bool:
 
 def run_command(command: list[str], env: dict[str, str] | None = None) -> None:
     print("$ " + " ".join(command))
+    process = subprocess.Popen(command, **process_popen_options(env))
     try:
-        subprocess.run(
-            command,
-            cwd=ROOT,
-            env=env,
-            check=True,
-            timeout=COMMAND_TIMEOUT_SECONDS,
-        )
+        returncode = process.wait(timeout=COMMAND_TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired as exc:
+        terminate_process_group(process)
         rendered = " ".join(command)
         raise RuntimeError(
             "validation command timed out "
             f"after {COMMAND_TIMEOUT_SECONDS:g} seconds: {rendered}"
         ) from exc
+    if returncode != 0:
+        raise subprocess.CalledProcessError(returncode, command)
+
+
+def process_group_supported() -> bool:
+    return os.name == "posix" and hasattr(os, "killpg")
+
+
+def process_popen_options(env: dict[str, str] | None = None) -> dict[str, object]:
+    options: dict[str, object] = {"cwd": ROOT, "env": env}
+    if process_group_supported():
+        options["start_new_session"] = True
+    return options
+
+
+def wait_for_process(process: subprocess.Popen[object], timeout: float = 5.0) -> bool:
+    try:
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return False
+    except (ChildProcessError, OSError) as exc:
+        print(f"WARNING: validation timeout cleanup wait failed: {exc}", file=sys.stderr)
+        return False
+    return True
+
+
+def signal_process_group(process: subprocess.Popen[object], sig: signal.Signals) -> bool:
+    try:
+        os.killpg(process.pid, sig)
+    except ProcessLookupError:
+        return False
+    except OSError as exc:
+        print(f"WARNING: validation timeout cleanup signal failed: {exc}", file=sys.stderr)
+        return False
+    return True
+
+
+def terminate_direct_process(process: subprocess.Popen[object]) -> None:
+    try:
+        process.terminate()
+    except (ChildProcessError, OSError) as exc:
+        print(f"WARNING: validation timeout cleanup terminate failed: {exc}", file=sys.stderr)
+    else:
+        if wait_for_process(process):
+            return
+    try:
+        process.kill()
+    except (ChildProcessError, OSError) as exc:
+        print(f"WARNING: validation timeout cleanup kill failed: {exc}", file=sys.stderr)
+        return
+    wait_for_process(process)
+
+
+def terminate_process_group(process: subprocess.Popen[object]) -> None:
+    if not process_group_supported():
+        terminate_direct_process(process)
+        return
+    signal_process_group(process, signal.SIGTERM)
+    leader_exited = wait_for_process(process)
+    # The leader can exit on SIGTERM while descendants in its new session keep
+    # running. SIGKILL the group regardless so those descendants cannot leak.
+    signal_process_group(process, signal.SIGKILL)
+    if leader_exited or wait_for_process(process):
+        return
+    terminate_direct_process(process)
 
 
 if __name__ == "__main__":

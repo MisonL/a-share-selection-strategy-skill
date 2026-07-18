@@ -31,6 +31,11 @@
       "split_boundary": "Separate retry planning, clean-pool merge, and bucket execution after moving shared bucket fixtures to support code.",
       "reassess_when": "another incremental provider or recovery state is added, or this file reaches 2200 lines"
     },
+    "test_external_source_stability_probe.py": {
+      "reason": "Probe execution, durable archive integrity, and persisted redaction scenarios share deterministic source specifications and manifest fixtures.",
+      "split_boundary": "Separate archive integrity and redaction persistence scenarios after moving shared probe metadata fixtures to support code.",
+      "reassess_when": "another archive evidence or redaction contract is added, or this file reaches 1200 lines"
+    },
     "test_today_a_share_html_report.py": {
       "reason": "Static report sections share candidate fixtures, localization assertions, and consumer-view helpers imported by disclosure tests.",
       "split_boundary": "Separate localization, candidate tables, K-line data, and disclosure views after stabilizing a shared report fixture API.",

@@ -19,7 +19,7 @@ sys.path.insert(0, str(SCRIPTS))
 import prepare_clean_history_pool  # noqa: E402
 from lib.gates.clean_history_pool import derive_short_history_data  # noqa: E402
 from lib.selection_core.a_share_selection_command_safety import (  # noqa: E402
-    SENSITIVE_FLAG_NAMES,
+    classify_sensitive_flag,
     sanitize_command,
     sanitize_text,
 )
@@ -449,7 +449,7 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
             [
                 flag
                 for flag in sensitive_flags
-                if flag.lower() not in SENSITIVE_FLAG_NAMES
+                if not classify_sensitive_flag(flag)[0]
             ],
         )
 

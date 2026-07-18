@@ -22,21 +22,27 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
 REDACTED = "[REDACTED]"
-SENSITIVE_FLAG_NAMES = {
-    "--api-key",
-    "--apikey",
-    "--authorization",
-    "--bearer-token",
-    "--client-secret",
-    "--password",
-    "--secret",
-    "--token",
-}
 SENSITIVE_KEY_VALUE_RE = re.compile(
     r"""(?ix)
     (?P<prefix>
         ["']?
-        [A-Z0-9_-]*(?:ACCESS[_-]?KEY|API[_-]?KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|SIGNATURE)[A-Z0-9_-]*
+        [A-Z0-9_-]*(?:
+            ACCESS[_-]?KEY
+            |API[_-]?KEY
+            |BEARER[_-]?TOKEN
+            |CLIENT[_-]?SECRET
+            |COOKIE
+            |CREDENTIAL
+            |ID[_-]?TOKEN
+            |PASSPHRASE
+            |PASSWORD
+            |PRIVATE[_-]?KEY
+            |REFRESH[_-]?TOKEN
+            |SECRET
+            |SESSION(?:[_-]?ID)?
+            |SIGNATURE
+            |TOKEN
+        )[A-Z0-9_-]*
         ["']?
         \s*[:=]\s*
     )
@@ -59,13 +65,67 @@ QUOTED_AUTHORIZATION_RE = re.compile(
     )
     """
 )
+QUOTED_COOKIE_QUOTED_VALUE_RE = re.compile(
+    r"""(?ix)
+    (?P<prefix>
+        ["'][A-Z0-9_-]*COOKIE[A-Z0-9_-]*["']
+        \s*[:=]\s*
+    )
+    (?P<value>
+        "(?:\\.|[^"\\])*"
+        |'(?:\\.|[^'\\])*'
+    )
+    """
+)
+QUOTED_COOKIE_BARE_VALUE_RE = re.compile(
+    r"""(?ix)
+    (?P<prefix>
+        ["'][A-Z0-9_-]*COOKIE[A-Z0-9_-]*["']
+        \s*[:=]
+    )
+    (?!\s*["'])
+    (?P<spacing>\s*)
+    (?:
+        (?P<value_with_closing>[^\r\n]*?(?:\r?\n[ \t]+[^\r\n]*?)*)
+        (?P<closing>[}\]]+)
+        (?=\s*(?:,\s*["'][^"']+["']\s*[:=]|\r?\n|$))
+        |
+        (?P<value>[^\r\n]*?(?:\r?\n[ \t]+[^\r\n]*?)*)
+        (?=\s*,\s*["'][^"']+["']\s*[:=]|\r?\n(?![ \t])|$)
+    )
+    """
+)
+UNQUOTED_COOKIE_HEADER_RE = re.compile(
+    r"""(?ix)
+    (?<!["'A-Z0-9_-])
+    (?P<prefix>
+        [A-Z0-9_-]*COOKIE[A-Z0-9_-]*
+        \s*:\s*
+    )
+    (?P<value>[^\r\n]*(?:\r?\n[ \t]+[^\r\n]*)*)
+    """
+)
+UNQUOTED_COOKIE_ASSIGNMENT_RE = re.compile(
+    r"""(?ix)
+    (?<!["'A-Z0-9_-])
+    (?P<prefix>
+        [A-Z0-9_-]*COOKIE[A-Z0-9_-]*
+        \s*=\s*
+    )
+    (?P<value>
+        [^\s;,\r\n]+(?:\s*=\s*[^\s;,\r\n]+)?
+        (?:\s*[;,]\s*[^\s;,\r\n]+(?:\s*=\s*[^\s;,\r\n]+)?)*
+        (?:\r?\n[ \t]+[^\r\n]*)*
+    )
+    """
+)
 AUTHORIZATION_RE = re.compile(
     r"(?i)\b(?P<prefix>(?:Proxy-)?Authorization\s*[:=]\s*)"
     r"(?P<value>[^\r\n]*?(?:\r?\n[ \t]+[^\r\n]*?)*)"
     r"(?=\s+(?:Proxy-)?Authorization\s*[:=]|\r?\n(?![ \t])|$)"
 )
 OPENAI_STYLE_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b")
-URL_RE = re.compile(r"https?://[^\s]+")
+URL_RE = re.compile(r"https?://[^\s]+", re.IGNORECASE)
 KNOWN_AUTHORIZATION_SCHEMES = {
     "apikey",
     "aws4-hmac-sha256",
@@ -101,7 +161,23 @@ SENSITIVE_QUERY_KEY_PHRASES = {
 }
 SENSITIVE_COMPACT_QUERY_KEY_PHRASES = {
     "accesskey",
+    "accesstoken",
     "apikey",
+    "bearertoken",
+    "clientsecret",
+    "cookie",
+    "credential",
+    "idtoken",
+    "passphrase",
+    "password",
+    "privatekey",
+    "proxyauthorization",
+    "refreshtoken",
+    "secret",
+    "sessionid",
+    "setcookie",
+    "signature",
+    "token",
 }
 SENSITIVE_MAPPING_VALUE_KEYS = {
     "access_key",
@@ -140,6 +216,48 @@ SENSITIVE_MAPPING_VALUE_KEY_COMPONENTS = {
     "signature",
     "token",
 }
+IDENTIFIER_CASE_BOUNDARY_RE = re.compile(
+    r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])"
+)
+SENSITIVE_COMPACT_MAPPING_VALUE_KEYS = {
+    key.replace("_", "") for key in SENSITIVE_MAPPING_VALUE_KEYS
+}
+SAFE_SENSITIVE_QUERY_KEY_NAMES = SENSITIVE_MAPPING_VALUE_KEYS | {
+    "access_key_id",
+    "x_amz_credential",
+    "x_amz_security_token",
+    "x_amz_signature",
+    "x_api_key",
+}
+SAFE_SENSITIVE_QUERY_KEY_COMPACT_NAMES = {
+    key.replace("_", "") for key in SAFE_SENSITIVE_QUERY_KEY_NAMES
+}
+SENSITIVE_COMMAND_FLAG_KEYS = SAFE_SENSITIVE_QUERY_KEY_NAMES | {
+    "auth_token",
+    "cookies",
+    "secret_key",
+    "session_token",
+}
+SENSITIVE_COMMAND_FLAG_COMPACT_NAMES = {
+    key.replace("_", "") for key in SENSITIVE_COMMAND_FLAG_KEYS
+}
+SENSITIVE_EMBEDDED_COMMAND_FLAG_PREFIXES = {
+    "accesskey",
+    "accesstoken",
+    "apikey",
+    "bearertoken",
+    "clientsecret",
+    "cookie",
+    "idtoken",
+    "privatekey",
+    "proxyauthorization",
+    "refreshtoken",
+    "secretkey",
+    "sessionid",
+    "sessiontoken",
+    "setcookie",
+    "authtoken",
+}
 
 
 def sanitize_command(command: list[Any]) -> list[str]:
@@ -152,21 +270,52 @@ def sanitize_command(command: list[Any]) -> list[str]:
             redact_next = False
             continue
         flag, separator, value = text.partition("=")
-        normalized = flag.lower()
-        if normalized in SENSITIVE_FLAG_NAMES:
+        sensitive_flag, embedded_name = classify_sensitive_flag(flag)
+        if sensitive_flag:
+            sanitized_flag = f"--{REDACTED} flag" if embedded_name else flag
             if separator:
-                sanitized.append(f"{flag}={REDACTED}")
+                sanitized.append(f"{sanitized_flag}={REDACTED}")
             else:
-                sanitized.append(text)
+                sanitized.append(sanitized_flag)
                 redact_next = True
             continue
         sanitized.append(sanitize_text(text))
     return sanitized
 
 
+def classify_sensitive_flag(flag: str) -> tuple[bool, bool]:
+    if not flag.startswith("--"):
+        return False, False
+    raw_key = flag.lstrip("-")
+    normalized = normalize_query_key(raw_key)
+    if normalized in SENSITIVE_COMMAND_FLAG_KEYS:
+        return True, False
+    compact = re.sub(r"[^a-z0-9]+", "", raw_key.lower())
+    if compact in SENSITIVE_COMMAND_FLAG_COMPACT_NAMES:
+        return True, False
+    embedded = any(
+        prefix in compact and compact != prefix
+        for prefix in SENSITIVE_EMBEDDED_COMMAND_FLAG_PREFIXES
+    )
+    return embedded, embedded
+
+
 def sanitize_text(text: str) -> str:
     sanitized = OPENAI_STYLE_KEY_RE.sub(REDACTED, text)
     sanitized = QUOTED_AUTHORIZATION_RE.sub(redact_sensitive_key_value, sanitized)
+    sanitized = QUOTED_COOKIE_QUOTED_VALUE_RE.sub(
+        redact_sensitive_key_value,
+        sanitized,
+    )
+    sanitized = QUOTED_COOKIE_BARE_VALUE_RE.sub(
+        redact_cookie_bare_value,
+        sanitized,
+    )
+    sanitized = UNQUOTED_COOKIE_HEADER_RE.sub(redact_cookie_header_value, sanitized)
+    sanitized = UNQUOTED_COOKIE_ASSIGNMENT_RE.sub(
+        redact_cookie_assignment_value,
+        sanitized,
+    )
     sanitized = AUTHORIZATION_RE.sub(
         redact_authorization_value,
         sanitized,
@@ -189,6 +338,30 @@ def redact_sensitive_key_value(match: re.Match[str]) -> str:
     if quote:
         return f"{match.group('prefix')}{quote}{REDACTED}{quote}"
     return f"{match.group('prefix')}{REDACTED}"
+
+
+def redact_cookie_header_value(match: re.Match[str]) -> str:
+    return f"{match.group('prefix')}{REDACTED}"
+
+
+def redact_cookie_bare_value(match: re.Match[str]) -> str:
+    closing = match.group("closing") or ""
+    return f"{match.group('prefix')}{match.group('spacing')}{REDACTED}{closing}"
+
+
+def redact_cookie_assignment_value(match: re.Match[str]) -> str:
+    if is_url_query_context(match):
+        return match.group(0)
+    return redact_cookie_header_value(match)
+
+
+def is_url_query_context(match: re.Match[str]) -> bool:
+    for url_match in URL_RE.finditer(match.string):
+        if not url_match.start() <= match.start() < url_match.end():
+            continue
+        offset = match.start() - url_match.start()
+        return offset > 0 and url_match.group(0)[offset - 1] in {"?", "&", "#"}
+    return False
 
 
 def sanitize_urls(text: str) -> str:
@@ -218,7 +391,8 @@ def sanitize_url_key_values(text: str) -> str:
     changed = False
     for key, value in pairs:
         if is_sensitive_query_key(key):
-            sanitized_pairs.append((key, REDACTED))
+            sanitized_key = sanitize_query_key(key)
+            sanitized_pairs.append((sanitized_key, REDACTED))
             changed = True
             continue
         sanitized_value = sanitize_nested_query_value(value)
@@ -266,13 +440,28 @@ def sanitize_url_netloc(netloc: str) -> str:
     return f"{REDACTED}@{host}"
 
 
+def sanitize_query_key(key: str) -> str:
+    normalized = normalize_query_key(key)
+    compact = re.sub(r"[^a-z0-9]+", "", key.lower())
+    if (
+        normalized in SAFE_SENSITIVE_QUERY_KEY_NAMES
+        or compact in SAFE_SENSITIVE_QUERY_KEY_COMPACT_NAMES
+    ):
+        return key
+    return f"{REDACTED} key"
+
+
 def is_sensitive_query_key(key: str) -> bool:
     normalized = normalize_query_key(key)
     compact = re.sub(r"[^a-z0-9]+", "", key.lower())
     components = set(normalized.split("_"))
     return (
         normalized in SENSITIVE_QUERY_KEYS
+        or normalized in SENSITIVE_MAPPING_VALUE_KEYS
+        or compact in SENSITIVE_QUERY_KEYS
+        or compact in SENSITIVE_COMPACT_MAPPING_VALUE_KEYS
         or bool(components & SENSITIVE_QUERY_KEY_COMPONENTS)
+        or bool(components & SENSITIVE_MAPPING_VALUE_KEY_COMPONENTS)
         or any(phrase in normalized for phrase in SENSITIVE_QUERY_KEY_PHRASES)
         or any(phrase in compact for phrase in SENSITIVE_COMPACT_QUERY_KEY_PHRASES)
     )
@@ -282,8 +471,10 @@ def is_sensitive_mapping_value_key(key: object) -> bool:
     if not isinstance(key, str):
         return False
     normalized = normalize_query_key(key)
+    compact = re.sub(r"[^a-z0-9]+", "", key.lower())
     return (
         normalized in SENSITIVE_MAPPING_VALUE_KEYS
+        or compact in SENSITIVE_COMPACT_MAPPING_VALUE_KEYS
         or is_sensitive_query_key(key)
         or bool(set(normalized.split("_")) & SENSITIVE_MAPPING_VALUE_KEY_COMPONENTS)
     )
@@ -303,4 +494,5 @@ def sanitize_mapping_key(key: object) -> str:
 
 
 def normalize_query_key(key: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", key.lower()).strip("_")
+    separated = IDENTIFIER_CASE_BOUNDARY_RE.sub("_", key)
+    return re.sub(r"[^a-z0-9]+", "_", separated.lower()).strip("_")

@@ -456,26 +456,76 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
                     "fetch_yfinance_ohlcv.py",
                     "--token",
                     "probe-secret-token",
-                    "--http-url=https://example.test/data?api_key=probe-secret-key",
+                    "--privateKey",
+                    "probe-secret-private-command",
+                    "--clientsecret",
+                    "probe-secret-compact-client-command",
+                    "--refreshtoken=probe-secret-compact-refresh-command",
+                    "--sessionid",
+                    "probe-secret-compact-session-command",
+                    "--setcookie=probe-secret-compact-cookie-command",
+                    "--secretkey",
+                    "probe-secret-compact-secret-key-command",
+                    "--authtoken=probe-secret-compact-auth-token-command",
+                    "--sessiontoken",
+                    "probe-secret-compact-session-token-command",
+                    "--clientSecretprobe-secret-command-flag",
+                    "probe-secret-embedded-command-value",
+                    "--http-url=https://example.test/data?api_key=probe-secret-key&privateKey=probe-secret-private-url&sessionId=probe-secret-session-url&clientSecretprobesecretvalue=probe-secret-query-key&set_cookie=probe-secret-query-cookie",
                 ],
                 metadata_path=root / "metadata.json",
                 output_path=root / "prices.csv",
             )
             metadata = valid_metadata("yfinance")
-            metadata["provider_error"] = "Authorization: Bearer probe-secret-bearer"
+            metadata["provider_error"] = (
+                "Authorization: Bearer probe-secret-bearer\n"
+                "Cookie: session=probe-secret-cookie-session; "
+                "theme=probe-secret-cookie-theme\n"
+                "set_cookie: session=probe-secret-snake-cookie-session; "
+                "theme=probe-secret-snake-cookie-theme\n"
+                "  continuation=probe-secret-snake-cookie-continuation"
+                "\n\"Cookie\": session=probe-secret-quoted-cookie-session; "
+                "theme=probe-secret-quoted-cookie-theme, \"safe\": \"retained\""
+            )
             metadata["Authorization"] = "Bearer probe-secret-header"
             metadata["api_key"] = "probe-secret-api-key"
+            metadata["clientSecret"] = "probe-secret-client-secret"
+            metadata["PrivateKey"] = "probe-secret-private-key"
+            metadata["set_cookie"] = "probe-secret-metadata-set-cookie"
+            metadata["cookies"] = "probe-secret-metadata-cookies"
+            metadata["clientSecretprobesecretvalue"] = "probe-secret-metadata-key"
             metadata["Authorization: Bearer probe-secret-metadata-key"] = "metadata"
             metadata["api_key_probe-secret-metadata-key"] = "metadata"
             metadata["nested"] = {
                 "url": "https://example.test/?token=probe-secret-url",
                 "token": "probe-secret-nested-token",
+                "bearerToken": "probe-secret-bearer-token",
+                "refreshToken": "probe-secret-refresh-token",
+                "sessionId": "probe-secret-session-id",
             }
             result = subprocess.CompletedProcess(
                 spec.command,
                 0,
-                stdout="API_KEY=probe-secret-stdout",
-                stderr="password=probe-secret-stderr",
+                stdout=(
+                    "API_KEY=probe-secret-stdout "
+                    "privateKey=probe-secret-private-stdout "
+                    "Cookie=session=probe-secret-cookie-assignment; "
+                    "theme=probe-secret-cookie-assignment-theme\n"
+                    "cookies=one=probe-secret-stdout-cookie-one, "
+                    "two=probe-secret-stdout-cookie-two\n"
+                    "Cookie=session=probe-secret-stdout-ampersand-one&"
+                    "probe-secret-stdout-ampersand-two\n"
+                    "\"cookies\": one=probe-secret-stdout-quoted-cookie-one, "
+                    "two=probe-secret-stdout-quoted-cookie-two, \"safe\": \"retained\""
+                ),
+                stderr=(
+                    "password=probe-secret-stderr "
+                    "sessionId=probe-secret-session-stderr "
+                    "Set-Cookie: refresh=probe-secret-set-cookie; HttpOnly\n"
+                    "Set_Cookie: refresh=probe-secret-stderr-snake-cookie; HttpOnly\n"
+                    "'Set_Cookie': refresh=probe-secret-stderr-quoted-cookie; "
+                    "theme=probe-secret-stderr-quoted-cookie-theme, 'safe': 'retained'"
+                ),
             )
 
             record = probe.source_record(spec, result, metadata)
@@ -490,15 +540,59 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
 
         for secret in (
             "probe-secret-token",
+            "probe-secret-private-command",
+            "probe-secret-compact-client-command",
+            "probe-secret-compact-refresh-command",
+            "probe-secret-compact-session-command",
+            "probe-secret-compact-cookie-command",
+            "probe-secret-compact-secret-key-command",
+            "probe-secret-compact-auth-token-command",
+            "probe-secret-compact-session-token-command",
+            "probe-secret-command-flag",
+            "probe-secret-embedded-command-value",
             "probe-secret-key",
+            "probe-secret-private-url",
+            "probe-secret-session-url",
+            "clientSecretprobesecretvalue",
+            "probe-secret-query-key",
+            "probe-secret-query-cookie",
             "probe-secret-bearer",
+            "probe-secret-cookie-session",
+            "probe-secret-cookie-theme",
             "probe-secret-header",
             "probe-secret-api-key",
+            "probe-secret-client-secret",
+            "probe-secret-private-key",
+            "probe-secret-metadata-set-cookie",
+            "probe-secret-metadata-cookies",
+            "probe-secret-metadata-key",
             "probe-secret-metadata-key",
             "probe-secret-url",
             "probe-secret-nested-token",
+            "probe-secret-bearer-token",
+            "probe-secret-refresh-token",
+            "probe-secret-session-id",
             "probe-secret-stdout",
+            "probe-secret-private-stdout",
+            "probe-secret-cookie-assignment",
+            "probe-secret-cookie-assignment-theme",
+            "probe-secret-stdout-cookie-one",
+            "probe-secret-stdout-cookie-two",
+            "probe-secret-stdout-ampersand-one",
+            "probe-secret-stdout-ampersand-two",
             "probe-secret-stderr",
+            "probe-secret-session-stderr",
+            "probe-secret-set-cookie",
+            "probe-secret-stderr-snake-cookie",
+            "probe-secret-snake-cookie-session",
+            "probe-secret-snake-cookie-theme",
+            "probe-secret-snake-cookie-continuation",
+            "probe-secret-quoted-cookie-session",
+            "probe-secret-quoted-cookie-theme",
+            "probe-secret-stdout-quoted-cookie-one",
+            "probe-secret-stdout-quoted-cookie-two",
+            "probe-secret-stderr-quoted-cookie",
+            "probe-secret-stderr-quoted-cookie-theme",
         ):
             with self.subTest(secret=secret):
                 self.assertNotIn(secret, persisted)

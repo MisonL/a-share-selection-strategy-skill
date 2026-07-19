@@ -39,7 +39,7 @@
 | `prepare_incremental_history_plan.py` | `gate_backtest_cli` | `gate_backtest` | 638 | Prepare a bounded, resumable incremental history fetch plan from universe and metadata. | 保留: public planning CLI，只生成增量计划，不证明抓取成功。 |
 | `execute_incremental_history_plan.py` | `gate_backtest_cli` | `gate_backtest` | 306 | Execute one explicit provider across bounded plan buckets and persist resumable artifacts. | 保留: public execution CLI，不自动切源，不证明全 A 完成。 |
 | `probe_baostock_limit_fields.py` | `gate_backtest_cli` | `gate_backtest` | 421 | Probe baostock field availability without modeling limit rules. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
-| `probe_external_source_stability.py` | `gate_backtest_cli` | `gate_backtest` | 759 | Run repeated external source probes through the stable fetch CLIs. | 保留: public gate/backtest CLI，输出是诊断或门禁证据；紧凑归档实现位于 `lib/gates/`，不扩大 CLI 职责。 |
+| `probe_external_source_stability.py` | `gate_backtest_cli` | `gate_backtest` | 761 | Run repeated external source probes through the stable fetch CLIs. | 保留: public gate/backtest CLI，输出是诊断或门禁证据；紧凑归档实现位于 `lib/gates/`，不扩大 CLI 职责。 |
 | `run_baostock_walk_forward.py` | `gate_backtest_cli` | `gate_backtest` | 692 | Run the baostock prediction-derived walk-forward gate through existing CLIs. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
 | `run_today_a_share_selection.py` | `stable_cli` | `selection_core` | 1309 | Run an auditable local A-share selection workflow through existing CLIs. | 保留: stable public CLI，用户命令兼容路径；full-A provenance 细节由 internal runner helper 实现。 |
 | `score_candidates.py` | `stable_cli` | `selection_core` | 532 | Score stock candidates from local OHLCV data. | 保留: stable public CLI，用户命令兼容路径。 |

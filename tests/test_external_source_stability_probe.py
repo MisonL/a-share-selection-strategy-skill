@@ -509,6 +509,7 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
                 stdout=(
                     "API_KEY=probe-secret-stdout "
                     "privateKey=probe-secret-private-stdout "
+                    "--tokenConfigured true "
                     "Cookie=session=probe-secret-cookie-assignment; "
                     "theme=probe-secret-cookie-assignment-theme\n"
                     "cookies=one=probe-secret-stdout-cookie-one, "
@@ -521,6 +522,7 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
                 stderr=(
                     "password=probe-secret-stderr "
                     "sessionId=probe-secret-session-stderr "
+                    "--token_configured false "
                     "Set-Cookie: refresh=probe-secret-set-cookie; HttpOnly\n"
                     "Set_Cookie: refresh=probe-secret-stderr-snake-cookie; HttpOnly\n"
                     "'Set_Cookie': refresh=probe-secret-stderr-quoted-cookie; "
@@ -529,6 +531,8 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
             )
 
             record = probe.source_record(spec, result, metadata)
+            self.assertIn("--tokenConfigured [REDACTED]", record["stdout"])
+            self.assertIn("--token_configured [REDACTED]", record["stderr"])
             spec.metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
             archive_dir = root / "durable-evidence"
             archive.archive_evidence({"results": [record]}, archive_dir)

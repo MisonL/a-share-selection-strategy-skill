@@ -22,6 +22,9 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
 REDACTED = "[REDACTED]"
+# Free text has no schema, so this intentionally favors false positives over
+# leaking a credential. Structured metadata may preserve only documented bool
+# capability fields at its own boundary.
 SENSITIVE_KEY_VALUE_RE = re.compile(
     r"""(?ix)
     (?P<prefix>
@@ -50,6 +53,19 @@ SENSITIVE_KEY_VALUE_RE = re.compile(
         "(?:\\.|[^"\\])*"
         |'(?:\\.|[^'\\])*'
         |[^\s&,}]+
+    )
+    """
+)
+TOKEN_CONFIGURED_FLAG_VALUE_RE = re.compile(
+    r"""(?ix)
+    (?P<prefix>
+        --TOKEN(?:[_-]?CONFIGURED|CONFIGURED)\b
+        [ \t]+
+    )
+    (?P<value>
+        "(?:\\.|[^"\\])*"
+        |'(?:\\.|[^'\\])*'
+        |(?!--)[^\s,;&}\]]+
     )
     """
 )
@@ -237,6 +253,7 @@ SENSITIVE_COMMAND_FLAG_KEYS = SAFE_SENSITIVE_QUERY_KEY_NAMES | {
     "cookies",
     "secret_key",
     "session_token",
+    "token_configured",
 }
 SENSITIVE_COMMAND_FLAG_COMPACT_NAMES = {
     key.replace("_", "") for key in SENSITIVE_COMMAND_FLAG_KEYS
@@ -302,6 +319,10 @@ def classify_sensitive_flag(flag: str) -> tuple[bool, bool]:
 
 def sanitize_text(text: str) -> str:
     sanitized = OPENAI_STYLE_KEY_RE.sub(REDACTED, text)
+    sanitized = TOKEN_CONFIGURED_FLAG_VALUE_RE.sub(
+        redact_sensitive_key_value,
+        sanitized,
+    )
     sanitized = QUOTED_AUTHORIZATION_RE.sub(redact_sensitive_key_value, sanitized)
     sanitized = QUOTED_COOKIE_QUOTED_VALUE_RE.sub(
         redact_sensitive_key_value,

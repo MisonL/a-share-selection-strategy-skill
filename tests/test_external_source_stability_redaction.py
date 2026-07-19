@@ -90,6 +90,66 @@ class ExternalSourceStabilityRedactionTests(unittest.TestCase):
             with self.subTest(secret=secret):
                 self.assertNotIn(secret, str(sanitized))
 
+    def test_only_structured_bool_token_configured_preserves_capability_state(
+        self,
+    ) -> None:
+        self.assertEqual(
+            "tokenConfigured=[REDACTED] token_configured=[REDACTED]",
+            sanitize_text("tokenConfigured=true token_configured=false"),
+        )
+        self.assertEqual(
+            "--tokenConfigured [REDACTED] "
+            "--token_configured [REDACTED] "
+            "--token-configured [REDACTED]",
+            sanitize_text(
+                "--tokenConfigured true "
+                "--token_configured false "
+                "--token-configured probe-secret-free-text"
+            ),
+        )
+        self.assertEqual(
+            {"tokenConfigured": True, "token_configured": False},
+            probe.sanitize_persisted_value(
+                {"tokenConfigured": True, "token_configured": False}
+            ),
+        )
+        self.assertEqual(
+            {
+                "tokenConfigured": "[REDACTED]",
+                "token_configured": "[REDACTED]",
+            },
+            probe.sanitize_persisted_value(
+                {
+                    "tokenConfigured": "probe-secret-not-a-bool",
+                    "token_configured": "probe-secret-not-a-bool-either",
+                }
+            ),
+        )
+
+    def test_command_redacts_token_configured_capability_flags(self) -> None:
+        command = [
+            "tool",
+            "--tokenConfigured",
+            "true",
+            "--token_configured",
+            "false",
+            "--token-configured=true",
+            "--tokenConfigured=false",
+        ]
+
+        self.assertEqual(
+            [
+                "tool",
+                "--tokenConfigured",
+                "[REDACTED]",
+                "--token_configured",
+                "[REDACTED]",
+                "--token-configured=[REDACTED]",
+                "--tokenConfigured=[REDACTED]",
+            ],
+            sanitize_command(command),
+        )
+
     def test_persisted_mapping_redacts_embedded_credential_key_names(self) -> None:
         values = {
             "apiKey_probe-secret-key-name": "probe-secret-api-value",

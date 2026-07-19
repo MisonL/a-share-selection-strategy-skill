@@ -566,6 +566,8 @@ def sanitize_persisted_mapping(value: dict[Any, Any]) -> dict[str, Any]:
 
 
 def sensitive_persisted_mapping_value(key: str, value: Any) -> bool:
+    # This narrow exception applies only to parsed metadata mappings. Free text
+    # remains fail-closed because a token-like key cannot prove its value is safe.
     if normalize_query_key(key) == "token_configured" and isinstance(value, bool):
         return False
     return is_sensitive_mapping_value_key(key)

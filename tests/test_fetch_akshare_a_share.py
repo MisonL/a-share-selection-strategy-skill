@@ -8,6 +8,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -93,6 +94,14 @@ class FetchAkshareAShareTests(unittest.TestCase):
         self.assertEqual([], saved["failed_symbols"])
         self.assertEqual([], saved["fallback_errors"])
         self.assertEqual("stock_zh_a_hist", saved["symbols"][0]["provider"])
+        self.assertEqual("external_fetch", saved["source_type"])
+        self.assertEqual("akshare_history_fetch", saved["source_scope"])
+        self.assertTrue(saved["real_market_data"])
+        self.assertEqual(fetcher.CLAIM_BOUNDARY, saved["source_claim_boundary"])
+        self.assertEqual(fetcher.DATA_SOURCE_NOTE, saved["data_source_note"])
+        self.assertIn(
+            f"source_claim_boundary={fetcher.CLAIM_BOUNDARY}", stdout.getvalue()
+        )
         self.assertEqual("000001", frame["symbol"].iloc[0])
 
     def test_cli_falls_back_to_daily_when_hist_fails_without_strict_gate(self) -> None:
@@ -168,6 +177,11 @@ class FetchAkshareAShareTests(unittest.TestCase):
         self.assertEqual(1, len(saved["fallback_errors"]))
         self.assertFalse(saved["output_written"])
         self.assertTrue(saved["metadata_output_written"])
+        self.assertEqual("external_fetch", saved["source_type"])
+        self.assertEqual("akshare_history_fetch", saved["source_scope"])
+        self.assertTrue(saved["real_market_data"])
+        self.assertEqual(fetcher.CLAIM_BOUNDARY, saved["source_claim_boundary"])
+        self.assertEqual(fetcher.DATA_SOURCE_NOTE, saved["data_source_note"])
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn("fallback_errors=1", stderr.getvalue())
 
@@ -265,6 +279,45 @@ class FetchAkshareAShareTests(unittest.TestCase):
         self.assertTrue(saved["metadata_output_written"])
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn("fallback_errors=1", stderr.getvalue())
+
+    def test_cli_fetch_failure_removes_stale_metadata_and_discloses_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "prices.csv"
+            metadata = Path(tmpdir) / "metadata.json"
+            output.write_text("stale prices\n", encoding="utf-8")
+            metadata.write_text('{"stale": true}\n', encoding="utf-8")
+            stderr = StringIO()
+
+            with patch.object(
+                fetcher,
+                "fetch_prices",
+                side_effect=RuntimeError("upstream unavailable"),
+            ), redirect_stderr(stderr):
+                code = fetcher.main(
+                    [
+                        "--symbols",
+                        "000001",
+                        "--start-date",
+                        "2026-05-01",
+                        "--end-date",
+                        "2026-05-29",
+                        "--output",
+                        str(output),
+                        "--metadata-output",
+                        str(metadata),
+                    ]
+                )
+
+            output_exists = output.exists()
+            metadata_exists = metadata.exists()
+
+        self.assertEqual(2, code)
+        self.assertFalse(output_exists)
+        self.assertFalse(metadata_exists)
+        self.assertIn("metadata_output_written=false", stderr.getvalue())
+        self.assertIn(
+            f"source_claim_boundary={fetcher.CLAIM_BOUNDARY}", stderr.getvalue()
+        )
 
 
 def valid_history() -> pd.DataFrame:

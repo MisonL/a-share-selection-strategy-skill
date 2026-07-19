@@ -350,7 +350,7 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
   --diagnostics-output /tmp/a-share-selection-akshare/score_diagnostics.csv
 ```
 
-akshare A 股入口会先尝试中文列接口，失败或空结果时记录 `fallback_errors` 并转用 `stock_zh_a_daily`。fallback 成功不等于主接口稳定可用。akshare 输出不生成真实 `prediction/prediction_score`。
+akshare A 股入口会先尝试中文列接口，失败或空结果时记录 `fallback_errors` 并转用 `stock_zh_a_daily`。成功或严格失败 metadata 固定写入 `source_type=external_fetch`、`source_scope=akshare_history_fetch`、`real_market_data=true`、`source_claim_boundary` 和 `data_source_note`；这只说明请求 symbol 与日期范围内的外部行情落盘，不证明全 A 覆盖、券商订单或长期稳定性。fallback 成功不等于主接口稳定可用。akshare 输出不生成真实 `prediction/prediction_score`。
 
 ### pytdx A 股日线
 

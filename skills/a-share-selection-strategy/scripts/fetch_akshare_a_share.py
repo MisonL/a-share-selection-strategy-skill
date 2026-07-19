@@ -12,6 +12,15 @@ from typing import Any
 
 OUTPUT_COLUMNS = ["symbol", "name", "market", "date", "open", "high", "low", "close", "volume", "amount", "turn"]
 NUMERIC_COLUMNS = ["open", "high", "low", "close", "volume", "amount", "turn"]
+SOURCE = "akshare"
+SOURCE_SCOPE = "akshare_history_fetch"
+CLAIM_BOUNDARY = (
+    "akshare_external_api_not_broker_order_or_full_market_or_long_term_stability_proof"
+)
+DATA_SOURCE_NOTE = (
+    "akshare A-share daily OHLCV; scope is requested symbols and date range only; "
+    "stock_zh_a_daily fallback is disclosed in fallback_errors"
+)
 SCHEMAS = [
     dict(date="日期", symbol="股票代码", open="开盘", high="最高", low="最低", close="收盘", volume="成交量", amount="成交额", turn="换手率"),
     dict(date="date", symbol="", open="open", high="high", low="low", close="close", volume="volume", amount="amount", turn="turnover"),
@@ -29,7 +38,13 @@ def main(argv: list[str] | None = None) -> int:
         write_outputs(frame, metadata, output, metadata_output)
     except Exception as exc:  # noqa: BLE001
         remove_output(output)
-        print(f"ERROR: code=fetch_failed output_written=false message={exc}", file=sys.stderr)
+        remove_output(metadata_output)
+        print(
+            "ERROR: code=fetch_failed output_written=false "
+            f"metadata_output_written=false source_claim_boundary={CLAIM_BOUNDARY} "
+            f"message={exc}",
+            file=sys.stderr,
+        )
         return 2
     strict_errors = strict_gate_errors(metadata, args.fail_on_fetch_error)
     if strict_errors:
@@ -210,7 +225,12 @@ def build_metadata(
     fallbacks: list[dict[str, str]],
 ) -> dict[str, Any]:
     return {
-        "source": "akshare",
+        "source": SOURCE,
+        "source_type": "external_fetch",
+        "source_scope": SOURCE_SCOPE,
+        "real_market_data": True,
+        "source_claim_boundary": CLAIM_BOUNDARY,
+        "data_source_note": DATA_SOURCE_NOTE,
         "requested_symbols": parse_symbols(args.symbols),
         "start_date": args.start_date,
         "end_date": args.end_date,
@@ -345,11 +365,12 @@ def remove_output(output: Path) -> None:
 
 def print_summary(metadata: dict[str, Any], prefix: str = "OK") -> None:
     print(
-        f"{prefix}: source=akshare rows={metadata['rows']} symbol_count={metadata['symbol_count']} "
+        f"{prefix}: source={SOURCE} rows={metadata['rows']} symbol_count={metadata['symbol_count']} "
         f"failed_symbols={len(metadata['failed_symbols'])} empty_symbols={len(metadata['empty_symbols'])} "
         f"invalid_rows={metadata['invalid_rows']} dropped_invalid_rows={metadata['dropped_invalid_rows']} "
         f"fallback_errors={len(metadata['fallback_errors'])} start_date={metadata['start_date']} "
-        f"end_date={metadata['end_date']} adjust={metadata['adjust']}"
+        f"end_date={metadata['end_date']} adjust={metadata['adjust']} "
+        f"source_claim_boundary={CLAIM_BOUNDARY}"
     )
 
 

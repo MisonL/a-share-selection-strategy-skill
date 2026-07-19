@@ -4990,6 +4990,18 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             diagnostic_rows = csv_rows(output / "diagnostics.csv")
 
         self.assertTrue(summary["input_metadata"]["history_partial_result"])
+        self.assertEqual("external_fetch", summary["source_type"])
+        self.assertEqual("akshare_history_fetch", summary["source_scope"])
+        self.assertTrue(summary["real_market_data"])
+        self.assertEqual(
+            "akshare_external_api_not_broker_order_or_full_market_or_long_term_stability_proof",
+            summary["source_claim_boundary"],
+        )
+        self.assertEqual(
+            "akshare A-share daily OHLCV; scope is requested symbols and date range only; "
+            "stock_zh_a_daily fallback is disclosed in fallback_errors",
+            summary["input_metadata"]["data_source_note"],
+        )
         self.assertEqual("hfq", summary["input_metadata"]["history_adjust"])
         self.assertEqual(1, summary["input_metadata"]["history_fallback_error_count"])
         self.assertTrue(summary["history_selection"]["history_partial_result"])
@@ -5002,6 +5014,13 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertIn("history_fallback_error_count=1", stdout.getvalue())
         self.assertIn("history_adjust=hfq", stdout.getvalue())
         for row in candidate_rows + diagnostic_rows:
+            self.assertEqual("external_fetch", row["source_type"])
+            self.assertEqual("akshare_history_fetch", row["source_scope"])
+            self.assertEqual("True", row["real_market_data"])
+            self.assertEqual(
+                "akshare_external_api_not_broker_order_or_full_market_or_long_term_stability_proof",
+                row["source_claim_boundary"],
+            )
             self.assertEqual("True", row["history_partial_result"])
             self.assertEqual("1", row["history_fallback_error_count"])
             self.assertEqual("hfq", row["history_adjust"])
@@ -6873,6 +6892,16 @@ def history_fallback_executor(command: list[str]) -> subprocess.CompletedProcess
             json.dumps(
                 {
                     "source": "akshare",
+                    "source_type": "external_fetch",
+                    "source_scope": "akshare_history_fetch",
+                    "real_market_data": True,
+                    "source_claim_boundary": (
+                        "akshare_external_api_not_broker_order_or_full_market_or_long_term_stability_proof"
+                    ),
+                    "data_source_note": (
+                        "akshare A-share daily OHLCV; scope is requested symbols and date range only; "
+                        "stock_zh_a_daily fallback is disclosed in fallback_errors"
+                    ),
                     "adjust": "hfq",
                     "requested_symbols": ["000001"],
                     "rows": 1,

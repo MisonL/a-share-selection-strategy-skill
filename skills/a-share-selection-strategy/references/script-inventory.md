@@ -23,7 +23,7 @@
 | `allocate_portfolio_candidate_capital.py` | `gate_backtest_cli` | `gate_backtest` | 113 | Allocate candidate capital with portfolio-aware capacity gates. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
 | `backtest_buy_hold.py` | `gate_backtest_cli` | `gate_backtest` | 348 | Run a minimal close-to-close buy-hold backtest from local files. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
 | `create_demo_data.py` | `stable_cli` | `selection_core` | 315 | Create deterministic demo OHLCV CSV files for quick-start smoke tests. | 保留: stable public CLI，用户命令兼容路径。 |
-| `fetch_akshare_a_share.py` | `fetch_cli` | `fetch` | 357 | Fetch A-share OHLCV data through akshare and save local gate files. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
+| `fetch_akshare_a_share.py` | `fetch_cli` | `fetch` | 378 | Fetch A-share OHLCV data through akshare and save local gate files. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
 | `fetch_akshare_hk_daily.py` | `fetch_cli` | `fetch` | 408 | Fetch Hong Kong OHLCV data through akshare stock_hk_daily. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
 | `fetch_baostock_a_share.py` | `fetch_cli` | `fetch` | 613 | Fetch A-share OHLCV data through baostock and save CSV/Parquet gate files. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
 | `fetch_baostock_a_share_universe.py` | `fetch_cli` | `fetch` | 163 | Fetch baostock A-share universe into a spot-compatible CSV snapshot. | 保留: public fetch CLI，全 A 股票池主入口，支持显式日期回看和失败重试，不能写成实时行情或实时全市场完成。 |

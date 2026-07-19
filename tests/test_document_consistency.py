@@ -844,6 +844,45 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertNotIn("当前唯一例外", docs)
         self.assertNotIn("validate_ohlcv.validate_frame", docs)
 
+    def test_today_runner_reuses_internal_retry_plan_contract(self) -> None:
+        root = ROOT / "skills/a-share-selection-strategy"
+        runner = root / "scripts/run_today_a_share_selection.py"
+        retry_cli = root / "scripts/prepare_history_retry_symbols.py"
+        retry_helper = (
+            root / "scripts/lib/runner/run_today_a_share_selection_retry_plan.py"
+        )
+
+        runner_tree = ast.parse(runner.read_text(encoding="utf-8"), filename=str(runner))
+        retry_cli_tree = ast.parse(
+            retry_cli.read_text(encoding="utf-8"), filename=str(retry_cli)
+        )
+        runner_from_imports = {
+            node.module
+            for node in ast.walk(runner_tree)
+            if isinstance(node, ast.ImportFrom) and node.module
+        }
+        retry_cli_imports = {
+            node.module
+            for node in ast.walk(retry_cli_tree)
+            if isinstance(node, ast.ImportFrom) and node.module
+        }
+
+        self.assertTrue(retry_helper.is_file())
+        self.assertIn(
+            "lib.runner.run_today_a_share_selection_retry_plan", runner_from_imports
+        )
+        self.assertNotIn(
+            "prepare_history_retry_symbols",
+            {
+                module
+                for node in ast.walk(runner_tree)
+                for module in imported_top_level_modules(node)
+            },
+        )
+        self.assertIn(
+            "lib.runner.run_today_a_share_selection_retry_plan", retry_cli_imports
+        )
+
     def test_lib_helpers_stay_internal_and_side_effect_free(self) -> None:
         root = ROOT / "skills/a-share-selection-strategy"
         registry = json.loads(

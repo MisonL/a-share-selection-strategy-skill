@@ -2,7 +2,7 @@
 
 本文件用于回答“为什么 `scripts/` 下还有很多 `.py`、每个脚本是否必要”。它是审计索引，不是运行时入口，不替代 `../configs/script_entrypoints.json`，也不进入 Skill 首轮读取路径。
 
-当前根层 `.py` 共 33 个，其中公开 CLI 29 个、兼容 wrapper 4 个。`scripts/lib/` 是内部实现目录，不列入本表。判断脚本是否合理时先看 `公开 CLI 是否必须兼容` 和 `internal helper 是否还能继续下沉`，不要按文件数量直接合并。当前整个 `scripts/` 树有 119 个 Python 文件；其中 86 个是按领域分层的内部实现，不是 Agent 首轮入口。
+当前根层 `.py` 共 33 个，其中公开 CLI 29 个、兼容 wrapper 4 个。`scripts/lib/` 是内部实现目录，不列入本表。判断脚本是否合理时先看 `公开 CLI 是否必须兼容` 和 `internal helper 是否还能继续下沉`，不要按文件数量直接合并。当前整个 `scripts/` 树有 120 个 Python 文件；其中 87 个是按领域分层的内部实现，不是 Agent 首轮入口。
 
 结论：
 
@@ -34,7 +34,7 @@
 | `generate_lightgbm_predictions.py` | `gate_backtest_cli` | `gate_backtest` | 477 | Generate LightGBM prediction_score values from local OHLCV data. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
 | `portfolio_equity_curve.py` | `gate_backtest_cli` | `gate_backtest` | 266 | Build a simple equal-weight equity curve from backtest CSV files. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
 | `portfolio_overlap_report.py` | `gate_backtest_cli` | `gate_backtest` | 379 | Report overlap and capacity gates from backtest CSV files. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
-| `prepare_history_retry_symbols.py` | `gate_backtest_cli` | `gate_backtest` | 231 | Prepare an auditable retry symbol list from history fetch artifacts. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
+| `prepare_history_retry_symbols.py` | `gate_backtest_cli` | `gate_backtest` | 101 | Prepare an auditable retry symbol list from history fetch artifacts. | 保留: public gate/backtest CLI；恢复计划纯逻辑位于 `lib/runner/`，输出仍是诊断或门禁证据。 |
 | `prepare_clean_history_pool.py` | `gate_backtest_cli` | `gate_backtest` | 415 | Prepare clean prices, derived short-history audit, metadata, optional verified delta merge, or atomic clean-pool provenance from existing artifacts. | 保留: public recovery CLI，只处理既有 artifact；推导清单和 provenance 只校验 lineage，不联网、不提升最终全 A 声称。 |
 | `prepare_incremental_history_plan.py` | `gate_backtest_cli` | `gate_backtest` | 638 | Prepare a bounded, resumable incremental history fetch plan from universe and metadata. | 保留: public planning CLI，只生成增量计划，不证明抓取成功。 |
 | `execute_incremental_history_plan.py` | `gate_backtest_cli` | `gate_backtest` | 306 | Execute one explicit provider across bounded plan buckets and persist resumable artifacts. | 保留: public execution CLI，不自动切源，不证明全 A 完成。 |

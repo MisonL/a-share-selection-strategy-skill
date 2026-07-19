@@ -26,6 +26,9 @@ from lib.selection_core.a_share_selection_command_safety import (  # noqa: E402
 from prepare_clean_history_pool import build_clean_plan  # noqa: E402
 from prepare_history_retry_symbols import build_retry_plan  # noqa: E402
 from prepare_incremental_history_plan import build_incremental_plan  # noqa: E402
+from lib.runner.run_today_a_share_selection_retry_plan import (  # noqa: E402
+    build_retry_plan as build_internal_retry_plan,
+)
 from lib.gates.incremental_history_artifacts import (  # noqa: E402
     combine_csv,
     combine_metadata,
@@ -131,6 +134,9 @@ def write_bucket_artifacts(command: list[str], *, rows: int) -> None:
 
 
 class RecoveryAndSafetyHelperTests(unittest.TestCase):
+    def test_retry_cli_reexports_internal_retry_plan_contract(self) -> None:
+        self.assertIs(build_retry_plan, build_internal_retry_plan)
+
     def test_pytdx_incremental_merge_requires_same_date_strict_companion(self) -> None:
         metadata = {
             "provider": "pytdx",

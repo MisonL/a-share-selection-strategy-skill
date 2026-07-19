@@ -21,7 +21,6 @@ from lib.selection_core.a_share_selection_command_safety import (
     sanitize_command,
     sanitize_text,
 )
-from prepare_history_retry_symbols import build_retry_plan
 from lib.runner.run_today_a_share_selection_commands import (
     fetch_history_command,
     fetch_spot_fallback_command,
@@ -60,6 +59,7 @@ from lib.runner.run_today_a_share_selection_full_a_provenance import (
     complete_full_a_provenance,
 )
 from lib.runner.run_today_a_share_selection_provenance import annotate_run_csv_outputs
+from lib.runner.run_today_a_share_selection_retry_plan import build_retry_plan
 from lib.runner.run_today_a_share_selection_validation import (
     normalize_zzshare_history_options,
     sync_validated_history_options,

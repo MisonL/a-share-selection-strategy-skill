@@ -16,6 +16,8 @@ if __name__ == "__main__":
     fail_not_cli(__file__)
 
 
+import math
+import time
 from datetime import date, datetime
 from typing import Any
 
@@ -95,6 +97,7 @@ def ensure_runtime_dependencies() -> None:
 
 def fetch_prices(args: Any) -> tuple[pd.DataFrame, dict[str, Any]]:
     ensure_runtime_dependencies()
+    monotonic_started = monotonic_seconds()
     rows: list[dict[str, Any]] = []
     symbols_meta: list[dict[str, Any]] = []
     failed: list[dict[str, str]] = []
@@ -119,7 +122,13 @@ def fetch_prices(args: Any) -> tuple[pd.DataFrame, dict[str, Any]]:
     finally:
         api.disconnect()
     frame = pd.DataFrame(unique_sorted_rows(rows), columns=OUTPUT_COLUMNS)
-    return frame, build_metadata(args, frame, symbols_meta, failed)
+    return frame, build_metadata(
+        args,
+        frame,
+        symbols_meta,
+        failed,
+        monotonic_started=monotonic_started,
+    )
 
 
 def fetch_symbol_rows(
@@ -271,6 +280,8 @@ def build_metadata(
     frame: pd.DataFrame,
     symbols_meta: list[dict[str, Any]],
     failed: list[dict[str, str]],
+    *,
+    monotonic_started: float,
 ) -> dict[str, Any]:
     return {
         "source": "pytdx",
@@ -330,7 +341,19 @@ def build_metadata(
         "invalid_symbols": [],
         "invalid_row_examples": [],
         "dropped_invalid_rows": 0,
+        "duration_seconds": duration_seconds(monotonic_started),
     }
+
+
+def monotonic_seconds() -> float:
+    return time.monotonic()
+
+
+def duration_seconds(started: float) -> float:
+    elapsed = monotonic_seconds() - started
+    if not math.isfinite(elapsed):
+        return 0.0
+    return round(max(elapsed, 0.0), 6)
 
 
 def provider_version() -> str:

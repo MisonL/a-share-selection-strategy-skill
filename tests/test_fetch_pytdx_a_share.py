@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
 import tempfile
 import types
@@ -106,7 +107,14 @@ class FetchPytdxAShareTests(unittest.TestCase):
         self.assertEqual("A-share", row["market"])
 
     def test_cli_writes_prices_and_metadata_with_fake_pytdx(self) -> None:
-        with fake_pytdx_module(FakeTdxApi):
+        with (
+            fake_pytdx_module(FakeTdxApi),
+            patch.object(
+                pytdx_helpers,
+                "monotonic_seconds",
+                side_effect=[100.0, 101.2345678],
+            ),
+        ):
             with tempfile.TemporaryDirectory() as tmpdir:
                 output = Path(tmpdir) / "prices.csv"
                 metadata = Path(tmpdir) / "metadata.json"
@@ -146,12 +154,21 @@ class FetchPytdxAShareTests(unittest.TestCase):
         self.assertEqual(["symbol", "date"], saved["merge_join_keys"])
         self.assertTrue(saved["strict_fields_same_date_required"])
         self.assertFalse(saved["selection_ready"])
+        self.assertTrue(math.isfinite(saved["duration_seconds"]))
+        self.assertEqual(1.234568, saved["duration_seconds"])
         self.assertLess(saved["requested_raw_rows"], 800 * 2)
         self.assertEqual(["000001", "600000"], saved["requested_symbols"])
         self.assertEqual(["000001", "600000"], sorted(frame["symbol"].unique()))
 
     def test_cli_strict_fails_when_symbol_is_empty(self) -> None:
-        with fake_pytdx_module(FakeEmptyTdxApi):
+        with (
+            fake_pytdx_module(FakeEmptyTdxApi),
+            patch.object(
+                pytdx_helpers,
+                "monotonic_seconds",
+                side_effect=[20.0, 19.0],
+            ),
+        ):
             with tempfile.TemporaryDirectory() as tmpdir:
                 output = Path(tmpdir) / "prices.csv"
                 metadata = Path(tmpdir) / "metadata.json"
@@ -180,11 +197,20 @@ class FetchPytdxAShareTests(unittest.TestCase):
         self.assertEqual(["000001"], saved["empty_symbols"])
         self.assertFalse(saved["output_written"])
         self.assertTrue(saved["metadata_output_written"])
+        self.assertTrue(math.isfinite(saved["duration_seconds"]))
+        self.assertEqual(0.0, saved["duration_seconds"])
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn("empty_symbols=1", stderr.getvalue())
 
     def test_cli_strict_fails_when_max_pages_truncates_window(self) -> None:
-        with fake_pytdx_module(FakeTruncatedTdxApi):
+        with (
+            fake_pytdx_module(FakeTruncatedTdxApi),
+            patch.object(
+                pytdx_helpers,
+                "monotonic_seconds",
+                side_effect=[4.0, 4.25],
+            ),
+        ):
             with tempfile.TemporaryDirectory() as tmpdir:
                 output = Path(tmpdir) / "prices.csv"
                 metadata = Path(tmpdir) / "metadata.json"
@@ -215,7 +241,20 @@ class FetchPytdxAShareTests(unittest.TestCase):
         self.assertFalse(output.exists())
         self.assertEqual(["000001"], saved["possibly_truncated_symbols"])
         self.assertFalse(saved["symbols"][0]["window_complete"])
+        self.assertTrue(math.isfinite(saved["duration_seconds"]))
+        self.assertEqual(0.25, saved["duration_seconds"])
         self.assertIn("possibly_truncated_symbols=1", stderr.getvalue())
+
+    def test_duration_seconds_clamps_nonfinite_elapsed_to_zero(self) -> None:
+        for value in [float("inf"), float("nan")]:
+            with self.subTest(monotonic_value=value), patch.object(
+                pytdx_helpers,
+                "monotonic_seconds",
+                return_value=value,
+            ):
+                duration = pytdx_helpers.duration_seconds(1.0)
+
+            self.assertEqual(0.0, duration)
 
     def test_cli_removes_stale_metadata_when_strict_metadata_write_fails(self) -> None:
         with fake_pytdx_module(FakeEmptyTdxApi):

@@ -357,6 +357,14 @@ class SkillRegistryConsistencyTests(unittest.TestCase):
         ]:
             with self.subTest(runbook_stale_provider_contract=text):
                 self.assertNotIn(text, runbook)
+        for text in [
+            "metadata 的 `duration_seconds`",
+            "内部单调时钟观察值",
+            "不包含 CLI/uv 启动或文件写盘时间",
+            "不证明 endpoint 性能、吞吐、长期稳定性或免费可用性",
+        ]:
+            with self.subTest(pytdx_duration_contract=text):
+                self.assertIn(text, runbook)
         pytdx_contract = full_a["supplemental_merge_contracts"]["pytdx_history"]
         self.assertEqual(["symbol", "date"], pytdx_contract["join_keys"])
         self.assertTrue(pytdx_contract["strict_fields_same_date_required"])

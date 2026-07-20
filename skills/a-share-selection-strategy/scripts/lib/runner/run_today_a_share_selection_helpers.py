@@ -21,6 +21,7 @@ import csv
 from pathlib import Path
 from typing import Any
 
+from lib.a_share_selection_run_state import step_executed
 from lib.selection_core.a_share_selection_candidate_fields import (
     OPTIONAL_CANDIDATE_FIELD_KEYS,
 )
@@ -308,10 +309,6 @@ def same_path_or_existing_file(left: Path, right: Path) -> bool:
     return left.expanduser().resolve(strict=False) == right.expanduser().resolve(
         strict=False
     )
-
-
-def step_executed(step: dict[str, Any]) -> bool:
-    return step.get("executed", True) is not False
 
 
 def print_summary(manifest: dict[str, Any], output: Path) -> None:

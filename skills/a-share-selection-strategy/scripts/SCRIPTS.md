@@ -10,7 +10,7 @@
 
 新的内部 helper 不再新增到 `scripts/` 根层；默认放入 `lib/` 或后续更细分的内部子目录。根层 internal helper 只是兼容预算，后续迁移只能减少或保持，不应增加。HTML、runner、walk-forward、zzshare fetch、gates support 和 selection_core helper 已分别下沉到 `lib/report_html/`、`lib/runner/`、`lib/walk_forward/`、`lib/fetch/`、`lib/gates/` 和 `lib/selection_core/`，根层只保留相关 public CLI 和 4 个 compatibility wrapper。
 
-依赖方向默认从公开 CLI 指向内部 helper；internal helper 默认不得 import public CLI。共享 OHLCV frame 校验逻辑位于 `lib/a_share_selection_validation.py`，公开 CLI 和内部 helper 都从内部模块复用。
+依赖方向默认从公开 CLI 指向内部 helper；internal helper 默认不得 import public CLI。共享 OHLCV frame 校验逻辑位于 `lib/a_share_selection_validation.py`，公开 CLI 和内部 helper 都从内部模块复用。跨 runner 与 HTML 展示层的纯运行状态契约集中在 `lib/a_share_selection_run_state.py`，包括 partial result、synthetic demo 和 step execution 判定；`lib/report_html/` 可以依赖这一共享模块，但不得 import `lib.runner`，共享模块也不得 import `lib.runner` 或 `lib.report_html`。
 
 `lib/` 内部实现分为纯 helper、parser 层和明确产物层。纯 helper 不得新增 argparse CLI、不得直接写出 CSV/JSON/HTML 等产物，也不得 import 公开 CLI；parser 层只构造 public CLI 的 `ArgumentParser`；明确产物层只在 public CLI 调用下写出 run artifact。`lib/runner/run_today_a_share_selection_retry_plan.py` 是 `prepare_history_retry_symbols.py` 与今日 runner 共同复用的恢复计划纯逻辑，根层 CLI 只保留 parser 和 artifact I/O。`lib/fetch/zzshare_a_share_checkpoint.py` 是 zzshare 长跑 checkpoint artifact 边界，不是用户入口。需要直接执行时只允许 fail-fast。
 
@@ -74,6 +74,7 @@
 - `a_share_selection_cli_guard.py`
 - `a_share_selection_config.py`
 - `a_share_selection_paths.py`
+- `a_share_selection_run_state.py`
 
 `lib/gates/incremental_history_execution.py` 只负责计划执行、resume、provider command 和 manifest 状态；`lib/gates/incremental_history_artifacts.py` 负责 bucket CSV/metadata 校验、聚合和原子发布。二者只能由公开 `execute_incremental_history_plan.py` 调用，都不是独立 CLI，也不允许隐式选择或切换数据源。
 

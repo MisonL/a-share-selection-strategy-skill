@@ -18,9 +18,8 @@ if __name__ == "__main__":
 
 from typing import Any
 
+from lib.a_share_selection_run_state import is_synthetic_demo, step_executed
 from lib.report_html.a_share_selection_html_format import bilingual, i18n
-from lib.runner.run_today_a_share_selection_helpers import step_executed
-from lib.runner.run_today_a_share_selection_input_metadata import is_synthetic_demo
 
 
 def is_demo_summary(summary: dict[str, Any]) -> bool:

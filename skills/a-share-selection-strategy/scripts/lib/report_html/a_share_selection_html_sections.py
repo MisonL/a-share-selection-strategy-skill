@@ -19,6 +19,11 @@ if __name__ == "__main__":
 from pathlib import Path
 from typing import Any
 
+from lib.a_share_selection_run_state import (
+    history_selection_partial_result,
+    is_synthetic_demo,
+    local_input_partial_result,
+)
 from lib.report_html.a_share_selection_html_candidate_master import (
     candidate_master_detail,
     candidate_open_banner,
@@ -79,12 +84,6 @@ from lib.report_html.a_share_selection_html_modes import (
     scoring_method_key,
 )
 from lib.report_html.a_share_selection_html_spot import spot_metadata_fields
-from lib.runner.run_today_a_share_selection_input_metadata import (
-    history_selection_partial_result,
-    is_synthetic_demo,
-    local_input_partial_result,
-)
-
 HK_MARKET_LABELS = {
     "hk",
     "hkex",

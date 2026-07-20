@@ -23,6 +23,7 @@ from datetime import date, datetime
 from typing import Any
 
 import lib.runner.run_today_a_share_selection_helpers as helpers
+from lib.a_share_selection_run_state import history_partial_result, step_executed
 from lib.selection_core.a_share_selection_candidate_fields import (
     OPTIONAL_CANDIDATE_FIELD_ALIASES,
     candidate_field_value_present,
@@ -30,7 +31,6 @@ from lib.selection_core.a_share_selection_candidate_fields import (
 from lib.selection_core.a_share_selection_provenance import (
     PROVENANCE_COLUMNS as INPUT_CSV_PROVENANCE_COLUMNS,
 )
-from lib.runner.run_today_a_share_selection_input_metadata import history_partial_result
 from lib.selection_core.a_share_selection_disclosure import (
     ADVICE_BOUNDARY,
     RECOMMENDATION_BOUNDARY,
@@ -171,7 +171,7 @@ def run_identity(manifest: dict[str, Any], status: str) -> dict[str, Any]:
     failed = [
         step
         for step in manifest["steps"]
-        if helpers.step_executed(step)
+        if step_executed(step)
         and step.get("returncode") not in step.get("allowed_returncodes", [])
     ]
     return {
@@ -514,7 +514,7 @@ def step_summary_record(step: dict[str, Any]) -> dict[str, Any]:
     record = {
         "step": step.get("step", ""),
         "planned": bool(step.get("planned", False)),
-        "executed": helpers.step_executed(step),
+        "executed": step_executed(step),
         "returncode": step.get("returncode"),
     }
     if "duration_seconds" in step:
@@ -1176,7 +1176,7 @@ def failed_run_reason(manifest: dict[str, Any]) -> tuple[str, str]:
     failed_steps = [
         step
         for step in manifest["steps"]
-        if helpers.step_executed(step)
+        if step_executed(step)
         and step.get("returncode") not in step.get("allowed_returncodes", [])
     ]
     if manifest.get("missing_prediction_column_groups"):

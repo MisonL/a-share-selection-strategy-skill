@@ -68,13 +68,14 @@
 
 ## 内部 helper
 
-这些模块可能带 `__main__`，但直接执行只用于 fail-fast 提示“不是 CLI 入口”。不要把它们当作用户入口、内部实现入口或 `--help` 合约：
+以下 4 个根层 compatibility wrapper 可能带 `__main__`，但直接执行只用于 fail-fast 提示“不是 CLI 入口”。不要把它们当作用户入口、内部实现入口或 `--help` 合约：
 
 - `a_share_selection_calendar_contract.py`
 - `a_share_selection_cli_guard.py`
 - `a_share_selection_config.py`
 - `a_share_selection_paths.py`
-- `a_share_selection_run_state.py`
+
+`lib/a_share_selection_run_state.py` 是 runner 与 HTML 展示层共用的纯运行状态模块，不在 `scripts/` 根层、不属于根层 script entrypoint registry，也不是用户 CLI。它只能由内部模块通过 `lib.a_share_selection_run_state` 导入。
 
 `lib/gates/incremental_history_execution.py` 只负责计划执行、resume、provider command 和 manifest 状态；`lib/gates/incremental_history_artifacts.py` 负责 bucket CSV/metadata 校验、聚合和原子发布。二者只能由公开 `execute_incremental_history_plan.py` 调用，都不是独立 CLI，也不允许隐式选择或切换数据源。
 

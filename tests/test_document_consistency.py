@@ -42,6 +42,19 @@ def python_script_mentions(text: str) -> set[str]:
     return set(re.findall(r"\b[a-zA-Z_][a-zA-Z0-9_]*\.py\b", text))
 
 
+def markdown_code_bullets_after_heading(text: str, heading: str) -> list[str]:
+    lines = text.splitlines()
+    start = lines.index(heading)
+    values = []
+    for line in lines[start + 1 :]:
+        if line.startswith("## "):
+            break
+        match = re.fullmatch(r"- `([^`]+)`", line.strip())
+        if match:
+            values.append(match.group(1))
+    return values
+
+
 def imported_top_level_modules(node: ast.AST) -> list[str]:
     if isinstance(node, ast.Import):
         return [alias.name.split(".", 1)[0] for alias in node.names]
@@ -695,6 +708,8 @@ class DocumentConsistencyTests(unittest.TestCase):
 
     def test_root_internal_helper_surface_does_not_expand(self) -> None:
         root = ROOT / "skills/a-share-selection-strategy"
+        scripts_root = root / "scripts"
+        scripts_index = (scripts_root / "SCRIPTS.md").read_text(encoding="utf-8")
         registry = json.loads(
             (root / "configs/script_entrypoints.json").read_text(encoding="utf-8")
         )
@@ -723,6 +738,21 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertEqual(0, domain_counts.get("selection_core", 0))
         self.assertEqual(0, domain_counts.get("walk_forward", 0))
         self.assertEqual(4, domain_counts["compatibility_wrapper"])
+        self.assertEqual(
+            sorted(current_root_internal_helpers),
+            sorted(
+                markdown_code_bullets_after_heading(
+                    scripts_index,
+                    "## 内部 helper",
+                )
+            ),
+        )
+        self.assertIn("`lib/a_share_selection_run_state.py`", scripts_index)
+        self.assertIn("不在 `scripts/` 根层", scripts_index)
+        self.assertIn("不是用户 CLI", scripts_index)
+        self.assertFalse(
+            (scripts_root / "a_share_selection_run_state.py").exists()
+        )
         self.assertIn("新的内部 helper 不再新增到 `scripts/` 根层", docs)
         self.assertIn("根层 internal helper 是兼容预算", docs)
         self.assertIn(

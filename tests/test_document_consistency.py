@@ -214,15 +214,44 @@ class DocumentConsistencyTests(unittest.TestCase):
         full_a_workflow = (
             root / "instructions/full-a-strict-workflow.md"
         ).read_text(encoding="utf-8")
-        current_path = root / "evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md"
+        reviews = root / "evidence/reviews"
+        archive = reviews / "archive"
+        current_path = reviews / "CURRENT-REAL-SCENARIO-GATES.md"
         current = current_path.read_text(encoding="utf-8")
 
         self.assertIn(str(current_path.relative_to(ROOT)), agents)
         self.assertNotIn("当前真实门禁优先级以", agents)
+        self.assertIn("evidence/reviews/archive/", agents)
+        self.assertEqual([current_path], sorted(reviews.glob("*.md")))
+        archived_reports = sorted(archive.glob("*.md"))
+        self.assertTrue(archived_reports)
+        for path in archived_reports:
+            with self.subTest(archived_report=path.name):
+                self.assertRegex(path.name, r".+-\d{4}-\d{2}-\d{2}\.md$")
+                self.assertNotRegex(
+                    path.read_text(encoding="utf-8"),
+                    r"evidence/reviews/(?!archive/)[A-Za-z0-9_-]+\.md",
+                )
+        evidence_links = {
+            target
+            for target in markdown_link_targets(index)
+            if target.startswith("../evidence/reviews/")
+        }
+        self.assertEqual(
+            {"../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md"},
+            evidence_links,
+        )
+        current_evidence_links = markdown_link_targets(current)
+        self.assertTrue(current_evidence_links)
+        self.assertTrue(
+            all(target.startswith("archive/") for target in current_evidence_links)
+        )
         self.assertIn(
             "../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md",
             index,
         )
+        self.assertIn("`../evidence/reviews/archive/`", index)
+        self.assertIn("不要扫描或首轮加载整个 archive", index)
         self.assertIn(
             "../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md",
             full_a_workflow,
@@ -1160,7 +1189,7 @@ class DocumentConsistencyTests(unittest.TestCase):
 
     def test_unified_validation_entry_is_documented(self) -> None:
         root = ROOT / "skills/a-share-selection-strategy"
-        closeout = root / "evidence/reviews/SKILL-SYSTEM-CLOSEOUT-2026-07-04.md"
+        closeout = root / "evidence/reviews/archive/SKILL-SYSTEM-CLOSEOUT-2026-07-04.md"
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         validator = (ROOT / "validate_skill_changes.py").read_text(encoding="utf-8")
         closeout_text = closeout.read_text(encoding="utf-8")
@@ -1235,10 +1264,9 @@ class DocumentConsistencyTests(unittest.TestCase):
             with self.subTest(validation_doc=text):
                 self.assertIn(text, agents_text)
                 self.assertIn(text, runbook_text)
-        self.assertIn(
-            "SKILL-SYSTEM-CLOSEOUT-2026-07-04.md",
-            (root / "references/index.md").read_text(encoding="utf-8"),
-        )
+        index = (root / "references/index.md").read_text(encoding="utf-8")
+        self.assertIn("`../evidence/reviews/archive/`", index)
+        self.assertNotIn("SKILL-SYSTEM-CLOSEOUT-2026-07-04.md", index)
         self.assertIn(
             "python3 validate_skill_changes.py --skip-skill-validate --skip-tests",
             workflow,
@@ -1260,7 +1288,7 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("Run repo health checks", workflow)
         for path in [
             "configs/data_sources.json",
-            "evidence/reviews/SKILL-SYSTEM-CLOSEOUT-2026-07-04.md",
+            "evidence/reviews/archive/SKILL-SYSTEM-CLOSEOUT-2026-07-04.md",
             "a_share_selection_command_safety.py",
             "prepare_history_retry_symbols.py",
             "tests/test_recovery_and_safety_helpers.py",

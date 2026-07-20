@@ -159,7 +159,7 @@ PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy --with pyarrow pytho
 本轮本地验证证明:
 
 - 本地 CLI 行为、runner resume/plan-only 语义、文档一致性、命令脱敏和 registry 契约在当前测试环境下通过。
-- 新增的 `configs/data_sources.json`、`evidence/reviews/SKILL-SYSTEM-CLOSEOUT-2026-07-04.md`、`a_share_selection_command_safety.py`、`prepare_history_retry_symbols.py`、`tests/test_recovery_and_safety_helpers.py` 和 `validate_skill_changes.py` 是本轮功能闭环的一部分，最终提交时应纳入版本控制。
+- 新增的 `configs/data_sources.json`、`evidence/reviews/archive/SKILL-SYSTEM-CLOSEOUT-2026-07-04.md`、`a_share_selection_command_safety.py`、`prepare_history_retry_symbols.py`、`tests/test_recovery_and_safety_helpers.py` 和 `validate_skill_changes.py` 是本轮功能闭环的一部分，最终提交时应纳入版本控制。
 
 本轮不证明:
 

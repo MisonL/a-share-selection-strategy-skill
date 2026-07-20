@@ -17,7 +17,8 @@
 | 工作流 | [../instructions/full-a-strict-workflow.md](../instructions/full-a-strict-workflow.md) | Agent | 全 A / 全市场真实任务的主路径、批次策略和失败恢复 |
 | 专题 | [factor-framework.md](factor-framework.md)、[prediction-derived-profile.md](prediction-derived-profile.md) | 实现者和审查者 | 因子公式、预测列口径、评分边界 |
 | 汇报 | [../templates/output-templates.md](../templates/output-templates.md) 和 `../templates/output-templates-*.md` | Agent 和 reviewer | 先按机器字段路由，再按需读取长模板 |
-| 证据 | `../evidence/reviews/*.md` | reviewer | 历史真实复验、失败边界和不能外推项 |
+| 当前证据 | [../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md](../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md) | Agent 和 reviewer | 当前真实门禁唯一人工入口、有限范围状态和仍未证明项 |
+| 历史证据 | `../evidence/reviews/archive/*.md` | reviewer | 原始 dated 复验、审查和失败边界；只按当前入口或具体追溯需要读取 |
 
 ## 快速入口
 
@@ -34,7 +35,7 @@
 | 机器校验脚本入口分类是否漂移 | `../configs/script_entrypoints.json` | 再对照 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) |
 | 查配置、依赖或字段映射 | [script-reference.md](script-reference.md) | 只在需要复制完整命令时读 [../instructions/runbook.md](../instructions/runbook.md) |
 | 解释 stdout、summary、manifest、失败门禁 | [../templates/output-templates.md](../templates/output-templates.md) | 命中低频场景时读对应 `../templates/output-templates-*.md` |
-| 查当前真实门禁状态和边界 | [../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md](../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md) | 再按其中链接读取最新 dated evidence；历史报告不得直接覆盖当前状态 |
+| 查当前真实门禁状态和边界 | [../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md](../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md) | 再按其中 `archive/` 链接读取最新 dated evidence；历史报告不得直接覆盖当前状态 |
 
 ## Agent 读取顺序
 
@@ -44,7 +45,7 @@
 4. 需要确认 CLI 入口或 helper 边界时，读 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md)；需要依赖、数据源能力边界、输入契约或字段映射时，再读 [script-reference.md](script-reference.md)；只有审查脚本数量、逐个脚本必要性或迁移顺序时，才读 [script-inventory.md](script-inventory.md)。
 5. [../templates/output-templates.md](../templates/output-templates.md)：按机器字段选择汇报模板和恢复动作；优先使用场景直跳表，只在路由命中时读取同级 `../templates/output-templates-*.md`。
 6. 需要复制完整命令或跑真实门禁时，先看 [../instructions/runbook.md](../instructions/runbook.md) 的场景快速路由，再读对应章节。
-7. 只有需要真实场景证据、历史复验口径或审计追溯时，才读 `../evidence/reviews/` 中的对应报告；历史报告不得覆盖当前代码、测试和本轮 artifact。
+7. 只有需要真实场景证据、历史复验口径或审计追溯时，才先读 [../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md](../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md)，再按其链接读取 `../evidence/reviews/archive/` 中的对应报告；历史报告不得覆盖当前代码、测试和本轮 artifact。
 
 `../evals/evals.json` 是 Skill 触发和行为覆盖 manifest，不在真实选股任务的启动读取路径中。只有新增或重构 Skill 触发语义时才读取它，并按 `eval_files` 只打开相关场景分片：`generic.json`、`prediction.json`、`fetch.json` 或 `gates.json`。
 
@@ -90,29 +91,6 @@
 
 `lightgbm_*` 字段仍会出现在旧产物、历史证据和兼容输出中。新报告优先引用上表的中性字段；引用旧字段时必须说明它是兼容字段或历史原始输出。
 
-## 历史报告
+## 历史证据
 
-| 文件 | 用途 |
-| --- | --- |
-| [../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md](../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md) | 当前真实门禁唯一人工入口，汇总最新证据、有限范围状态和仍未证明项 |
-| [../evidence/reviews/ARCHIVE-TIMEOUT-REVIEW-2026-07-18.md](../evidence/reviews/ARCHIVE-TIMEOUT-REVIEW-2026-07-18.md) | 2026-07-18 外部源探针紧凑归档与验证器超时清理的 Claude、OMP 和 Codex 审查、独立复现及修复边界 |
-| [../evidence/reviews/PYTDX-DEFAULT-ENDPOINT-2026-07-17.md](../evidence/reviews/PYTDX-DEFAULT-ENDPOINT-2026-07-17.md) | 2026-07-17 Pytdx 默认 endpoint 调整、三次新默认真实复验、两 symbol 复验、第三方依赖警告和不外推边界 |
-| [../evidence/reviews/EXTERNAL-SOURCE-STABILITY-2026-07-17.md](../evidence/reviews/EXTERNAL-SOURCE-STABILITY-2026-07-17.md) | 2026-07-17 七个外部 source 的三次短窗口探测、Eastmoney/Pytdx 失败关闭、Akshare provider observation 和 Pytdx 显式 host 诊断 |
-| [../evidence/reviews/CLAUDE-OMP-REMAINING-OPTIMIZATION-REVIEW-2026-07-15.md](../evidence/reviews/CLAUDE-OMP-REMAINING-OPTIMIZATION-REVIEW-2026-07-15.md) | 2026-07-15 Claude、OMP 和 Codex 对剩余 Skill 优化项的只读复核、分歧裁定及远端 frontmatter 门禁建议 |
-| [../evidence/reviews/CLAUDE-OMP-SYSTEM-REVIEW-2026-07-15.md](../evidence/reviews/CLAUDE-OMP-SYSTEM-REVIEW-2026-07-15.md) | 2026-07-15 Claude、OMP 和 Codex 对当前 Skill 体系及 `09efee4..2a7c321` 的复核、分歧裁定和待修文档合同 |
-| [../evidence/reviews/SKILL-OPTIMIZATION-CLOSEOUT-2026-07-15.md](../evidence/reviews/SKILL-OPTIMIZATION-CLOSEOUT-2026-07-15.md) | 2026-07-15 Skill 优化提交边界、双依赖 profile 完整回归、CI 分片合同和远端 pending 边界 |
-| [../evidence/reviews/CLAUDE-OMP-UNCOMMITTED-REVIEW-2026-07-15.md](../evidence/reviews/CLAUDE-OMP-UNCOMMITTED-REVIEW-2026-07-15.md) | 2026-07-15 Claude、OMP 和 Codex 对未提交变更的只读终审、交叉验证和剩余边界 |
-| [../evidence/reviews/FULL-A-INCREMENTAL-BAOSTOCK-2026-07-15.md](../evidence/reviews/FULL-A-INCREMENTAL-BAOSTOCK-2026-07-15.md) | 2026-07-15 Baostock 全 A 增量分桶实测、短历史清洗、最终评分和 claim boundary |
-| [../evidence/reviews/FULL-A-PROVENANCE-RUN-2026-07-14.md](../evidence/reviews/FULL-A-PROVENANCE-RUN-2026-07-14.md) | 2026-07-14 schema v2 provenance、真实 5,202 标的最终 runner、性能与 claim=false 边界 |
-| [../evidence/reviews/FULL-A-WORKFLOW-BOTTLENECK-2026-07-09.md](../evidence/reviews/FULL-A-WORKFLOW-BOTTLENECK-2026-07-09.md) | 2026-07-09 全 A 实跑耗时、瓶颈、clean pool 和不可外推边界 |
-| [../evidence/reviews/FULL-A-WORKFLOW-BOTTLENECK-2026-07-12.md](../evidence/reviews/FULL-A-WORKFLOW-BOTTLENECK-2026-07-12.md) | 2026-07-12 全 A 实跑最新耗时、短历史恢复、评分瓶颈和字段边界 |
-| [../evidence/reviews/SKILL-SYSTEM-CLOSEOUT-2026-07-04.md](../evidence/reviews/SKILL-SYSTEM-CLOSEOUT-2026-07-04.md) | 2026-07-04 Skill 体系优化收尾、本地门禁和外部门禁边界 |
-| [../evidence/reviews/REAL-SCENARIO-GATES-2026-05-30.md](../evidence/reviews/REAL-SCENARIO-GATES-2026-05-30.md) | 真实场景总门禁和边界总览 |
-| [../evidence/reviews/CURRENT-GATES-CLOSEOUT-2026-06-08.md](../evidence/reviews/CURRENT-GATES-CLOSEOUT-2026-06-08.md) | 2026-06-08 当前 P1/P2/P3 门禁推进闭环 |
-| [../evidence/reviews/P1-PORTFOLIO-CAPACITY-2026-06-08.md](../evidence/reviews/P1-PORTFOLIO-CAPACITY-2026-06-08.md) | 2026-06-08 独立 40-symbol 组合容量复验 |
-| [../evidence/reviews/P2A-BAOSTOCK-LIMIT-FIELDS-2026-05-30.md](../evidence/reviews/P2A-BAOSTOCK-LIMIT-FIELDS-2026-05-30.md) | baostock 涨跌停字段探针证据 |
-| [../evidence/reviews/P1-PORTFOLIO-CAPACITY-SZ-MAINBOARD-2026-06-01.md](../evidence/reviews/P1-PORTFOLIO-CAPACITY-SZ-MAINBOARD-2026-06-01.md) | 深市主板组合容量复验 |
-| [../evidence/reviews/P1-PORTFOLIO-CAPACITY-SSE603-LATEWINDOW-2026-06-01.md](../evidence/reviews/P1-PORTFOLIO-CAPACITY-SSE603-LATEWINDOW-2026-06-01.md) | 沪市 603 late-window 复验 |
-| [../evidence/reviews/P1-PORTFOLIO-CAPACITY-SSE601-MONTHENDS-2026-06-01.md](../evidence/reviews/P1-PORTFOLIO-CAPACITY-SSE601-MONTHENDS-2026-06-01.md) | 沪市 601 month-end 复验 |
-| [../evidence/reviews/P1-PORTFOLIO-CAPACITY-CYB-2026-06-01.md](../evidence/reviews/P1-PORTFOLIO-CAPACITY-CYB-2026-06-01.md) | 创业板组合容量复验 |
-| [../evidence/reviews/P1-PORTFOLIO-CAPACITY-STAR-MARKET-2026-06-01.md](../evidence/reviews/P1-PORTFOLIO-CAPACITY-STAR-MARKET-2026-06-01.md) | 科创板组合容量复验 |
+当前真实门禁只从 [CURRENT-REAL-SCENARIO-GATES.md](../evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md) 进入。所有 dated 复验和审查报告都在 `../evidence/reviews/archive/`，按当前入口的链接或明确的审计追溯需要读取；不要扫描或首轮加载整个 archive。

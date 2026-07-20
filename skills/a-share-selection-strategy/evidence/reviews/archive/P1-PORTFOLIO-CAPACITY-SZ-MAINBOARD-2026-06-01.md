@@ -25,7 +25,7 @@
 
 - `new_count=40`
 - `unique=40`
-- 与 `skills/a-share-selection-strategy/evidence/reviews/REAL-SCENARIO-GATES-2026-05-30.md` 中已展开池集合、已记录交集符号和 `600438` 的交集为 `[]`
+- 与 `skills/a-share-selection-strategy/evidence/reviews/archive/REAL-SCENARIO-GATES-2026-05-30.md` 中已展开池集合、已记录交集符号和 `600438` 的交集为 `[]`
 
 窗口和约束:
 

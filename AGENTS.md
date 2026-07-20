@@ -22,7 +22,7 @@
 | Agent 调用规则和任务路由 | `skills/a-share-selection-strategy/SKILL.md` |
 | 输出汇报模板 | `skills/a-share-selection-strategy/templates/output-templates.md` |
 | 当前真实门禁状态 | `skills/a-share-selection-strategy/evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md` |
-| 历史真实门禁证据 | `skills/a-share-selection-strategy/evidence/reviews/REAL-SCENARIO-GATES-2026-05-30.md` |
+| 历史真实门禁证据 | `skills/a-share-selection-strategy/evidence/reviews/archive/`，仅按当前门禁索引或具体审计追溯进入 |
 
 ## 输入数据要求
 

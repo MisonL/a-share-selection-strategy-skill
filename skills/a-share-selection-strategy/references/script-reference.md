@@ -29,7 +29,7 @@
 
 稳定 CLI、取数入口、门禁回测入口和内部 helper 的完整边界见 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md)。本文件只在已经确定入口后提供配置、依赖、字段和命令细节。
 
-`../configs/script_entrypoints.json` 必须覆盖 `scripts/` 根层每个 `.py`，并把它们归入 `stable_cli`、`fetch_cli`、`gate_backtest_cli` 或 `internal_helper`。注册表 v2 用 `visibility`、`kind`、`stability`、`domain` 和 `skill_route` 拆开描述入口可见性、脚本类型、稳定性、领域和 Agent 路由资格；新增、删除或移动根层脚本时，先更新注册表，再更新 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) 的解释层。
+`../configs/script_entrypoints.json` 必须覆盖 `scripts/` 根层每个 `.py`，并把它们归入 `stable_cli`、`fetch_cli`、`gate_backtest_cli` 或 `internal_helper`。注册表 v3 的分类轴是 `visibility`、`kind`、`stability`、`domain` 和 `default_entry`；`skill_route` 是每个条目的路径命中资格字段。它们共同描述入口可见性、脚本类型、稳定性、领域、默认任务入口和路径命中资格。只有三个常规主入口为 `default_entry=true`，其他 public CLI 仍须在任务路径或 artifact 门禁命中后显式选择。新增、删除或移动根层脚本时，先更新注册表，再更新 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) 的解释层。
 
 新增内部 helper 默认不得放到 `scripts/` 根层；放入 `scripts/lib/` 或后续内部子目录。根层 internal helper 是兼容预算，只允许迁出、删减或保留，不允许无审计地扩张。
 

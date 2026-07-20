@@ -50,7 +50,7 @@ skills/
 
 脚本以 CLI 为稳定入口。配置文件的权威路径在 `skills/a-share-selection-strategy/configs/`；CLI 仍兼容旧命令里传入的 `skills/a-share-selection-strategy/scripts/*.json`，会自动回退到 `configs/`。Python 复用时需自行将 `skills/a-share-selection-strategy/scripts/` 加入 `PYTHONPATH` 或 `sys.path`。
 
-`skills/a-share-selection-strategy/configs/script_entrypoints.json` 是脚本入口机器注册表，只用于本地一致性校验和审计；用户仍按上表和 `skills/a-share-selection-strategy/scripts/SCRIPTS.md` 调用 CLI。
+`skills/a-share-selection-strategy/configs/script_entrypoints.json` 是脚本入口机器注册表，只用于本地一致性校验和审计；其中 `default_entry=true` 仅标记常规任务拓扑的三个主入口，其他 public CLI 仍按路径命中使用。用户仍按上表和 `skills/a-share-selection-strategy/scripts/SCRIPTS.md` 调用 CLI。
 
 仅说“帮我选今天 A 股”但未提供行情文件或明确联网授权时，不运行 CLI、不输出候选股，先使用“无法直接选股”模板。
 

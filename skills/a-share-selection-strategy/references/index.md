@@ -12,7 +12,7 @@
 | 脚本分层 | [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) | Agent 和实操者 | 稳定 CLI、取数入口、门禁回测入口和 helper 边界 |
 | 脚本审计 | [script-inventory.md](script-inventory.md) | reviewer 和维护者 | 逐个脚本的用途、必要性判断、保留或迁移方向 |
 | 脚本参考 | [script-reference.md](script-reference.md) | Agent 和实操者 | 配置文件、依赖、数据源能力边界、字段映射、输入契约和命令细节 |
-| 机器配置 | `../configs/data_sources.json`、`../configs/source_routing.json`、`../configs/script_entrypoints.json` | Agent 和测试 | 数据源能力、业务场景源路由和脚本入口注册表；入口注册表 v2 拆分 `visibility/kind/stability/domain/skill_route`，只用于审计和一致性检查，不做运行时自动选源、自动 fallback 或脚本 dispatch |
+| 机器配置 | `../configs/data_sources.json`、`../configs/source_routing.json`、`../configs/script_entrypoints.json` | Agent 和测试 | 数据源能力、业务场景源路由和脚本入口注册表；入口注册表 v3 的分类轴是 `visibility/kind/stability/domain/default_entry`，`skill_route` 标记路径命中资格；只用于审计和一致性检查，不做运行时自动选源、自动 fallback 或脚本 dispatch |
 | 手册 | [../instructions/runbook.md](../instructions/runbook.md) | 实操者和 Agent | 完整 demo、联网取数、P1/P2/P3 门禁命令 |
 | 工作流 | [../instructions/full-a-strict-workflow.md](../instructions/full-a-strict-workflow.md) | Agent | 全 A / 全市场真实任务的主路径、批次策略和失败恢复 |
 | 专题 | [factor-framework.md](factor-framework.md)、[prediction-derived-profile.md](prediction-derived-profile.md) | 实现者和审查者 | 因子公式、预测列口径、评分边界 |
@@ -25,7 +25,7 @@
 | 目标 | 先读 | 继续读 |
 | --- | --- | --- |
 | 跑本地 demo、今日入口、验证命令 | [项目 README](../../../README.md) | [../instructions/runbook.md](../instructions/runbook.md) 的场景快速路由 |
-| 让 AI Agent 正确调用本 Skill | [SKILL.md](../SKILL.md) | 只在需要脚本边界时读 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) |
+| 让 AI Agent 正确调用本 Skill | [SKILL.md](../SKILL.md) | 本地和定向任务直接使用 `default_entry=true` 的任务拓扑入口；只在需要脚本边界时读 [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) |
 | 跑全 A / 全市场真实任务 | [SKILL.md](../SKILL.md) | [../instructions/full-a-strict-workflow.md](../instructions/full-a-strict-workflow.md) |
 | 了解评分因子和输出字段 | [factor-framework.md](factor-framework.md) | [prediction-derived-profile.md](prediction-derived-profile.md) |
 | 查 CLI 入口或 helper 边界 | [../scripts/SCRIPTS.md](../scripts/SCRIPTS.md) | 需要配置、依赖或字段映射时读 [script-reference.md](script-reference.md) |

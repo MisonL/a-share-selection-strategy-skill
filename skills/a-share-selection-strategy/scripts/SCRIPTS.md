@@ -1,22 +1,14 @@
 # 脚本清单
 
-本文件是 `scripts/` 目录入口分层面向人类和 Agent 的解释层。看到脚本文件时，先按“稳定 CLI / 取数入口 / 门禁回测入口 / 内部 helper”四类判断，不要按文件数量或 `__main__` 保护猜入口。
+本文件是 `scripts/` 目录入口分层面向人类和 Agent 的解释层。仅当任务拓扑没有给出默认动作，或需要判断公开 CLI、路径命中入口和 internal helper 边界时才读它；本地评分、定向真实任务和今日低价超短直接按 `SKILL.md` 的任务拓扑执行。
 
 配置文件的权威路径在 `../configs/`；旧命令传入的 `scripts/*.json` 会由 CLI 自动回退到 `../configs/`。
 
-脚本入口机器注册表见 `../configs/script_entrypoints.json`，它是入口机器分类事实源。本文件负责解释用途和选择规则；注册表只用于审计根层 `.py` 是否被归类，不是运行时 dispatcher，也不替代 CLI 合约。注册表 v2 额外标注 `visibility`、`kind`、`stability`、`domain` 和 `skill_route`；`skill_route=false` 的 internal helper 不进入 Agent 默认路由。
+脚本入口机器注册表见 `../configs/script_entrypoints.json`，它是入口机器分类事实源。本文件负责解释用途和选择规则；注册表只用于审计根层 `.py` 是否被归类，不是运行时 dispatcher，也不替代 CLI 合约。注册表 v3 将 `visibility`、`kind`、`stability`、`domain` 和 `default_entry` 作为分类轴，并以 `skill_route` 标记每个条目的路径命中资格：只有 `default_entry=true` 的三个常规主入口可由任务拓扑直接选择，其他 public CLI 仅在路径或 artifact 门禁命中后使用。
 
 根层 `.py` 路径保持兼容；部分内部 helper 的真实实现已迁入 `lib/`，根层同名文件只做 re-export 和直接执行 fail-fast。用户命令仍使用本文件列出的根层 CLI，不直接调用 `lib/`。
 
-新的内部 helper 不再新增到 `scripts/` 根层；默认放入 `lib/` 或后续更细分的内部子目录。根层 internal helper 只是兼容预算，后续迁移只能减少或保持，不应增加。HTML、runner、walk-forward、zzshare fetch、gates support 和 selection_core helper 已分别下沉到 `lib/report_html/`、`lib/runner/`、`lib/walk_forward/`、`lib/fetch/`、`lib/gates/` 和 `lib/selection_core/`，根层只保留相关 public CLI 和 4 个 compatibility wrapper。
-
-依赖方向默认从公开 CLI 指向内部 helper；internal helper 默认不得 import public CLI。共享 OHLCV frame 校验逻辑位于 `lib/a_share_selection_validation.py`，公开 CLI 和内部 helper 都从内部模块复用。跨 runner 与 HTML 展示层的纯运行状态契约集中在 `lib/a_share_selection_run_state.py`，包括 partial result、synthetic demo 和 step execution 判定；`lib/report_html/` 可以依赖这一共享模块，但不得 import `lib.runner`，共享模块也不得 import `lib.runner` 或 `lib.report_html`。
-
-`lib/` 内部实现分为纯 helper、parser 层和明确产物层。纯 helper 不得新增 argparse CLI、不得直接写出 CSV/JSON/HTML 等产物，也不得 import 公开 CLI；parser 层只构造 public CLI 的 `ArgumentParser`；明确产物层只在 public CLI 调用下写出 run artifact。`lib/runner/run_today_a_share_selection_retry_plan.py` 是 `prepare_history_retry_symbols.py` 与今日 runner 共同复用的恢复计划纯逻辑，根层 CLI 只保留 parser 和 artifact I/O。`lib/fetch/zzshare_a_share_checkpoint.py` 是 zzshare 长跑 checkpoint artifact 边界，不是用户入口。需要直接执行时只允许 fail-fast。
-
-`lib/selection_core/` 只接收评分、字段、符号、数据解析、披露、诊断和本地校验逻辑。runner 编排、HTML 展示、provider 取数、walk-forward artifact 检查和 gate/backtest support 不得放回 selection_core。
-
-`compatibility_wrapper` 条目必须在 `../configs/script_entrypoints.json` 记录 `migration_target` 和 `deletion_blocker`；内部运行路径应优先导入 `lib.*`，没有外部兼容理由的 wrapper 应删除。
+新的 internal helper 不再新增到 `scripts/` 根层；默认放入 `lib/` 分层包。根层 internal helper 只是兼容预算，后续迁移只能减少或保持，不应增加。内部运行路径优先导入 `lib.*`，但 import 路径不是稳定用户 API；完整分层、复杂度豁免和迁移判断见 [../references/script-inventory.md](../references/script-inventory.md)。
 
 命令细节、依赖和字段映射仍以 [../references/script-reference.md](../references/script-reference.md) 为准；脚本边界和 helper 边界先读本文件。
 
@@ -75,58 +67,17 @@
 - `a_share_selection_config.py`
 - `a_share_selection_paths.py`
 
-`lib/a_share_selection_run_state.py` 是 runner 与 HTML 展示层共用的纯运行状态模块，不在 `scripts/` 根层、不属于根层 script entrypoint registry，也不是用户 CLI。它只能由内部模块通过 `lib.a_share_selection_run_state` 导入。
-
-`lib/gates/incremental_history_execution.py` 只负责计划执行、resume、provider command 和 manifest 状态；`lib/gates/incremental_history_artifacts.py` 负责 bucket CSV/metadata 校验、聚合和原子发布。二者只能由公开 `execute_incremental_history_plan.py` 调用，都不是独立 CLI，也不允许隐式选择或切换数据源。
-
-`lib/gates/full_a_clean_pool_provenance.py` 是由 `prepare_clean_history_pool.py` 调用的 artifact 校验 helper。它对 universe、原始 history、clean prices/metadata/report 和可选 short-history 清单重算 symbol 集合、计数、路径和 SHA-256；至少 4,000 个 symbol 的 sample guard 还必须与完整 baostock metadata 合同、逐标 freshness 和 history-clean 全行保真同时通过，数量本身不是完整性证明。`lib/gates/full_a_clean_pool_artifacts.py` 负责前后双指纹与路径身份，`lib/gates/full_a_clean_pool_lineage.py` 负责逐标日期与 retained row/content 对账，二者都不写 artifact。三个 helper 只返回证明数据，不写入、补齐或切换任何数据源，更不能单独提升 runner 的 `full_market_claim_allowed`。
-
-`lib/runner/run_today_a_share_selection_full_a_provenance.py` 是 runner 的内部两阶段门禁：评分前读取 clean/final prices 的 `symbol` 列，绑定 exact clean/universe 输入、过滤计数和四类 symbol-set SHA-256；评分后用已验证 final 集合的数量和哈希对账 diagnostics/candidates。只有无任何剔除时才允许 breadth 声明，失败时清除未验证评分产物。它不是 CLI，也不改变默认 runner 输出。
-
-`lib/runner/run_today_a_share_selection_prices_sidecar.py` 属于明确产物层，只能由公开 runner 写入和校验过滤后 Parquet 的 sidecar；复用时同时校验文件指纹、实际 row/symbol/date 统计、symbol-set SHA-256 和过滤契约。它不是独立 CLI，也不获取或补齐行情。
-
-直接复用 Python 代码时，需要将本目录加入 `PYTHONPATH` 或 `sys.path`。不要把内部 helper 的导入路径当成稳定 package API。
-
-HTML 报告模块已下沉到 `lib/report_html/`。`a_share_selection_html_sections.py`、`a_share_selection_html_scripts.py`、`a_share_selection_html_candidate_master.py` 仍是维护热点，只能继续作为展示层 helper 拆分，不能把候选事实、门禁判断或机器字段来源移动进 HTML 展示层。后续拆分时保留 `run_today_a_share_selection.py` 和 `report.html` 输出契约不变。
-
-后续结构收口优先级：逐步解除 4 个 compatibility wrapper 的外部 root import blocker；HTML、runner、walk-forward、zzshare fetch helper、gates support helper 和 selection_core helper 已完成下沉；公开 CLI 路径默认冻结，不为整理目录而移动用户命令。
-
-## 维护热点
-
-以下文件是已知维护热点，不是新增入口，也不是当前必须拆分的阻塞项。后续拆分必须保持 public CLI、CSV/JSON artifact 和 `report.html` 输出契约不变。
-
-| 文件 | 当前边界 | 后续拆分原则 |
-| --- | --- | --- |
-| `lib/report_html/a_share_selection_html_sections.py` | HTML section rendering | 只拆展示层 section 组合，不移动候选事实、门禁判断或机器字段来源 |
-| `lib/report_html/a_share_selection_html_scripts.py` | HTML 内嵌交互脚本字符串 | 只拆前端展示脚本片段，不改变报告数据模型 |
-| `lib/report_html/a_share_selection_html_candidate_master.py` | 候选详情展示组装 | 只拆 candidate display helpers，不改变候选 CSV/diagnostics 语义 |
-| `lib/runner/run_today_a_share_selection_summary.py` | summary 字段投影和兼容字段组装 | 只按稳定领域子视图拆分，不改变 summary/stdout/CSV provenance 字段 |
-| `run_today_a_share_selection.py` | public runner 编排和失败收口 | 继续下沉独立职责，但保留单一 public CLI、步骤顺序和失败清理语义 |
-
-上述超过 800 行的文件已记录职责豁免。豁免原因不是忽略复杂度，而是当前内容分别属于声明式展示、字段投影或单入口编排；按固定行数机械拆分会扩大跨文件跳转和兼容回归面。只有形成可命名的独立职责，并有对应 artifact/HTML 契约测试时才继续拆分。
-
-机器可校验的精确豁免集合位于 `../configs/production_complexity_exemptions.json`。`validate_skill_changes.py` 会按生产文件总行数和函数非空行数重算当前集合；新增超限、漏登记或已经不再超限的陈旧豁免都会失败。
-
-超过 80 行但仍保持内聚的函数也必须显式登记。当前豁免只适用于声明式构造，不适用于网络循环、状态机、失败处理或评分执行流：
-
-| 函数 | 声明式职责 | 后续治理条件 |
-| --- | --- | --- |
-| `candidate_stock_dialog()` | 生成单一候选详情 dialog 的 HTML 结构 | 形成稳定展示子组件并通过 HTML 快照/浏览器回归后拆分 |
-| `history_selection_fields()` | 定义历史抓取展示字段顺序和标签 | 字段分组成为独立用户视图时拆分 |
-| `runner_disclosure_stdout()` | 定义 runner stdout 机器字段投影 | stdout 契约分组并有兼容测试时拆分 |
-| `history_metadata_for_output()` | 将 provider metadata 投影为 runner 字段 | provider-neutral 与 provider-specific 字段形成稳定边界时拆分 |
-| `add_history_options()` | 集中声明 history argparse 参数 | 参数组拥有独立 parser 合约时拆分 |
-| `provenance_fields()` | 定义 provenance 字段映射 | 字段组形成稳定 schema 子对象时拆分 |
+`lib/a_share_selection_run_state.py` 是 runner 与 HTML 展示层共用的纯运行状态模块，不在 `scripts/` 根层、不属于根层 script entrypoint registry，也不是用户 CLI。`lib/report_html/` 只能作为展示层 helper，不能把候选事实、门禁判断或机器字段来源移入展示层；`report.html` 输出契约不变。全 A provenance、Parquet sidecar、复杂度豁免和维护热点只在审计或维护任务中按 [../references/script-inventory.md](../references/script-inventory.md) 读取。
 
 ## 判定规则
 
-1. 看到 `create_demo_data.py`、`validate_ohlcv.py`、`score_candidates.py`、`run_today_a_share_selection.py`、`slice_prices_as_of.py`，先按稳定 CLI 处理。
+1. 常规本地或定向任务先按 `default_entry=true` 的 `validate_ohlcv.py`、`score_candidates.py`、`run_today_a_share_selection.py` 处理；`create_demo_data.py` 和 `slice_prices_as_of.py` 只在 demo 或时间切片路径命中时使用。
 2. 看到 `fetch_*.py`，先按取数入口处理，检查数据源边界和落地 metadata。
 3. 看到 `generate_lightgbm_predictions.py`、`allocate_*_capital.py`、`backtest_*`、`portfolio_*`、`run_baostock_walk_forward.py`、`validate_walk_forward_*`、`probe_*`，先按门禁和回测入口处理。
 4. 看到根层 `a_share_selection_calendar_contract.py`、`a_share_selection_cli_guard.py`、`a_share_selection_config.py`、`a_share_selection_paths.py`，先按兼容 wrapper 处理；`lib/report_html/` 是 HTML 展示层内部实现包，`lib/runner/` 是 `run_today_a_share_selection.py` 的内部实现包，`lib/walk_forward/` 是 public walk-forward gate CLI 的内部实现包，`lib/fetch/` 是 provider fetch helper 包，`lib/gates/` 是 gate/backtest support helper 包，`lib/selection_core/` 是评分、字段、符号和数据校验内部实现包。
 5. `__main__` 只代表可 fail-fast，不代表对用户公开的 CLI 合约。
 
-`skill_route=true` 表示脚本允许被任务拓扑引用，不表示 Agent 应在首轮从 29 个 public CLI 中随机选择。默认主入口仍是 `validate_ohlcv.py`、`score_candidates.py` 和 `run_today_a_share_selection.py`；fetch、prediction、backtest、capacity、probe、recovery 和 validator CLI 只在路径命中或 artifact 门禁需要时使用。
+`default_entry=true` 表示 Agent 可直接按任务拓扑选择的三个常规主入口。`skill_route=true` 表示 public CLI 可在路径命中后引用，不表示 Agent 应在首轮从 29 个 public CLI 中随机选择；fetch、prediction、backtest、capacity、probe、recovery 和 validator CLI 仍只在路径命中或 artifact 门禁需要时使用。
 
 ## 入口选择规则
 

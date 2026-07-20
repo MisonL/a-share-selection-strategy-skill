@@ -49,17 +49,39 @@
 | `validate_walk_forward_artifacts.py` | `gate_backtest_cli` | `gate_backtest` | 100 | Validate walk-forward artifact contents without rerunning the pipeline. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
 | `validate_walk_forward_manifest.py` | `gate_backtest_cli` | `gate_backtest` | 413 | Validate a walk-forward runner manifest without rerunning the pipeline. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
 
+## 内部实现边界
+
+依赖方向默认从公开 CLI 指向内部 helper；internal helper 默认不得 import public CLI。共享 OHLCV frame 校验逻辑位于 `lib/a_share_selection_validation.py`，公开 CLI 和内部 helper 都从内部模块复用。跨 runner 与 HTML 展示层的纯运行状态契约集中在 `lib/a_share_selection_run_state.py`，包括 partial result、synthetic demo 和 step execution 判定；`lib/report_html/` 可以依赖这一共享模块，但不得 import `lib.runner`，共享模块也不得 import `lib.runner` 或 `lib.report_html`。
+
+`lib/` 内部实现分为纯 helper、parser 层和明确产物层。纯 helper 不得新增 argparse CLI、不得直接写出 CSV/JSON/HTML 等产物，也不得 import 公开 CLI；parser 层只构造 public CLI 的 `ArgumentParser`；明确产物层只在 public CLI 调用下写出 run artifact。`lib/runner/run_today_a_share_selection_retry_plan.py` 是 `prepare_history_retry_symbols.py` 与今日 runner 共同复用的恢复计划纯逻辑，根层 CLI 只保留 parser 和 artifact I/O。`lib/fetch/zzshare_a_share_checkpoint.py` 是 zzshare 长跑 checkpoint artifact 边界，不是用户入口。需要直接执行时只允许 fail-fast。
+
+`lib/selection_core/` 只接收评分、字段、符号、数据解析、披露、诊断和本地校验逻辑。runner 编排、HTML 展示、provider 取数、walk-forward artifact 检查和 gate/backtest support 不得放回 selection_core。
+
+`compatibility_wrapper` 条目必须在 `../configs/script_entrypoints.json` 记录 `migration_target` 和 `deletion_blocker`；内部运行路径应优先导入 `lib.*`，没有外部兼容理由的 wrapper 应删除。直接复用 Python 代码时，需要将 `scripts/` 加入 `PYTHONPATH` 或 `sys.path`，但不要把内部 helper 的导入路径当成稳定 package API。
+
+### 全 A provenance 和明确产物层
+
+`lib/gates/incremental_history_execution.py` 只负责计划执行、resume、provider command 和 manifest 状态；`lib/gates/incremental_history_artifacts.py` 负责 bucket CSV/metadata 校验、聚合和原子发布。二者只能由公开 `execute_incremental_history_plan.py` 调用，都不是独立 CLI，也不允许隐式选择或切换数据源。
+
+`lib/gates/full_a_clean_pool_provenance.py` 是由 `prepare_clean_history_pool.py` 调用的 artifact 校验 helper。它对 universe、原始 history、clean prices/metadata/report 和可选 short-history 清单重算 symbol 集合、计数、路径和 SHA-256；至少 4,000 个 symbol 的 sample guard 还必须与完整 baostock metadata 合同、逐标 freshness 和 history-clean 全行保真同时通过，数量本身不是完整性证明。`lib/gates/full_a_clean_pool_artifacts.py` 负责前后双指纹与路径身份，`lib/gates/full_a_clean_pool_lineage.py` 负责逐标日期与 retained row/content 对账，二者都不写 artifact。三个 helper 只返回证明数据，不写入、补齐或切换任何数据源，更不能单独提升 runner 的 `full_market_claim_allowed`。
+
+`lib/runner/run_today_a_share_selection_full_a_provenance.py` 是 runner 的内部两阶段门禁：评分前读取 clean/final prices 的 `symbol` 列，绑定 exact clean/universe 输入、过滤计数和四类 symbol-set SHA-256；评分后用已验证 final 集合的数量和哈希对账 diagnostics/candidates。只有无任何剔除时才允许 breadth 声明，失败时清除未验证评分产物。它不是 CLI，也不改变默认 runner 输出。
+
+`lib/runner/run_today_a_share_selection_prices_sidecar.py` 属于明确产物层，只能由公开 runner 写入和校验过滤后 Parquet 的 sidecar；复用时同时校验文件指纹、实际 row/symbol/date 统计、symbol-set SHA-256 和过滤契约。它不是独立 CLI，也不获取或补齐行情。
+
+HTML 报告模块已下沉到 `lib/report_html/`。`a_share_selection_html_sections.py`、`a_share_selection_html_scripts.py`、`a_share_selection_html_candidate_master.py` 只能继续作为展示层 helper 拆分，不能把候选事实、门禁判断或机器字段来源移动进 HTML 展示层。后续拆分时保留 `run_today_a_share_selection.py` 和 `report.html` 输出契约不变。
+
 ## 后续迁移顺序
 
 1. 继续冻结 29 个 public CLI 根层路径，先维护命令兼容。
 2. 不再新增根层 internal helper；新 helper 进入 `scripts/lib/` 或后续内部子包。
 3. HTML、runner、walk-forward、zzshare fetch helper、gates support helper 与 selection_core helper 已完成下沉；继续拆 HTML 大文件时只拆展示逻辑，不移动事实判断。
 4. 兼容 wrapper 保留到 blocker 解除；不要为了减少 4 个 wrapper 破坏旧 import 或测试。
-5. 每次迁移都同步 `script_entrypoints.json`、本文件和文档一致性测试。
+5. 每次迁移都同步 `script_entrypoints.json`、本文件、`tests/test_skill_entrypoint_contracts.py` 和相关文档一致性测试。
 
 ## 维护热点
 
-这些文件当前仍偏大，但已经迁入内部实现层。它们不扩大根层入口面，不阻塞当前 Skill 使用；后续拆分应作为独立任务处理。它们属于声明式展示、字段投影或报告组装边界，按固定行数拆分会增加跨文件跳转并扩大 `report.html` 回归面；在 public CLI、CSV/JSON 和 HTML 契约均有测试保护前，允许保持内聚实现。
+这些文件当前仍偏大，但已经迁入内部实现层。它们不是新增入口，也不是当前必须拆分的阻塞项，不扩大根层入口面；后续拆分应作为独立任务处理。它们属于声明式展示、字段投影或报告组装边界，按固定行数拆分会增加跨文件跳转并扩大 `report.html` 回归面；在 public CLI、CSV/JSON 和 HTML 契约均有测试保护前，允许保持内聚实现。
 
 | 文件 | 原因 | 约束 |
 | --- | --- | --- |
@@ -68,3 +90,18 @@
 | `lib/report_html/a_share_selection_html_candidate_master.py` | 候选详情展示组装集中 | 只拆 candidate display helpers，不改变候选 CSV/diagnostics 语义 |
 | `lib/runner/run_today_a_share_selection_summary.py` | summary 字段投影和兼容字段集中 | 只按稳定子视图拆分，不改变 summary/stdout/CSV provenance 字段 |
 | `run_today_a_share_selection.py` | 单一 public runner 的编排和失败收口集中 | 继续下沉独立职责，但不拆成多个用户入口或改变步骤顺序 |
+
+上述超过 800 行的文件已记录职责豁免。豁免原因不是忽略复杂度，而是当前内容分别属于声明式展示、字段投影或单入口编排；按固定行数机械拆分会扩大跨文件跳转和兼容回归面。只有形成可命名的独立职责，并有对应 artifact/HTML 契约测试时才继续拆分。
+
+机器可校验的精确豁免集合位于 `../configs/production_complexity_exemptions.json`。`validate_skill_changes.py` 会按生产文件总行数和函数非空行数重算当前集合；新增超限、漏登记或已经不再超限的陈旧豁免都会失败。
+
+超过 80 行但仍保持内聚的函数也必须显式登记。当前豁免只适用于声明式构造，不适用于网络循环、状态机、失败处理或评分执行流：
+
+| 函数 | 声明式职责 | 后续治理条件 |
+| --- | --- | --- |
+| `candidate_stock_dialog()` | 生成单一候选详情 dialog 的 HTML 结构 | 形成稳定展示子组件并通过 HTML 快照/浏览器回归后拆分 |
+| `history_selection_fields()` | 定义历史抓取展示字段顺序和标签 | 字段分组成为独立用户视图时拆分 |
+| `runner_disclosure_stdout()` | 定义 runner stdout 机器字段投影 | stdout 契约分组并有兼容测试时拆分 |
+| `history_metadata_for_output()` | 将 provider metadata 投影为 runner 字段 | provider-neutral 与 provider-specific 字段形成稳定边界时拆分 |
+| `add_history_options()` | 集中声明 history argparse 参数 | 参数组拥有独立 parser 合约时拆分 |
+| `provenance_fields()` | 定义 provenance 字段映射 | 字段组形成稳定 schema 子对象时拆分 |

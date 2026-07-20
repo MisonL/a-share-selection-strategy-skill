@@ -399,6 +399,27 @@ class SkillEntrypointContractTests(unittest.TestCase):
             registry["entries"]["fetch_akshare_a_share.py"]["primary_artifacts"],
         )
 
+    def test_gate_backtest_table_and_classification_rule_match_registry(self) -> None:
+        registry = load_registry()
+        scripts_index = (SCRIPTS_ROOT / "SCRIPTS.md").read_text(encoding="utf-8")
+        gate_backtest_scripts = {
+            script
+            for script, metadata in registry["entries"].items()
+            if metadata["category"] == "gate_backtest_cli"
+        }
+        gate_backtest_rows = markdown_table_rows_after_heading(
+            scripts_index, "## 门禁和回测入口"
+        )
+        documented_scripts = {
+            markdown_code_value(row[0]) for row in gate_backtest_rows[2:]
+        }
+
+        self.assertEqual(gate_backtest_scripts, documented_scripts)
+        self.assertIn(
+            "看到“门禁和回测入口”表中的任一 public CLI，先按门禁和回测入口处理",
+            scripts_index,
+        )
+
     def test_root_internal_helper_surface_does_not_expand(self) -> None:
         scripts_index = (SCRIPTS_ROOT / "SCRIPTS.md").read_text(encoding="utf-8")
         inventory = (SKILL_ROOT / "references/script-inventory.md").read_text(

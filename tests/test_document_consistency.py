@@ -793,7 +793,20 @@ class DocumentConsistencyTests(unittest.TestCase):
             self.assertIn("--full-a-provenance", document)
             self.assertIn("full_market_closure_eligible", document)
             self.assertIn("diagnostics", document)
-        self.assertIn("不能替代 runner 的 `full_market_claim_allowed`", index)
+        for field in [
+            "full_market_closure_eligible",
+            "full_a_provenance_closure_eligible",
+            "full_market_claim_allowed",
+        ]:
+            self.assertIn(f"`{field}`", index)
+        self.assertIn("clean-pool provenance 原始预检查字段", index)
+        self.assertIn(
+            "将 `full_market_closure_eligible` 投影到本轮 manifest 的字段", index
+        )
+        self.assertIn("不是独立重算，也不替代最终 `full_market_claim_allowed`", index)
+        self.assertIn("最终过滤零剔除", index)
+        self.assertIn("评分后 candidates/diagnostics 与最终 prices 对账通过", index)
+        self.assertIn("状态为 `valid` 才可能为 true", index)
         self.assertIn("不能单独提升 runner 的 `full_market_claim_allowed`", inventory)
         self.assertIn(
             "lib/runner/run_today_a_share_selection_full_a_provenance.py",

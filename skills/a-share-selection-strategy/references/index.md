@@ -77,10 +77,11 @@
 | --- | --- | --- |
 | `execution_path` | 今日 runner 实际走过的任务路径 | 只说明本次执行事实，不等于任务目标已经满足 |
 | `coverage_class` | 本轮覆盖等级，如本地输入、小样本、显式扩池 | `spot_derived_sample` 不能写成全 A 或扩大股票池 |
-| `full_market_claim_allowed` | runner 是否允许自动宣称全市场闭环 | `false` 时必须按边界缩短结论 |
 | `full_market_claim_boundary` | 不能外推为全市场闭环的具体原因 | 必须和候选数一起汇报 |
-| `full_market_closure_eligible` | clean-pool provenance 对 universe/history/clean artifact 的预检查结果 | 要求至少 4,000 个 symbol、完整 baostock metadata 合同且清洗前后无排除；仍不能替代 runner 的 `full_market_claim_allowed` |
-| `full_a_provenance_validation_status` | runner 对显式 clean-pool provenance 的两阶段验证状态 | 只有 `valid` 且最终过滤零剔除、diagnostics 全覆盖时才可能允许 breadth 声明 |
+| `full_market_closure_eligible` | clean-pool provenance 原始预检查字段，描述 universe/history/clean artifact 的 lineage 是否闭合 | 要求至少 4,000 个 symbol、完整 baostock metadata 合同且清洗前后无排除；只说明上游 artifact，不是 runner 输入验证或最终全市场声明 |
+| `full_a_provenance_closure_eligible` | runner 在评分前验证显式 provenance 后，将 `full_market_closure_eligible` 投影到本轮 manifest 的字段 | 只是已验证 provenance 的预条件，不是独立重算，也不替代最终 `full_market_claim_allowed` |
+| `full_a_provenance_validation_status` | runner 对显式 clean-pool provenance 的两阶段验证状态 | `pre_score_validated` 只表示评分前验证；只有评分后 candidates/diagnostics 与最终 prices 对账通过才会成为 `valid` |
+| `full_market_claim_allowed` | runner 的最终全市场 breadth 声明字段 | 只有投影字段为 true、最终过滤零剔除、评分后 candidates/diagnostics 与最终 prices 对账通过且状态为 `valid` 才可能为 true；仍不证明实时行情、模型、成交或收益 |
 | `full_a_provenance_as_of_date` | universe snapshot、history metadata 与 history 实际最大交易日共同确认的新鲜度日期 | 必须与最终 runner 的 `--min-symbol-latest-date` 相同；不能把请求日当成未观测到的交易日 |
 | `history.symbols_before_as_of_date_count` | history 中实际 `date_max` 未达到共同 as-of 的 symbol 数 | 正数时 `full_market_closure_eligible=false`，不得把全局最大日解释为逐标都已更新 |
 | `full_a_provenance_output_cleanup_errors` | 评分后 provenance 对账失败时未能删除的候选或诊断路径 | 非空必须披露，残余文件不得作为本轮成功产物 |

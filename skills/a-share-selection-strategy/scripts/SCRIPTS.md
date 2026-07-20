@@ -73,7 +73,7 @@
 
 1. 常规本地或定向任务先按 `default_entry=true` 的 `validate_ohlcv.py`、`score_candidates.py`、`run_today_a_share_selection.py` 处理；`create_demo_data.py` 和 `slice_prices_as_of.py` 只在 demo 或时间切片路径命中时使用。
 2. 看到 `fetch_*.py`，先按取数入口处理，检查数据源边界和落地 metadata。
-3. 看到 `generate_lightgbm_predictions.py`、`allocate_*_capital.py`、`backtest_*`、`portfolio_*`、`run_baostock_walk_forward.py`、`validate_walk_forward_*`、`probe_*`，先按门禁和回测入口处理。
+3. 看到“门禁和回测入口”表中的任一 public CLI，先按门禁和回测入口处理；其中包括 prediction、sizing、backtest、portfolio、walk-forward、recovery、clean-pool、incremental plan/execute、validator 和 probe 路径。
 4. 看到根层 `a_share_selection_calendar_contract.py`、`a_share_selection_cli_guard.py`、`a_share_selection_config.py`、`a_share_selection_paths.py`，先按兼容 wrapper 处理；`lib/report_html/` 是 HTML 展示层内部实现包，`lib/runner/` 是 `run_today_a_share_selection.py` 的内部实现包，`lib/walk_forward/` 是 public walk-forward gate CLI 的内部实现包，`lib/fetch/` 是 provider fetch helper 包，`lib/gates/` 是 gate/backtest support helper 包，`lib/selection_core/` 是评分、字段、符号和数据校验内部实现包。
 5. `__main__` 只代表可 fail-fast，不代表对用户公开的 CLI 合约。
 

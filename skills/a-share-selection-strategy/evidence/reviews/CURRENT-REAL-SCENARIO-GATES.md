@@ -1,6 +1,6 @@
 # Current Real Scenario Gates
 
-本文件是当前真实门禁状态的唯一人工入口，状态更新时间为 2026-07-17。它只汇总最新可追溯证据，不替代 `archive/` 中的原始 dated report，也不把本地测试、历史成功或单次联网结果外推为长期能力。
+本文件是当前真实门禁状态的唯一人工入口，状态更新时间为 2026-07-21。它只汇总最新可追溯证据，不替代 `archive/` 中的原始 dated report，也不把本地测试、历史成功或单次联网结果外推为长期能力。
 
 ## 事实优先级
 
@@ -24,6 +24,8 @@
 | 真实涨跌停和完整可交易规则 | `not_proven` | [CURRENT-GATES-CLOSEOUT-2026-06-08.md](archive/CURRENT-GATES-CLOSEOUT-2026-06-08.md) | `preclose/pctChg/tradestatus/isST` 可作为控制和诊断字段 | 直接涨跌停字段不可用，`limit_rules_model=not_modeled`，不得推导为规则门禁通过 |
 | 外部数据源长期稳定性、额度和授权 | `not_proven` | [EXTERNAL-SOURCE-STABILITY-2026-07-17.md](archive/EXTERNAL-SOURCE-STABILITY-2026-07-17.md)、[PYTDX-DEFAULT-ENDPOINT-2026-07-17.md](archive/PYTDX-DEFAULT-ENDPOINT-2026-07-17.md) | 仅证明当前网络和参数下的 3 次短窗口探测：21 次调用中 15 次通过，Eastmoney spot 与旧默认 Pytdx 均为 0/3，Akshare 的内部 provider fallback 被显式记录；后续独立复验的新 Pytdx 默认 endpoint 单 symbol 3/3 和两 symbol 请求通过，不属于上述 21 次统计 | 不证明任一源长期稳定、未来免费、授权持续有效、默认或替代 Pytdx host 长期可用，或可自动 fallback |
 | 券商订单、真实成交、滑点和真实资金容量 | `not_run` | [REAL-SCENARIO-GATES-2026-05-30.md](archive/REAL-SCENARIO-GATES-2026-05-30.md) | 无 | 未接入真实券商门禁；任何本地 sizing、订单字段或 backtest 都不能替代 |
+
+2026-07-21 的 [多 Agent 真实任务场景验收](archive/AGENT-REAL-SCENARIO-VALIDATION-2026-07-21.md) 补充复核了定向 Baostock 失败关闭、全 A 股票池和 plan-only 预检、成功空结果的 recovery，以及 Pytdx 严格字段拒绝。它没有执行新的全 A 历史长跑、全 A 评分、prediction、回测或券商流程，因此只作为上述范围和失败语义的补充 evidence，不升级任何表中状态。
 
 ## 状态更新规则
 

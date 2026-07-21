@@ -406,7 +406,7 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("`tokenConfigured=true/false` 也会脱敏", runbook)
         self.assertIn("`--tokenConfigured true/false` 也会脱敏", runbook)
         self.assertIn("脱敏后重名键会保留为稳定的 distinct 字段", runbook)
-        self.assertIn("原始 `/tmp` 路径作为本轮 provenance", runbook)
+        self.assertIn("经脱敏后的 `/tmp` 路径作为本轮 provenance", runbook)
         self.assertIn("绝不复制价格 CSV、Parquet", runbook)
         self.assertIn("不改变数据源路由、自动 fallback、host rotation", runbook)
         self.assertIn("选择依据是 [2026-07-17 的外部源稳定性诊断]", runbook)

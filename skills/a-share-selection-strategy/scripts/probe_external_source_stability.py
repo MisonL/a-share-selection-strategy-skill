@@ -10,6 +10,7 @@ import json
 import math
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,12 @@ from lib.gates.external_source_evidence_archive import (
     paths_overlap,
     validate_archive_destination,
     write_json,
+)
+from lib.gates.external_source_stability_summary import (
+    build_summary as build_probe_summary,
+    command_elapsed_seconds,
+    strict_errors as summary_strict_errors,
+    strict_failure_diagnostics as summary_strict_failure_diagnostics,
 )
 from lib.fetch.pytdx_a_share import DEFAULT_HOST, DEFAULT_PORT
 from lib.selection_core.a_share_selection_command_safety import (
@@ -96,7 +103,12 @@ def main(argv: list[str] | None = None) -> int:
     errors = strict_errors(manifest)
     if errors:
         print_summary(manifest, prefix="ERROR_SUMMARY")
-        print(f"ERROR: strict gate failed; {'; '.join(errors)} output_written=true", file=sys.stderr)
+        diagnostics = strict_failure_diagnostics(manifest)
+        detail = f"; {'; '.join(diagnostics)}" if diagnostics else ""
+        print(
+            f"ERROR: strict gate failed; {'; '.join(errors)}{detail} output_written=true",
+            file=sys.stderr,
+        )
         return 3
     print_summary(manifest)
     return 0
@@ -302,19 +314,38 @@ def run_command(
     )
 
 
-def run_probe(args: argparse.Namespace, *, output_dir: Path, manifest: dict[str, Any], executor: Executor) -> None:
+def run_probe(
+    args: argparse.Namespace,
+    *,
+    output_dir: Path,
+    manifest: dict[str, Any],
+    executor: Executor,
+    monotonic: Callable[[], float] | None = None,
+) -> None:
+    clock = monotonic or time.monotonic
     output_dir.mkdir(parents=True, exist_ok=True)
     for iteration in range(1, int(args.iterations) + 1):
         iteration_dir = output_dir / f"iteration-{iteration}"
         iteration_dir.mkdir(parents=True, exist_ok=True)
         for spec in source_specs(args, iteration_dir):
             timeout = command_timeout(args)
+            started = clock()
+            timed_out = False
             try:
                 result = executor(spec.command, timeout)
             except subprocess.TimeoutExpired as exc:
+                timed_out = True
                 result = timeout_result(spec.command, exc)
+            elapsed = command_elapsed_seconds(started, clock())
             metadata = read_metadata(spec.metadata_path)
-            source_result = source_record(spec, result, metadata)
+            source_result = source_record(
+                spec,
+                result,
+                metadata,
+                command_elapsed_seconds=elapsed,
+                command_timeout_seconds=timeout,
+                command_timed_out=timed_out,
+            )
             manifest["results"].append(source_result)
     manifest["summary"] = build_summary(manifest)
 
@@ -519,17 +550,30 @@ def source_record(
     spec: SourceSpec,
     result: subprocess.CompletedProcess[str],
     metadata: dict[str, Any],
+    *,
+    command_elapsed_seconds: float | None = None,
+    command_timeout_seconds: float | None = None,
+    command_timed_out: bool = False,
 ) -> dict[str, Any]:
     checks = source_checks(spec.name, metadata, spec.command)
     passed = result.returncode == 0 and all(item["passed"] for item in required_checks(checks))
+    metadata_output_is_symlink = spec.metadata_path.is_symlink()
+    metadata_output_is_file = (
+        not metadata_output_is_symlink and spec.metadata_path.is_file()
+    )
     return {
         "source": spec.name,
         "command": sanitize_command(spec.command),
         "returncode": result.returncode,
+        "command_elapsed_seconds": command_elapsed_seconds,
+        "command_timeout_seconds": command_timeout_seconds,
+        "command_timed_out": command_timed_out,
         "stdout": sanitize_text(decode_timeout_output(result.stdout)),
         "stderr": sanitize_text(decode_timeout_output(result.stderr)),
-        "output": str(spec.output_path),
-        "metadata_output": str(spec.metadata_path),
+        "output": sanitize_text(str(spec.output_path)),
+        "metadata_output": sanitize_text(str(spec.metadata_path)),
+        "metadata_output_is_file": metadata_output_is_file,
+        "metadata_output_is_symlink": metadata_output_is_symlink,
         "metadata": sanitize_persisted_value(metadata),
         "checks": checks,
         "passed": passed,
@@ -692,46 +736,24 @@ def check(name: str, passed: bool, *, required: bool = True) -> dict[str, Any]:
 
 
 def build_summary(manifest: dict[str, Any]) -> dict[str, Any]:
-    results = manifest["results"]
-    by_source = {source: [item for item in results if item["source"] == source] for source in sorted({item["source"] for item in results})}
-    return {
-        "iterations": manifest["iterations"],
-        "total_runs": len(results),
-        "passed_runs": sum(1 for item in results if item["passed"]),
-        "sources": {
-            source: {
-                "runs": len(items),
-                "passed_runs": sum(1 for item in items if item["passed"]),
-                "all_passed": all(item["passed"] for item in items),
-                "observation_failed_checks": observation_failures(items),
-            }
-            for source, items in by_source.items()
-        },
-        "all_sources_all_iterations_passed": bool(results) and all(item["passed"] for item in results),
-        "long_term_stability_claim": "not_proven",
-        "short_window_claim_boundary": SHORT_WINDOW_CLAIM_BOUNDARY,
-        "interpretation": "Repeated success only describes this run window, parameters, and network environment.",
-    }
+    return build_probe_summary(
+        manifest,
+        short_window_claim_boundary=SHORT_WINDOW_CLAIM_BOUNDARY,
+    )
 
 
 def strict_errors(manifest: dict[str, Any]) -> list[str]:
-    summary = manifest.get("summary", {})
-    errors = []
-    for source, data in summary.get("sources", {}).items():
-        if not data.get("all_passed"):
-            errors.append(f"{source}_passed_runs={data.get('passed_runs')} runs={data.get('runs')}")
-    return errors
+    return summary_strict_errors(manifest.get("summary", {}))
 
 
-def observation_failures(items: list[dict[str, Any]]) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for item in items:
-        for check_item in item["checks"]:
-            if check_item.get("required", True) or check_item["passed"]:
-                continue
-            name = str(check_item["name"])
-            counts[name] = counts.get(name, 0) + 1
-    return dict(sorted(counts.items()))
+def strict_failure_diagnostics(manifest: dict[str, Any]) -> list[str]:
+    results = manifest.get("results", [])
+    if not isinstance(results, list):
+        return []
+    return summary_strict_failure_diagnostics(
+        results,
+        manifest.get("summary", {}),
+    )
 
 
 def initial_manifest(args: argparse.Namespace) -> dict[str, Any]:

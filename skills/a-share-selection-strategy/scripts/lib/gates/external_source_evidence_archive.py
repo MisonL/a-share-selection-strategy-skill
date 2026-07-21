@@ -117,10 +117,9 @@ def archive_metadata_copy(
     result_dir: Path,
     archive_dir: Path,
 ) -> str | None:
-    metadata_output = Path(str(result.get("metadata_output", "")))
-    if metadata_output.is_symlink():
-        raise ValueError(f"metadata output must not be a symlink: {metadata_output}")
-    if not metadata_output.is_file():
+    if result.get("metadata_output_is_symlink") is True:
+        raise ValueError("metadata output must not be a symlink")
+    if result.get("metadata_output_is_file") is not True:
         return None
     metadata = result.get("metadata")
     if not isinstance(metadata, dict):

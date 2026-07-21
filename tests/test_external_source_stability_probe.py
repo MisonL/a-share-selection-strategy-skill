@@ -293,6 +293,7 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
             integrity_manifest = archive.verify_archive_integrity(archive_dir)
             first_archive = archive_dir / "results" / "001-eastmoney_spot"
             self.assertEqual("not_proven", archived_manifest["long_term_stability_claim"])
+            self.assertEqual(manifest["summary"], archived_manifest["summary"])
             self.assertEqual(archive.ARCHIVE_SCHEMA_VERSION, integrity_manifest["schema_version"])
             self.assertEqual(
                 archive.ARCHIVE_DIRECTORY_MODE,
@@ -530,10 +531,10 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
                 ),
             )
 
+            spec.metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
             record = probe.source_record(spec, result, metadata)
             self.assertIn("--tokenConfigured [REDACTED]", record["stdout"])
             self.assertIn("--token_configured [REDACTED]", record["stderr"])
-            spec.metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
             archive_dir = root / "durable-evidence"
             archive.archive_evidence({"results": [record]}, archive_dir)
 

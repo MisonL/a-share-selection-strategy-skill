@@ -218,6 +218,47 @@ class DocumentConsistencyTests(unittest.TestCase):
         for target in markdown_link_targets(current):
             self.assertTrue((current_path.parent / target).is_file(), target)
 
+    def test_real_scenario_experience_keeps_windows_and_exit_evidence_distinct(
+        self,
+    ) -> None:
+        root = ROOT / "skills/a-share-selection-strategy"
+        current = (root / "evidence/reviews/CURRENT-REAL-SCENARIO-GATES.md").read_text(
+            encoding="utf-8"
+        )
+        experience = (
+            root
+            / "evidence/reviews/archive/AGENT-REAL-SCENARIO-EXPERIENCE-2026-07-21.md"
+        ).read_text(encoding="utf-8")
+
+        for value in [
+            "第一轮的定向 Baostock 抓取显式失败关闭",
+            "第二轮对相同固定标的已成功取数并通过校验，随后被策略阈值过滤",
+        ]:
+            with self.subTest(current_value=value):
+                self.assertIn(value, current)
+        for value in [
+            "## 命令和退出码证据口径",
+            "不可将它当作外层命令退出码",
+            "第一轮 7-source probe、第一轮 Pytdx provider merge contract、第二轮全 A plan-only 和第二轮 probe",
+            "第一轮定向 Baostock 的外层退出码未保留",
+            "/tmp/a-share-opt040-fulla-KFHGWS/plan.exit_code",
+            "/tmp/a-share-opt040-fulla-KFHGWS/plan.wall_seconds",
+            "以下顶层命令从原始 Agent 会话恢复",
+            "顶层 exit `3` 是 Eastmoney strict failure 的收口",
+            "outer_exit_code.txt",
+            "/tmp/a-share-opt040-rerun-fulla-UC34M0/execution_record.json",
+            "这些是 runner 子步骤 returncode，不是顶层 CLI exit code",
+            "verified_merge_pytdx_contract.command.txt",
+            "它与上方 strict-window CSV 不属于同一次输入链路",
+        ]:
+            with self.subTest(experience_value=value):
+                self.assertIn(value, experience)
+        self.assertNotIn("<load metadata", experience)
+        self.assertIn(
+            "Path('/tmp/a-share-opt040-pytdx-Rs2gle/fetch/metadata.json')",
+            experience,
+        )
+
     def test_skill_markdown_links_resolve_to_existing_files(self) -> None:
         skill_root = ROOT / "skills/a-share-selection-strategy"
         for document in sorted(skill_root.rglob("*.md")):

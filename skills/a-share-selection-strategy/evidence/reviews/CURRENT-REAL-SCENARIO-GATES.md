@@ -27,6 +27,8 @@
 
 2026-07-21 的 [多 Agent 真实任务场景验收](archive/AGENT-REAL-SCENARIO-VALIDATION-2026-07-21.md) 补充复核了定向 Baostock 失败关闭、全 A 股票池和 plan-only 预检、成功空结果的 recovery，以及 Pytdx 严格字段拒绝。它没有执行新的全 A 历史长跑、全 A 评分、prediction、回测或券商流程，因此只作为上述范围和失败语义的补充 evidence，不升级任何表中状态。
 
+同日的 [多 Agent 真实场景体验复验](archive/AGENT-REAL-SCENARIO-EXPERIENCE-2026-07-21.md) 记录两个独立网络窗口中的 Baostock 显式失败关闭与定向取数后阈值过滤、全 A plan-only、Pytdx 补充源严格边界和两轮有界 7-source 探针。它收集到的超时、stderr 和耗时体验反馈只用于后续优化取舍，不升级任何表中状态，也不构成全 A、prediction、回测、券商或长期数据源结论。
+
 ## 状态更新规则
 
 - `verified_limited_scope` 只表示引用报告中的真实范围通过，不等于全市场、长期或生产通过。

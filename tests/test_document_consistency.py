@@ -210,6 +210,7 @@ class DocumentConsistencyTests(unittest.TestCase):
             "Eastmoney spot 与旧默认 Pytdx 均为 0/3",
             "后续独立复验的新 Pytdx 默认 endpoint",
             "不属于上述 21 次统计",
+            "AGENT-REAL-SCENARIO-EXPERIENCE-2026-07-21.md",
             "本地验证边界",
         ]:
             with self.subTest(value=value):

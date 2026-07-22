@@ -430,8 +430,10 @@ class ValidateSkillChangesTests(unittest.TestCase):
                 "    time.sleep(0.01)\n"
                 "time.sleep(60)\n"
             )
-            with patch.object(validate_skill_changes, "COMMAND_TIMEOUT_SECONDS", 1.0):
-                with self.assertRaisesRegex(RuntimeError, "timed out after 1 seconds"):
+            # A loaded CI worker can need longer than one second to start both
+            # interpreters and persist the descendant PID before the timeout.
+            with patch.object(validate_skill_changes, "COMMAND_TIMEOUT_SECONDS", 5.0):
+                with self.assertRaisesRegex(RuntimeError, "timed out after 5 seconds"):
                     validate_skill_changes.run_command([sys.executable, "-c", parent_code])
 
             self.assertTrue(child_pid_path.is_file())

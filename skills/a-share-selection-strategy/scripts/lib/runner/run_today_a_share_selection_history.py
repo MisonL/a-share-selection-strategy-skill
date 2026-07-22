@@ -18,7 +18,6 @@ if __name__ == "__main__":
 
 import importlib.util
 import json
-import re
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +31,7 @@ from lib.selection_core.a_share_selection_symbols import (
     normalize_symbol_values,
     parse_a_share_symbols,
     parse_six_digit_symbols,
+    read_symbols_file,
     valid_hk_symbol_text,
 )
 
@@ -254,23 +254,6 @@ def explicit_symbols_text(args: Any) -> str:
     if option_configured(symbols_file):
         return read_symbols_file(Path(symbols_file))
     return str(getattr(args, "symbols", "") or "")
-
-
-def read_symbols_file(path: Path) -> str:
-    if not path.exists():
-        raise FileNotFoundError(f"symbols file not found: {path}")
-    if path.is_dir():
-        raise IsADirectoryError(f"symbols file is a directory: {path}")
-    try:
-        raw_text = path.read_text(encoding="utf-8-sig")
-    except UnicodeDecodeError as exc:
-        raise ValueError(
-            f"symbols file is not valid UTF-8 or UTF-8-BOM: {path}"
-        ) from exc
-    text = re.sub(r"[\r\n]+", ",", raw_text).rstrip(",")
-    if not any(value.strip() for value in text.split(",")):
-        raise ValueError(f"symbols file is empty or contains no symbols: {path}")
-    return text
 
 
 def explicit_symbol_metadata(args: Any, symbols: list[str]) -> dict[str, Any]:

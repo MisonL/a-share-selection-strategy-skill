@@ -39,6 +39,7 @@ SHARDS = (
 RUNNER_AUXILIARY_FILES = {
     "test_baostock_walk_forward_runner.py",
     "test_today_a_share_runner_failure_evidence.py",
+    "test_today_a_share_selection_runner_artifacts.py",
 }
 PROVIDER_PREFIXES = (
     "test_external_source_",

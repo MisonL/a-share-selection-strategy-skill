@@ -16,6 +16,7 @@ if __name__ == "__main__":
     fail_not_cli(__file__)
 
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -105,6 +106,33 @@ RAW_QUALITY_COUNT_KEYS = (
     "raw_non_trading_rows",
     "raw_invalid_non_trading_overlap_rows",
 )
+
+SPOT_INPUT_METADATA_CLAIM_BOUNDARY = (
+    "local_spot_input_companion_metadata_not_runner_fetch_output_or_full_market_proof"
+)
+
+
+def spot_input_metadata_path(spot_input: str | None) -> Path | None:
+    if not spot_input:
+        return None
+    return Path(spot_input).parent / "spot_metadata.json"
+
+
+def same_path(left: Path, right: Path) -> bool:
+    return left.expanduser().resolve(strict=False) == right.expanduser().resolve(
+        strict=False
+    )
+
+
+def file_fingerprint(path: Path) -> dict[str, Any]:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return {
+        "sha256": digest.hexdigest(),
+        "size_bytes": int(path.stat().st_size),
+    }
 
 
 def input_metadata_for_prices(prices_input: str | None) -> dict[str, Any]:

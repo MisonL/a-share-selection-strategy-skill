@@ -207,6 +207,25 @@ def run_status_fields(manifest: dict[str, Any], status: str) -> dict[str, Any]:
 def history_request_fields(manifest: dict[str, Any]) -> dict[str, Any]:
     return {
         "history_source": manifest.get("history_source", ""),
+        "history_symbols_file": manifest.get("history_symbols_file", ""),
+        "history_symbols_file_origin": manifest.get(
+            "history_symbols_file_origin", "not_applicable"
+        ),
+        "history_symbols_file_exists": bool(
+            manifest.get("history_symbols_file_exists", False)
+        ),
+        "history_symbols_file_output_written": bool(
+            manifest.get("history_symbols_file_output_written", False)
+        ),
+        "history_symbols_file_symbol_count": int(
+            manifest.get("history_symbols_file_symbol_count", 0) or 0
+        ),
+        "history_symbols_file_sha256": manifest.get(
+            "history_symbols_file_sha256", ""
+        ),
+        "history_symbols_file_size_bytes": int(
+            manifest.get("history_symbols_file_size_bytes", 0) or 0
+        ),
         "history_limit": manifest.get("history_limit", ""),
         "history_max_pages": manifest.get("history_max_pages", ""),
         "history_max_concurrent_symbol_requests": manifest.get(
@@ -584,8 +603,10 @@ def row_count_fields(
     initialized: bool,
 ) -> dict[str, Any]:
     history_count = history_symbol_count(manifest, history_selection)
+    spot_metadata = helpers.spot_metadata_view(manifest) if initialized else {}
     return {
-        "spot_metadata": helpers.spot_metadata_view(manifest) if initialized else {},
+        "spot_metadata": spot_metadata,
+        **spot_input_metadata_fields(manifest, spot_metadata),
         "spot_rows": helpers.spot_rows(manifest) if initialized else 0,
         "spot_matched_symbols": score.get("spot_matched_symbols", 0),
         "history_selection": history_selection,
@@ -604,6 +625,38 @@ def row_count_fields(
         "spot_metadata_output": str(paths["spot_metadata"]),
         "spot_metadata_output_written": output_file_written(
             paths["spot_metadata"], initialized
+        ),
+    }
+
+
+def spot_input_metadata_fields(
+    manifest: dict[str, Any], spot_metadata: dict[str, Any]
+) -> dict[str, Any]:
+    origin = str(manifest.get("spot_metadata_origin", "") or "")
+    if not origin:
+        origin = "runner_fetch_output" if spot_metadata else "not_written"
+    return {
+        "spot_metadata_origin": origin,
+        "spot_input_metadata_source": str(
+            manifest.get("spot_input_metadata_source", "") or ""
+        ),
+        "spot_input_metadata_output": str(
+            manifest.get("spot_input_metadata_output", "") or ""
+        ),
+        "spot_input_metadata_output_exists": bool(
+            manifest.get("spot_input_metadata_output_exists", False)
+        ),
+        "spot_input_metadata_output_written": bool(
+            manifest.get("spot_input_metadata_output_written", False)
+        ),
+        "spot_input_metadata_sha256": str(
+            manifest.get("spot_input_metadata_sha256", "") or ""
+        ),
+        "spot_input_metadata_size_bytes": int(
+            manifest.get("spot_input_metadata_size_bytes", 0) or 0
+        ),
+        "spot_input_metadata_claim_boundary": str(
+            manifest.get("spot_input_metadata_claim_boundary", "") or ""
         ),
     }
 

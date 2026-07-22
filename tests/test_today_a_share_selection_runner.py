@@ -2143,6 +2143,8 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         self.assertEqual(
             "local_prices_input+local_spot_input", manifest["source_scope"]
         )
+        self.assertEqual("not_provided", summary["spot_metadata_origin"])
+        self.assertFalse(summary["spot_input_metadata_output_written"])
         self.assertEqual(1, summary["spot_rows"])
 
     def test_runner_does_not_write_score_profile_by_default(self) -> None:
@@ -3227,7 +3229,7 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             manifest["execution_path"],
         )
         self.assertEqual("explicit_symbols_file", manifest["execution_path_reason"])
-        self.assertIn("000001,600000", fetch_history["command"])
+        self.assertEqual("fetch_history", fetch_history["step"])
 
     def test_runner_passes_symbols_file_to_zzshare_history_fetch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -3605,6 +3607,10 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
             [step["step"] for step in manifest["steps"]],
         )
         self.assertIn("<derived_from_spot_snapshot>", manifest["steps"][1]["command"])
+        self.assertNotIn("--symbols-file", manifest["steps"][1]["command"])
+        self.assertEqual("", manifest["history_symbols_file"])
+        self.assertEqual("not_applicable", manifest["history_symbols_file_origin"])
+        self.assertFalse((output / "history_symbols.txt").exists())
         self.assertFalse((output / "selected_symbols.json").exists())
         self.assertFalse((output / "history_metadata.json").exists())
 
@@ -3651,6 +3657,10 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         )
         self.assertIn("fetch_baostock_a_share.py", manifest["steps"][1]["command"][1])
         self.assertIn("<derived_from_spot_snapshot>", manifest["steps"][1]["command"])
+        self.assertNotIn("--symbols-file", manifest["steps"][1]["command"])
+        self.assertEqual("", manifest["history_symbols_file"])
+        self.assertEqual("not_applicable", manifest["history_symbols_file_origin"])
+        self.assertFalse((output / "history_symbols.txt").exists())
         self.assertIn(str(output / "prices.csv"), manifest["steps"][1]["command"])
         self.assertFalse(manifest["commands_executed"])
         self.assertFalse((output / "selected_symbols.json").exists())
@@ -3683,11 +3693,19 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 (output / "run_manifest.json").read_text(encoding="utf-8")
             )
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            symbols_path = output / "history_symbols.txt"
+            symbols_text = symbols_path.read_text(encoding="utf-8")
 
         self.assertEqual(0, code, stderr)
         self.assertTrue(stdout.startswith("PLAN_ONLY:"), stdout)
         self.assertEqual("parquet", manifest["history_output_format"])
         self.assertTrue(summary["prices_output"].endswith("prices.parquet"))
+        self.assertIn("--symbols-file", manifest["steps"][0]["command"])
+        self.assertIn(str(symbols_path), manifest["steps"][0]["command"])
+        self.assertEqual("000001\n600000\n", symbols_text)
+        self.assertEqual(str(symbols_path), manifest["history_symbols_file"])
+        self.assertTrue(manifest["history_symbols_file_output_written"])
+        self.assertEqual(2, summary["history_symbols_file_symbol_count"])
         self.assertEqual(
             str(output / "prices.parquet"),
             manifest["steps"][0]["command"][
@@ -3906,6 +3924,8 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                 (output / "selected_symbols.json").read_text(encoding="utf-8")
             )
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            history_symbols_path = output / "history_symbols.txt"
+            history_symbols_text = history_symbols_path.read_text(encoding="utf-8")
 
         self.assertEqual(0, code, stderr)
         self.assertEqual("planned", summary["status"])
@@ -3928,7 +3948,17 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
         )
         fetch_history = manifest["steps"][0]
         self.assertEqual("fetch_history", fetch_history["step"])
-        self.assertIn("000002,600000", fetch_history["command"])
+        self.assertIn("--symbols-file", fetch_history["command"])
+        self.assertIn(str(history_symbols_path), fetch_history["command"])
+        self.assertNotIn("000002,600000", fetch_history["command"])
+        self.assertEqual("000002\n600000\n", history_symbols_text)
+        self.assertEqual(str(history_symbols_path), manifest["history_symbols_file"])
+        self.assertEqual(
+            "runner_generated_history_symbols",
+            manifest["history_symbols_file_origin"],
+        )
+        self.assertTrue(manifest["history_symbols_file_output_written"])
+        self.assertEqual(2, manifest["history_symbols_file_symbol_count"])
         self.assertIn(str(output / "prices.parquet"), fetch_history["command"])
 
     def test_runner_resume_rejects_invalid_history_output_format(self) -> None:

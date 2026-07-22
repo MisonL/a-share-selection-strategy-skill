@@ -209,6 +209,8 @@ uv run --with pandas --with numpy --with baostock python skills/a-share-selectio
 
 `--symbols-file` 会在 manifest 中形成 `execution_path_reason=explicit_symbols_file`；`--plan-only` 只写计划 step 和审计输入快照，`commands_executed=false`；`--resume-from` 只生成 `resume_retry_symbols`，并在 `resume_inherited_options` 记录从上一轮继承的非敏感历史抓取参数，仍需重新检查新一轮 `history_metadata.json`。Baostock 的 `--history-output-format parquet|pq` 需要 `pyarrow` 或 `fastparquet`，会把 fetch、validate、score、summary 和 HTML 候选 K 线绑定到同一 Parquet artifact；缺引擎在 step 和联网前失败。默认仍为 CSV，其他 provider 或本地 `--prices-input` 不接受该参数。`history_http_url` 不从上一轮 manifest 自动继承；需要复用自定义 URL 时本轮显式传 `--history-http-url`，manifest 会用 `resume_sensitive_options_requiring_explicit_input` 提醒。
 
+Baostock 和 ZZShare 的实际 symbol 列表均使用同一文件契约：直接 Baostock CLI 的 `--symbols`/`--symbols-file` 互斥；runner 对显式文件保留用户路径，对内联或 spot 派生出的可解析列表写入 `history_symbols.txt`，并在执行与 `--plan-only` 的 fetch command 中传 `--symbols-file`。manifest 和 summary 记录 `history_symbols_file`、来源、符号数量、大小和 SHA-256；这改善长列表的审计与命令长度，不改变 provider、抓取执行、严格门禁或全 A 声明。没有落地 spot 的 plan-only 派生仍以 `<derived_from_spot_snapshot>` 内联表示，绝不生成伪列表文件。
+
 全 A clean pool：
 
 ```bash

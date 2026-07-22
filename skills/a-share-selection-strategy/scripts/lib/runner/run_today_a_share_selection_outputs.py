@@ -16,7 +16,9 @@ if __name__ == "__main__":
     fail_not_cli(__file__)
 
 
+import json
 from pathlib import Path
+import shutil
 import time
 from typing import Any
 
@@ -29,6 +31,62 @@ from lib.runner.run_today_a_share_selection_helpers import (
     tabular_suffix,
     write_json,
 )
+from lib.runner.run_today_a_share_selection_input_metadata import (
+    SPOT_INPUT_METADATA_CLAIM_BOUNDARY,
+    file_fingerprint,
+    same_path,
+    spot_input_metadata_path,
+)
+
+
+def prepare_spot_input_metadata(
+    spot_input: str | None,
+    output_dir: Path,
+    manifest: dict[str, Any],
+) -> None:
+    source = spot_input_metadata_path(spot_input)
+    if source is None:
+        return
+    target = output_dir / "spot_metadata.json"
+    manifest.update(
+        {
+            "spot_metadata_origin": "not_provided",
+            "spot_input_metadata_source": "",
+            "spot_input_metadata_output": "",
+            "spot_input_metadata_output_exists": False,
+            "spot_input_metadata_output_written": False,
+            "spot_input_metadata_sha256": "",
+            "spot_input_metadata_size_bytes": 0,
+            "spot_input_metadata_claim_boundary": "",
+        }
+    )
+    if not source.exists():
+        return
+    if not source.is_file():
+        raise ValueError(f"spot input metadata must be a file: {source}")
+    try:
+        data = json.loads(source.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"spot input metadata must be valid JSON: {source}") from exc
+    if not isinstance(data, dict):
+        raise ValueError(f"spot input metadata must be a JSON object: {source}")
+    copied = False
+    if not same_path(source, target) and not same_existing_path(source, target):
+        shutil.copyfile(source, target)
+        copied = True
+    fingerprint = file_fingerprint(target)
+    manifest.update(
+        {
+            "spot_metadata_origin": "local_spot_input_companion",
+            "spot_input_metadata_source": str(source),
+            "spot_input_metadata_output": str(target),
+            "spot_input_metadata_output_exists": True,
+            "spot_input_metadata_output_written": copied,
+            "spot_input_metadata_sha256": fingerprint["sha256"],
+            "spot_input_metadata_size_bytes": fingerprint["size_bytes"],
+            "spot_input_metadata_claim_boundary": SPOT_INPUT_METADATA_CLAIM_BOUNDARY,
+        }
+    )
 
 
 def finalize_outputs(
@@ -204,6 +262,9 @@ def clear_stale_run_outputs(args: Any, output: Path) -> None:
         ]
         if value
     ]
+    spot_metadata_input = spot_input_metadata_path(args.spot_input)
+    if spot_metadata_input is not None:
+        protected.append(spot_metadata_input)
     for path in paths:
         if not protected_run_output(path, protected):
             remove_stale_output_path(path)

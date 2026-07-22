@@ -40,7 +40,10 @@ class FetchBaostockAShareTests(unittest.TestCase):
             fetcher.parse_symbols("bj.430047")
 
     def test_help_discloses_csv_and_parquet_outputs(self) -> None:
-        self.assertIn("Output CSV or Parquet path", fetcher.build_parser().format_help())
+        help_text = fetcher.build_parser().format_help()
+
+        self.assertIn("Output CSV or Parquet path", help_text)
+        self.assertIn("--symbols-file", help_text)
 
     def test_collect_rows_maps_ohlcv_amount_and_name(self) -> None:
         result = FakeResult(
@@ -362,6 +365,9 @@ class FetchBaostockAShareTests(unittest.TestCase):
         self.assertFalse(metadata_exists)
         self.assertIn("code=missing_dependency", stderr.getvalue())
         self.assertIn("pyarrow or fastparquet", stderr.getvalue())
+        self.assertIn(
+            f"source_claim_boundary={fetcher.CLAIM_BOUNDARY}", stderr.getvalue()
+        )
 
     def test_main_rejects_unsupported_output_before_fetch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -398,6 +404,9 @@ class FetchBaostockAShareTests(unittest.TestCase):
         self.assertFalse(output_exists)
         self.assertFalse(metadata_exists)
         self.assertIn("unsupported prices output format", stderr.getvalue())
+        self.assertIn(
+            f"source_claim_boundary={fetcher.CLAIM_BOUNDARY}", stderr.getvalue()
+        )
 
     def test_main_rejects_same_prices_and_metadata_output_before_fetch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -430,6 +439,9 @@ class FetchBaostockAShareTests(unittest.TestCase):
         self.assertEqual(2, code)
         self.assertFalse(output_exists)
         self.assertIn("prices output and metadata output must differ", stderr.getvalue())
+        self.assertIn(
+            f"source_claim_boundary={fetcher.CLAIM_BOUNDARY}", stderr.getvalue()
+        )
 
     def test_build_metadata_includes_standalone_source_boundary_fields(self) -> None:
         args = argparse_namespace("000001")
@@ -511,6 +523,9 @@ class FetchBaostockAShareTests(unittest.TestCase):
         self.assertIn(
             "output_written=false metadata_output_written=true", stderr.getvalue()
         )
+        self.assertIn(
+            f"source_claim_boundary={fetcher.CLAIM_BOUNDARY}", stderr.getvalue()
+        )
 
     def test_fetch_failure_removes_stale_output_and_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -547,6 +562,9 @@ class FetchBaostockAShareTests(unittest.TestCase):
         self.assertFalse(output_exists)
         self.assertFalse(metadata_exists)
         self.assertIn("code=fetch_failed", stderr.getvalue())
+        self.assertIn(
+            f"source_claim_boundary={fetcher.CLAIM_BOUNDARY}", stderr.getvalue()
+        )
 
     def test_partial_default_stdout_discloses_partial_result(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

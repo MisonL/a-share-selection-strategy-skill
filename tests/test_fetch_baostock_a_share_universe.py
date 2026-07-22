@@ -158,6 +158,45 @@ class FetchBaostockAShareUniverseTests(unittest.TestCase):
         self.assertEqual("partial_universe_not_full_market", saved["coverage_claim"])
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn("raw_items=0", stderr.getvalue())
+        self.assertIn(
+            f"source_claim_boundary={fetcher.CLAIM_BOUNDARY}", stderr.getvalue()
+        )
+
+    def test_cli_fetch_exception_removes_stale_outputs_and_emits_claim_boundary(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "spot.csv"
+            metadata = Path(tmpdir) / "spot_metadata.json"
+            output.write_text("symbol,name\nSTALE,old\n", encoding="utf-8")
+            metadata.write_text('{"stale": true}\n', encoding="utf-8")
+            stderr = StringIO()
+            with (
+                patch.object(
+                    fetcher,
+                    "fetch_universe",
+                    side_effect=RuntimeError("network unavailable"),
+                ),
+                redirect_stderr(stderr),
+            ):
+                code = fetcher.main(
+                    [
+                        "--output",
+                        str(output),
+                        "--metadata-output",
+                        str(metadata),
+                        "--fail-on-partial",
+                    ]
+                )
+
+        self.assertEqual(2, code)
+        self.assertFalse(output.exists())
+        self.assertFalse(metadata.exists())
+        self.assertIn("code=fetch_failed", stderr.getvalue())
+        self.assertIn("message=network unavailable", stderr.getvalue())
+        self.assertIn(
+            f"source_claim_boundary={fetcher.CLAIM_BOUNDARY}", stderr.getvalue()
+        )
 
     def test_cli_login_failure_writes_failure_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -198,6 +237,9 @@ class FetchBaostockAShareUniverseTests(unittest.TestCase):
         self.assertTrue(saved["metadata_output_written"])
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn("partial_result=true", stderr.getvalue())
+        self.assertIn(
+            f"source_claim_boundary={fetcher.CLAIM_BOUNDARY}", stderr.getvalue()
+        )
 
     def test_cli_removes_stale_metadata_when_initial_metadata_write_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -235,6 +277,9 @@ class FetchBaostockAShareUniverseTests(unittest.TestCase):
         self.assertFalse(output.exists())
         self.assertFalse(metadata.exists())
         self.assertIn("metadata_output_written=false", stderr.getvalue())
+        self.assertIn(
+            f"source_claim_boundary={fetcher.CLAIM_BOUNDARY}", stderr.getvalue()
+        )
 
     def test_cli_retries_after_login_failure_and_records_prior_error(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

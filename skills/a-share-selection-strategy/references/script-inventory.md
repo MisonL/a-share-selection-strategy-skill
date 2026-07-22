@@ -25,8 +25,8 @@
 | `create_demo_data.py` | `stable_cli` | `selection_core` | 315 | Create deterministic demo OHLCV CSV files for quick-start smoke tests. | 保留: stable public CLI，用户命令兼容路径。 |
 | `fetch_akshare_a_share.py` | `fetch_cli` | `fetch` | 378 | Fetch A-share OHLCV data through akshare and save local gate files. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
 | `fetch_akshare_hk_daily.py` | `fetch_cli` | `fetch` | 408 | Fetch Hong Kong OHLCV data through akshare stock_hk_daily. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
-| `fetch_baostock_a_share.py` | `fetch_cli` | `fetch` | 613 | Fetch A-share OHLCV data through baostock and save CSV/Parquet gate files. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
-| `fetch_baostock_a_share_universe.py` | `fetch_cli` | `fetch` | 163 | Fetch baostock A-share universe into a spot-compatible CSV snapshot. | 保留: public fetch CLI，全 A 股票池主入口，支持显式日期回看和失败重试，不能写成实时行情或实时全市场完成。 |
+| `fetch_baostock_a_share.py` | `fetch_cli` | `fetch` | 651 | Fetch A-share OHLCV data through baostock and save CSV/Parquet gate files. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
+| `fetch_baostock_a_share_universe.py` | `fetch_cli` | `fetch` | 167 | Fetch baostock A-share universe into a spot-compatible CSV snapshot. | 保留: public fetch CLI，全 A 股票池主入口，支持显式日期回看和失败重试，不能写成实时行情或实时全市场完成。 |
 | `fetch_eastmoney_a_share_spot.py` | `fetch_cli` | `fetch` | 422 | Fetch Eastmoney A-share realtime spot snapshot into local CSV metadata. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
 | `fetch_pytdx_a_share.py` | `fetch_cli` | `fetch` | 171 | Fetch A-share daily OHLCV data through pytdx and save gate files. | 保留: public fetch CLI，显式 no-token 补充源；缺换手率、可交易字段、官方授权和长期稳定证明。 |
 | `fetch_yfinance_ohlcv.py` | `fetch_cli` | `fetch` | 345 | Fetch yfinance OHLCV data and save local gate files. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
@@ -41,7 +41,7 @@
 | `probe_baostock_limit_fields.py` | `gate_backtest_cli` | `gate_backtest` | 421 | Probe baostock field availability without modeling limit rules. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
 | `probe_external_source_stability.py` | `gate_backtest_cli` | `gate_backtest` | 783 | Run repeated external source probes through the stable fetch CLIs. | 保留: public gate/backtest CLI，输出是诊断或门禁证据；紧凑摘要和归档实现位于 `lib/gates/`，不扩大 CLI 职责。 |
 | `run_baostock_walk_forward.py` | `gate_backtest_cli` | `gate_backtest` | 692 | Run the baostock prediction-derived walk-forward gate through existing CLIs. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
-| `run_today_a_share_selection.py` | `stable_cli` | `selection_core` | 1309 | Run an auditable local A-share selection workflow through existing CLIs. | 保留: stable public CLI，用户命令兼容路径；full-A provenance 细节由 internal runner helper 实现。 |
+| `run_today_a_share_selection.py` | `stable_cli` | `selection_core` | 1340 | Run an auditable local A-share selection workflow through existing CLIs. | 保留: stable public CLI，用户命令兼容路径；full-A provenance 细节由 internal runner helper 实现。 |
 | `score_candidates.py` | `stable_cli` | `selection_core` | 532 | Score stock candidates from local OHLCV data. | 保留: stable public CLI，用户命令兼容路径。 |
 | `slice_prices_as_of.py` | `stable_cli` | `selection_core` | 118 | Slice local OHLCV rows to an as-of date to prevent future leakage. | 保留: stable public CLI，用户命令兼容路径。 |
 | `summarize_walk_forward_run.py` | `gate_backtest_cli` | `gate_backtest` | 417 | Summarize and gate a real walk-forward run directory. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |

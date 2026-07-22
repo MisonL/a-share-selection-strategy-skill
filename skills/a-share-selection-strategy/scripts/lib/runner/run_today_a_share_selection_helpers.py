@@ -145,13 +145,10 @@ def spot_metadata_view(manifest: dict[str, Any]) -> dict[str, Any]:
 def spot_rows(manifest: dict[str, Any]) -> int:
     metadata = spot_metadata_view(manifest)
     if metadata:
-        filtered_items = metadata.get("filtered_items")
-        raw_items = metadata.get("raw_items")
-        if filtered_items is not None:
-            return int(filtered_items)
-        if raw_items is not None:
-            return int(raw_items)
-        return 0
+        for key in ("filtered_items", "raw_items", "symbol_count"):
+            value = metadata.get(key)
+            if value is not None:
+                return int(value)
     spot_path = spot_output_path(manifest)
     if spot_path is None:
         return 0

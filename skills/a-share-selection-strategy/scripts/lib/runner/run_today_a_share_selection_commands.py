@@ -236,9 +236,9 @@ def append_baostock_history_options(command: list[str], args: Any) -> None:
 
 
 def history_symbol_command_args(args: Any, symbols: list[str]) -> list[str]:
-    if args.history_source != "zzshare":
+    if args.history_source not in {"baostock", "zzshare"}:
         return ["--symbols", ",".join(symbols)]
-    if getattr(args, "plan_only", False) or planned_symbol_placeholder(symbols):
+    if planned_symbol_placeholder(symbols):
         return ["--symbols", ",".join(symbols)]
     symbols_file = getattr(args, "history_symbols_file", "") or getattr(
         args, "symbols_file", ""
@@ -371,6 +371,14 @@ def manifest_spot_fields(args: Any) -> dict[str, Any]:
         "spot_fallback_retry_interval_seconds": float(
             args.spot_fallback_retry_interval_seconds
         ),
+        "spot_metadata_origin": "",
+        "spot_input_metadata_source": "",
+        "spot_input_metadata_output": "",
+        "spot_input_metadata_output_exists": False,
+        "spot_input_metadata_output_written": False,
+        "spot_input_metadata_sha256": "",
+        "spot_input_metadata_size_bytes": 0,
+        "spot_input_metadata_claim_boundary": "",
         "fetch_spot_fallback_used": False,
         "fetch_spot_primary_failure": {},
         "spot_pages": int(args.spot_pages),
@@ -454,6 +462,13 @@ def full_a_manifest_fields(args: Any) -> dict[str, Any]:
 
 def manifest_history_fields(args: Any) -> dict[str, Any]:
     return {
+        "history_symbols_file": "",
+        "history_symbols_file_origin": "not_applicable",
+        "history_symbols_file_exists": False,
+        "history_symbols_file_output_written": False,
+        "history_symbols_file_symbol_count": 0,
+        "history_symbols_file_sha256": "",
+        "history_symbols_file_size_bytes": 0,
         "max_history_symbols": int(args.max_history_symbols),
         "max_history_symbols_supplied": bool(
             getattr(args, "max_history_symbols_supplied", False)

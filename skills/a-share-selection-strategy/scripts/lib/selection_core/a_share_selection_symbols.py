@@ -17,6 +17,7 @@ if __name__ == "__main__":
 
 
 import hashlib
+from pathlib import Path
 from typing import Any
 
 
@@ -58,6 +59,39 @@ def parse_six_digit_symbols(
 
 def parse_a_share_symbols(text: str) -> list[str]:
     return parse_six_digit_symbols(text, allowed_exchanges=A_SHARE_EXCHANGES)
+
+
+def read_symbols_file(path: Path) -> str:
+    if not path.exists():
+        raise FileNotFoundError(f"symbols file not found: {path}")
+    if path.is_dir():
+        raise IsADirectoryError(f"symbols file is a directory: {path}")
+    try:
+        raw_text = path.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValueError(
+            f"symbols file is not valid UTF-8 or UTF-8-BOM: {path}"
+        ) from exc
+    values = [
+        value.strip()
+        for line in raw_text.replace("\r", "\n").splitlines()
+        for value in line.split(",")
+        if value.strip()
+    ]
+    if not values:
+        raise ValueError(f"symbols file is empty or contains no symbols: {path}")
+    return ",".join(values)
+
+
+def symbol_file_fingerprint(path: Path) -> dict[str, int | str]:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return {
+        "sha256": digest.hexdigest(),
+        "size_bytes": int(path.stat().st_size),
+    }
 
 
 def normalize_prefixed_symbol(

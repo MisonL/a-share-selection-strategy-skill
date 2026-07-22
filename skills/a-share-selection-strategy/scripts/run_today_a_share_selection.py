@@ -21,6 +21,7 @@ from lib.selection_core.a_share_selection_command_safety import (
     sanitize_command,
     sanitize_text,
 )
+from lib.selection_core.a_share_selection_symbols import symbol_file_fingerprint
 from lib.runner.run_today_a_share_selection_commands import (
     fetch_history_command,
     fetch_spot_fallback_command,
@@ -44,6 +45,7 @@ from lib.runner.run_today_a_share_selection_modes import ModeResolution, resolve
 from lib.runner.run_today_a_share_selection_outputs import (
     clear_stale_run_outputs,
     finalize_outputs,
+    prepare_spot_input_metadata,
 )
 from lib.runner.run_today_a_share_selection_parser import build_parser
 from lib.runner.run_today_a_share_selection_prices_filter import (
@@ -240,7 +242,7 @@ def run_pipeline(context: RunContext) -> None:
     validate_symbols_file_output_collision(
         context.args, output, prices, candidates, diagnostics, spot
     )
-    prepare_inputs(context.args, output, prices, spot)
+    prepare_inputs(context.args, output, prices, spot, context.manifest)
     if context.args.fetch_spot:
         run_fetch_spot_step(context, spot)
     prices = apply_optional_prices_filter(context, prices, spot)
@@ -311,7 +313,7 @@ def run_plan(context: RunContext) -> None:
     validate_symbols_file_output_collision(
         context.args, output, prices, candidates, diagnostics, spot
     )
-    prepare_inputs(context.args, output, prices, spot)
+    prepare_inputs(context.args, output, prices, spot, context.manifest)
     if context.args.fetch_spot:
         plan_step(context, Step("fetch_spot", fetch_spot_command(context.args, spot)))
         if context.args.fetch_spot_fallback:
@@ -362,26 +364,52 @@ def prepare_history_symbols_file(
     manifest: dict[str, Any],
     symbols: list[str],
 ) -> None:
+    manifest.update(
+        {
+            "history_symbols_file": "",
+            "history_symbols_file_origin": "not_applicable",
+            "history_symbols_file_exists": False,
+            "history_symbols_file_output_written": False,
+            "history_symbols_file_symbol_count": 0,
+            "history_symbols_file_sha256": "",
+            "history_symbols_file_size_bytes": 0,
+        }
+    )
     args.history_symbols_file = ""
-    manifest["history_symbols_file"] = ""
-    if args.history_source != "zzshare":
-        return
-    if getattr(args, "plan_only", False):
+    if args.history_source not in {"baostock", "zzshare"}:
         return
     if any(str(symbol).startswith("<") and str(symbol).endswith(">") for symbol in symbols):
         return
     if getattr(args, "symbols_file", None):
-        args.history_symbols_file = str(Path(args.symbols_file))
-        manifest["history_symbols_file"] = args.history_symbols_file
-        return
-    path = Path(args.output_dir) / "history_symbols.txt"
-    path.write_text("\n".join(symbols) + "\n", encoding="utf-8")
+        path = Path(args.symbols_file)
+        origin = "explicit_symbols_file"
+    else:
+        path = Path(args.output_dir) / "history_symbols.txt"
+        path.write_text("\n".join(symbols) + "\n", encoding="utf-8")
+        origin = "runner_generated_history_symbols"
+    fingerprint = symbol_file_fingerprint(path)
     args.history_symbols_file = str(path)
-    manifest["history_symbols_file"] = str(path)
+    manifest.update(
+        {
+            "history_symbols_file": str(path),
+            "history_symbols_file_origin": origin,
+            "history_symbols_file_exists": True,
+            "history_symbols_file_output_written": (
+                origin == "runner_generated_history_symbols"
+            ),
+            "history_symbols_file_symbol_count": len(symbols),
+            "history_symbols_file_sha256": fingerprint["sha256"],
+            "history_symbols_file_size_bytes": fingerprint["size_bytes"],
+        }
+    )
 
 
 def prepare_inputs(
-    args: argparse.Namespace, output: Path, prices: Path, spot: Path | None
+    args: argparse.Namespace,
+    output: Path,
+    prices: Path,
+    spot: Path | None,
+    manifest: dict[str, Any],
 ) -> None:
     output.mkdir(parents=True, exist_ok=True)
     if args.prices_input:
@@ -396,6 +424,7 @@ def prepare_inputs(
         source_spot = Path(args.spot_input)
         if not helpers.same_existing_path(source_spot, spot):
             shutil.copyfile(source_spot, spot)
+        prepare_spot_input_metadata(args.spot_input, output, manifest)
 
 
 def apply_optional_prices_filter(
@@ -883,6 +912,7 @@ def run_fetch_spot_step(context: RunContext, spot: Path | None) -> None:
     step = Step("fetch_spot", fetch_spot_command(context.args, spot))
     result = run_step_result(context, step)
     if result.returncode == 0:
+        context.manifest["spot_metadata_origin"] = "runner_fetch_output"
         return
     fallback = context.args.fetch_spot_fallback
     if not fallback:
@@ -905,6 +935,7 @@ def run_fetch_spot_step(context: RunContext, spot: Path | None) -> None:
             fallback_result.returncode,
             fallback_result.stderr,
         )
+    context.manifest["spot_metadata_origin"] = "runner_fetch_output"
 
 
 def mark_last_step_as_handled_fallback(

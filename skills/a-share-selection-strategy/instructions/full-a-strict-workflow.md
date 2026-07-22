@@ -280,7 +280,7 @@ uv run --with pandas --with numpy --with zzshare python skills/a-share-selection
 
 ### 5. 清洗后复跑历史
 
-如果第一轮已经明确哪些 symbol 需要剔除或重试，建议基于清洗后的 symbol 集重新跑一轮历史抓取。长列表优先使用 `--symbols-file`，不要把几千个 symbol 直接塞进 shell 命令行。runner 对 zzshare 会把内部生成的长列表写入 `history_symbols.txt` 后传给 fetcher；validate 因短历史失败时，会写出 `short_history_symbols.txt` 和 `short_history_symbols.json` 作为剔除或延长窗口复跑的恢复依据。
+如果第一轮已经明确哪些 symbol 需要剔除或重试，建议基于清洗后的 symbol 集重新跑一轮历史抓取。长列表优先使用 `--symbols-file`，不要把几千个 symbol 直接塞进 shell 命令行。runner 对 Baostock 和 ZZShare 的可解析实际列表都会使用文件：显式输入沿用用户文件，内部派生或内联输入则写入运行目录的 `history_symbols.txt`，在执行和 `--plan-only` 中都引用该路径；`run_manifest.json` 和 `summary.json` 会记录路径、来源、符号数量、文件大小和 SHA-256。`<derived_from_spot_snapshot>` 计划占位符仍内联，不会伪造列表文件。validate 因短历史失败时，会写出 `short_history_symbols.txt` 和 `short_history_symbols.json` 作为剔除或延长窗口复跑的恢复依据。
 
 推荐用 `prepare_history_retry_symbols.py` 从 `selected_symbols.json` 和 `history_metadata.json` 生成 retry plan，收集失败、空结果、截断和因预算耗尽未处理的 symbol 作为 retry list；默认排除 invalid/non-trading/ST 等数据质量不合格的 symbol。只有显式传 `--include-clean-selected` 时，才追加本轮干净的 selected symbol。不要手工重敲大列表；必须保留清洗规则和剔除数量，方便复核。
 

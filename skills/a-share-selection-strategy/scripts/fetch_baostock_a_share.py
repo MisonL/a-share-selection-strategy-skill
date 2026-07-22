@@ -23,6 +23,7 @@ from lib.fetch.baostock_a_share_names import (
 from lib.selection_core.a_share_selection_symbols import (
     baostock_code,
     parse_six_digit_symbols,
+    read_symbols_file,
 )
 
 
@@ -42,8 +43,10 @@ def build_parser() -> argparse.ArgumentParser:
             "Exit 0 plus written files still require metadata and gate review."
         )
     )
+    parser.add_argument("--symbols", help="Comma-separated six-digit symbols.")
     parser.add_argument(
-        "--symbols", required=True, help="Comma-separated six-digit symbols."
+        "--symbols-file",
+        help="Text file containing comma-separated or newline-separated symbols.",
     )
     parser.add_argument("--start-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
     parser.add_argument("--end-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
@@ -95,33 +98,37 @@ def main(argv: list[str] | None = None) -> int:
     output = Path(args.output)
     metadata_output = Path(args.metadata_output)
     try:
+        normalize_symbol_arguments(args)
+    except ValueError as exc:
+        return fail_before_fetch(
+            output,
+            metadata_output,
+            code="invalid_argument",
+            message=str(exc),
+        )
+    try:
         output_format = prices_output_format(output)
     except ValueError as exc:
-        remove_output(output)
-        remove_output(metadata_output)
-        print(
-            f"ERROR: code=invalid_output_format output_written=false message={exc}",
-            file=sys.stderr,
+        return fail_before_fetch(
+            output,
+            metadata_output,
+            code="invalid_output_format",
+            message=str(exc),
         )
-        return 2
     if output.resolve() == metadata_output.resolve():
-        remove_output(output)
-        remove_output(metadata_output)
-        print(
-            "ERROR: code=invalid_output_path output_written=false "
-            "message=prices output and metadata output must differ",
-            file=sys.stderr,
+        return fail_before_fetch(
+            output,
+            metadata_output,
+            code="invalid_output_path",
+            message="prices output and metadata output must differ",
         )
-        return 2
     if output_format == "parquet" and not parquet_engine_available():
-        remove_output(output)
-        remove_output(metadata_output)
-        print(
-            "ERROR: code=missing_dependency output_written=false "
-            "message=Parquet output requires pyarrow or fastparquet",
-            file=sys.stderr,
+        return fail_before_fetch(
+            output,
+            metadata_output,
+            code="missing_dependency",
+            message="Parquet output requires pyarrow or fastparquet",
         )
-        return 2
     try:
         metadata = fetch_and_write(
             args,
@@ -130,13 +137,12 @@ def main(argv: list[str] | None = None) -> int:
             output_format=output_format,
         )
     except Exception as exc:  # noqa: BLE001
-        remove_output(output)
-        remove_output(metadata_output)
-        print(
-            f"ERROR: code=fetch_failed output_written=false message={exc}",
-            file=sys.stderr,
+        return fail_before_fetch(
+            output,
+            metadata_output,
+            code="fetch_failed",
+            message=str(exc),
         )
-        return 2
     strict_errors = strict_gate_errors(metadata, fail_on_fetch_error=args.fail_on_fetch_error)
     if strict_errors:
         metadata = output_status(
@@ -147,12 +153,31 @@ def main(argv: list[str] | None = None) -> int:
         print_summary(metadata, prefix="ERROR_SUMMARY")
         print(
             "ERROR: strict gate failed; "
-            f"{'; '.join(strict_errors)} output_written=false metadata_output_written=true",
+            f"{'; '.join(strict_errors)} output_written=false "
+            "metadata_output_written=true "
+            f"source_claim_boundary={CLAIM_BOUNDARY}",
             file=sys.stderr,
         )
         return 3
     print_summary(metadata, prefix=summary_prefix(metadata))
     return 0
+
+
+def fail_before_fetch(
+    output: Path,
+    metadata_output: Path,
+    *,
+    code: str,
+    message: str,
+) -> int:
+    remove_output(output)
+    remove_output(metadata_output)
+    print(
+        f"ERROR: code={code} output_written=false metadata_output_written=false "
+        f"source_claim_boundary={CLAIM_BOUNDARY} message={message}",
+        file=sys.stderr,
+    )
+    return 2
 
 
 def fetch_and_write(
@@ -253,6 +278,19 @@ def fetch_prices(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any]
 
 def parse_symbols(text: str) -> list[str]:
     return parse_six_digit_symbols(text)
+
+
+def normalize_symbol_arguments(args: argparse.Namespace) -> None:
+    if args.symbols and args.symbols_file:
+        raise ValueError("use either --symbols or --symbols-file, not both")
+    if args.symbols_file:
+        try:
+            args.symbols = read_symbols_file(Path(args.symbols_file))
+        except OSError as exc:
+            raise ValueError(str(exc)) from exc
+    if not str(args.symbols or "").strip():
+        raise ValueError("provide --symbols or --symbols-file")
+    args.symbols = ",".join(dict.fromkeys(parse_symbols(args.symbols)))
 
 
 def collect_rows(result: Any, symbol: str, name: str = "") -> list[dict[str, Any]]:

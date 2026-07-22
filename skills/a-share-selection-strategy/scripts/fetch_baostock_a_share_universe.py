@@ -39,7 +39,8 @@ def main(argv: list[str] | None = None) -> int:
         remove_output(metadata_output)
         print(
             "ERROR: code=fetch_failed output_written=false "
-            f"metadata_output_written=false message={exc}",
+            "metadata_output_written=false "
+            f"source_claim_boundary={CLAIM_BOUNDARY} message={exc}",
             file=sys.stderr,
         )
         return 2
@@ -58,14 +59,17 @@ def main(argv: list[str] | None = None) -> int:
             remove_output(metadata_output)
             print(
                 "ERROR: code=fetch_failed output_written=false "
-                f"metadata_output_written=false message={exc}",
+                "metadata_output_written=false "
+                f"source_claim_boundary={CLAIM_BOUNDARY} message={exc}",
                 file=sys.stderr,
             )
             return 2
         print_summary(metadata, prefix="ERROR_SUMMARY")
         print(
             "ERROR: strict gate failed; "
-            f"{'; '.join(errors)} output_written=false metadata_output_written=true",
+            f"{'; '.join(errors)} output_written=false "
+            "metadata_output_written=true "
+            f"source_claim_boundary={CLAIM_BOUNDARY}",
             file=sys.stderr,
         )
         return 3

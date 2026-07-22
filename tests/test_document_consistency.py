@@ -651,6 +651,12 @@ class DocumentConsistencyTests(unittest.TestCase):
             ["ID", "标题", "内容", "验收标准", "审查要求", "状态", "标签"],
             list(tasks[0]),
         )
+        self.assertTrue(all(row.get(None) is None for row in tasks))
+        self.assertEqual(len(tasks), len({row["ID"] for row in tasks}))
+        self.assertTrue(all(row["ID"].strip() for row in tasks))
+        self.assertTrue(
+            all(row["状态"] in {"未开始", "进行中", "已完成"} for row in tasks)
+        )
         self.assertLessEqual(sum(row["状态"] == "进行中" for row in tasks), 1)
         self.assertIn("`tasks.csv` 是本仓库唯一任务驱动源", agents)
         self.assertIn('TASKS_FILE = ROOT / "tasks.csv"', validator)

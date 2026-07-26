@@ -9,8 +9,22 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from lib.gates.a_share_selection_output_safety import validate_output_paths
 
-OUTPUT_COLUMNS = ["symbol", "name", "market", "date", "open", "high", "low", "close", "volume", "amount", "turn"]
+
+OUTPUT_COLUMNS = [
+    "symbol",
+    "name",
+    "market",
+    "date",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "amount",
+    "turn",
+]
 NUMERIC_COLUMNS = ["open", "high", "low", "close", "volume", "amount", "turn"]
 SOURCE = "akshare"
 SOURCE_SCOPE = "akshare_history_fetch"
@@ -22,8 +36,28 @@ DATA_SOURCE_NOTE = (
     "stock_zh_a_daily fallback is disclosed in fallback_errors"
 )
 SCHEMAS = [
-    dict(date="日期", symbol="股票代码", open="开盘", high="最高", low="最低", close="收盘", volume="成交量", amount="成交额", turn="换手率"),
-    dict(date="date", symbol="", open="open", high="high", low="low", close="close", volume="volume", amount="amount", turn="turnover"),
+    dict(
+        date="日期",
+        symbol="股票代码",
+        open="开盘",
+        high="最高",
+        low="最低",
+        close="收盘",
+        volume="成交量",
+        amount="成交额",
+        turn="换手率",
+    ),
+    dict(
+        date="date",
+        symbol="",
+        open="open",
+        high="high",
+        low="low",
+        close="close",
+        volume="volume",
+        amount="amount",
+        turn="turnover",
+    ),
 ]
 
 
@@ -32,9 +66,21 @@ def main(argv: list[str] | None = None) -> int:
     output = Path(args.output)
     metadata_output = Path(args.metadata_output)
     try:
+        validate_output_paths([output, metadata_output], [])
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(
+            "ERROR: code=invalid_argument output_written=false "
+            f"metadata_output_written=false source_claim_boundary={CLAIM_BOUNDARY} "
+            f"message={exc}",
+            file=sys.stderr,
+        )
+        return 2
+    try:
         frame, metadata = fetch_prices(args)
         frame, metadata = apply_quality_policy(frame, metadata, args.drop_invalid_rows)
-        metadata = output_status(metadata, output_written=True, metadata_output_written=True)
+        metadata = output_status(
+            metadata, output_written=True, metadata_output_written=True
+        )
         write_outputs(frame, metadata, output, metadata_output)
     except Exception as exc:  # noqa: BLE001
         remove_output(output)
@@ -48,7 +94,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     strict_errors = strict_gate_errors(metadata, args.fail_on_fetch_error)
     if strict_errors:
-        metadata = output_status(metadata, output_written=False, metadata_output_written=True)
+        metadata = output_status(
+            metadata, output_written=False, metadata_output_written=True
+        )
         remove_output(output)
         write_metadata(metadata, metadata_output)
         print_summary(metadata, prefix="ERROR_SUMMARY")
@@ -69,12 +117,22 @@ def build_parser() -> argparse.ArgumentParser:
             "Fallback providers and partial symbols must be disclosed before candidate claims."
         )
     )
-    parser.add_argument("--symbols", required=True, help="Comma-separated six-digit symbols.")
+    parser.add_argument(
+        "--symbols", required=True, help="Comma-separated six-digit symbols."
+    )
     parser.add_argument("--start-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
     parser.add_argument("--end-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
-    parser.add_argument("--output", required=True, help="Output CSV path.")
-    parser.add_argument("--metadata-output", required=True, help="Output metadata JSON path.")
-    parser.add_argument("--adjust", default="", help="akshare adjust value. Default: empty.")
+    parser.add_argument(
+        "--output", required=True, help="Output CSV path; must differ from metadata."
+    )
+    parser.add_argument(
+        "--metadata-output",
+        required=True,
+        help="Output metadata JSON path; must differ from prices output.",
+    )
+    parser.add_argument(
+        "--adjust", default="", help="akshare adjust value. Default: empty."
+    )
     parser.add_argument(
         "--fail-on-fetch-error",
         action="store_true",
@@ -120,7 +178,9 @@ def fetch_prices(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any]
     return frame, build_metadata(args, frame, symbols_meta, failed, fallbacks)
 
 
-def fetch_symbol(ak: Any, args: argparse.Namespace, symbol: str) -> tuple[list[dict[str, Any]], str, str]:
+def fetch_symbol(
+    ak: Any, args: argparse.Namespace, symbol: str
+) -> tuple[list[dict[str, Any]], str, str]:
     error = ""
     try:
         raw = ak.stock_zh_a_hist(
@@ -144,7 +204,9 @@ def fetch_symbol(ak: Any, args: argparse.Namespace, symbol: str) -> tuple[list[d
     )
     rows = collect_rows(raw, symbol)
     if not rows:
-        raise ValueError(f"stock_zh_a_daily returned empty data after fallback: {error}")
+        raise ValueError(
+            f"stock_zh_a_daily returned empty data after fallback: {error}"
+        )
     return rows, "stock_zh_a_daily", error
 
 
@@ -176,7 +238,9 @@ def collect_rows(frame: pd.DataFrame, requested_symbol: str) -> list[dict[str, A
     return [row_record(row, columns, requested_symbol) for _, row in frame.iterrows()]
 
 
-def row_record(row: pd.Series, columns: dict[str, str], requested_symbol: str) -> dict[str, Any]:
+def row_record(
+    row: pd.Series, columns: dict[str, str], requested_symbol: str
+) -> dict[str, Any]:
     symbol = row_symbol(row, columns, requested_symbol)
     return {
         "symbol": symbol,
@@ -206,7 +270,9 @@ def row_symbol(row: pd.Series, columns: dict[str, str], fallback: str) -> str:
     return symbol.zfill(6) if symbol.isdigit() else symbol
 
 
-def symbol_metadata(symbol: str, rows: list[dict[str, Any]], provider: str) -> dict[str, Any]:
+def symbol_metadata(
+    symbol: str, rows: list[dict[str, Any]], provider: str
+) -> dict[str, Any]:
     dates = [str(row["date"]) for row in rows if str(row["date"])]
     return {
         "symbol": symbol,
@@ -274,12 +340,23 @@ def apply_quality_policy(
     metadata["invalid_symbols"] = sorted({item["symbol"] for item in invalid})
     metadata["invalid_row_examples"] = invalid[:10]
     metadata["dropped_invalid_rows"] = len(invalid) if drop_invalid_rows else 0
-    result = frame.drop(index=[item["index"] for item in invalid]) if drop_invalid_rows else frame
+    result = (
+        frame.drop(index=[item["index"] for item in invalid])
+        if drop_invalid_rows
+        else frame
+    )
     result = result.reset_index(drop=True)
     metadata["rows"] = int(len(result))
-    metadata["symbol_count"] = int(result["symbol"].nunique()) if not result.empty else 0
-    providers = {str(item["symbol"]): str(item["provider"]) for item in metadata["symbols"]}
-    metadata["symbols"] = [symbol_metadata_for_frame(symbol, result, providers.get(symbol, "")) for symbol in metadata["requested_symbols"]]
+    metadata["symbol_count"] = (
+        int(result["symbol"].nunique()) if not result.empty else 0
+    )
+    providers = {
+        str(item["symbol"]): str(item["provider"]) for item in metadata["symbols"]
+    }
+    metadata["symbols"] = [
+        symbol_metadata_for_frame(symbol, result, providers.get(symbol, ""))
+        for symbol in metadata["requested_symbols"]
+    ]
     metadata["empty_symbols"] = empty_symbols(metadata["symbols"])
     return result, metadata
 
@@ -307,8 +384,14 @@ def invalid_numeric_columns(row: pd.Series) -> list[str]:
     return invalid
 
 
-def symbol_metadata_for_frame(symbol: str, frame: pd.DataFrame, provider: str) -> dict[str, Any]:
-    rows = [] if frame.empty else frame[frame["symbol"].astype(str) == symbol].to_dict("records")
+def symbol_metadata_for_frame(
+    symbol: str, frame: pd.DataFrame, provider: str
+) -> dict[str, Any]:
+    rows = (
+        []
+        if frame.empty
+        else frame[frame["symbol"].astype(str) == symbol].to_dict("records")
+    )
     return symbol_metadata(symbol, rows, provider)
 
 
@@ -316,7 +399,9 @@ def empty_symbols(symbols_meta: list[dict[str, Any]]) -> list[str]:
     return [str(item["symbol"]) for item in symbols_meta if int(item["rows"]) == 0]
 
 
-def strict_gate_errors(metadata: dict[str, Any], fail_on_fetch_error: bool) -> list[str]:
+def strict_gate_errors(
+    metadata: dict[str, Any], fail_on_fetch_error: bool
+) -> list[str]:
     errors = []
     if metadata["invalid_rows"] != metadata["dropped_invalid_rows"]:
         errors.append(f"invalid_rows={metadata['invalid_rows']}")
@@ -327,7 +412,9 @@ def strict_gate_errors(metadata: dict[str, Any], fail_on_fetch_error: bool) -> l
     if metadata["empty_symbols"]:
         errors.append(f"empty_symbols={len(metadata['empty_symbols'])}")
     if metadata["symbol_count"] != len(metadata["requested_symbols"]):
-        errors.append(f"symbol_count={metadata['symbol_count']} requested_symbols={len(metadata['requested_symbols'])}")
+        errors.append(
+            f"symbol_count={metadata['symbol_count']} requested_symbols={len(metadata['requested_symbols'])}"
+        )
     if metadata["fallback_errors"]:
         errors.append(f"fallback_errors={len(metadata['fallback_errors'])}")
     return errors
@@ -344,7 +431,9 @@ def summary_prefix(metadata: dict[str, Any]) -> str:
     return "OK"
 
 
-def write_outputs(frame: pd.DataFrame, metadata: dict[str, Any], output: Path, meta: Path) -> None:
+def write_outputs(
+    frame: pd.DataFrame, metadata: dict[str, Any], output: Path, meta: Path
+) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(output, index=False)
     write_metadata(metadata, meta)
@@ -352,7 +441,10 @@ def write_outputs(frame: pd.DataFrame, metadata: dict[str, Any], output: Path, m
 
 def write_metadata(metadata: dict[str, Any], meta: Path) -> None:
     meta.parent.mkdir(parents=True, exist_ok=True)
-    meta.write_text(json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    meta.write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
 
 
 def remove_output(output: Path) -> None:

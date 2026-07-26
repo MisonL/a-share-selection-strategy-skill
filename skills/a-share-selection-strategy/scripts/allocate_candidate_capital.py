@@ -8,6 +8,15 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from lib.gates.a_share_selection_output_safety import (
+    prepare_output_paths,
+    remove_output_files,
+)
+from lib.selection_core.a_share_selection_cli_numeric import (
+    integer_or_non_finite,
+    normalize_negative_non_finite_option_values,
+)
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
@@ -24,12 +33,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--output", required=True, help="Path to output CSV.")
     parser.add_argument("--cash-budget", type=float, required=True)
-    parser.add_argument("--lot-size", type=int, default=100)
+    parser.add_argument("--lot-size", type=integer_or_non_finite, default=100)
     parser.add_argument("--close-tolerance", type=float, default=0.000001)
     parser.add_argument("--overwrite-capital-fields", action="store_true")
     parser.add_argument("--fail-on-unallocated", action="store_true")
-    args = parser.parse_args(argv)
+    args = parser.parse_args(
+        normalize_negative_non_finite_option_values(argv, NUMERIC_OPTIONS)
+    )
+    output = Path(args.output)
+    output_prepared = False
     try:
+        prepare_output_paths(
+            [output],
+            [Path(args.prices), Path(args.candidates)],
+        )
+        output_prepared = True
         ensure_runtime_dependencies()
         result, summary = allocate_capital(
             read_table(Path(args.prices)),
@@ -48,8 +66,10 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 3
-        write_output(result, Path(args.output))
+        write_output(result, output)
     except Exception as exc:  # noqa: BLE001
+        if output_prepared:
+            remove_output_files([output])
         print(
             f"ERROR: code=bad_input output_written=false message={exc}",
             file=sys.stderr,
@@ -59,12 +79,16 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+NUMERIC_OPTIONS = ("--cash-budget", "--lot-size", "--close-tolerance")
+
+
 def ensure_runtime_dependencies() -> None:
     if "pd" in globals():
         return
     import pandas as pandas_module
     import lib.selection_core.a_share_selection_capital as capital_module
     import lib.selection_core.a_share_selection_data as data_module
+    import lib.selection_core.a_share_selection_sizing_contracts as sizing_contracts
     import lib.a_share_selection_validation as validation_module
 
     globals().update(
@@ -72,8 +96,20 @@ def ensure_runtime_dependencies() -> None:
             "pd": pandas_module,
             "CAPITAL_FIELDS": capital_module.CAPITAL_FIELDS,
             "SIZING_FIELDS": capital_module.SIZING_FIELDS,
+            "SIZING_EXECUTION_MODEL": capital_module.SIZING_EXECUTION_MODEL,
+            "lot_floor_quantity": capital_module.lot_floor_quantity,
+            "normalize_complete_capital_fields": (
+                capital_module.normalize_complete_capital_fields
+            ),
+            "next_observed_open_entry": capital_module.next_observed_open_entry,
             "parse_dates": data_module.parse_dates,
             "read_table": data_module.read_table,
+            "require_finite_number": sizing_contracts.require_finite_number,
+            "require_finite_non_negative_number": (
+                sizing_contracts.require_finite_non_negative_number
+            ),
+            "require_integer_at_least": sizing_contracts.require_integer_at_least,
+            "require_positive_number": sizing_contracts.require_positive_number,
             "validate_frame": validation_module.validate_frame,
         }
     )
@@ -89,9 +125,12 @@ def allocate_capital(
     overwrite_capital_fields: bool = False,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     ensure_runtime_dependencies()
-    validate_inputs(prices, candidates, cash_budget, lot_size, close_tolerance)
+    cash_budget, lot_size, close_tolerance = validate_inputs(
+        prices, candidates, cash_budget, lot_size, close_tolerance
+    )
     reject_existing_sizing_fields(candidates, overwrite_capital_fields)
-    quotes = signal_quotes(prices)
+    history_prices = prepare_price_history(prices)
+    quotes = signal_quotes(history_prices)
     result = drop_existing_sizing_fields(candidates).reset_index(drop=True)
     result["symbol"] = result["symbol"].astype(str)
     result["_signal_date"] = parse_dates(result["date"])
@@ -106,20 +145,32 @@ def allocate_capital(
         missing = int(merged["signal_close"].isna().sum())
         raise ValueError(f"missing signal close for {missing} candidates")
     validate_candidate_close(merged, close_tolerance)
+    execution = sizing_execution_quotes(history_prices, merged)
+    merged = merged.merge(
+        execution,
+        on=["symbol", "_signal_date"],
+        how="left",
+        validate="one_to_one",
+    )
     slot_cash = cash_budget / len(merged)
     merged["cash_slot"] = slot_cash
-    merged["quantity"] = (slot_cash / (merged["signal_close"] * lot_size)).astype(
-        int
-    ) * lot_size
-    merged["cash_reserved"] = merged["quantity"] * merged["signal_close"]
+    merged["quantity"] = 0
+    entry_prices = pd.to_numeric(merged["sizing_entry_price"], errors="coerce")
+    eligible = merged["sizing_skip_reason"].eq("") & entry_prices.notna()
+    merged.loc[eligible, "quantity"] = entry_prices.loc[eligible].map(
+        lambda entry_price: lot_floor_quantity(slot_cash, entry_price, lot_size)
+    )
+    too_small = eligible & merged["quantity"].eq(0)
+    merged.loc[too_small, "sizing_skip_reason"] = "insufficient_cash_slot"
+    merged["cash_reserved"] = merged["quantity"] * entry_prices.fillna(0.0)
     merged["notional"] = merged["cash_reserved"]
     merged["weight"] = merged["cash_reserved"] / cash_budget
     merged["capital_model"] = "equal_cash_budget_lot_floor"
     merged["cash_budget"] = float(cash_budget)
     merged["lot_size"] = int(lot_size)
     merged["sizing_claim_boundary"] = "local_sizing_not_broker_order"
-    merged["unallocated"] = merged["quantity"] <= 0
-    output = merged.drop(columns=["_signal_date"])
+    merged["unallocated"] = merged["quantity"].eq(0)
+    output = normalize_complete_capital_fields(merged.drop(columns=["_signal_date"]))
     return output, build_summary(output, cash_budget, lot_size)
 
 
@@ -129,14 +180,13 @@ def validate_inputs(
     cash_budget: float,
     lot_size: int,
     close_tolerance: float,
-) -> None:
-    if cash_budget <= 0:
-        raise ValueError("cash-budget must be > 0")
-    if lot_size < 1:
-        raise ValueError("lot-size must be >= 1")
-    if close_tolerance < 0:
-        raise ValueError("close-tolerance must be >= 0")
-    errors = validate_frame(prices, min_history_rows=0)
+) -> tuple[float, int, float]:
+    cash_budget = require_positive_number(cash_budget, "cash-budget")
+    lot_size = require_integer_at_least(lot_size, "lot-size", 1)
+    close_tolerance = require_finite_non_negative_number(
+        close_tolerance, "close-tolerance"
+    )
+    errors = validate_frame(prices, min_history_rows=0, allow_invalid_open=True)
     if errors:
         raise ValueError("; ".join(errors))
     missing = [column for column in ["symbol", "date"] if column not in candidates]
@@ -144,6 +194,7 @@ def validate_inputs(
         raise ValueError(f"candidates missing required columns: {', '.join(missing)}")
     if candidates.empty:
         raise ValueError("candidates data is empty")
+    return cash_budget, lot_size, close_tolerance
 
 
 def reject_existing_sizing_fields(
@@ -163,18 +214,44 @@ def drop_existing_sizing_fields(candidates: pd.DataFrame) -> pd.DataFrame:
     return candidates.drop(columns=present)
 
 
-def signal_quotes(prices: pd.DataFrame) -> pd.DataFrame:
+def prepare_price_history(prices: pd.DataFrame) -> pd.DataFrame:
     result = prices.copy()
     result["symbol"] = result["symbol"].astype(str)
     result["_signal_date"] = parse_dates(result["date"])
+    result["date"] = result["_signal_date"]
+    result["open"] = pd.to_numeric(result["open"], errors="coerce")
     result["signal_close"] = pd.to_numeric(result["close"], errors="coerce")
     result = result.dropna(subset=["symbol", "_signal_date", "signal_close"])
     if (result["signal_close"] <= 0).any():
         raise ValueError("signal close must be > 0")
-    quotes = result[["symbol", "_signal_date", "signal_close"]]
-    if quotes.duplicated(["symbol", "_signal_date"]).any():
+    if result.duplicated(["symbol", "_signal_date"]).any():
         raise ValueError("prices contain duplicate symbol/date rows")
-    return quotes
+    return result.sort_values(["symbol", "_signal_date"]).reset_index(drop=True)
+
+
+def signal_quotes(prices: pd.DataFrame) -> pd.DataFrame:
+    return prices[["symbol", "_signal_date", "signal_close"]].copy()
+
+
+def sizing_execution_quotes(
+    prices: pd.DataFrame, candidates: pd.DataFrame
+) -> pd.DataFrame:
+    rows = []
+    for row in candidates[["symbol", "_signal_date"]].to_dict("records"):
+        history = prices[prices["symbol"] == str(row["symbol"])].reset_index(drop=True)
+        entry, reason = next_observed_open_entry(history, row["_signal_date"])
+        rows.append(
+            {
+                "symbol": str(row["symbol"]),
+                "_signal_date": row["_signal_date"],
+                "sizing_execution_model": SIZING_EXECUTION_MODEL,
+                "sizing_entry_date": entry.entry_date if entry is not None else pd.NA,
+                "sizing_entry_price": entry.entry_price if entry is not None else pd.NA,
+                "sizing_entry_price_field": "open",
+                "sizing_skip_reason": reason,
+            }
+        )
+    return pd.DataFrame(rows)
 
 
 def validate_candidate_close(frame: pd.DataFrame, tolerance: float) -> None:
@@ -191,7 +268,13 @@ def validate_candidate_close(frame: pd.DataFrame, tolerance: float) -> None:
 def build_summary(
     frame: pd.DataFrame, cash_budget: float, lot_size: int
 ) -> dict[str, Any]:
-    total_reserved = float(frame["cash_reserved"].sum())
+    total_reserved = require_finite_non_negative_number(
+        frame["cash_reserved"].sum(), "total-cash-reserved"
+    )
+    cash_remaining = require_finite_number(
+        cash_budget - total_reserved, "cash-remaining"
+    )
+    max_weight = require_finite_non_negative_number(frame["weight"].max(), "max-weight")
     return {
         "candidates": int(len(frame)),
         "allocated_candidates": int((frame["quantity"] > 0).sum()),
@@ -199,9 +282,18 @@ def build_summary(
         "cash_budget": float(cash_budget),
         "lot_size": int(lot_size),
         "total_cash_reserved": total_reserved,
-        "cash_remaining": float(cash_budget - total_reserved),
-        "max_weight": float(frame["weight"].max()),
+        "cash_remaining": cash_remaining,
+        "max_weight": max_weight,
         "capital_model": "equal_cash_budget_lot_floor",
+        "unallocated_reason_counts": unallocated_reason_counts(frame),
+    }
+
+
+def unallocated_reason_counts(frame: pd.DataFrame) -> dict[str, int]:
+    reasons = frame.loc[frame["unallocated"], "sizing_skip_reason"].fillna("")
+    return {
+        str(reason): int(count)
+        for reason, count in reasons[reasons != ""].value_counts().sort_index().items()
     }
 
 

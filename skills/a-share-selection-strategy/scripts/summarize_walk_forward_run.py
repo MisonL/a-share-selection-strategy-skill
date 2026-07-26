@@ -10,6 +10,21 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from lib.selection_core.a_share_selection_model_contracts import (
+    EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
+)
+from lib.selection_core.a_share_selection_cli_numeric import (
+    normalize_negative_non_finite_option_values,
+)
+from lib.selection_core.a_share_selection_sizing_contracts import (
+    require_finite_non_negative_number,
+    require_finite_number,
+    require_integer_at_least,
+)
+from lib.gates.a_share_selection_output_safety import (
+    prepare_output_paths,
+    remove_output_files,
+)
 from lib.walk_forward.metadata_checks import metadata_gate_errors
 
 
@@ -31,15 +46,36 @@ METADATA_FIELDS = (
     "raw_tradestatus_missing_rows",
     "tradestatus_missing_rows",
 )
+NUMERIC_OPTIONS = (
+    "--max-open-positions",
+    "--max-gross-weight",
+    "--max-gross-notional",
+    "--max-cash-reserved",
+)
+OVERLAP_INTEGER_CAPACITY_FIELDS = {
+    "max_open_positions": "max-open-positions",
+    "same_symbol_overlap_rows": "same-symbol-overlap-rows",
+}
+OVERLAP_DECIMAL_CAPACITY_FIELDS = {
+    "max_gross_weight": "max-gross-weight",
+    "max_gross_notional": "max-gross-notional",
+    "max_cash_reserved": "max-cash-reserved",
+}
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(
+        normalize_negative_non_finite_option_values(argv, NUMERIC_OPTIONS)
+    )
+    run_dir = Path(args.run_dir)
     output = Path(args.output)
+    output_prepared = False
     try:
-        ensure_runtime_dependencies()
-        summary = build_run_summary(Path(args.run_dir), args)
+        prepare_output_paths([output], summary_input_paths(run_dir, args))
+        output_prepared = True
+        validate_capacity_options(args)
+        summary = build_run_summary(run_dir, args)
         write_json(summary, output)
         if summary["quality_errors"]:
             print_summary(summary, output, prefix="ERROR_SUMMARY")
@@ -51,6 +87,8 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 3
     except Exception as exc:  # noqa: BLE001
+        if output_prepared:
+            remove_output_files([output])
         print(
             f"ERROR: code=bad_input output_written=false message={exc}",
             file=sys.stderr,
@@ -74,10 +112,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--expected-symbol-count", type=int)
     parser.add_argument("--required-tradability-model")
     parser.add_argument("--required-limit-rules-model")
-    parser.add_argument("--max-open-positions", type=int)
-    parser.add_argument("--max-gross-weight", type=float)
-    parser.add_argument("--max-gross-notional", type=float)
-    parser.add_argument("--max-cash-reserved", type=float)
+    parser.add_argument(
+        "--required-execution-model",
+        choices=[EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE],
+    )
+    parser.add_argument("--max-open-positions")
+    parser.add_argument("--max-gross-weight")
+    parser.add_argument("--max-gross-notional")
+    parser.add_argument("--max-cash-reserved")
     parser.add_argument("--fail-on-symbol-overlap", action="store_true")
     parser.add_argument(
         "--expect-portfolio-violations",
@@ -86,6 +128,44 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--allow-dropped-invalid-rows", action="store_true")
     return parser
+
+
+def validate_capacity_options(options: argparse.Namespace) -> None:
+    if options.max_open_positions is not None:
+        options.max_open_positions = require_integer_at_least(
+            options.max_open_positions,
+            "max-open-positions",
+            0,
+        )
+    for attribute, name in OVERLAP_DECIMAL_CAPACITY_FIELDS.items():
+        value = getattr(options, attribute)
+        if value is not None:
+            setattr(
+                options,
+                attribute,
+                require_finite_non_negative_number(value, name),
+            )
+
+
+def summary_input_paths(
+    run_dir: Path,
+    options: argparse.Namespace,
+) -> list[Path]:
+    paths = [
+        run_dir / "metadata.json",
+        run_dir / "prediction_equity_curve.csv",
+        run_dir / "prediction_overlap_summary.json",
+        run_dir / "prediction_allocation_summary.json",
+    ]
+    for signal_dir in declared_signal_dirs(run_dir, options.signal_dates):
+        paths.extend(
+            [
+                signal_dir / "prediction_summary.json",
+                signal_dir / "prediction_candidates.csv",
+                signal_dir / "prediction_backtest.csv",
+            ]
+        )
+    return paths
 
 
 def ensure_runtime_dependencies() -> None:
@@ -108,6 +188,9 @@ def build_run_summary(run_dir: Path, options: argparse.Namespace) -> dict[str, A
     signals = [
         signal_summary(path) for path in signal_dirs(run_dir, options.signal_dates)
     ]
+    execution_models = sorted(
+        {model for signal in signals for model in signal["execution_models"]}
+    )
     equity = equity_summary(run_dir / "prediction_equity_curve.csv")
     portfolio = portfolio_summary(run_dir / "prediction_overlap_summary.json", options)
     summary = {
@@ -117,6 +200,11 @@ def build_run_summary(run_dir: Path, options: argparse.Namespace) -> dict[str, A
         if (run_dir / "prediction_allocation_summary.json").exists()
         else None,
         "signals": signals,
+        "execution_models": execution_models,
+        "execution_model": (
+            execution_models[0] if len(execution_models) == 1 else None
+        ),
+        "required_execution_model": options.required_execution_model,
         "equity": equity,
         "portfolio": portfolio,
         "expected_portfolio_violations": bool(options.expect_portfolio_violations),
@@ -127,8 +215,11 @@ def build_run_summary(run_dir: Path, options: argparse.Namespace) -> dict[str, A
         ),
         "required_tradability_model_checked": bool(options.required_tradability_model),
         "required_limit_rules_model_checked": bool(options.required_limit_rules_model),
+        "required_execution_model_checked": bool(options.required_execution_model),
         "model_gates_checked": bool(
-            options.required_tradability_model and options.required_limit_rules_model
+            options.required_tradability_model
+            and options.required_limit_rules_model
+            and options.required_execution_model
         ),
         "claim_boundary": "summary_not_external_gate",
     }
@@ -162,11 +253,7 @@ def capacity_gate_status(
 
 
 def signal_dirs(run_dir: Path, signal_dates: list[str] | None) -> list[Path]:
-    base = signal_base(run_dir)
-    if signal_dates:
-        paths = [base / signal_date for signal_date in signal_dates]
-    else:
-        paths = sorted(path for path in base.iterdir() if DATE_DIR.fullmatch(path.name))
+    paths = declared_signal_dirs(run_dir, signal_dates)
     if not paths:
         raise ValueError("no signal date directories found")
     missing = [path.name for path in paths if not path.is_dir()]
@@ -175,6 +262,15 @@ def signal_dirs(run_dir: Path, signal_dates: list[str] | None) -> list[Path]:
             f"missing signal date directories: {', '.join(missing)}"
         )
     return paths
+
+
+def declared_signal_dirs(run_dir: Path, signal_dates: list[str] | None) -> list[Path]:
+    base = signal_base(run_dir)
+    if signal_dates:
+        return [base / signal_date for signal_date in signal_dates]
+    if not base.is_dir():
+        return []
+    return sorted(path for path in base.iterdir() if DATE_DIR.fullmatch(path.name))
 
 
 def signal_base(run_dir: Path) -> Path:
@@ -208,6 +304,9 @@ def signal_summary(signal_dir: Path) -> dict[str, Any]:
         "limit_rules_models": sorted(
             backtest.get("limit_rules_model", pd.Series()).dropna().unique()
         ),
+        "execution_models": sorted(
+            backtest.get("execution_model", pd.Series()).dropna().unique()
+        ),
     }
 
 
@@ -219,8 +318,9 @@ def equity_summary(path: Path) -> dict[str, Any]:
     )
     if frame.empty:
         raise ValueError("equity curve is empty")
-    final = frame.iloc[-1]
-    final_equity = float(final["equity"])
+    equity = finite_numeric_values(frame["equity"], "equity curve equity")
+    drawdown = finite_numeric_values(frame["drawdown"], "equity curve drawdown")
+    final_equity = float(equity.iloc[-1])
     return {
         "periods": int(len(frame)),
         "positions": int(pd.to_numeric(frame["positions"], errors="raise").sum()),
@@ -229,14 +329,51 @@ def equity_summary(path: Path) -> dict[str, Any]:
         ),
         "final_equity": final_equity,
         "total_return": final_equity - 1.0,
-        "max_drawdown": float(pd.to_numeric(frame["drawdown"], errors="raise").min()),
+        "max_drawdown": float(drawdown.min()),
     }
+
+
+def finite_numeric_values(values: Any, name: str) -> Any:
+    return values.map(lambda value: require_finite_number(value, name))
 
 
 def portfolio_summary(path: Path, gate: argparse.Namespace) -> dict[str, Any]:
     summary = load_json(path)
-    violations = portfolio_violations(summary, gate)
+    capacity_values = overlap_capacity_values(summary)
+    violations = portfolio_violations(capacity_values, gate)
     return {"summary": summary, "violations": violations}
+
+
+def overlap_capacity_values(summary: Any) -> dict[str, float | int]:
+    if not isinstance(summary, dict):
+        raise ValueError("prediction overlap summary must be a JSON object")
+    values: dict[str, float | int] = {}
+    for key, name in OVERLAP_INTEGER_CAPACITY_FIELDS.items():
+        values[key] = overlap_integer_capacity_value(summary, key, name)
+    for key, name in OVERLAP_DECIMAL_CAPACITY_FIELDS.items():
+        values[key] = overlap_decimal_capacity_value(summary, key, name)
+    return values
+
+
+def overlap_integer_capacity_value(summary: dict[str, Any], key: str, name: str) -> int:
+    value = overlap_json_number(summary, key, name)
+    return require_integer_at_least(value, name, 0)
+
+
+def overlap_decimal_capacity_value(
+    summary: dict[str, Any], key: str, name: str
+) -> float:
+    value = overlap_json_number(summary, key, name)
+    return require_finite_non_negative_number(value, name)
+
+
+def overlap_json_number(summary: dict[str, Any], key: str, name: str) -> int | float:
+    if key not in summary:
+        raise ValueError(f"{name} is required")
+    value = summary[key]
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{name} must be a JSON number")
+    return value
 
 
 def quality_errors(
@@ -320,44 +457,59 @@ def model_errors(signal: dict[str, Any], options: argparse.Namespace) -> list[st
             errors.append(
                 f"{signal['signal_date']}_limit_rules_models={','.join(models)}"
             )
+    if options.required_execution_model:
+        models = signal["execution_models"]
+        if models != [options.required_execution_model]:
+            errors.append(
+                f"{signal['signal_date']}_execution_models={','.join(models)}"
+            )
     return errors
 
 
 def portfolio_violations(
-    summary: dict[str, Any], gate: argparse.Namespace
+    capacity_values: dict[str, float | int], gate: argparse.Namespace
 ) -> list[str]:
     violations = []
     if gate.max_open_positions is not None:
-        if int(summary["max_open_positions"]) > gate.max_open_positions:
+        if capacity_values["max_open_positions"] > gate.max_open_positions:
             limit = gate.max_open_positions
             violations.append(
-                f"max_open_positions={summary['max_open_positions']} limit={limit}"
+                f"max_open_positions={capacity_values['max_open_positions']} limit={limit}"
             )
     add_float_violation(
-        violations, summary, key="max_gross_weight", limit=gate.max_gross_weight
+        violations,
+        capacity_values,
+        key="max_gross_weight",
+        limit=gate.max_gross_weight,
     )
     add_float_violation(
-        violations, summary, key="max_gross_notional", limit=gate.max_gross_notional
+        violations,
+        capacity_values,
+        key="max_gross_notional",
+        limit=gate.max_gross_notional,
     )
     add_float_violation(
-        violations, summary, key="max_cash_reserved", limit=gate.max_cash_reserved
+        violations,
+        capacity_values,
+        key="max_cash_reserved",
+        limit=gate.max_cash_reserved,
     )
-    if gate.fail_on_symbol_overlap and int(summary.get("same_symbol_overlap_rows", 0)):
+    if gate.fail_on_symbol_overlap and capacity_values["same_symbol_overlap_rows"]:
         violations.append(
-            f"same_symbol_overlap_rows={summary['same_symbol_overlap_rows']}"
+            f"same_symbol_overlap_rows={capacity_values['same_symbol_overlap_rows']}"
         )
     return violations
 
 
 def add_float_violation(
     violations: list[str],
-    summary: dict[str, Any],
+    capacity_values: dict[str, float | int],
     *,
     key: str,
     limit: float | None,
 ) -> None:
-    if limit is not None and float(summary.get(key, 0.0)) > limit:
-        violations.append(f"{key}={summary[key]} limit={limit}")
+    if limit is not None and capacity_values[key] > limit:
+        violations.append(f"{key}={capacity_values[key]} limit={limit}")
 
 
 def complete_trades(frame: pd.DataFrame) -> pd.DataFrame:
@@ -391,7 +543,7 @@ def load_json(path: Path) -> dict[str, Any]:
 def write_json(data: dict[str, Any], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True),
+        json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False),
         encoding="utf-8",
     )
 
@@ -407,6 +559,8 @@ def print_summary(summary: dict[str, Any], output: Path, prefix: str = "OK") -> 
         f"capacity_gate_pass={summary['capacity_gate_pass']} "
         f"capacity_gate_status={summary['capacity_gate_status']} "
         f"model_gates_checked={summary['model_gates_checked']} "
+        f"execution_model={summary['execution_model']} "
+        f"required_execution_model_checked={summary['required_execution_model_checked']} "
         f"quality_errors={len(summary['quality_errors'])} "
         f"verdict={summary['verdict']} "
         f"claim_boundary=summary_not_external_gate output={output}"

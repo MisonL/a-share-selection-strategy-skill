@@ -62,6 +62,7 @@ DIAGNOSTIC_COLUMNS = [
     "prediction_input_source",
     "prediction_model",
     "prediction_horizon_days",
+    "prediction_label_execution_model",
     "prediction_scope",
     "prediction_model_quality_scope",
     "prediction_model_executed_by_score_script",
@@ -253,6 +254,7 @@ def diagnostic_row(
         "prediction_input_source": row.get("prediction_input_source"),
         "prediction_model": row.get("prediction_model"),
         "prediction_horizon_days": row.get("prediction_horizon_days"),
+        "prediction_label_execution_model": row.get("prediction_label_execution_model"),
         "prediction_scope": row.get("prediction_scope"),
         "prediction_model_quality_scope": row.get("prediction_model_quality_scope"),
         "prediction_model_executed_by_score_script": row.get(

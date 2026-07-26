@@ -3,42 +3,69 @@
 from __future__ import annotations
 
 import csv
+import math
 from pathlib import Path
 from typing import Any
 
+from lib.walk_forward.backtest_checks import (
+    backtest_execution_errors,
+    reference_price_index,
+    sized_execution_errors,
+)
+from lib.selection_core.a_share_selection_sizing_contracts import SIZING_FIELDS
 from lib.walk_forward.metadata_checks import metadata_gate_errors
 from lib.walk_forward.price_checks import signal_price_errors
 from lib.walk_forward.allocation_checks import allocation_errors
-from lib.walk_forward.date_checks import date_after, same_calendar_date, same_date_list
+from lib.walk_forward.date_checks import (
+    date_after,
+    normalized_date_text,
+    same_calendar_date,
+    same_date_list,
+)
 
 
 CAPITAL_FIELDS = ("weight", "notional", "quantity", "cash_reserved")
 BACKTEST_FIELDS = (
+    "symbol",
     "signal_date",
+    "execution_model",
     "entry_date",
     "exit_date",
-    "entry_close",
-    "exit_close",
+    "entry_price",
+    "entry_price_field",
+    "exit_price",
+    "exit_price_field",
     "gross_return",
     "return",
-    *CAPITAL_FIELDS,
+    *SIZING_FIELDS,
     "status",
     "missing_data",
     "tradability_model",
     "limit_rules_model",
     "hold_days_requested",
+    "holding_observed_bars",
+    "holding_period",
     "cost_bps",
     "slippage_bps",
 )
 BACKTEST_NUMERIC_FIELDS = (
-    "entry_close",
-    "exit_close",
+    "entry_price",
+    "exit_price",
     "gross_return",
     "return",
     "cost_bps",
     "slippage_bps",
-    *CAPITAL_FIELDS,
+    "cash_budget",
+    "lot_size",
+    "signal_close",
+    "cash_slot",
+    "quantity",
+    "cash_reserved",
+    "notional",
+    "weight",
+    "sizing_entry_price",
 )
+OBSOLETE_BACKTEST_FIELDS = ("entry_close", "exit_close")
 PRICE_COLUMNS = (
     "symbol",
     "date",
@@ -52,17 +79,15 @@ PRICE_COLUMNS = (
     "tradestatus",
     "isST",
 )
-SIZED_COLUMNS = (
-    "cash_budget",
-    "lot_size",
-    "capital_model",
-    "signal_close",
-    "cash_slot",
-    "quantity",
-    "cash_reserved",
-    "notional",
-    "weight",
-    "unallocated",
+SIZED_COLUMNS = tuple(SIZING_FIELDS)
+OVERLAP_INTEGER_CAPACITY_FIELDS = (
+    "max_open_positions",
+    "same_symbol_overlap_rows",
+)
+OVERLAP_DECIMAL_CAPACITY_FIELDS = (
+    "max_gross_weight",
+    "max_gross_notional",
+    "max_cash_reserved",
 )
 
 
@@ -73,20 +98,38 @@ def build_artifact_report(run_dir: Path, args: Any, validator: str) -> dict[str,
     summary = load_json(run_dir / "prediction_run_summary.json")
     errors += metadata_errors(load_json(run_dir / "metadata.json"), symbols, args)
     overlap = load_json(run_dir / "prediction_overlap_summary.json")
-    errors += allocation_errors(
-        run_dir=run_dir,
-        summary=summary,
-        overlap=overlap,
-        args=args,
-        load_json=load_json,
-        read_csv=read_csv,
+    overlap_is_object = isinstance(overlap, dict)
+    if overlap_is_object:
+        errors += allocation_errors(
+            run_dir=run_dir,
+            summary=summary,
+            overlap=overlap,
+            args=args,
+            load_json=load_json,
+            read_csv=read_csv,
+        )
+    errors += summary_errors(
+        summary,
+        dates,
+        args.expected_candidates,
+        args.required_execution_model,
     )
-    errors += summary_errors(summary, dates, args.expected_candidates)
-    totals = validate_signal_artifacts(run_dir, dates, symbols, args, errors)
+    prices_by_symbol, price_errors = reference_price_index(
+        read_csv(run_dir / "prices.csv")
+    )
+    errors += price_errors
+    totals = validate_signal_artifacts(
+        run_dir, dates, symbols, args, errors, prices_by_symbol
+    )
     errors += equity_errors(
         run_dir / "prediction_equity_curve.csv", summary, dates, args, totals
     )
-    errors += overlap_errors(overlap, summary, args)
+    capacity_errors = (
+        overlap_capacity_errors(overlap)
+        if overlap_is_object
+        else ["portfolio_overlap_summary_not_object"]
+    )
+    errors += overlap_errors(overlap, summary, args, capacity_errors)
     manifest_path = manifest_validation_path(run_dir, args)
     manifest_checked = manifest_path is not None
     if manifest_path is not None:
@@ -98,7 +141,9 @@ def build_artifact_report(run_dir: Path, args: Any, validator: str) -> dict[str,
         totals,
         summary,
         manifest_checked,
+        args.required_execution_model,
         args.expected_portfolio_violations > 0,
+        not capacity_errors,
         errors,
     )
 
@@ -136,11 +181,16 @@ def metadata_errors(
 
 
 def summary_errors(
-    summary: dict[str, Any], dates: list[str], expected: list[int]
+    summary: dict[str, Any],
+    dates: list[str],
+    expected: list[int],
+    required_execution_model: str,
 ) -> list[str]:
     errors = []
     if summary.get("quality_errors") != []:
         errors.append(f"quality_errors={summary.get('quality_errors')}")
+    if summary.get("execution_model") != required_execution_model:
+        errors.append(f"summary_execution_model={summary.get('execution_model')}")
     signals = summary.get("signals", [])
     if not same_date_list([item.get("signal_date", "") for item in signals], dates):
         errors.append("summary_signal_dates_mismatch")
@@ -160,6 +210,7 @@ def validate_signal_artifacts(
     symbols: list[str],
     args: Any,
     errors: list[str],
+    prices_by_symbol: dict[str, list[dict[str, str]]],
 ) -> dict[str, int]:
     totals = {"candidates": 0, "completed_trades": 0}
     for index, date in enumerate(dates):
@@ -181,8 +232,17 @@ def validate_signal_artifacts(
         errors += candidate_errors(sized, date, symbols, expected, "sized")
         errors += signal_price_errors(candidates, sized, prices, date)
         errors += sized_errors(sized, date, args)
+        errors += sized_execution_errors(
+            sized=sized,
+            prices_by_symbol=prices_by_symbol,
+            signal_date=date,
+            args=args,
+        )
         errors += raw_candidate_errors(run_dir, date, len(candidates), args)
-        errors += backtest_errors(backtest, date, expected, args)
+        errors += backtest_errors(
+            backtest, candidates, prices_by_symbol, date, expected, args
+        )
+        errors += sizing_artifact_consistency_errors(sized, backtest, date, args)
         totals["candidates"] += len(candidates)
         totals["completed_trades"] += count_complete(backtest)
     return totals
@@ -238,6 +298,7 @@ def candidate_errors(
 
 def sized_errors(rows: list[dict[str, str]], signal_date: str, args: Any) -> list[str]:
     errors = required_column_errors(rows, SIZED_COLUMNS, f"{signal_date}_sized")
+    expected_boundary = sizing_claim_boundary(args.required_allocation_model)
     for row in rows:
         if row.get("capital_model") != args.required_allocation_model:
             errors.append(f"{signal_date}_capital_model={row.get('capital_model')}")
@@ -247,7 +308,117 @@ def sized_errors(rows: list[dict[str, str]], signal_date: str, args: Any) -> lis
             errors.append(f"{signal_date}_lot_size={row.get('lot_size')}")
         if row.get("unallocated", "").lower() not in ("false", "0"):
             errors.append(f"{signal_date}_unallocated={row.get('unallocated')}")
+        if row.get("sizing_claim_boundary") != expected_boundary:
+            errors.append(
+                f"{signal_date}_sizing_claim_boundary="
+                f"{row.get('sizing_claim_boundary')}"
+            )
+        if row.get("sizing_execution_model") != args.required_execution_model:
+            errors.append(
+                f"{signal_date}_sizing_execution_model="
+                f"{row.get('sizing_execution_model')}"
+            )
+        if row.get("sizing_entry_price_field") != "open":
+            errors.append(
+                f"{signal_date}_sizing_entry_price_field="
+                f"{row.get('sizing_entry_price_field')}"
+            )
+        if row.get("sizing_skip_reason", ""):
+            errors.append(
+                f"{signal_date}_sizing_skip_reason={row.get('sizing_skip_reason')}"
+            )
     return errors
+
+
+def sizing_claim_boundary(allocation_model: str) -> str:
+    if allocation_model == "portfolio_cash_lot_floor":
+        return "local_portfolio_allocation_not_broker_or_external_cash_capacity_proof"
+    return "local_sizing_not_broker_order"
+
+
+SIZING_NUMERIC_FIELDS = frozenset(
+    {
+        "cash_budget",
+        "lot_size",
+        "signal_close",
+        "cash_slot",
+        "quantity",
+        "cash_reserved",
+        "notional",
+        "weight",
+        "sizing_entry_price",
+    }
+)
+
+
+def sizing_artifact_consistency_errors(
+    sized: list[dict[str, str]],
+    backtest: list[dict[str, str]],
+    signal_date: str,
+    args: Any,
+) -> list[str]:
+    sized_by_key, sized_errors = sizing_rows_by_key(sized, signal_date, "sized", "date")
+    backtest_by_key, backtest_errors = sizing_rows_by_key(
+        backtest, signal_date, "backtest", "signal_date"
+    )
+    errors = [*sized_errors, *backtest_errors]
+    if set(sized_by_key) != set(backtest_by_key):
+        errors.append(f"{signal_date}_sized_backtest_keys_mismatch")
+    for key in set(sized_by_key) & set(backtest_by_key):
+        for field in SIZING_FIELDS:
+            if not sizing_field_matches(
+                field,
+                sized_by_key[key].get(field),
+                backtest_by_key[key].get(field),
+                args,
+            ):
+                errors.append(f"{signal_date}_sizing_field_mismatch={field}:{key[0]}")
+    return sorted(set(errors))
+
+
+def sizing_rows_by_key(
+    rows: list[dict[str, str]],
+    signal_date: str,
+    label: str,
+    date_field: str,
+) -> tuple[dict[tuple[str, str], dict[str, str]], list[str]]:
+    expected_date = normalized_date_text(signal_date)
+    result: dict[tuple[str, str], dict[str, str]] = {}
+    errors = []
+    for row in rows:
+        symbol = str(row.get("symbol", "")).strip()
+        date = normalized_date_text(row.get(date_field, ""))
+        if not symbol or date is None:
+            errors.append(f"{signal_date}_{label}_invalid_sizing_key")
+            continue
+        if expected_date is None or date != expected_date:
+            errors.append(
+                f"{signal_date}_{label}_sizing_signal_date_mismatch="
+                f"{row.get(date_field, '')}"
+            )
+            continue
+        key = (symbol, date)
+        if key in result:
+            errors.append(f"{signal_date}_{label}_duplicate_sizing_symbol={symbol}")
+            continue
+        result[key] = row
+    return result, errors
+
+
+def sizing_field_matches(field: str, left: object, right: object, args: Any) -> bool:
+    if field in SIZING_NUMERIC_FIELDS:
+        left_value = finite_number(left)
+        right_value = finite_number(right)
+        return (
+            left_value is not None
+            and right_value is not None
+            and abs(left_value - right_value) <= args.backtest_value_tolerance
+        )
+    if field == "sizing_entry_date":
+        return same_calendar_date(str(left or ""), str(right or ""))
+    if field == "unallocated":
+        return str(left).strip().lower() == str(right).strip().lower()
+    return str(left or "") == str(right or "")
 
 
 def raw_candidate_errors(
@@ -260,7 +431,12 @@ def raw_candidate_errors(
 
 
 def backtest_errors(
-    rows: list[dict[str, str]], date: str, expected: int, args: Any
+    rows: list[dict[str, str]],
+    candidates: list[dict[str, str]],
+    prices_by_symbol: dict[str, list[dict[str, str]]],
+    date: str,
+    expected: int,
+    args: Any,
 ) -> list[str]:
     errors = required_column_errors(rows, BACKTEST_FIELDS, f"{date}_backtest")
     if len(rows) != expected:
@@ -278,6 +454,13 @@ def backtest_errors(
         )
     for row in rows:
         errors += backtest_row_errors(row, date, args)
+    errors += backtest_execution_errors(
+        candidates=candidates,
+        backtest=rows,
+        prices_by_symbol=prices_by_symbol,
+        signal_date=date,
+        args=args,
+    )
     return errors
 
 
@@ -286,21 +469,24 @@ def backtest_row_errors(row: dict[str, str], date: str, args: Any) -> list[str]:
     checks = {
         "status": "complete",
         "missing_data": "False",
+        "execution_model": args.required_execution_model,
         "tradability_model": args.required_tradability_model,
         "limit_rules_model": args.required_limit_rules_model,
         "hold_days_requested": str(args.hold_days),
+        "entry_price_field": "open",
+        "exit_price_field": "close",
+        "sizing_execution_model": args.required_execution_model,
+        "sizing_entry_price_field": "open",
+        "sizing_skip_reason": "",
     }
     for key, expected in checks.items():
         if row.get(key) != expected:
             errors.append(f"{date}_{key}={row.get(key)}")
     for key in BACKTEST_NUMERIC_FIELDS:
         errors += numeric_field_errors(row, key, date)
-    if not same_calendar_date(row.get("entry_date", ""), date):
-        errors.append(f"{date}_entry_date={row.get('entry_date')}")
-    if row.get("exit_date") and date_after(
-        row.get("entry_date", ""), row.get("exit_date", "")
-    ):
-        errors.append(f"{date}_exit_date={row.get('exit_date')}")
+    for field in OBSOLETE_BACKTEST_FIELDS:
+        if field in row:
+            errors.append(f"{date}_backtest_obsolete_{field}")
     if safe_float(row.get("cost_bps")) != args.cost_bps:
         errors.append(f"{date}_cost_bps={row.get('cost_bps')}")
     if safe_float(row.get("slippage_bps")) != args.slippage_bps:
@@ -312,8 +498,10 @@ def numeric_field_errors(row: dict[str, str], key: str, date: str) -> list[str]:
     if key not in row:
         return []
     try:
-        float_value(row.get(key))
+        value = float_value(row.get(key))
     except (TypeError, ValueError):
+        return [f"{date}_{key}={row.get(key)}"]
+    if not math.isfinite(value):
         return [f"{date}_{key}={row.get(key)}"]
     return []
 
@@ -342,19 +530,40 @@ def equity_errors(
         errors.append(f"equity_positions={sum_int(rows, 'positions')}")
     if sum_int(rows, "incomplete_trades") != 0:
         errors.append(f"equity_incomplete_trades={sum_int(rows, 'incomplete_trades')}")
-    final = float_value(rows[-1].get("equity")) if rows else 0.0
-    if abs(final - args.expected_final_equity) > args.final_equity_tolerance:
+    invalid_curve_values = [
+        row.get("equity") for row in rows if finite_number(row.get("equity")) is None
+    ]
+    if invalid_curve_values:
+        errors.append(f"equity_invalid_equity={invalid_curve_values[0]}")
+    final = finite_number(rows[-1].get("equity")) if rows else 0.0
+    if final is None:
+        errors.append(f"equity_final_equity_invalid={rows[-1].get('equity')}")
+    elif abs(final - args.expected_final_equity) > args.final_equity_tolerance:
         errors.append(f"equity_final_equity={final}")
-    summary_final = float_value(summary.get("equity", {}).get("final_equity"))
-    if abs(summary_final - final) > args.final_equity_tolerance:
+    summary_final = finite_number(summary.get("equity", {}).get("final_equity"))
+    if summary_final is None:
+        errors.append(
+            "summary_equity_final_equity_invalid="
+            f"{summary.get('equity', {}).get('final_equity')}"
+        )
+    elif final is not None and abs(summary_final - final) > args.final_equity_tolerance:
         errors.append("summary_equity_final_mismatch")
     return errors
 
 
 def overlap_errors(
-    overlap: dict[str, Any], summary: dict[str, Any], args: Any
+    overlap: Any,
+    summary: dict[str, Any],
+    args: Any,
+    capacity_errors: list[str] | None = None,
 ) -> list[str]:
-    errors = []
+    errors = (
+        list(capacity_errors)
+        if capacity_errors is not None
+        else overlap_capacity_errors(overlap)
+    )
+    if not isinstance(overlap, dict):
+        return errors
     violations = summary.get("portfolio", {}).get("violations", [])
     if len(violations) != args.expected_portfolio_violations:
         errors.append(f"portfolio_violations={len(violations)}")
@@ -368,6 +577,39 @@ def overlap_errors(
     if overlap != summary.get("portfolio", {}).get("summary"):
         errors.append("portfolio_summary_mismatch")
     return errors
+
+
+def overlap_capacity_errors(overlap: Any) -> list[str]:
+    if not isinstance(overlap, dict):
+        return ["portfolio_overlap_summary_not_object"]
+    errors = []
+    for field in OVERLAP_INTEGER_CAPACITY_FIELDS:
+        error = overlap_capacity_field_error(overlap, field, integer=True)
+        if error:
+            errors.append(error)
+    for field in OVERLAP_DECIMAL_CAPACITY_FIELDS:
+        error = overlap_capacity_field_error(overlap, field, integer=False)
+        if error:
+            errors.append(error)
+    return errors
+
+
+def overlap_capacity_field_error(
+    overlap: dict[str, Any], field: str, *, integer: bool
+) -> str | None:
+    prefix = f"portfolio_{field}"
+    if field not in overlap or overlap[field] is None:
+        return f"{prefix}_missing"
+    value = overlap[field]
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return f"{prefix}_non_numeric"
+    if not math.isfinite(value):
+        return f"{prefix}_non_finite"
+    if value < 0:
+        return f"{prefix}_negative"
+    if integer and not float(value).is_integer():
+        return f"{prefix}_non_integer"
+    return None
 
 
 def manifest_errors(manifest: dict[str, Any], dates: list[str]) -> list[str]:
@@ -390,14 +632,16 @@ def report_view(
     totals: dict[str, int],
     summary: dict[str, Any],
     manifest_checked: bool,
+    execution_model: str,
     expected_portfolio_violations: bool,
+    capacity_inputs_valid: bool,
     errors: list[str],
 ) -> dict[str, Any]:
     portfolio_violations = len(summary.get("portfolio", {}).get("violations", []))
-    capacity_gate_pass = portfolio_violations == 0
+    capacity_gate_pass = capacity_inputs_valid and portfolio_violations == 0
     if capacity_gate_pass:
         capacity_gate_status = "pass"
-    elif expected_portfolio_violations:
+    elif capacity_inputs_valid and expected_portfolio_violations:
         capacity_gate_status = "expected_violation_not_pass"
     else:
         capacity_gate_status = "failed_not_pass"
@@ -410,7 +654,8 @@ def report_view(
         "signals_checked": len(dates),
         "total_candidates": totals["candidates"],
         "total_completed_trades": totals["completed_trades"],
-        "final_equity": summary.get("equity", {}).get("final_equity"),
+        "final_equity": finite_number(summary.get("equity", {}).get("final_equity")),
+        "execution_model": execution_model,
         "portfolio_violations": portfolio_violations,
         "expected_portfolio_violations": expected_portfolio_violations,
         "capacity_gate_pass": capacity_gate_pass,
@@ -455,6 +700,14 @@ def sum_int(rows: list[dict[str, str]], key: str) -> int:
 
 def float_value(value: str | None) -> float:
     return float(value or 0.0)
+
+
+def finite_number(value: object) -> float | None:
+    try:
+        numeric = float(str(value))
+    except (TypeError, ValueError):
+        return None
+    return numeric if math.isfinite(numeric) else None
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:

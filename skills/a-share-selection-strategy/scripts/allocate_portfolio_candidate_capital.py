@@ -9,10 +9,28 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from lib.gates.a_share_selection_output_safety import (
+    prepare_output_paths,
+    remove_output_files,
+)
+from lib.selection_core.a_share_selection_cli_numeric import (
+    integer_or_non_finite,
+    normalize_negative_non_finite_option_values,
+)
+
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    args = build_parser().parse_args(
+        normalize_negative_non_finite_option_values(argv, NUMERIC_OPTIONS)
+    )
+    outputs = output_paths(args)
+    output_prepared = False
     try:
+        prepare_output_paths(
+            outputs,
+            [Path(args.prices), *(Path(path) for path in args.raw_candidates)],
+        )
+        output_prepared = True
         ensure_runtime_dependencies()
         selected, sized, skipped, summary = allocate_portfolio(
             read_table(Path(args.prices)),
@@ -33,12 +51,23 @@ def main(argv: list[str] | None = None) -> int:
         write_output(skipped, Path(args.skipped_output))
         write_json(summary, Path(args.summary_output))
     except Exception as exc:  # noqa: BLE001
+        if output_prepared:
+            remove_output_files(outputs)
         print(
             f"ERROR: code=bad_input output_written=false message={exc}", file=sys.stderr
         )
         return 2
     print_summary(summary, args.summary_output)
     return 0
+
+
+def output_paths(args: argparse.Namespace) -> tuple[Path, ...]:
+    return (
+        *(Path(path) for path in args.candidate_outputs),
+        *(Path(path) for path in args.sized_outputs),
+        Path(args.skipped_output),
+        Path(args.summary_output),
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -53,15 +82,29 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--skipped-output", required=True)
     parser.add_argument("--summary-output", required=True)
     parser.add_argument("--cash-budget", type=float, required=True)
-    parser.add_argument("--lot-size", type=int, default=100)
-    parser.add_argument("--hold-days", type=int, required=True)
-    parser.add_argument("--max-open-positions", type=int, required=True)
+    parser.add_argument("--lot-size", type=integer_or_non_finite, default=100)
+    parser.add_argument("--hold-days", type=integer_or_non_finite, required=True)
+    parser.add_argument(
+        "--max-open-positions", type=integer_or_non_finite, required=True
+    )
     parser.add_argument("--max-gross-weight", type=float, required=True)
     parser.add_argument("--max-gross-notional", type=float, required=True)
     parser.add_argument("--max-cash-reserved", type=float, required=True)
     parser.add_argument("--fail-on-symbol-overlap", action="store_true")
     parser.add_argument("--close-tolerance", type=float, default=0.000001)
     return parser
+
+
+NUMERIC_OPTIONS = (
+    "--cash-budget",
+    "--lot-size",
+    "--hold-days",
+    "--max-open-positions",
+    "--max-gross-weight",
+    "--max-gross-notional",
+    "--max-cash-reserved",
+    "--close-tolerance",
+)
 
 
 def ensure_runtime_dependencies() -> None:

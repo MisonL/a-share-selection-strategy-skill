@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from lib.gates.a_share_selection_output_safety import validate_output_paths
 from lib.gates.clean_history_pool import (
     CLAIM_BOUNDARY,
     apply_clean_plan,
@@ -18,7 +19,6 @@ from lib.gates.clean_history_pool import (
     derive_short_history_data,
     read_frame,
     read_json,
-    validate_paths,
 )
 from lib.gates.full_a_clean_pool_provenance import build_clean_pool_provenance
 from lib.gates.incremental_history_artifacts import publish_output_pair
@@ -65,7 +65,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--incremental-plan", help="Incremental plan JSON.")
     parser.add_argument("--incremental-prices", help="Fetched incremental prices.")
-    parser.add_argument("--incremental-metadata", help="Incremental fetch metadata JSON.")
+    parser.add_argument(
+        "--incremental-metadata", help="Incremental fetch metadata JSON."
+    )
     parser.add_argument(
         "--universe-input",
         help="Explicit baostock_universe CSV or Parquet for clean-pool provenance.",
@@ -89,12 +91,13 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     validate_short_history_options(args)
     paths = build_paths(args)
-    validate_paths(inputs=input_paths(paths), outputs=output_paths(paths))
+    validate_output_paths(
+        outputs=output_paths(paths),
+        inputs=[path for path in input_paths(paths) if path is not None],
+    )
     metadata = read_json(paths["history_metadata"])
     short_data = (
-        read_json(paths["short_history_input"])
-        if paths["short_history_input"]
-        else {}
+        read_json(paths["short_history_input"]) if paths["short_history_input"] else {}
     )
     frame = read_frame(paths["prices_input"])
     frame, metadata, merge_report = apply_optional_incremental_merge(
@@ -344,9 +347,7 @@ def build_staged_provenance(
         display_paths={
             "clean_prices": required_output_path(paths, "output"),
             "clean_metadata": required_output_path(paths, "metadata_output"),
-            **(
-                {"clean_metadata_alias": metadata_alias} if metadata_alias else {}
-            ),
+            **({"clean_metadata_alias": metadata_alias} if metadata_alias else {}),
             "clean_report": required_output_path(paths, "report_output"),
             **(
                 {"short_history": short_history_output}
@@ -381,7 +382,9 @@ def print_success(
 ) -> None:
     merge_count = 0 if merge_report is None else merge_report["planned_symbol_count"]
     provenance_text = (
-        f"provenance_output={provenance_output} " if provenance_output is not None else ""
+        f"provenance_output={provenance_output} "
+        if provenance_output is not None
+        else ""
     )
     print(
         "OK: clean_symbols="

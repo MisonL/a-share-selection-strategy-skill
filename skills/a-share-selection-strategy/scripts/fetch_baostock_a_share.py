@@ -20,6 +20,7 @@ from lib.fetch.baostock_a_share_names import (
     fetch_symbol_names,
     resolve_symbol_names,
 )
+from lib.gates.a_share_selection_output_safety import validate_output_paths
 from lib.selection_core.a_share_selection_symbols import (
     baostock_code,
     parse_six_digit_symbols,
@@ -54,11 +55,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         required=True,
         help=(
-            "Output CSV or Parquet path. Parquet requires pyarrow or fastparquet."
+            "Output CSV or Parquet path; must differ from metadata and file inputs. "
+            "Parquet requires pyarrow or fastparquet."
         ),
     )
     parser.add_argument(
-        "--metadata-output", required=True, help="Output metadata JSON path."
+        "--metadata-output",
+        required=True,
+        help="Output metadata JSON path; must differ from prices and file inputs.",
     )
     parser.add_argument(
         "--adjust", default="3", help="baostock adjustflag. Default: 3."
@@ -98,6 +102,13 @@ def main(argv: list[str] | None = None) -> int:
     output = Path(args.output)
     metadata_output = Path(args.metadata_output)
     try:
+        validate_output_paths(
+            [output, metadata_output],
+            file_input_paths(args),
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        return fail_output_path_validation(str(exc))
+    try:
         normalize_symbol_arguments(args)
     except ValueError as exc:
         return fail_before_fetch(
@@ -114,13 +125,6 @@ def main(argv: list[str] | None = None) -> int:
             metadata_output,
             code="invalid_output_format",
             message=str(exc),
-        )
-    if output.resolve() == metadata_output.resolve():
-        return fail_before_fetch(
-            output,
-            metadata_output,
-            code="invalid_output_path",
-            message="prices output and metadata output must differ",
         )
     if output_format == "parquet" and not parquet_engine_available():
         return fail_before_fetch(
@@ -143,7 +147,9 @@ def main(argv: list[str] | None = None) -> int:
             code="fetch_failed",
             message=str(exc),
         )
-    strict_errors = strict_gate_errors(metadata, fail_on_fetch_error=args.fail_on_fetch_error)
+    strict_errors = strict_gate_errors(
+        metadata, fail_on_fetch_error=args.fail_on_fetch_error
+    )
     if strict_errors:
         metadata = output_status(
             metadata, output_written=False, metadata_output_written=True
@@ -161,6 +167,23 @@ def main(argv: list[str] | None = None) -> int:
         return 3
     print_summary(metadata, prefix=summary_prefix(metadata))
     return 0
+
+
+def file_input_paths(args: argparse.Namespace) -> list[Path]:
+    return [
+        Path(path)
+        for path in (args.symbols_file, args.names_input)
+        if str(path or "").strip()
+    ]
+
+
+def fail_output_path_validation(message: str) -> int:
+    print(
+        "ERROR: code=invalid_argument output_written=false metadata_output_written=false "
+        f"source_claim_boundary={CLAIM_BOUNDARY} message={message}",
+        file=sys.stderr,
+    )
+    return 2
 
 
 def fail_before_fetch(
@@ -432,7 +455,9 @@ def apply_quality_policy(
         raise ValueError(f"unsupported non-trading-policy: {non_trading_policy}")
     raw_non_trading_mask = non_trading_row_mask(frame)
     non_trading_mask = non_trading_row_mask(result)
-    dropped_non_trading = int(non_trading_mask.sum()) if non_trading_policy == "drop" else 0
+    dropped_non_trading = (
+        int(non_trading_mask.sum()) if non_trading_policy == "drop" else 0
+    )
     if dropped_non_trading:
         result = result.loc[~non_trading_mask]
     result = result.reset_index(drop=True)
@@ -533,9 +558,8 @@ def strict_gate_errors(
         errors.append(
             f"tradestatus_missing_rows={metadata['tradestatus_missing_rows']}"
         )
-    if (
-        metadata.get("non_trading_policy", "reject") == "reject"
-        and metadata.get("non_trading_rows", 0)
+    if metadata.get("non_trading_policy", "reject") == "reject" and metadata.get(
+        "non_trading_rows", 0
     ):
         errors.append(f"non_trading_rows={metadata['non_trading_rows']}")
     if fail_on_fetch_error and metadata["failed_symbols"]:
@@ -593,9 +617,7 @@ def write_outputs(
 def prices_output_format(output: Path) -> str:
     output_format = OUTPUT_FORMATS.get(output.suffix.lower())
     if output_format is None:
-        raise ValueError(
-            "unsupported prices output format; use .csv, .parquet, or .pq"
-        )
+        raise ValueError("unsupported prices output format; use .csv, .parquet, or .pq")
     return output_format
 
 

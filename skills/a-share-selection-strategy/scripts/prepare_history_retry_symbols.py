@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from lib.gates.a_share_selection_output_safety import validate_output_paths
 from lib.runner.run_today_a_share_selection_retry_plan import build_retry_plan
 
 
@@ -44,8 +45,8 @@ def main(argv: list[str] | None = None) -> int:
     output = Path(args.output)
     symbols_output = Path(args.symbols_output) if args.symbols_output else None
     validate_output_paths(
-        inputs=[selected_path, metadata_path],
         outputs=[path for path in [output, symbols_output] if path is not None],
+        inputs=[selected_path, metadata_path],
     )
     selected_data = read_json(selected_path)
     metadata = read_json(metadata_path)
@@ -76,25 +77,11 @@ def read_json(path: Path) -> dict[str, Any]:
     return data
 
 
-def validate_output_paths(*, inputs: list[Path], outputs: list[Path]) -> None:
-    input_paths = {resolved_path(path) for path in inputs}
-    seen_outputs = set()
-    for output in outputs:
-        output_path = resolved_path(output)
-        if output_path in input_paths:
-            raise ValueError(f"output path must not overwrite input: {output}")
-        if output_path in seen_outputs:
-            raise ValueError(f"duplicate output path: {output}")
-        seen_outputs.add(output_path)
-
-
-def resolved_path(path: Path) -> Path:
-    return path.expanduser().resolve(strict=False)
-
-
 def write_json(data: dict[str, Any], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
 
 
 if __name__ == "__main__":

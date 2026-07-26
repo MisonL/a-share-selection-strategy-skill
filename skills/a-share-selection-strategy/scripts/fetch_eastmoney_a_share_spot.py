@@ -14,6 +14,8 @@ from typing import Any, Callable
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from lib.gates.a_share_selection_output_safety import validate_output_paths
+
 
 BASE_URL = "https://push2.eastmoney.com/api/qt/clist/get"
 FIELDS = "f12,f14,f2,f3,f6,f100"
@@ -45,8 +47,19 @@ def main(argv: list[str] | None = None) -> int:
     output = Path(args.output)
     metadata_output = Path(args.metadata_output)
     try:
+        validate_output_paths([output, metadata_output], [])
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(
+            "ERROR: code=invalid_argument output_written=false "
+            f"metadata_output_written=false message={exc}",
+            file=sys.stderr,
+        )
+        return 2
+    try:
         rows, metadata = fetch_snapshot(args, open_url)
-        metadata = output_status(metadata, output_written=True, metadata_output_written=True)
+        metadata = output_status(
+            metadata, output_written=True, metadata_output_written=True
+        )
         write_csv(output, rows)
         write_json(metadata, metadata_output)
     except Exception as exc:  # noqa: BLE001
@@ -59,7 +72,9 @@ def main(argv: list[str] | None = None) -> int:
     errors = strict_errors(metadata, args)
     if errors:
         if metadata["raw_items"] == 0:
-            metadata = output_status(metadata, output_written=False, metadata_output_written=True)
+            metadata = output_status(
+                metadata, output_written=False, metadata_output_written=True
+            )
             remove_output(output)
             write_json(metadata, metadata_output)
         print_summary(metadata, prefix="ERROR_SUMMARY")
@@ -82,9 +97,19 @@ def build_parser() -> argparse.ArgumentParser:
             "Partial pages or a small requested page set do not prove full-market coverage."
         )
     )
-    parser.add_argument("--output", required=True, help="Output spot CSV path.")
-    parser.add_argument("--metadata-output", required=True, help="Output metadata JSON path.")
-    parser.add_argument("--pages", type=positive_int, default=1, help="Pages to request.")
+    parser.add_argument(
+        "--output",
+        required=True,
+        help="Output spot CSV path; must differ from metadata.",
+    )
+    parser.add_argument(
+        "--metadata-output",
+        required=True,
+        help="Output metadata JSON path; must differ from spot output.",
+    )
+    parser.add_argument(
+        "--pages", type=positive_int, default=1, help="Pages to request."
+    )
     parser.add_argument("--page-size", type=positive_int, default=100)
     parser.add_argument("--timeout-seconds", type=float, default=10.0)
     parser.add_argument("--retries", type=non_negative_int, default=1)
@@ -144,7 +169,9 @@ def open_url(url: str, timeout: float) -> bytes:
         return response.read()
 
 
-def fetch_snapshot(args: argparse.Namespace, opener: Opener) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def fetch_snapshot(
+    args: argparse.Namespace, opener: Opener
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     started_at = utc_now()
     started = time.monotonic()
     rows: list[dict[str, Any]] = []
@@ -320,8 +347,7 @@ def duration_seconds(started: float | None) -> float:
 
 def error_summaries(failed_pages: list[dict[str, Any]]) -> list[str]:
     return [
-        f"page={item.get('page')} error={item.get('error')}"
-        for item in failed_pages
+        f"page={item.get('page')} error={item.get('error')}" for item in failed_pages
     ]
 
 
@@ -353,7 +379,9 @@ def source_claim_boundary(partial_result: bool) -> str:
 def strict_errors(metadata: dict[str, Any], args: argparse.Namespace) -> list[str]:
     errors = []
     if args.fail_on_partial and metadata["partial_result"]:
-        errors.append(f"partial_result=true failed_pages={len(metadata['failed_pages'])}")
+        errors.append(
+            f"partial_result=true failed_pages={len(metadata['failed_pages'])}"
+        )
     if metadata["raw_items"] == 0:
         errors.append("raw_items=0")
     return errors
@@ -385,7 +413,9 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 
 def write_json(data: dict[str, Any], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
 
 
 def remove_output(path: Path) -> None:

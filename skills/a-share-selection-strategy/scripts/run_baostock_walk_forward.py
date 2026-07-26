@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.selection_core.a_share_selection_model_contracts import (
+    EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
     LIMIT_RULES_MODEL_NOT_MODELED,
     TRADABILITY_MODEL_ENTRY_EXIT,
     TRADABILITY_MODEL_HOLDING_PERIOD,
@@ -540,6 +541,8 @@ def backtest_command(
         args.cost_bps,
         "--slippage-bps",
         args.slippage_bps,
+        "--execution-model",
+        EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
         "--require-tradable-bars",
         "--expected-signal-date",
         signal_date,
@@ -604,6 +607,8 @@ def summary_command(args: argparse.Namespace, output: Path) -> list[str]:
         tradability_model(args),
         "--required-limit-rules-model",
         LIMIT_RULES_MODEL,
+        "--required-execution-model",
+        EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
         "--max-open-positions",
         args.max_open_positions,
         "--max-gross-weight",
@@ -646,6 +651,7 @@ def initial_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "allocation_model": args.allocation_model,
         "limit_rules_model": LIMIT_RULES_MODEL,
         "tradability_model": tradability_model(args),
+        "execution_model": EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
         "steps": [],
     }
 
@@ -672,6 +678,7 @@ def print_summary(manifest: dict[str, Any], manifest_path: Path) -> None:
         f"capacity_gate_pass={manifest.get('capacity_gate_pass', 'unknown')} "
         f"capacity_gate_status={manifest.get('capacity_gate_status', 'unknown')} "
         f"claim_boundary={manifest.get('claim_boundary', 'unknown')} "
+        f"execution_model={manifest['execution_model']} "
         f"limit_rules_model={manifest['limit_rules_model']} manifest={manifest_path}"
     )
 
@@ -684,6 +691,7 @@ def print_offline_plan_summary(manifest: dict[str, Any], manifest_path: Path) ->
         f"commands_executed={str(manifest.get('commands_executed', 'unknown')).lower()} "
         "verdict=offline_plan_not_executed "
         f"claim_boundary={manifest.get('claim_boundary', 'unknown')} "
+        f"execution_model={manifest['execution_model']} "
         f"limit_rules_model={manifest['limit_rules_model']} manifest={manifest_path}"
     )
 

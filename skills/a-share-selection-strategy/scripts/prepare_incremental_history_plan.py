@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from lib.gates.a_share_selection_output_safety import validate_output_paths
 from lib.gates.incremental_history_plan import (
     build_fetch_buckets,
     metadata_history_is_empty,
@@ -59,9 +60,9 @@ def main(argv: list[str] | None = None) -> int:
     metadata_input = Path(args.history_metadata)
     output = Path(args.output)
     symbols_output = Path(args.symbols_output) if args.symbols_output else None
-    validate_paths(
-        inputs=[spot_input, prices_input, metadata_input],
+    validate_output_paths(
         outputs=[path for path in [output, symbols_output] if path is not None],
+        inputs=[spot_input, prices_input, metadata_input],
     )
     target = normalize_date(args.target_end_date)
     universe = read_universe_symbols(spot_input)
@@ -77,9 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     plan["prices_input"] = str(prices_input.resolve())
     plan["history_metadata_input"] = str(metadata_input.resolve())
-    plan["plan_duration_seconds"] = round(
-        max(time.monotonic() - started, 0.0), 6
-    )
+    plan["plan_duration_seconds"] = round(max(time.monotonic() - started, 0.0), 6)
     plan["plan_symbols_per_second"] = (
         round(len(universe) / plan["plan_duration_seconds"], 6)
         if plan["plan_duration_seconds"]
@@ -88,7 +87,9 @@ def main(argv: list[str] | None = None) -> int:
     write_json(plan, output)
     if symbols_output:
         symbols_output.parent.mkdir(parents=True, exist_ok=True)
-        symbols_output.write_text("\n".join(plan["fetch_symbols"]) + "\n", encoding="utf-8")
+        symbols_output.write_text(
+            "\n".join(plan["fetch_symbols"]) + "\n", encoding="utf-8"
+        )
     print(
         "OK: fetch_symbols="
         f"{plan['fetch_symbol_count']} up_to_date_symbols={plan['up_to_date_symbol_count']} "
@@ -234,9 +235,7 @@ def classify_history_symbol(
         symbol, failed, empty, truncated, unprocessed
     )
     if metadata_reason:
-        return "empty", fetch_record(
-            symbol, reason=metadata_reason, fetch_mode="full"
-        )
+        return "empty", fetch_record(symbol, reason=metadata_reason, fetch_mode="full")
     if metadata_history_is_empty(history, date_max):
         return "empty", fetch_record(
             symbol, reason="empty_or_missing_history", fetch_mode="full"
@@ -366,12 +365,8 @@ def validate_history_metadata_quality(metadata: dict[str, Any]) -> None:
     if metadata_count(metadata, "tradestatus_missing_rows"):
         raise ValueError("history metadata has tradestatus_missing_rows")
     non_trading_rows = metadata_count(metadata, "non_trading_rows")
-    dropped_non_trading_rows = metadata_count(
-        metadata, "dropped_non_trading_rows"
-    )
-    retained_non_trading_rows = metadata_count(
-        metadata, "retained_non_trading_rows"
-    )
+    dropped_non_trading_rows = metadata_count(metadata, "dropped_non_trading_rows")
+    retained_non_trading_rows = metadata_count(metadata, "retained_non_trading_rows")
     non_trading_policy = str(metadata.get("non_trading_policy", "")).strip()
     if non_trading_rows:
         if non_trading_policy == "drop":
@@ -392,19 +387,19 @@ def validate_history_metadata_quality(metadata: dict[str, Any]) -> None:
             )
 
     recovery_symbols = set().union(
-        *(metadata_symbols(metadata.get(key, [])) for key in (
-            "failed_symbols",
-            "empty_symbols",
-            "possibly_truncated_symbols",
-            "unprocessed_symbols",
-        ))
+        *(
+            metadata_symbols(metadata.get(key, []))
+            for key in (
+                "failed_symbols",
+                "empty_symbols",
+                "possibly_truncated_symbols",
+                "unprocessed_symbols",
+            )
+        )
     )
     clean_pool_removal = audited_clean_pool_removal(metadata)
     explained_quality = bool(
-        recovery_symbols
-        or invalid_rows
-        or non_trading_rows
-        or clean_pool_removal
+        recovery_symbols or invalid_rows or non_trading_rows or clean_pool_removal
     )
     if (
         metadata.get("rate_limit_budget_exhausted") is True
@@ -533,7 +528,9 @@ def read_price_stats(path: Path) -> dict[str, dict[str, Any]]:
     symbols = frame["symbol"].astype(str).str.strip()
     if symbols.eq("").any() or not symbols.str.fullmatch(r"\d{6}").all():
         raise ValueError("prices input contains invalid symbol values")
-    compact_dates = frame["date"].astype(str).str.strip().str.replace("-", "", regex=False)
+    compact_dates = (
+        frame["date"].astype(str).str.strip().str.replace("-", "", regex=False)
+    )
     dates = pd.to_datetime(compact_dates, format="%Y%m%d", errors="coerce")
     if dates.isna().any():
         raise ValueError("prices input contains invalid date values")
@@ -591,22 +588,6 @@ def read_json(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"expected JSON object: {path}")
     return data
-
-
-def validate_paths(*, inputs: list[Path], outputs: list[Path]) -> None:
-    input_paths = {resolved_path(path) for path in inputs}
-    seen_outputs = set()
-    for output in outputs:
-        output_path = resolved_path(output)
-        if output_path in input_paths:
-            raise ValueError(f"output path must not overwrite input: {output}")
-        if output_path in seen_outputs:
-            raise ValueError(f"duplicate output path: {output}")
-        seen_outputs.add(output_path)
-
-
-def resolved_path(path: Path) -> Path:
-    return path.expanduser().resolve(strict=False)
 
 
 def write_json(data: dict[str, Any], path: Path) -> None:

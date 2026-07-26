@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from lib.gates.a_share_selection_output_safety import validate_output_paths
 from lib.selection_core.a_share_selection_symbols import (
     normalize_hk_symbol,
     valid_hk_symbol_text,
@@ -37,6 +38,16 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     output = Path(args.output)
     metadata_output = Path(args.metadata_output)
+    try:
+        validate_output_paths([output, metadata_output], [])
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(
+            "ERROR: code=invalid_argument output_written=false "
+            f"metadata_output_written=false source_claim_boundary={CLAIM_BOUNDARY} "
+            f"message={exc}",
+            file=sys.stderr,
+        )
+        return 2
     try:
         frame, metadata = fetch_prices(args)
         frame, metadata = apply_quality_policy(frame, metadata, args.drop_invalid_rows)
@@ -85,9 +96,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--symbols", required=True, help="Comma-separated HK symbols.")
     parser.add_argument("--start-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
     parser.add_argument("--end-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
-    parser.add_argument("--output", required=True, help="Output CSV path.")
     parser.add_argument(
-        "--metadata-output", required=True, help="Output metadata JSON path."
+        "--output", required=True, help="Output CSV path; must differ from metadata."
+    )
+    parser.add_argument(
+        "--metadata-output",
+        required=True,
+        help="Output metadata JSON path; must differ from prices output.",
     )
     parser.add_argument(
         "--adjust", default="", help="akshare adjust value. Default: empty."

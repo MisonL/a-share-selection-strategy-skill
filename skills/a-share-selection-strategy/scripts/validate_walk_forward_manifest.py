@@ -9,7 +9,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from lib.gates.a_share_selection_output_safety import (
+    prepare_output_paths,
+    remove_output_files,
+)
 from lib.selection_core.a_share_selection_model_contracts import (
+    EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
     TRADABILITY_MODEL_HOLDING_PERIOD,
 )
 
@@ -21,13 +26,20 @@ SOURCE = "baostock"
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    manifest_path = Path(args.manifest)
     output = Path(args.output) if args.output else None
+    output_prepared = False
     try:
-        manifest = load_json(Path(args.manifest))
+        if output is not None:
+            prepare_output_paths([output], [manifest_path])
+            output_prepared = True
+        manifest = load_json(manifest_path)
         report = build_report(manifest, args)
         if output:
             write_json(report, output)
     except Exception as exc:  # noqa: BLE001
+        if output_prepared:
+            remove_output_files([output])
         print(
             f"ERROR: code=bad_input output_written=false message={exc}", file=sys.stderr
         )
@@ -51,11 +63,19 @@ def build_parser() -> argparse.ArgumentParser:
         )
     )
     parser.add_argument("--manifest", required=True, help="run_manifest.json path.")
-    parser.add_argument("--output", help="Optional JSON report path.")
+    parser.add_argument(
+        "--output",
+        help="Optional JSON report path; must differ from --manifest.",
+    )
     parser.add_argument("--signal-dates", nargs="+", required=True)
     parser.add_argument("--expected-symbol-count", type=int, required=True)
     parser.add_argument("--required-tradability-model", required=True)
     parser.add_argument("--required-limit-rules-model", required=True)
+    parser.add_argument(
+        "--required-execution-model",
+        choices=[EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE],
+        default=EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
+    )
     parser.add_argument("--expected-max-candidates", type=int)
     parser.add_argument(
         "--expect-portfolio-violations",
@@ -148,6 +168,7 @@ def top_level_errors(
         "signal_dates": signal_dates,
         "tradability_model": args.required_tradability_model,
         "limit_rules_model": args.required_limit_rules_model,
+        "execution_model": args.required_execution_model,
     }
     for key, value in expected.items():
         if manifest.get(key) != value:
@@ -243,6 +264,7 @@ def command_errors(
                 signal_date,
                 allocation_model,
                 args.required_tradability_model,
+                args.required_execution_model,
             )
         )
     if allocation_model == "portfolio_cash_lot_floor":
@@ -264,6 +286,7 @@ def signal_command_errors(
     signal_date: str,
     allocation_model: str,
     required_tradability_model: str,
+    required_execution_model: str,
 ) -> list[str]:
     checks = {
         "slice": ["slice_prices_as_of.py", "--as-of-date", signal_date],
@@ -274,7 +297,9 @@ def signal_command_errors(
         ],
         "validate": ["validate_ohlcv.py", "--config", "prediction_profile_config.json"],
         "score": ["score_candidates.py", "--fail-on-skipped", "--fail-on-empty-result"],
-        "backtest": backtest_requirements(signal_date, required_tradability_model),
+        "backtest": backtest_requirements(
+            signal_date, required_tradability_model, required_execution_model
+        ),
     }
     if allocation_model != "portfolio_cash_lot_floor":
         checks["allocate"] = [
@@ -296,13 +321,17 @@ def signal_command_errors(
 
 
 def backtest_requirements(
-    signal_date: str, required_tradability_model: str
+    signal_date: str,
+    required_tradability_model: str,
+    required_execution_model: str,
 ) -> list[str]:
     required = [
         "backtest_buy_hold.py",
         "--require-tradable-bars",
         "--expected-signal-date",
         signal_date,
+        "--execution-model",
+        required_execution_model,
         "--fail-on-incomplete",
     ]
     if required_tradability_model == TRADABILITY_MODEL_HOLDING_PERIOD:
@@ -362,6 +391,8 @@ def summary_command_errors(command: list[str], args: argparse.Namespace) -> list
         args.required_tradability_model,
         "--required-limit-rules-model",
         args.required_limit_rules_model,
+        "--required-execution-model",
+        args.required_execution_model,
         "--fail-on-symbol-overlap",
     ]
     if args.expect_portfolio_violations:
@@ -389,7 +420,8 @@ def load_json(path: Path) -> dict[str, Any]:
 def write_json(data: dict[str, Any], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8"
+        json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False),
+        encoding="utf-8",
     )
 
 

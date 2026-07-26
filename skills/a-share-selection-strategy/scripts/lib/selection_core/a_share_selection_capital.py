@@ -16,38 +16,103 @@ if __name__ == "__main__":
     fail_not_cli(__file__)
 
 
+from dataclasses import dataclass
+import math
 from typing import Any
 
 import pandas as pd
 
+from lib.selection_core.a_share_selection_sizing_contracts import (
+    BACKTEST_CAPITAL_FIELDS,
+    CAPITAL_FIELDS,
+    SIZING_EXECUTION_MODEL,
+    SIZING_FIELDS,
+    is_non_finite_number,
+    require_finite_non_negative_number,
+    require_integer_at_least,
+    require_positive_number,
+)
 
-CAPITAL_FIELDS = ["weight", "notional", "quantity", "cash_reserved"]
-BACKTEST_CAPITAL_FIELDS = [
-    "capital_model",
-    "sizing_claim_boundary",
-    "weight",
-    "notional",
-    "quantity",
-    "cash_reserved",
-]
-SIZING_FIELDS = [
-    "cash_budget",
-    "lot_size",
-    "capital_model",
-    "signal_close",
-    "cash_slot",
-    "quantity",
-    "cash_reserved",
-    "notional",
-    "weight",
-    "sizing_claim_boundary",
-    "unallocated",
-]
+
 DAILY_CAPACITY_FIELDS = {
     "weight": "gross_weight",
     "notional": "gross_notional",
     "cash_reserved": "cash_reserved",
 }
+
+
+@dataclass(frozen=True)
+class NextObservedOpenEntry:
+    signal_position: int
+    entry_position: int
+    entry_date: str
+    entry_price: float
+
+
+def next_observed_open_entry(
+    history: pd.DataFrame, signal_date: Any
+) -> tuple[NextObservedOpenEntry | None, str]:
+    positions = [
+        position
+        for position, value in enumerate(history["date"])
+        if value == signal_date
+    ]
+    if not positions:
+        return None, "missing_entry_price"
+    signal_position = positions[0]
+    entry_position = signal_position + 1
+    if entry_position >= len(history):
+        return None, "missing_next_observed_bar"
+    entry = history.iloc[entry_position]
+    entry_price = finite_positive_price(entry.get("open"))
+    if entry_price is None:
+        return None, "invalid_entry_open"
+    entry_date = pd.to_datetime(entry["date"], errors="coerce")
+    if pd.isna(entry_date):
+        return None, "invalid_entry_date"
+    return (
+        NextObservedOpenEntry(
+            signal_position=signal_position,
+            entry_position=entry_position,
+            entry_date=entry_date.date().isoformat(),
+            entry_price=entry_price,
+        ),
+        "",
+    )
+
+
+def finite_positive_price(value: Any) -> float | None:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(numeric) or numeric <= 0:
+        return None
+    return numeric
+
+
+def lot_floor_quantity(
+    cash_available: Any,
+    entry_price: Any,
+    lot_size: Any,
+) -> int:
+    cash_available = require_finite_non_negative_number(cash_available, "cash-slot")
+    entry_price = require_positive_number(entry_price, "sizing-entry-price")
+    lot_size = require_integer_at_least(lot_size, "lot-size", 1)
+    try:
+        lot_cost = entry_price * lot_size
+    except OverflowError as exc:
+        raise ValueError("lot cost must be finite") from exc
+    if not math.isfinite(lot_cost) or lot_cost <= 0:
+        raise ValueError("lot cost must be finite and > 0")
+    lot_count = cash_available / lot_cost
+    if not math.isfinite(lot_count) or lot_count < 0:
+        raise ValueError("lot quantity calculation must be finite")
+    quantity = int(lot_count) * lot_size
+    require_finite_non_negative_number(quantity, "quantity")
+    return quantity
+
+
 SUMMARY_CAPACITY_FIELDS = {
     "gross_weight": "max_gross_weight",
     "gross_notional": "max_gross_notional",
@@ -76,6 +141,8 @@ def normalize_complete_capital_fields(complete: pd.DataFrame) -> pd.DataFrame:
     for field in CAPITAL_FIELDS:
         if field not in result:
             continue
+        if result[field].map(is_non_finite_number).any():
+            raise ValueError(f"{field} must be finite for complete trades")
         values = pd.to_numeric(result[field], errors="coerce")
         if values.isna().any():
             raise ValueError(f"{field} must be numeric for complete trades")
@@ -90,11 +157,16 @@ def trade_capital_values(row: pd.Series) -> dict[str, float]:
 
 
 def daily_capacity_values(group: pd.DataFrame) -> dict[str, float]:
-    return {
-        output: float(group[source].sum())
-        for source, output in DAILY_CAPACITY_FIELDS.items()
-        if source in group
-    }
+    result = {}
+    for source, output in DAILY_CAPACITY_FIELDS.items():
+        if source not in group:
+            continue
+        try:
+            total = math.fsum(float(value) for value in group[source])
+        except (OverflowError, TypeError, ValueError) as exc:
+            raise ValueError(f"daily {output} must be finite") from exc
+        result[output] = require_finite_non_negative_number(total, f"daily-{output}")
+    return result
 
 
 def max_capacity_summary(
@@ -102,7 +174,9 @@ def max_capacity_summary(
 ) -> tuple[float | None, list[str]]:
     if daily.empty or field not in daily:
         return None, []
-    maximum = float(daily[field].max())
+    maximum = require_finite_non_negative_number(
+        daily[field].max(), field.replace("_", "-")
+    )
     dates = daily.loc[daily[field] == maximum, "date"].astype(str).tolist()
     return maximum, dates
 
@@ -125,11 +199,15 @@ def capacity_gate(
 ) -> None:
     if limit is None:
         return
-    if limit < 0:
-        raise ValueError(f"{summary_field.replace('_', '-')} must be >= 0")
+    limit = require_finite_non_negative_number(limit, summary_field.replace("_", "-"))
     if field not in summary["capital_fields_present"]:
         violations.append(f"{field}_missing")
         return
-    maximum = summary[summary_field] or 0.0
+    raw_maximum = summary[summary_field]
+    maximum = (
+        0.0
+        if raw_maximum is None
+        else require_finite_non_negative_number(raw_maximum, summary_field)
+    )
     if maximum > limit:
         violations.append(f"{summary_field}={maximum} limit={limit}")

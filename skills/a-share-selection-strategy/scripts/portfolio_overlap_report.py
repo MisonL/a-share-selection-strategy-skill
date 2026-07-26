@@ -6,10 +6,22 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from lib.a_share_selection_calendar_contract import CALENDAR_MODEL
+from lib.gates.a_share_selection_output_safety import (
+    prepare_output_paths,
+    remove_output_files,
+)
+from lib.selection_core.a_share_selection_cli_numeric import (
+    integer_or_non_finite,
+    normalize_negative_non_finite_option_values,
+)
+from lib.selection_core.a_share_selection_sizing_contracts import (
+    require_integer_at_least,
+)
 
 
 REQUIRED_COLUMNS = [
@@ -21,6 +33,12 @@ REQUIRED_COLUMNS = [
     "status",
 ]
 CLAIM_BOUNDARY = "local_capacity_gate_not_broker_or_external_cash_capacity_proof"
+
+
+@dataclass(frozen=True)
+class TradeContext:
+    symbol: str
+    signal_date: str
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -41,14 +59,22 @@ def main(argv: list[str] | None = None) -> int:
         "--overlap-output", required=True, help="Same-symbol overlap CSV path."
     )
     parser.add_argument("--summary-output", required=True, help="Summary JSON path.")
-    parser.add_argument("--max-open-positions", type=int, default=None)
+    parser.add_argument(
+        "--max-open-positions", type=integer_or_non_finite, default=None
+    )
     parser.add_argument("--max-gross-weight", type=float, default=None)
     parser.add_argument("--max-gross-notional", type=float, default=None)
     parser.add_argument("--max-cash-reserved", type=float, default=None)
     parser.add_argument("--fail-on-symbol-overlap", action="store_true")
     parser.add_argument("--require-capital-fields", action="store_true")
-    args = parser.parse_args(argv)
+    args = parser.parse_args(
+        normalize_negative_non_finite_option_values(argv, NUMERIC_OPTIONS)
+    )
+    outputs = output_paths(args)
+    output_prepared = False
     try:
+        prepare_output_paths(outputs, [Path(path) for path in args.backtests])
+        output_prepared = True
         ensure_runtime_dependencies()
         frames = [read_table(Path(path)) for path in args.backtests]
         daily, overlaps, summary = build_overlap_report(frames)
@@ -64,6 +90,8 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 3
     except Exception as exc:  # noqa: BLE001
+        if output_prepared:
+            remove_output_files(outputs)
         print(
             f"ERROR: code=bad_input output_written=false message={exc}",
             file=sys.stderr,
@@ -71,6 +99,22 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     print_summary(summary, args.summary_output)
     return 0
+
+
+def output_paths(args: argparse.Namespace) -> tuple[Path, ...]:
+    return (
+        Path(args.daily_output),
+        Path(args.overlap_output),
+        Path(args.summary_output),
+    )
+
+
+NUMERIC_OPTIONS = (
+    "--max-open-positions",
+    "--max-gross-weight",
+    "--max-gross-notional",
+    "--max-cash-reserved",
+)
 
 
 def ensure_runtime_dependencies() -> None:
@@ -113,9 +157,9 @@ def build_overlap_report(
         raise ValueError(
             "complete trades must have parseable signal, entry, and exit dates"
         )
-    set_active_trade_context(complete)
+    trade_context = build_trade_context(complete)
     daily = daily_open_positions(complete)
-    overlaps = same_symbol_overlaps(daily)
+    overlaps = same_symbol_overlaps(daily, trade_context)
     summary = build_summary(combined, complete, daily, overlaps)
     return daily, overlaps, summary
 
@@ -183,7 +227,9 @@ def daily_row(group: pd.DataFrame) -> pd.Series:
     return pd.Series(row)
 
 
-def same_symbol_overlaps(daily: pd.DataFrame) -> pd.DataFrame:
+def same_symbol_overlaps(
+    daily: pd.DataFrame, trade_context: tuple[TradeContext, ...]
+) -> pd.DataFrame:
     if daily.empty:
         return empty_overlaps()
     rows = []
@@ -194,21 +240,26 @@ def same_symbol_overlaps(daily: pd.DataFrame) -> pd.DataFrame:
         ]
         if len(symbols) == int(row["open_positions"]):
             continue
-        rows.extend(overlap_rows_for_date(str(row["date"]), indices))
+        rows.extend(overlap_rows_for_date(str(row["date"]), indices, trade_context))
     return pd.DataFrame(rows) if rows else empty_overlaps()
 
 
-def overlap_rows_for_date(date: str, trade_indices: list[int]) -> list[dict[str, Any]]:
+def overlap_rows_for_date(
+    date: str,
+    trade_indices: list[int],
+    trade_context: tuple[TradeContext, ...],
+) -> list[dict[str, Any]]:
     rows = []
     seen: dict[str, list[int]] = {}
     for index in trade_indices:
-        symbol = str(active_trade_context[index]["symbol"])
-        seen.setdefault(symbol, []).append(index)
+        context = context_for_trade_index(index, trade_context)
+        seen.setdefault(context.symbol, []).append(index)
     for symbol, indices in seen.items():
         if len(indices) <= 1:
             continue
         signal_dates = sorted(
-            active_trade_context[index]["signal_date"] for index in indices
+            context_for_trade_index(index, trade_context).signal_date
+            for index in indices
         )
         rows.append(
             {
@@ -222,14 +273,24 @@ def overlap_rows_for_date(date: str, trade_indices: list[int]) -> list[dict[str,
     return rows
 
 
-active_trade_context: list[dict[str, Any]] = []
+def build_trade_context(complete: pd.DataFrame) -> tuple[TradeContext, ...]:
+    return tuple(
+        TradeContext(
+            symbol=str(row.symbol),
+            signal_date=row.signal_date.date().isoformat(),
+        )
+        for row in complete[["symbol", "signal_date"]]
+        .reset_index(drop=True)
+        .itertuples(index=False)
+    )
 
 
-def set_active_trade_context(complete: pd.DataFrame) -> None:
-    global active_trade_context
-    context = complete.reset_index(drop=True).copy()
-    context["signal_date"] = context["signal_date"].dt.date.astype(str)
-    active_trade_context = context.to_dict("records")
+def context_for_trade_index(
+    index: int, trade_context: tuple[TradeContext, ...]
+) -> TradeContext:
+    if index < 0 or index >= len(trade_context):
+        raise ValueError("daily trade index is outside the supplied trade context")
+    return trade_context[index]
 
 
 def build_summary(
@@ -312,8 +373,10 @@ def gate_violations(
 ) -> list[str]:
     ensure_runtime_dependencies()
     violations = []
-    if max_open_positions is not None and max_open_positions < 1:
-        raise ValueError("max-open-positions must be >= 1")
+    if max_open_positions is not None:
+        max_open_positions = require_integer_at_least(
+            max_open_positions, "max-open-positions", 1
+        )
     if (
         max_open_positions is not None
         and summary["max_open_positions"] > max_open_positions

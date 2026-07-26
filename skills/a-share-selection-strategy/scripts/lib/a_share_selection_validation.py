@@ -49,20 +49,31 @@ def ensure_runtime_dependencies() -> None:
     prediction_value_errors = prediction_value_errors_fn
 
 
-def validate_frame(frame: pd.DataFrame, min_history_rows: int) -> list[str]:
+def validate_frame(
+    frame: pd.DataFrame,
+    min_history_rows: int,
+    *,
+    allow_invalid_open: bool = False,
+) -> list[str]:
     ensure_runtime_dependencies()
     errors: list[str] = []
     missing = [column for column in REQUIRED_COLUMNS if column not in frame.columns]
     if missing:
         errors.append(f"missing required columns: {', '.join(missing)}")
-        errors.extend(validate_available_columns(frame, min_history_rows))
+        errors.extend(
+            validate_available_columns(
+                frame,
+                min_history_rows,
+                allow_invalid_open=allow_invalid_open,
+            )
+        )
         return errors
     if frame.empty:
         return ["input data is empty"]
 
     errors.extend(validate_required_values(frame))
     errors.extend(validate_symbols(frame))
-    errors.extend(validate_numeric_values(frame))
+    errors.extend(validate_numeric_values(frame, allow_invalid_open=allow_invalid_open))
     errors.extend(validate_dates(frame))
     errors.extend(validate_duplicates(frame))
     errors.extend(validate_history(frame, min_history_rows=min_history_rows))
@@ -72,6 +83,8 @@ def validate_frame(frame: pd.DataFrame, min_history_rows: int) -> list[str]:
 def validate_available_columns(
     frame: pd.DataFrame,
     min_history_rows: int,
+    *,
+    allow_invalid_open: bool = False,
 ) -> Iterable[str]:
     if "symbol" in frame:
         yield from validate_symbols(frame)
@@ -79,7 +92,11 @@ def validate_available_columns(
         yield from validate_dates(frame)
     for column in [*PRICE_COLUMNS, "volume"]:
         if column in frame:
-            yield from validate_numeric_column(frame, column)
+            yield from validate_numeric_column(
+                frame,
+                column,
+                allow_non_positive=allow_invalid_open and column == "open",
+            )
     if {"symbol", "date"}.issubset(frame.columns):
         yield from validate_duplicates(frame)
     if "symbol" in frame:
@@ -124,12 +141,25 @@ def hk_symbol_context(frame: pd.DataFrame, symbols: pd.Series) -> pd.Series:
     return symbol_markers | markets
 
 
-def validate_numeric_values(frame: pd.DataFrame) -> Iterable[str]:
+def validate_numeric_values(
+    frame: pd.DataFrame, *, allow_invalid_open: bool = False
+) -> Iterable[str]:
+    # Invalid finite opens can be represented as per-trade incompleteness, but
+    # missing and non-finite OHLCV values are never valid input.
     for column in [*PRICE_COLUMNS, "volume"]:
-        yield from validate_numeric_column(frame, column)
+        yield from validate_numeric_column(
+            frame,
+            column,
+            allow_non_positive=allow_invalid_open and column == "open",
+        )
 
 
-def validate_numeric_column(frame: pd.DataFrame, column: str) -> Iterable[str]:
+def validate_numeric_column(
+    frame: pd.DataFrame,
+    column: str,
+    *,
+    allow_non_positive: bool = False,
+) -> Iterable[str]:
     values = pd.to_numeric(frame[column], errors="coerce")
     invalid_count = int(values.isna().sum())
     if invalid_count:
@@ -137,16 +167,23 @@ def validate_numeric_column(frame: pd.DataFrame, column: str) -> Iterable[str]:
             f"column {column} has {invalid_count} non-numeric values"
             f"{error_examples(frame, values.isna(), field=column)}"
         )
+    non_finite = values.isin([float("inf"), float("-inf")])
+    non_finite_count = int(non_finite.sum())
+    if non_finite_count:
+        yield (
+            f"column {column} has {non_finite_count} non-finite values"
+            f"{error_examples(frame, non_finite, field=column)}"
+        )
     if column in PRICE_COLUMNS:
-        mask = values <= 0
+        mask = values.notna() & ~non_finite & (values <= 0)
         non_positive = int(mask.sum())
-        if non_positive:
+        if non_positive and not allow_non_positive:
             yield (
                 f"column {column} has {non_positive} non-positive values"
                 f"{error_examples(frame, mask, field=column)}"
             )
     else:
-        mask = values < 0
+        mask = values.notna() & ~non_finite & (values < 0)
         negative = int(mask.sum())
         if negative:
             yield (

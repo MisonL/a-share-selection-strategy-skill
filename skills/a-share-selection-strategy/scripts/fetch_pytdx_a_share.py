@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from lib.gates.a_share_selection_output_safety import validate_output_paths
 from lib.fetch.pytdx_a_share import (
     CLAIM_BOUNDARY,
     DEFAULT_HOST,
@@ -30,6 +31,16 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     output = Path(args.output)
     metadata_output = Path(args.metadata_output)
+    try:
+        validate_output_paths([output, metadata_output], [])
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(
+            "ERROR: code=invalid_argument output_written=false "
+            "metadata_output_written=false "
+            f"source_claim_boundary={CLAIM_BOUNDARY} message={exc}",
+            file=sys.stderr,
+        )
+        return 2
     try:
         validate_arguments(args)
     except ValueError as exc:
@@ -103,13 +114,21 @@ def build_parser() -> argparse.ArgumentParser:
             "Fetch pytdx A-share daily OHLCV into local CSV and metadata. "
             "pytdx is a no token supplemental source; it does not provide "
             "turnover, tradestatus, isST, official license, or stability proof."
-        )
+        ),
     )
-    parser.add_argument("--symbols", required=True, help="Comma-separated six-digit symbols.")
+    parser.add_argument(
+        "--symbols", required=True, help="Comma-separated six-digit symbols."
+    )
     parser.add_argument("--start-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
     parser.add_argument("--end-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
-    parser.add_argument("--output", required=True, help="Output CSV path.")
-    parser.add_argument("--metadata-output", required=True, help="Output metadata JSON path.")
+    parser.add_argument(
+        "--output", required=True, help="Output CSV path; must differ from metadata."
+    )
+    parser.add_argument(
+        "--metadata-output",
+        required=True,
+        help="Output metadata JSON path; must differ from prices output.",
+    )
     parser.add_argument("--host", default=DEFAULT_HOST, help="TDX quote server host.")
     parser.add_argument("--port", type=positive_int, default=DEFAULT_PORT)
     parser.add_argument("--timeout-seconds", type=positive_float, default=10.0)

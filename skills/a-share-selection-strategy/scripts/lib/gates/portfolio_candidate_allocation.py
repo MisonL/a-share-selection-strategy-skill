@@ -22,8 +22,18 @@ from typing import Any
 import pandas as pd
 
 from lib.a_share_selection_calendar_contract import CALENDAR_MODEL
-from lib.selection_core.a_share_selection_capital import SIZING_FIELDS
+from lib.selection_core.a_share_selection_capital import (
+    SIZING_EXECUTION_MODEL,
+    SIZING_FIELDS,
+    lot_floor_quantity,
+    next_observed_open_entry,
+)
 from lib.selection_core.a_share_selection_data import parse_dates
+from lib.selection_core.a_share_selection_sizing_contracts import (
+    require_finite_non_negative_number,
+    require_integer_at_least,
+    require_positive_number,
+)
 from lib.a_share_selection_validation import validate_frame
 
 
@@ -47,7 +57,16 @@ def allocate_portfolio(
     fail_on_symbol_overlap: bool,
     close_tolerance: float = 0.000001,
 ) -> tuple[list[pd.DataFrame], list[pd.DataFrame], pd.DataFrame, dict[str, Any]]:
-    validate_args(
+    (
+        cash_budget,
+        lot_size,
+        hold_days,
+        max_open_positions,
+        max_gross_weight,
+        max_gross_notional,
+        max_cash_reserved,
+        close_tolerance,
+    ) = validate_args(
         candidate_frames,
         expected_signal_dates,
         cash_budget,
@@ -114,7 +133,7 @@ def validate_args(
     max_gross_notional: float,
     max_cash_reserved: float,
     close_tolerance: float,
-) -> None:
+) -> tuple[float, int, int, int, float, float, float, float]:
     if not candidate_frames:
         raise ValueError("at least one candidate file is required")
     if expected_signal_dates is not None and len(expected_signal_dates) != len(
@@ -127,22 +146,29 @@ def validate_args(
         "max-gross-notional": max_gross_notional,
         "max-cash-reserved": max_cash_reserved,
     }
-    for name, value in checks.items():
-        if value <= 0:
-            raise ValueError(f"{name} must be > 0")
-    if lot_size < 1 or hold_days < 1 or max_open_positions < 1:
-        raise ValueError("lot-size, hold-days, and max-open-positions must be >= 1")
-    if close_tolerance < 0:
-        raise ValueError("close-tolerance must be >= 0")
+    normalized = {
+        name: require_positive_number(value, name) for name, value in checks.items()
+    }
+    return (
+        normalized["cash-budget"],
+        require_integer_at_least(lot_size, "lot-size", 1),
+        require_integer_at_least(hold_days, "hold-days", 1),
+        require_integer_at_least(max_open_positions, "max-open-positions", 1),
+        normalized["max-gross-weight"],
+        normalized["max-gross-notional"],
+        normalized["max-cash-reserved"],
+        require_finite_non_negative_number(close_tolerance, "close-tolerance"),
+    )
 
 
 def prepare_prices(prices: pd.DataFrame) -> pd.DataFrame:
-    errors = validate_frame(prices, min_history_rows=0)
+    errors = validate_frame(prices, min_history_rows=0, allow_invalid_open=True)
     if errors:
         raise ValueError("; ".join(errors))
     result = prices.copy()
     result["symbol"] = result["symbol"].astype(str)
     result["date"] = parse_dates(result["date"])
+    result["open"] = pd.to_numeric(result["open"], errors="coerce")
     result["close"] = pd.to_numeric(result["close"], errors="coerce")
     result = result.dropna(subset=["symbol", "date", "close"])
     if (result["close"] <= 0).any():
@@ -250,15 +276,14 @@ def allocation_decision(
     fail_on_symbol_overlap: bool,
 ) -> dict[str, Any]:
     history = prices[prices["symbol"] == str(row["symbol"])].reset_index(drop=True)
-    entry_positions = history.index[history["date"] == row["_signal_date"]].tolist()
-    if not entry_positions:
-        return skip("missing_entry_price")
-    entry_pos = int(entry_positions[0])
-    exit_pos = entry_pos + hold_days
+    entry, entry_reason = next_observed_open_entry(history, row["_signal_date"])
+    if entry is None:
+        return skip(entry_reason)
+    exit_pos = entry.signal_position + hold_days
     if exit_pos >= len(history):
         return skip("missing_future_price")
     active_dates = business_dates(
-        history.iloc[entry_pos]["date"], history.iloc[exit_pos]["date"]
+        history.iloc[entry.entry_position]["date"], history.iloc[exit_pos]["date"]
     )
     reason = capacity_skip_reason(
         row, active_dates, daily, max_open_positions, fail_on_symbol_overlap
@@ -273,14 +298,17 @@ def allocation_decision(
         max_gross_notional,
         max_cash_reserved,
     )
-    signal_close = float(history.iloc[entry_pos]["close"])
+    signal_close = float(history.iloc[entry.signal_position]["close"])
     slot = min(cash_budget / max_open_positions, remaining)
-    quantity = int(slot / (signal_close * lot_size)) * lot_size
+    slot = require_finite_non_negative_number(slot, "cash-slot")
+    quantity = lot_floor_quantity(slot, entry.entry_price, lot_size)
     if quantity <= 0:
         return skip("insufficient_cash_slot")
-    cash_reserved = float(quantity * signal_close)
+    cash_reserved = require_finite_non_negative_number(
+        quantity * entry.entry_price, "cash-reserved"
+    )
     capital = capital_fields(
-        cash_budget, lot_size, signal_close, slot, quantity, cash_reserved
+        cash_budget, lot_size, signal_close, entry, slot, quantity, cash_reserved
     )
     return {"skip_reason": "", "active_dates": active_dates, "capital": capital}
 
@@ -310,29 +338,36 @@ def remaining_cash(
     max_gross_notional: float,
     max_cash_reserved: float,
 ) -> float:
+    gross_weight_limit = require_finite_non_negative_number(
+        max_gross_weight * cash_budget, "max-gross-weight-capacity"
+    )
     limit = min(
         cash_budget,
-        max_gross_weight * cash_budget,
+        gross_weight_limit,
         max_gross_notional,
         max_cash_reserved,
     )
     values = []
     for date in active_dates:
         state = daily.get(date, empty_day())
-        used = max(float(state["gross_notional"]), float(state["cash_reserved"]))
+        used = require_finite_non_negative_number(
+            max(float(state["gross_notional"]), float(state["cash_reserved"])),
+            "used-capacity",
+        )
         values.append(limit - used)
-    return max(0.0, min(values))
+    return require_finite_non_negative_number(max(0.0, min(values)), "remaining-cash")
 
 
 def capital_fields(
     cash_budget: float,
     lot_size: int,
     signal_close: float,
+    entry,
     slot: float,
     quantity: int,
     cash_reserved: float,
 ) -> dict[str, Any]:
-    return {
+    capital = {
         "cash_budget": float(cash_budget),
         "lot_size": int(lot_size),
         "capital_model": CAPITAL_MODEL,
@@ -342,8 +377,25 @@ def capital_fields(
         "cash_reserved": cash_reserved,
         "notional": cash_reserved,
         "weight": cash_reserved / cash_budget,
+        "sizing_claim_boundary": CLAIM_BOUNDARY,
         "unallocated": False,
+        "sizing_execution_model": SIZING_EXECUTION_MODEL,
+        "sizing_entry_date": entry.entry_date,
+        "sizing_entry_price": entry.entry_price,
+        "sizing_entry_price_field": "open",
+        "sizing_skip_reason": "",
     }
+    for field in [
+        "cash_budget",
+        "signal_close",
+        "cash_slot",
+        "cash_reserved",
+        "notional",
+        "weight",
+        "sizing_entry_price",
+    ]:
+        require_finite_non_negative_number(capital[field], field)
+    return capital
 
 
 def update_daily(
@@ -355,8 +407,14 @@ def update_daily(
     for date in active_dates:
         state = daily.setdefault(date, empty_day())
         state["open_positions"] += 1
-        state["gross_notional"] += float(capital["notional"])
-        state["cash_reserved"] += float(capital["cash_reserved"])
+        state["gross_notional"] = require_finite_non_negative_number(
+            state["gross_notional"] + float(capital["notional"]),
+            "daily-gross-notional",
+        )
+        state["cash_reserved"] = require_finite_non_negative_number(
+            state["cash_reserved"] + float(capital["cash_reserved"]),
+            "daily-cash-reserved",
+        )
         state["symbols"].add(symbol)
 
 
@@ -402,6 +460,34 @@ def build_summary(
     options: dict[str, Any],
 ) -> dict[str, Any]:
     reason_counts = Counter(row["skip_reason"] for row in skipped_rows)
+    max_gross_weight = max(
+        (
+            require_finite_non_negative_number(
+                state["gross_notional"] / options["cash_budget"],
+                "max-gross-weight",
+            )
+            for state in daily.values()
+        ),
+        default=0.0,
+    )
+    max_gross_notional = max(
+        (
+            require_finite_non_negative_number(
+                state["gross_notional"], "max-gross-notional"
+            )
+            for state in daily.values()
+        ),
+        default=0.0,
+    )
+    max_cash_reserved = max(
+        (
+            require_finite_non_negative_number(
+                state["cash_reserved"], "max-cash-reserved"
+            )
+            for state in daily.values()
+        ),
+        default=0.0,
+    )
     summary = {
         "schema_version": 1,
         "allocation_model": CAPITAL_MODEL,
@@ -415,19 +501,9 @@ def build_summary(
         "max_open_positions": max(
             (state["open_positions"] for state in daily.values()), default=0
         ),
-        "max_gross_weight": max(
-            (
-                state["gross_notional"] / options["cash_budget"]
-                for state in daily.values()
-            ),
-            default=0.0,
-        ),
-        "max_gross_notional": max(
-            (state["gross_notional"] for state in daily.values()), default=0.0
-        ),
-        "max_cash_reserved": max(
-            (state["cash_reserved"] for state in daily.values()), default=0.0
-        ),
+        "max_gross_weight": max_gross_weight,
+        "max_gross_notional": max_gross_notional,
+        "max_cash_reserved": max_cash_reserved,
     }
     summary.update(option_fields(options))
     return summary

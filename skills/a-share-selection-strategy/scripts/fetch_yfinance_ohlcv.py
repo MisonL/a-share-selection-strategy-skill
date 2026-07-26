@@ -11,6 +11,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from lib.gates.a_share_selection_output_safety import validate_output_paths
+
 
 CLAIM_BOUNDARY = "market_label_not_source_exchange_or_calendar_proof"
 OUTPUT_COLUMNS = [
@@ -28,33 +30,19 @@ YFINANCE_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Fetch yfinance OHLCV data into local CSV and metadata JSON files. "
-            "The --market value is an output label only, not source, exchange, "
-            "or calendar proof."
-        )
-    )
-    parser.add_argument("--symbols", required=True, help="Comma-separated ticker symbols.")
-    parser.add_argument("--start-date", required=True, help="YYYY-MM-DD.")
-    parser.add_argument("--end-date", required=True, help="YYYY-MM-DD.")
-    parser.add_argument("--output", required=True, help="Output CSV path.")
-    parser.add_argument("--metadata-output", required=True, help="Output metadata JSON path.")
-    parser.add_argument(
-        "--market",
-        default="US",
-        help="Market label to write; this is not source, exchange, or calendar proof.",
-    )
-    parser.add_argument(
-        "--timeout-seconds",
-        type=float,
-        default=30.0,
-        help="Per-symbol yfinance history timeout. Default: 30.",
-    )
-    parser.add_argument("--fail-on-fetch-error", action="store_true")
-    args = parser.parse_args(argv)
+    args = build_parser().parse_args(argv)
     output = Path(args.output)
     metadata_output = Path(args.metadata_output)
+    try:
+        validate_output_paths([output, metadata_output], [])
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(
+            "ERROR: code=invalid_argument output_written=false "
+            "metadata_output_written=false "
+            f"source_claim_boundary={CLAIM_BOUNDARY} message={exc}",
+            file=sys.stderr,
+        )
+        return 2
     try:
         validate_arguments(args)
     except ValueError as exc:
@@ -69,7 +57,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         frame, metadata = fetch_prices(args)
-        metadata = output_status(metadata, output_written=True, metadata_output_written=True)
+        metadata = output_status(
+            metadata, output_written=True, metadata_output_written=True
+        )
         write_outputs(frame, metadata, output, metadata_output)
     except Exception as exc:  # noqa: BLE001
         remove_output(output)
@@ -81,9 +71,13 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    strict_errors = strict_gate_errors(metadata, fail_on_fetch_error=args.fail_on_fetch_error)
+    strict_errors = strict_gate_errors(
+        metadata, fail_on_fetch_error=args.fail_on_fetch_error
+    )
     if strict_errors:
-        metadata = output_status(metadata, output_written=False, metadata_output_written=True)
+        metadata = output_status(
+            metadata, output_written=False, metadata_output_written=True
+        )
         remove_output(output)
         write_metadata(metadata, metadata_output)
         print_summary(metadata, args.output, prefix="ERROR_SUMMARY")
@@ -95,6 +89,42 @@ def main(argv: list[str] | None = None) -> int:
         return 3
     print_summary(metadata, args.output, prefix=summary_prefix(metadata))
     return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Fetch yfinance OHLCV data into local CSV and metadata JSON files. "
+            "The --market value is an output label only, not source, exchange, "
+            "or calendar proof."
+        )
+    )
+    parser.add_argument(
+        "--symbols", required=True, help="Comma-separated ticker symbols."
+    )
+    parser.add_argument("--start-date", required=True, help="YYYY-MM-DD.")
+    parser.add_argument("--end-date", required=True, help="YYYY-MM-DD.")
+    parser.add_argument(
+        "--output", required=True, help="Output CSV path; must differ from metadata."
+    )
+    parser.add_argument(
+        "--metadata-output",
+        required=True,
+        help="Output metadata JSON path; must differ from prices output.",
+    )
+    parser.add_argument(
+        "--market",
+        default="US",
+        help="Market label to write; this is not source, exchange, or calendar proof.",
+    )
+    parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=30.0,
+        help="Per-symbol yfinance history timeout. Default: 30.",
+    )
+    parser.add_argument("--fail-on-fetch-error", action="store_true")
+    return parser
 
 
 def ensure_runtime_dependencies() -> None:
@@ -173,7 +203,9 @@ def positive_float(value: object, name: str) -> float:
     return parsed
 
 
-def history_rows(history: pd.DataFrame, symbol: str, *, market: str) -> list[dict[str, Any]]:
+def history_rows(
+    history: pd.DataFrame, symbol: str, *, market: str
+) -> list[dict[str, Any]]:
     ensure_runtime_dependencies()
     if history.empty:
         return []

@@ -68,6 +68,9 @@ def score_symbol(group: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any]:
         "prediction_score": metrics["prediction_score"],
         "prediction_model": latest.get("prediction_model", ""),
         "prediction_horizon_days": latest.get("prediction_horizon_days", ""),
+        "prediction_label_execution_model": latest.get(
+            "prediction_label_execution_model", ""
+        ),
         "prediction_scope": latest.get("prediction_scope", ""),
         "prediction_model_quality_scope": latest.get(
             "prediction_model_quality_scope", ""
@@ -242,8 +245,8 @@ def calculate_latest_macd(
         slow_ema = (1.0 - slow_alpha) * slow_ema + slow_alpha * float(value)
         latest_macd = fast_ema - slow_ema
         latest_signal = (
-            (1.0 - signal_alpha) * latest_signal + signal_alpha * latest_macd
-        )
+            1.0 - signal_alpha
+        ) * latest_signal + signal_alpha * latest_macd
     if len(values) == 1:
         return pd.Series([latest_macd]), pd.Series([latest_signal])
     return (

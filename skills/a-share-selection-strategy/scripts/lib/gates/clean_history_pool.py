@@ -48,9 +48,7 @@ def derive_short_history_data(
     invalid_symbols = ~normalized_symbols.str.fullmatch(r"\d{6}")
     if invalid_symbols.any():
         examples = normalized_symbols.loc[invalid_symbols].drop_duplicates().head(20)
-        raise ValueError(
-            f"prices input has invalid symbols: {examples.tolist()}"
-        )
+        raise ValueError(f"prices input has invalid symbols: {examples.tolist()}")
     working = frame.assign(_symbol=normalized_symbols, _date=dates)
     duplicates = working.duplicated(["_symbol", "_date"], keep=False)
     if duplicates.any():
@@ -105,7 +103,9 @@ def build_clean_plan(
             metadata_symbols(metadata.get("unprocessed_symbols", []))
         ),
     }
-    remove = unique_symbols(symbol for symbols in reasons.values() for symbol in symbols)
+    remove = unique_symbols(
+        symbol for symbols in reasons.values() for symbol in symbols
+    )
     return {
         "remove_symbols": remove,
         "reason_symbols": reasons,
@@ -180,7 +180,9 @@ def clean_symbol_summaries(
     by_symbol = metadata_symbol_map(metadata)
     if clean.empty or "symbol" not in clean:
         return []
-    grouped = clean.assign(_symbol=clean["symbol"].astype(str)).groupby("_symbol")["date"]
+    grouped = clean.assign(_symbol=clean["symbol"].astype(str)).groupby("_symbol")[
+        "date"
+    ]
     result = []
     for symbol, series in grouped:
         prior = dict(by_symbol.get(str(symbol), {}))
@@ -292,22 +294,6 @@ def read_json(path: Path | None) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"expected JSON object: {path}")
     return data
-
-
-def validate_paths(*, inputs: list[Path | None], outputs: list[Path]) -> None:
-    input_paths = {resolved_path(path) for path in inputs if path is not None}
-    seen_outputs = set()
-    for output in outputs:
-        output_path = resolved_path(output)
-        if output_path in input_paths:
-            raise ValueError(f"output path must not overwrite input: {output}")
-        if output_path in seen_outputs:
-            raise ValueError(f"duplicate output path: {output}")
-        seen_outputs.add(output_path)
-
-
-def resolved_path(path: Path) -> Path:
-    return path.expanduser().resolve(strict=False)
 
 
 def now_iso() -> str:

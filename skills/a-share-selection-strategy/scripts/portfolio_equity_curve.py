@@ -4,9 +4,22 @@
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from pathlib import Path
 from typing import Any
+
+from lib.selection_core.a_share_selection_sizing_contracts import (
+    require_finite_number,
+    require_positive_number,
+)
+from lib.gates.a_share_selection_output_safety import (
+    prepare_output_paths,
+    remove_output_files,
+)
+from lib.selection_core.a_share_selection_cli_numeric import (
+    normalize_negative_non_finite_option_values,
+)
 
 
 REQUIRED_COLUMNS = ["signal_date", "return", "missing_data", "status"]
@@ -41,8 +54,17 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Fail if max_drawdown is lower than this value, for example -0.10.",
     )
-    args = parser.parse_args(argv)
+    args = parser.parse_args(
+        normalize_negative_non_finite_option_values(argv, NUMERIC_OPTIONS)
+    )
+    output = Path(args.output)
+    output_prepared = False
     try:
+        prepare_output_paths(
+            [output],
+            [Path(path) for path in args.backtests],
+        )
+        output_prepared = True
         ensure_runtime_dependencies()
         validate_gate_thresholds(args.min_final_equity, args.max_drawdown_floor)
         frames = [read_table(Path(path)) for path in args.backtests]
@@ -65,8 +87,10 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 3
-        write_output(curve, Path(args.output))
+        write_output(curve, output)
     except Exception as exc:  # noqa: BLE001
+        if output_prepared:
+            remove_output_files([output])
         print(
             f"ERROR: code=bad_input output_written=false message={exc}",
             file=sys.stderr,
@@ -75,6 +99,13 @@ def main(argv: list[str] | None = None) -> int:
     print_summary(summary, args.output)
     print_incomplete_warning(summary, args.fail_on_incomplete)
     return 0
+
+
+NUMERIC_OPTIONS = (
+    "--initial-equity",
+    "--min-final-equity",
+    "--max-drawdown-floor",
+)
 
 
 def ensure_runtime_dependencies() -> None:
@@ -96,10 +127,11 @@ def validate_gate_thresholds(
     min_final_equity: float | None,
     max_drawdown_floor: float | None,
 ) -> None:
-    if min_final_equity is not None and min_final_equity <= 0:
-        raise ValueError("min-final-equity must be > 0")
+    if min_final_equity is not None:
+        require_positive_number(min_final_equity, "min-final-equity")
     if max_drawdown_floor is None:
         return
+    max_drawdown_floor = require_finite_number(max_drawdown_floor, "max-drawdown-floor")
     if (
         max_drawdown_floor < MIN_DRAWDOWN_FLOOR
         or max_drawdown_floor > MAX_DRAWDOWN_FLOOR
@@ -134,15 +166,23 @@ def build_equity_curve(
     initial_equity: float,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     ensure_runtime_dependencies()
-    if initial_equity <= 0:
-        raise ValueError("initial-equity must be > 0")
+    initial_equity = require_positive_number(initial_equity, "initial-equity")
     if not frames:
         raise ValueError("at least one backtest file is required")
     periods = [period_row(frame) for frame in frames]
     curve = pd.DataFrame(periods).sort_values("signal_date").reset_index(drop=True)
-    curve["equity"] = initial_equity * (1 + curve["mean_return"]).cumprod()
+    multipliers = 1 + curve["mean_return"]
+    require_finite_values(multipliers, "equity multiplier")
+    if (multipliers < 0).any():
+        raise ValueError("equity multiplier must be >= 0")
+    cumulative_multiplier = multipliers.cumprod()
+    require_finite_values(cumulative_multiplier, "cumulative equity multiplier")
+    curve["equity"] = initial_equity * cumulative_multiplier
+    require_finite_values(curve["equity"], "equity")
     curve["running_peak"] = curve["equity"].cummax().clip(lower=initial_equity)
     curve["drawdown"] = curve["equity"] / curve["running_peak"] - 1
+    require_finite_values(curve["running_peak"], "running peak")
+    require_finite_values(curve["drawdown"], "drawdown")
     return curve, build_summary(curve, initial_equity)
 
 
@@ -156,14 +196,20 @@ def period_row(frame: pd.DataFrame) -> dict[str, Any]:
     complete = prepared[is_complete_trade(prepared)]
     if complete.empty:
         raise ValueError("backtest period has no complete trades")
+    if (
+        complete["return"].isna().any()
+        or complete["return"].isin([float("inf"), float("-inf")]).any()
+    ):
+        raise ValueError("complete trade return must be finite")
     signal_dates = complete["signal_date"].dt.date.astype(str).unique()
     if len(signal_dates) != 1:
         raise ValueError("each backtest file must contain exactly one signal_date")
     incomplete = int(len(prepared) - len(complete))
+    mean_return = require_finite_number(complete["return"].mean(), "mean-return")
     return {
         "signal_date": signal_dates[0],
         "positions": int(len(complete)),
-        "mean_return": float(complete["return"].mean()),
+        "mean_return": mean_return,
         "incomplete_trades": incomplete,
         "weighting": "equal_weight_completed_trades",
         "claim_boundary": CLAIM_BOUNDARY,
@@ -190,21 +236,25 @@ def missing_data_mask(values: Any) -> Any:
 
 
 def build_summary(curve: pd.DataFrame, initial_equity: float) -> dict[str, Any]:
-    final_equity = float(curve["equity"].iloc[-1])
+    final_equity = require_finite_number(curve["equity"].iloc[-1], "final-equity")
     trough_index = int(curve["drawdown"].idxmin())
     trough_date = str(curve.loc[trough_index, "signal_date"])
     if float(curve.loc[trough_index, "drawdown"]) == 0:
         peak_date = "START"
     else:
         peak_date = peak_date_for_drawdown(curve, trough_index, initial_equity)
+    total_return = require_finite_number(
+        final_equity / float(initial_equity) - 1, "total-return"
+    )
+    max_drawdown = require_finite_number(curve["drawdown"].min(), "max-drawdown")
     return {
         "periods": int(len(curve)),
         "positions": int(curve["positions"].sum()),
         "incomplete_trades": int(curve["incomplete_trades"].sum()),
         "initial_equity": float(initial_equity),
         "final_equity": final_equity,
-        "total_return": final_equity / float(initial_equity) - 1,
-        "max_drawdown": float(curve["drawdown"].min()),
+        "total_return": total_return,
+        "max_drawdown": max_drawdown,
         "max_drawdown_peak_date": peak_date,
         "max_drawdown_trough_date": trough_date,
     }
@@ -228,6 +278,13 @@ def peak_date_for_drawdown(
 def write_output(frame: pd.DataFrame, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(path, index=False)
+
+
+def require_finite_values(values: Any, name: str) -> None:
+    for value in values:
+        numeric = float(value)
+        if not math.isfinite(numeric):
+            raise ValueError(f"{name} must be finite")
 
 
 def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> None:

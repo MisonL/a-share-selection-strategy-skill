@@ -10,6 +10,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from lib.gates.a_share_selection_output_safety import (
+    prepare_output_paths as prepare_safe_output_paths,
+    remove_output_files,
+)
 import lib.selection_core.a_share_selection_score_profile as score_profile
 from lib.selection_core.a_share_selection_provenance import (
     PROVENANCE_COLUMNS,
@@ -52,6 +56,7 @@ OUTPUT_COLUMNS = [
     "prediction_input_source",
     "prediction_model",
     "prediction_horizon_days",
+    "prediction_label_execution_model",
     "prediction_scope",
     "prediction_model_quality_scope",
     "prediction_model_executed_by_score_script",
@@ -136,27 +141,36 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     paths = score_paths(args)
-    profile = score_profile.start_profile(
-        paths.input,
-        paths.config,
-        paths.spot,
-        paths.profile,
-    )
+    output_prepared = False
     try:
+        prepare_score_outputs(paths)
+        output_prepared = True
+        profile = score_profile.start_profile(
+            paths.input,
+            paths.config,
+            paths.spot,
+            paths.profile,
+        )
         candidates, summary = execute_scoring(paths, profile)
     except Exception as exc:  # noqa: BLE001
-        return handle_score_error(exc, paths)
+        return handle_score_error(exc, paths, output_prepared=output_prepared)
     strict_errors = strict_gate_errors(
         summary,
         fail_on_skipped=args.fail_on_skipped,
         fail_on_empty_result=args.fail_on_empty_result,
     )
     if strict_errors:
-        return handle_strict_failure(args, paths, summary, strict_errors)
+        return handle_strict_failure(
+            args,
+            paths,
+            summary,
+            strict_errors,
+            output_prepared=output_prepared,
+        )
     try:
         write_score_outputs(args, paths, profile, candidates, summary)
     except Exception as exc:  # noqa: BLE001
-        return handle_score_error(exc, paths)
+        return handle_score_error(exc, paths, output_prepared=output_prepared)
     print_summary(summary, args.output)
     return 0
 
@@ -196,6 +210,25 @@ def execute_scoring(
     return candidates, summary
 
 
+def prepare_score_outputs(paths: ScorePaths) -> None:
+    validate_output_paths(paths)
+    prepare_safe_output_paths(score_output_paths(paths), score_input_paths(paths))
+
+
+def score_output_paths(paths: ScorePaths) -> tuple[Path, ...]:
+    return tuple(
+        path
+        for path in (paths.output, paths.diagnostics, paths.profile)
+        if path is not None
+    )
+
+
+def score_input_paths(paths: ScorePaths) -> tuple[Path, ...]:
+    return tuple(
+        path for path in (paths.input, paths.config, paths.spot) if path is not None
+    )
+
+
 def write_score_outputs(
     args: argparse.Namespace,
     paths: ScorePaths,
@@ -206,7 +239,9 @@ def write_score_outputs(
     write_output(candidates, paths.output)
     score_profile.tick(profile, "candidates_written")
     if args.diagnostics_output:
-        write_threshold_diagnostics(summary.get("threshold_diagnostics", []), paths.diagnostics)
+        write_threshold_diagnostics(
+            summary.get("threshold_diagnostics", []), paths.diagnostics
+        )
     score_profile.tick(profile, "diagnostics_written")
     write_profile_output(score_profile.finalize(profile, summary), paths.profile)
 
@@ -224,8 +259,11 @@ def handle_strict_failure(
     paths: ScorePaths,
     summary: dict[str, Any],
     errors: list[str],
+    *,
+    output_prepared: bool,
 ) -> int:
-    remove_stale_outputs(paths.output, paths.diagnostics, paths.profile)
+    if output_prepared:
+        remove_output_files(score_output_paths(paths))
     print_summary(summary, args.output, prefix="ERROR_SUMMARY")
     print(
         f"ERROR: strict gate failed; {'; '.join(errors)} output_not_written=true",
@@ -234,8 +272,14 @@ def handle_strict_failure(
     return 3
 
 
-def handle_score_error(exc: Exception, paths: ScorePaths) -> int:
-    remove_stale_outputs(paths.output, paths.diagnostics, paths.profile)
+def handle_score_error(
+    exc: Exception,
+    paths: ScorePaths,
+    *,
+    output_prepared: bool,
+) -> int:
+    if output_prepared:
+        remove_output_files(score_output_paths(paths))
     if isinstance(exc, (ImportError, ModuleNotFoundError)):
         code = "dependency_error"
     elif isinstance(exc, (FileNotFoundError, json.JSONDecodeError)):
@@ -322,7 +366,9 @@ def score_candidates(
     validate_prediction_symbols(prepared, config)
     input_frame, universe_summary = apply_universe_filter(prepared, config)
     score_profile.record_count(profile, "universe_rows", len(input_frame))
-    score_profile.record_count(profile, "universe_symbols", input_frame["symbol"].nunique())
+    score_profile.record_count(
+        profile, "universe_symbols", input_frame["symbol"].nunique()
+    )
     score_profile.tick(profile, "universe_filtered")
     spot_view, spot_summary = merge_spot_view(input_frame, spot)
     validate_prediction_values(input_frame, config)
@@ -515,17 +561,6 @@ def require_csv_output_suffix(path: Path, label: str) -> None:
 def require_json_output_suffix(path: Path, label: str) -> None:
     if path.suffix.lower() != ".json":
         raise ValueError(f"{label} supports JSON only; output suffix must be .json")
-
-
-def remove_stale_outputs(*paths: Path | None) -> None:
-    for path in paths:
-        if path is None:
-            continue
-        if not path.exists() and not path.is_symlink():
-            continue
-        if path.is_dir() and not path.is_symlink():
-            continue
-        path.unlink()
 
 
 if __name__ == "__main__":

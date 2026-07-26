@@ -7,32 +7,50 @@ import argparse
 import sys
 from pathlib import Path
 
+from lib.gates.a_share_selection_output_safety import (
+    prepare_output_paths,
+    remove_output_files,
+)
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Slice local OHLCV data by date.")
     parser.add_argument("--input", required=True, help="Path to CSV or Parquet file.")
-    parser.add_argument("--output", required=True, help="Path to output CSV file.")
+    parser.add_argument(
+        "--output",
+        required=True,
+        help="Path to output CSV file; must differ from --input.",
+    )
     parser.add_argument(
         "--as-of-date",
         required=True,
         help="Inclusive YYYY-MM-DD cutoff date; not proof that this date exists as a signal day.",
     )
     args = parser.parse_args(argv)
+    input_path = Path(args.input)
+    output_path = Path(args.output)
+    output_prepared = False
     try:
+        prepare_output_paths([output_path], [input_path])
+        output_prepared = True
         ensure_runtime_dependencies()
-        sliced = slice_prices(read_table(Path(args.input)), as_of_date=args.as_of_date)
-        write_output(sliced, Path(args.output))
+        sliced = slice_prices(read_table(input_path), as_of_date=args.as_of_date)
+        write_output(sliced, output_path)
     except (FileNotFoundError, ValueError) as exc:
+        if output_prepared:
+            remove_output_files([output_path])
         print(
             "ERROR: code=bad_input "
-            f"input={Path(args.input).name} output_written=false message={exc}",
+            f"input={input_path.name} output_written=false message={exc}",
             file=sys.stderr,
         )
         return 2
     except Exception as exc:  # noqa: BLE001
+        if output_prepared:
+            remove_output_files([output_path])
         print(
             "ERROR: code=runtime_error "
-            f"input={Path(args.input).name} output_written=false message={exc}",
+            f"input={input_path.name} output_written=false message={exc}",
             file=sys.stderr,
         )
         return 2

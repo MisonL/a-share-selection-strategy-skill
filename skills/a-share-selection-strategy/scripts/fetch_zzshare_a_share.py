@@ -30,6 +30,7 @@ from lib.fetch.zzshare_a_share_quality import (
     write_metadata,
     write_outputs,
 )
+from lib.gates.a_share_selection_output_safety import validate_output_paths
 from lib.fetch.zzshare_rate_limit import (
     DEFAULT_MAX_429_EVENTS,
     DEFAULT_MAX_RATE_LIMIT_SLEEP_SECONDS,
@@ -41,6 +42,14 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     output = Path(args.output)
     metadata_output = Path(args.metadata_output)
+    try:
+        validate_output_paths(
+            [output, metadata_output],
+            file_input_paths(args),
+            protected_directories=checkpoint_directories(args),
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        return fail_output_path_validation(str(exc))
     try:
         validate_arguments(args)
     except ValueError as exc:
@@ -123,18 +132,22 @@ def parser_description() -> str:
 
 
 def add_required_options(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "--symbols", help="Comma-separated six-digit symbols."
-    )
+    parser.add_argument("--symbols", help="Comma-separated six-digit symbols.")
     parser.add_argument(
         "--symbols-file",
         help="Text file containing comma-separated or newline-separated symbols.",
     )
     parser.add_argument("--start-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
     parser.add_argument("--end-date", required=True, help="YYYY-MM-DD or YYYYMMDD.")
-    parser.add_argument("--output", required=True, help="Output CSV path.")
     parser.add_argument(
-        "--metadata-output", required=True, help="Output metadata JSON path."
+        "--output",
+        required=True,
+        help="Output CSV path; must differ from metadata, file inputs, and checkpoints.",
+    )
+    parser.add_argument(
+        "--metadata-output",
+        required=True,
+        help="Output metadata JSON path; must differ from prices, file inputs, and checkpoints.",
     )
 
 
@@ -231,7 +244,8 @@ def add_gate_options(parser: argparse.ArgumentParser) -> None:
         "--checkpoint-dir",
         help=(
             "Optional directory for zzshare batch checkpoints. Checkpoints are "
-            "raw/audit artifacts and do not prove selection readiness."
+            "raw/audit artifacts, must not contain prices or metadata outputs, "
+            "and do not prove selection readiness."
         ),
     )
     parser.add_argument(
@@ -278,6 +292,27 @@ def validate_arguments(args: argparse.Namespace) -> None:
     validate_numeric_arguments(args)
     normalize_symbol_arguments(args)
     parse_symbols(args.symbols)
+
+
+def file_input_paths(args: argparse.Namespace) -> list[Path]:
+    if not str(args.symbols_file or "").strip():
+        return []
+    return [Path(args.symbols_file)]
+
+
+def checkpoint_directories(args: argparse.Namespace) -> list[Path]:
+    if not str(args.checkpoint_dir or "").strip():
+        return []
+    return [Path(args.checkpoint_dir)]
+
+
+def fail_output_path_validation(message: str) -> int:
+    print(
+        "ERROR: code=invalid_argument output_written=false "
+        f"metadata_output_written=false message={message}",
+        file=sys.stderr,
+    )
+    return 2
 
 
 def normalize_symbol_arguments(args: argparse.Namespace) -> None:
@@ -343,7 +378,9 @@ def validate_numeric_arguments(args: argparse.Namespace) -> None:
     if args.resume_from_checkpoint and not str(args.checkpoint_dir or "").strip():
         raise ValueError("resume-from-checkpoint requires checkpoint-dir")
     if str(args.checkpoint_dir or "").strip() and args.checkpoint_batch_size < 1:
-        raise ValueError("checkpoint-batch-size must be positive when checkpoint-dir is set")
+        raise ValueError(
+            "checkpoint-batch-size must be positive when checkpoint-dir is set"
+        )
 
 
 def non_negative_int(value: object, name: str) -> int:
@@ -375,7 +412,9 @@ def print_summary(metadata: dict, prefix: str = "OK") -> None:
     unprocessed = metadata.get("unprocessed_symbols", [])
     if not isinstance(unprocessed, list):
         unprocessed = []
-    unprocessed_examples = ",".join(str(symbol) for symbol in unprocessed[:10]) or "none"
+    unprocessed_examples = (
+        ",".join(str(symbol) for symbol in unprocessed[:10]) or "none"
+    )
     print(
         f"{prefix}: source=zzshare rows={metadata['rows']} "
         f"symbol_count={metadata['symbol_count']} "

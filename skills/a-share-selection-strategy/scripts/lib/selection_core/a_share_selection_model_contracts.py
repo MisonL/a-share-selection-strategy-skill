@@ -20,6 +20,16 @@ TRADABILITY_MODEL_NONE = "not_modeled"
 TRADABILITY_MODEL_ENTRY_EXIT = "tradestatus_entry_exit_only"
 TRADABILITY_MODEL_HOLDING_PERIOD = "tradestatus_holding_period_bars"
 LIMIT_RULES_MODEL_NOT_MODELED = "not_modeled"
+EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE = (
+    "signal_close_next_observed_open_to_close"
+)
+PREDICTION_LABEL_EXECUTION_MODEL = (
+    EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE
+)
+PREDICTION_LABEL_DEFINITION = (
+    "target_return = close.shift(-horizon) / open.shift(-1) - 1; "
+    "class = target_return > train_mean"
+)
 
 
 def tradability_model(

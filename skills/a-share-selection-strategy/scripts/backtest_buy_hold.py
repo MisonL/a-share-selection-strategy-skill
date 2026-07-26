@@ -1,13 +1,31 @@
 #!/usr/bin/env python3
-"""Run a minimal close-to-close buy-hold backtest from local files."""
+"""Run a local next-observed-open to signal-horizon-close buy-hold backtest."""
 
 from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import os
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
+
+from lib.selection_core.a_share_selection_model_contracts import (
+    EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
+)
+from lib.gates.a_share_selection_output_safety import (
+    prepare_output_paths,
+    remove_output_files,
+)
+from lib.selection_core.a_share_selection_cli_numeric import (
+    integer_or_non_finite,
+    normalize_negative_non_finite_option_values,
+)
+from lib.selection_core.a_share_selection_sizing_contracts import (
+    require_finite_non_negative_number,
+    require_integer_at_least,
+)
 
 
 @dataclass(frozen=True)
@@ -17,12 +35,30 @@ class BacktestOptions:
     slippage_bps: float
     require_tradable_bars: bool
     require_holding_period_tradable: bool = False
+    execution_model: str = EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE
 
 
 def main(argv: list[str] | None = None) -> int:
+    return run_cli(
+        build_parser().parse_args(
+            normalize_negative_non_finite_option_values(argv, NUMERIC_OPTIONS)
+        )
+    )
+
+
+NUMERIC_OPTIONS = (
+    "--hold-days",
+    "--holding-days",
+    "--cost-bps",
+    "--slippage-bps",
+)
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Run a minimal close-to-close buy-hold backtest. This is a local "
+            "Run a local backtest that enters at the next observed open after a signal "
+            "close and exits at the signal-horizon close. This is a local "
             "baseline, not a promise of future returns or real tradability. "
             "Without --fail-on-incomplete, incomplete output is not a successful backtest."
         )
@@ -31,7 +67,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--candidates", required=True, help="Path to candidates CSV.")
     parser.add_argument("--output", required=True, help="Path to output CSV.")
     parser.add_argument(
-        "--hold-days", "--holding-days", dest="hold_days", type=int, default=5
+        "--hold-days",
+        "--holding-days",
+        dest="hold_days",
+        type=integer_or_non_finite,
+        default=5,
     )
     parser.add_argument(
         "--cost-bps", type=float, default=0.0, help="Round-trip cost in basis points."
@@ -52,9 +92,25 @@ def main(argv: list[str] | None = None) -> int:
         "--expected-signal-date",
         help="Require every candidate date to match this signal date.",
     )
+    parser.add_argument(
+        "--execution-model",
+        choices=[EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE],
+        default=EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
+        help="Execution timing and price-field contract.",
+    )
     parser.add_argument("--fail-on-incomplete", action="store_true")
-    args = parser.parse_args(argv)
+    return parser
+
+
+def run_cli(args: argparse.Namespace) -> int:
+    output = Path(args.output)
+    output_prepared = False
     try:
+        prepare_output_paths(
+            [output],
+            [Path(args.prices), Path(args.candidates)],
+        )
+        output_prepared = True
         ensure_runtime_dependencies()
         result, summary = run_backtest(
             read_table(Path(args.prices)),
@@ -65,9 +121,10 @@ def main(argv: list[str] | None = None) -> int:
             require_tradable_bars=args.require_tradable_bars,
             require_holding_period_tradable=args.require_tradable_holding_period,
             expected_signal_date=args.expected_signal_date,
+            execution_model=args.execution_model,
         )
         if args.fail_on_incomplete and summary["incomplete_trades"]:
-            print_summary(summary, args.output, prefix="ERROR_SUMMARY")
+            print_summary(summary, str(output), prefix="ERROR_SUMMARY")
             print(
                 "ERROR: strict gate failed; "
                 f"incomplete_trades={summary['incomplete_trades']} "
@@ -75,8 +132,10 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 3
-        write_output(result, Path(args.output))
+        write_output(result, output)
     except Exception as exc:  # noqa: BLE001
+        if output_prepared:
+            remove_output_files([output])
         print(
             "ERROR: code=bad_input "
             f"prices={Path(args.prices).name} candidates={Path(args.candidates).name} "
@@ -106,6 +165,7 @@ def ensure_runtime_dependencies() -> None:
             "build_summary": row_module.build_summary,
             "completed_or_incomplete_row": row_module.completed_or_incomplete_row,
             "incomplete_row": row_module.incomplete_row,
+            "next_observed_open_entry": capital_module.next_observed_open_entry,
             "parse_dates": data_module.parse_dates,
             "read_table": data_module.read_table,
             "tradability_failure_reason": tradability_module.tradability_failure_reason,
@@ -124,15 +184,15 @@ def run_backtest(
     require_tradable_bars: bool = False,
     require_holding_period_tradable: bool = False,
     expected_signal_date: str | None = None,
+    execution_model: str = EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     ensure_runtime_dependencies()
-    if hold_days < 1:
-        raise ValueError("hold-days must be >= 1")
-    if cost_bps < 0:
-        raise ValueError("cost-bps must be >= 0")
-    if slippage_bps < 0:
-        raise ValueError("slippage-bps must be >= 0")
-    price_errors = validate_frame(prices, min_history_rows=0)
+    hold_days = require_integer_at_least(hold_days, "hold-days", 1)
+    cost_bps = require_finite_non_negative_number(cost_bps, "cost-bps")
+    slippage_bps = require_finite_non_negative_number(slippage_bps, "slippage-bps")
+    if execution_model != EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE:
+        raise ValueError(f"unsupported execution-model={execution_model}")
+    price_errors = validate_frame(prices, min_history_rows=0, allow_invalid_open=True)
     if price_errors:
         raise ValueError("; ".join(price_errors))
     validate_candidates(candidates)
@@ -144,6 +204,7 @@ def run_backtest(
         slippage_bps=slippage_bps,
         require_tradable_bars=require_tradable_bars,
         require_holding_period_tradable=require_holding_period_tradable,
+        execution_model=execution_model,
     )
     rows = [
         evaluate_candidate(row, prepared, options) for _, row in candidates.iterrows()
@@ -156,6 +217,7 @@ def run_backtest(
         slippage_bps,
         options.require_tradable_bars,
         require_holding_period_tradable=options.require_holding_period_tradable,
+        execution_model=options.execution_model,
     )
 
 
@@ -191,6 +253,7 @@ def prepare_prices(prices: pd.DataFrame) -> pd.DataFrame:
     result = prices.copy()
     result["symbol"] = result["symbol"].astype(str)
     result["date"] = parse_dates(result["date"])
+    result["open"] = pd.to_numeric(result["open"], errors="coerce")
     result["close"] = pd.to_numeric(result["close"], errors="coerce")
     result = result.dropna(subset=["symbol", "date", "close"])
     return result.sort_values(["symbol", "date"]).reset_index(drop=True)
@@ -206,17 +269,30 @@ def evaluate_candidate(
     history = prices[prices["symbol"] == symbol].reset_index(drop=True)
     if pd.isna(signal_date) or history.empty:
         return missing_entry_row(row, symbol=symbol, options=options)
-    entry_pos = entry_position(history, signal_date)
-    if entry_pos is None:
+    entry, entry_reason = next_observed_open_entry(history, signal_date)
+    if entry is None and entry_reason == "missing_entry_price":
         return missing_entry_row(
             row,
             symbol=symbol,
             options=options,
             signal_date=signal_date.date(),
         )
+    if entry is None:
+        return incomplete_row(
+            symbol=symbol,
+            signal_date=signal_date.date(),
+            holding_days=options.holding_days,
+            reason=entry_reason,
+            cost_bps=options.cost_bps,
+            slippage_bps=options.slippage_bps,
+            require_tradable_bars=options.require_tradable_bars,
+            require_holding_period_tradable=options.require_holding_period_tradable,
+            execution_model=options.execution_model,
+        )
     failure = future_or_tradability_failure(
         history,
-        entry_pos,
+        entry.signal_position,
+        entry.entry_position,
         options,
     )
     if failure["reason"]:
@@ -229,12 +305,13 @@ def evaluate_candidate(
             slippage_bps=options.slippage_bps,
             require_tradable_bars=options.require_tradable_bars,
             require_holding_period_tradable=options.require_holding_period_tradable,
+            execution_model=options.execution_model,
         )
     return completed_from_signal(
         symbol=symbol,
         signal_date=signal_date,
         history=history,
-        entry_pos=entry_pos,
+        entry_pos=entry.entry_position,
         exit_pos=failure["exit_pos"],
         options=options,
     )
@@ -256,6 +333,7 @@ def missing_entry_row(
         slippage_bps=options.slippage_bps,
         require_tradable_bars=options.require_tradable_bars,
         require_holding_period_tradable=options.require_holding_period_tradable,
+        execution_model=options.execution_model,
     )
 
 
@@ -279,22 +357,20 @@ def completed_from_signal(
         slippage_bps=options.slippage_bps,
         require_tradable_bars=options.require_tradable_bars,
         require_holding_period_tradable=options.require_holding_period_tradable,
+        execution_model=options.execution_model,
     )
-
-
-def entry_position(history: pd.DataFrame, signal_date: Any) -> int | None:
-    positions = history.index[history["date"] == signal_date].tolist()
-    if not positions:
-        return None
-    return int(positions[0])
 
 
 def future_or_tradability_failure(
     history: pd.DataFrame,
+    signal_pos: int,
     entry_pos: int,
     options: BacktestOptions,
 ) -> dict[str, Any]:
-    exit_pos = entry_pos + options.holding_days
+    # Preserve the public hold-days horizon from the signal date. The entry moves
+    # to the next observed open, but a five-bar signal horizon still exits on the
+    # fifth observed bar after the signal date rather than silently becoming six.
+    exit_pos = signal_pos + options.holding_days
     if exit_pos >= len(history):
         return {"reason": "missing_future_price", "exit_pos": exit_pos}
     if options.require_tradable_bars or options.require_holding_period_tradable:
@@ -311,7 +387,20 @@ def future_or_tradability_failure(
 
 def write_output(frame: pd.DataFrame, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    frame.to_csv(path, index=False)
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        text=True,
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as handle:
+            frame.to_csv(handle, index=False)
+        temporary.replace(path)
+    finally:
+        if temporary.exists() or temporary.is_symlink():
+            temporary.unlink()
 
 
 def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> None:
@@ -322,6 +411,7 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
         f"hold_days={summary['hold_days']} "
         f"cost_bps={summary['cost_bps']} "
         f"slippage_bps={summary['slippage_bps']} "
+        f"execution_model={summary['execution_model']} "
         f"tradability_required={summary['tradability_required']} "
         f"tradability_model={summary['tradability_model']} output={output}"
     )
@@ -335,7 +425,7 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
             "use --fail-on-incomplete for strict gates"
         )
     print(
-        "INFO: baseline=buy_hold_close_to_close "
+        f"INFO: execution_model={summary['execution_model']} "
         "cost_model=round_trip_bps slippage_model=round_trip_bps "
         f"tradability_model={summary['tradability_model']} "
         "suspension=missing_future_price "

@@ -19,12 +19,23 @@ from lib.fetch.baostock_a_share_universe import (
     print_summary,
     strict_errors,
 )
+from lib.gates.a_share_selection_output_safety import validate_output_paths
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     output = Path(args.output)
     metadata_output = Path(args.metadata_output)
+    try:
+        validate_output_paths([output, metadata_output], [])
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(
+            "ERROR: code=invalid_argument output_written=false "
+            "metadata_output_written=false "
+            f"source_claim_boundary={CLAIM_BOUNDARY} message={exc}",
+            file=sys.stderr,
+        )
+        return 2
     try:
         rows, metadata = fetch_universe(args)
         metadata = output_status(
@@ -85,11 +96,15 @@ def build_parser() -> argparse.ArgumentParser:
             "realtime spot quote snapshot."
         )
     )
-    parser.add_argument("--output", required=True, help="Output spot-compatible CSV.")
+    parser.add_argument(
+        "--output",
+        required=True,
+        help="Output spot-compatible CSV; must differ from metadata.",
+    )
     parser.add_argument(
         "--metadata-output",
         required=True,
-        help="Output metadata JSON path.",
+        help="Output metadata JSON path; must differ from spot output.",
     )
     parser.add_argument(
         "--fail-on-partial",

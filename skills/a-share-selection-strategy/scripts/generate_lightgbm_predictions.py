@@ -9,6 +9,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from lib.gates.a_share_selection_output_safety import (
+    prepare_output_paths,
+    remove_output_files,
+)
+from lib.selection_core.a_share_selection_model_contracts import (
+    PREDICTION_LABEL_EXECUTION_MODEL,
+)
+
 
 FEATURE_COLUMNS = [
     "momentum_1m",
@@ -62,11 +70,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Reject input rows after this YYYY-MM-DD as-of boundary.",
     )
     args = parser.parse_args(argv)
+    input_path = Path(args.input)
     output = Path(args.output)
     summary_output = Path(args.summary_output) if args.summary_output else None
+    outputs = tuple(path for path in (output, summary_output) if path is not None)
+    output_prepared = False
     try:
+        prepare_output_paths(outputs, [input_path])
+        output_prepared = True
         ensure_runtime_dependencies()
-        frame = read_table(Path(args.input))
+        frame = read_table(input_path)
         as_of = as_of_boundary(frame, args.as_of_date) if args.as_of_date else {}
         result, summary = generate_predictions(
             frame,
@@ -79,7 +92,6 @@ def main(argv: list[str] | None = None) -> int:
             summary.update(as_of)
         if args.fail_on_skipped and summary["skipped_symbols"]:
             print_summary(summary, args.output, prefix="ERROR_SUMMARY")
-            remove_stale_outputs(output, summary_output)
             print(
                 "ERROR: strict gate failed; "
                 f"skipped_symbols={summary['skipped_symbols']} output_not_written=true",
@@ -90,7 +102,8 @@ def main(argv: list[str] | None = None) -> int:
         if summary_output is not None:
             write_json_summary(summary, summary_output)
     except PredictionDependencyError as exc:
-        remove_stale_outputs(output, summary_output)
+        if output_prepared:
+            remove_output_files(outputs)
         print(
             "ERROR: code=dependency_error "
             f"input={Path(args.input).name} output_written=false message={exc}",
@@ -98,7 +111,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     except Exception as exc:  # noqa: BLE001
-        remove_stale_outputs(output, summary_output)
+        if output_prepared:
+            remove_output_files(outputs)
         all_skipped = " all_skipped=true" if "no symbols predicted;" in str(exc) else ""
         print(
             "ERROR: code=bad_input "
@@ -384,6 +398,8 @@ def scaled_frame(values: Any, index: pd.Index) -> pd.DataFrame:
 
 def build_feature_frame(group: pd.DataFrame, horizon: int) -> pd.DataFrame:
     data = group.copy()
+    raw_open = data["open"].astype(float)
+    raw_close = data["close"].astype(float)
     data["turn_value"] = turnover_series(data)
     for column in ["close", "volume", "turn_value"]:
         data[column] = data[column].replace(0, np.nan).ffill()
@@ -400,7 +416,17 @@ def build_feature_frame(group: pd.DataFrame, horizon: int) -> pd.DataFrame:
     features["rsi"] = calculate_rsi(close, 14)
     features["macd"] = macd
     features["signal"] = signal
-    features["target_return"] = close.shift(-horizon) / close - 1
+    entry_open = raw_open.shift(-1)
+    exit_close = raw_close.shift(-horizon)
+    valid_label_prices = (
+        entry_open.notna()
+        & exit_close.notna()
+        & np.isfinite(entry_open)
+        & np.isfinite(exit_close)
+        & (entry_open > 0)
+        & (exit_close > 0)
+    )
+    features["target_return"] = (exit_close / entry_open - 1).where(valid_label_prices)
     return features.replace([np.inf, -np.inf], np.nan)
 
 
@@ -419,6 +445,7 @@ def with_prediction(
     output["prediction_score"] = min(max(probability, 0.0), 1.0)
     output["prediction_horizon_days"] = int(horizon)
     output["prediction_model"] = "lightgbm"
+    output["prediction_label_execution_model"] = PREDICTION_LABEL_EXECUTION_MODEL
     output["prediction_scope"] = "latest_probability_repeated_for_scoring"
     output["prediction_model_quality_scope"] = PREDICTION_MODEL_QUALITY_SCOPE
     return output
@@ -427,15 +454,6 @@ def with_prediction(
 def write_output(frame: pd.DataFrame, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(path, index=False)
-
-
-def remove_stale_outputs(*paths: Path | None) -> None:
-    for path in paths:
-        if path is None or (not path.exists() and not path.is_symlink()):
-            continue
-        if path.is_dir() and not path.is_symlink():
-            continue
-        path.unlink()
 
 
 def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> None:

@@ -23,6 +23,10 @@ from typing import Any
 import pandas as pd
 
 from lib.selection_core.a_share_selection_data import parse_dates
+from lib.selection_core.a_share_selection_model_contracts import (
+    PREDICTION_LABEL_DEFINITION,
+    PREDICTION_LABEL_EXECUTION_MODEL,
+)
 
 MODEL_QUALITY_SCOPE = "generation_audit_only"
 MODEL_QUALITY_METRICS = {
@@ -65,7 +69,8 @@ def symbol_summary(
         **holdout,
         "prediction_score": float(probability),
         "prediction_horizon_days": int(horizon),
-        "label_definition": "target_return = close.shift(-horizon) / close - 1; class = target_return > train_mean",
+        "label_execution_model": PREDICTION_LABEL_EXECUTION_MODEL,
+        "label_definition": PREDICTION_LABEL_DEFINITION,
         "skipped_reason": "",
     }
 
@@ -86,6 +91,8 @@ def skipped_summary(group: pd.DataFrame, reason: str) -> dict[str, Any]:
         "holdout_metric_reason": "symbol_skipped",
         "prediction_score": None,
         "prediction_horizon_days": None,
+        "label_execution_model": PREDICTION_LABEL_EXECUTION_MODEL,
+        "label_definition": PREDICTION_LABEL_DEFINITION,
         "skipped_reason": reason,
     }
 
@@ -122,7 +129,8 @@ def build_summary(
         "prediction_scope": "latest_probability_repeated_for_scoring",
         "model_quality_scope": MODEL_QUALITY_SCOPE,
         "model_quality_metrics": dict(MODEL_QUALITY_METRICS),
-        "label_definition": "target_return = close.shift(-horizon) / close - 1; class = target_return > train_mean",
+        "label_execution_model": PREDICTION_LABEL_EXECUTION_MODEL,
+        "label_definition": PREDICTION_LABEL_DEFINITION,
         "symbols": symbol_summaries,
     }
 

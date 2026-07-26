@@ -26,6 +26,7 @@ from lib.fetch.zzshare_a_share_checkpoint_frames import (
     checkpoint_frame,
     checkpoint_metadata,
 )
+from lib.gates.a_share_selection_output_safety import validate_protected_directory
 
 
 CHECKPOINT_MANIFEST_NAME = "manifest.json"
@@ -38,9 +39,10 @@ def prepare_checkpoint(args: Any) -> Optional[dict[str, Any]]:
     if not path_text or batch_size < 1:
         return None
     path = Path(path_text)
+    validate_protected_directory(path)
     resume = bool(getattr(args, "resume_from_checkpoint", False))
     if path.exists() and not resume:
-        reset_checkpoint_dir(path)
+        reset_checkpoint_contents(path)
     path.mkdir(parents=True, exist_ok=True)
     manifest_path = path / CHECKPOINT_MANIFEST_NAME
     contract = checkpoint_execution_contract(args)
@@ -101,9 +103,7 @@ def checkpoint_execution_contract(args: Any) -> dict[str, Any]:
             getattr(args, "max_rate_limit_sleep_seconds", 0) or 0
         ),
         "max_429_events": int(getattr(args, "max_429_events", 0) or 0),
-        "max_runtime_seconds": float(
-            getattr(args, "max_runtime_seconds", 0) or 0
-        ),
+        "max_runtime_seconds": float(getattr(args, "max_runtime_seconds", 0) or 0),
         "non_trading_policy": str(
             getattr(args, "non_trading_policy", "fail") or "fail"
         ),
@@ -156,20 +156,20 @@ def validate_checkpoint_manifest(
         )
     if manifest.get("execution_contract_sha256") != contract_digest:
         raise ValueError(
-            "checkpoint execution contract does not match the current fetch: "
-            f"{path}"
+            f"checkpoint execution contract does not match the current fetch: {path}"
         )
     if manifest.get("execution_contract") != contract:
         raise ValueError(
-            "checkpoint execution contract payload does not match its digest: "
-            f"{path}"
+            f"checkpoint execution contract payload does not match its digest: {path}"
         )
     if not isinstance(manifest.get("parts"), list):
         raise ValueError(f"checkpoint manifest parts must be a list: {path}")
     if "part_artifacts" in manifest and not isinstance(
         manifest.get("part_artifacts"), dict
     ):
-        raise ValueError(f"checkpoint manifest part_artifacts must be an object: {path}")
+        raise ValueError(
+            f"checkpoint manifest part_artifacts must be an object: {path}"
+        )
     if not isinstance(manifest.get("symbols"), dict):
         raise ValueError(f"checkpoint manifest symbols must be an object: {path}")
 
@@ -235,6 +235,11 @@ def completed_checkpoint_record(
 
 
 def reset_checkpoint_dir(path: Path) -> None:
+    validate_protected_directory(path)
+    reset_checkpoint_contents(path)
+
+
+def reset_checkpoint_contents(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
     for child in path.iterdir():
         if child.name == CHECKPOINT_MANIFEST_NAME or child.name == "manifest.tmp":
@@ -320,10 +325,7 @@ def checkpoint_part_fingerprint_matches(
     expected: dict[str, Any],
     actual: dict[str, Any],
 ) -> bool:
-    return all(
-        expected.get(key) == actual.get(key)
-        for key in ("size_bytes", "sha256")
-    )
+    return all(expected.get(key) == actual.get(key) for key in ("size_bytes", "sha256"))
 
 
 def append_checkpoint_integrity_issue(

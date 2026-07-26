@@ -1,6 +1,6 @@
 # Current Real Scenario Gates
 
-本文件是当前真实门禁状态的唯一人工入口，状态更新时间为 2026-07-23。它只汇总最新可追溯证据，不替代 `archive/` 中的原始 dated report，也不把本地测试、历史成功或单次联网结果外推为长期能力。
+本文件是当前真实门禁状态的唯一人工入口，状态更新时间为 2026-07-26。它只汇总最新可追溯证据，不替代 `archive/` 中的原始 dated report，也不把本地测试、历史成功或单次联网结果外推为长期能力。
 
 ## 事实优先级
 
@@ -34,6 +34,8 @@
 2026-07-22 的 [多 Agent 真实任务场景复验](archive/AGENT-REAL-SCENARIO-VALIDATION-2026-07-22.md) 在新的网络窗口复核了 2-symbol Baostock 成功空结果、5,200-symbol Baostock 股票池与未执行的 plan-only、Pytdx 补充源严格边界和有界 7-source probe。它只补充调用体验、artifact 可观测性和失败边界；没有执行新的全 A 历史长跑、全 A 评分、prediction、回测或券商流程，不能升级本表状态。
 
 同日的 [多 Agent 真实使用场景体验验收](archive/AGENT-REAL-SCENARIO-EXPERIENCE-2026-07-22.md) 在独立目录复核了 3-symbol Baostock 定向成功空结果、5,200-symbol 股票池与本地 spot 驱动的 plan-only、Baostock Parquet 链路、Pytdx 严格字段拒绝，以及两个有界 7-source probe 网络窗口。它只记录调用体验、artifact 可观测性、外层耗时和窗口性；没有执行新的全 A 历史长跑、全 A 评分、prediction、回测或券商流程，不能升级本表状态。
+
+2026-07-26 的 [多 Agent 真实任务场景复验](archive/AGENT-REAL-SCENARIO-VALIDATION-2026-07-26.md) 在四个隔离目录复核了 3-symbol Baostock 成功空结果、5,200-symbol Baostock 股票池与未执行的 plan-only、Pytdx 补充源严格字段边界和有界七源 probe。它确认了隔离依赖冷启动、probe metadata 缺失时的检查状态、长 symbols manifest 和 CLI 摘要可观测性问题，但没有执行新的全 A 历史长跑、全 A 最终评分、prediction、回测或券商流程，因此不升级本表任何状态。
 
 ## 状态更新规则
 

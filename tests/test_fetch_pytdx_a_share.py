@@ -140,6 +140,11 @@ class FetchPytdxAShareTests(unittest.TestCase):
 
         self.assertEqual(0, code)
         self.assertIn("OK: source=pytdx rows=4", stdout.getvalue())
+        self.assertIn("selection_ready=false", stdout.getvalue())
+        self.assertIn(
+            "missing_provider_fields=turn,tradestatus,isST,name",
+            stdout.getvalue(),
+        )
         self.assertEqual(4, saved["rows"])
         self.assertEqual(2, saved["symbol_count"])
         self.assertEqual([], saved["failed_symbols"])
@@ -154,6 +159,8 @@ class FetchPytdxAShareTests(unittest.TestCase):
         self.assertEqual(["symbol", "date"], saved["merge_join_keys"])
         self.assertTrue(saved["strict_fields_same_date_required"])
         self.assertFalse(saved["selection_ready"])
+        self.assertEqual("unknown", saved["price_adjustment"])
+        self.assertEqual("unknown", saved["volume_unit"])
         self.assertTrue(math.isfinite(saved["duration_seconds"]))
         self.assertEqual(1.234568, saved["duration_seconds"])
         self.assertLess(saved["requested_raw_rows"], 800 * 2)
@@ -200,6 +207,11 @@ class FetchPytdxAShareTests(unittest.TestCase):
         self.assertTrue(math.isfinite(saved["duration_seconds"]))
         self.assertEqual(0.0, saved["duration_seconds"])
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
+        self.assertIn("selection_ready=false", stdout.getvalue())
+        self.assertIn(
+            "missing_provider_fields=turn,tradestatus,isST,name",
+            stdout.getvalue(),
+        )
         self.assertIn("empty_symbols=1", stderr.getvalue())
 
     def test_cli_strict_fails_when_max_pages_truncates_window(self) -> None:
@@ -255,6 +267,18 @@ class FetchPytdxAShareTests(unittest.TestCase):
                 duration = pytdx_helpers.duration_seconds(1.0)
 
             self.assertEqual(0.0, duration)
+
+    def test_docs_disclose_unknown_adjustment_and_volume_unit(self) -> None:
+        runbook = (SKILL_ROOT / "instructions/runbook.md").read_text(encoding="utf-8")
+        reference = (SKILL_ROOT / "references/script-reference.md").read_text(
+            encoding="utf-8"
+        )
+
+        for document in [runbook, reference]:
+            with self.subTest(document=document[:40]):
+                self.assertIn("`price_adjustment=unknown`", document)
+                self.assertIn("`volume_unit=unknown`", document)
+                self.assertIn("`selection_ready=false`", document)
 
     def test_cli_removes_stale_metadata_when_strict_metadata_write_fails(self) -> None:
         with fake_pytdx_module(FakeEmptyTdxApi):

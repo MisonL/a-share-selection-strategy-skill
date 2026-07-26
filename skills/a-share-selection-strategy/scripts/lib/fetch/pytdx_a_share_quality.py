@@ -156,5 +156,8 @@ def print_summary(metadata: dict[str, Any], prefix: str = "OK") -> None:
         f"requested_raw_rows={metadata.get('requested_raw_rows', 0)} "
         f"overfetch_rows={metadata.get('overfetch_rows', 0)} "
         f"possibly_truncated_symbols={len(metadata.get('possibly_truncated_symbols', []))} "
+        f"selection_ready={str(metadata.get('selection_ready') is True).lower()} "
+        "missing_provider_fields="
+        f"{','.join(str(item) for item in metadata.get('missing_provider_fields', []))} "
         f"source_claim_boundary={metadata['source_claim_boundary']}"
     )

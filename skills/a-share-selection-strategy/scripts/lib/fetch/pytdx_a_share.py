@@ -336,6 +336,8 @@ def build_metadata(
         "strict_fields_same_date_required": True,
         "selection_ready": False,
         "missing_provider_fields": ["turn", "tradestatus", "isST", "name"],
+        "price_adjustment": "unknown",
+        "volume_unit": "unknown",
         "name_value_policy": "blank_missing_provider_name",
         "invalid_rows": 0,
         "invalid_symbols": [],

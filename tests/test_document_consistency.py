@@ -257,6 +257,27 @@ class DocumentConsistencyTests(unittest.TestCase):
             experience,
         )
 
+    def test_real_scenario_performance_distinguishes_isolated_harness(self) -> None:
+        root = ROOT / "skills/a-share-selection-strategy"
+        report = (
+            root
+            / "evidence/reviews/archive/AGENT-REAL-SCENARIO-VALIDATION-2026-07-26.md"
+        ).read_text(encoding="utf-8")
+        runbook = (root / "instructions/runbook.md").read_text(encoding="utf-8")
+
+        for value in [
+            "独立 `UV_CACHE_DIR`",
+            "显式使用 `uv run --isolated`",
+            "不是项目 runner 默认每次创建 fresh isolated 环境",
+            "共享 uv 缓存和复用 venv",
+            "不把缓存命中解释为 provider 提速",
+        ]:
+            with self.subTest(value=value):
+                self.assertIn(value, report)
+        self.assertNotIn("当前默认每次创建 fresh isolated", report)
+        self.assertIn("无 `uv` 时创建临时虚拟环境", runbook)
+        self.assertIn("后续命令可把 `uv run", runbook)
+
     def test_skill_markdown_links_resolve_to_existing_files(self) -> None:
         skill_root = ROOT / "skills/a-share-selection-strategy"
         for document in sorted(skill_root.rglob("*.md")):

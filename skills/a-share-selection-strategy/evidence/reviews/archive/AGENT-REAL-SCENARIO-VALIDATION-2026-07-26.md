@@ -130,7 +130,7 @@ uv run --no-project --with pandas --with numpy --with pytdx python \
 
 ### 已验证问题
 
-1. 隔离冷启动是主要交互耗时。定向 runner、universe、Pytdx 和七源 probe 的外层耗时分别比内部业务计时多约 `17.01s`、`29.22s`、`148.37s` 和 `120.39s`；stderr 同时记录依赖下载、构建或安装。当前默认每次创建 fresh isolated 依赖环境，不适合高频交互任务。
+1. 本轮隔离 harness 的冷启动是主要外层耗时。四个子代理为隔离任务状态分别使用独立 `UV_CACHE_DIR`，七源 probe 还显式使用 `uv run --isolated`；定向 runner、universe、Pytdx 和七源 probe 的外层耗时分别比内部业务计时多约 `17.01s`、`29.22s`、`148.37s` 和 `120.39s`，stderr 同时记录依赖下载、构建或安装。这是本轮测试方式的成本，不是项目 runner 默认每次创建 fresh isolated 环境；常规 runbook 已支持共享 uv 缓存和复用 venv。
 2. probe 在 metadata 未写出时仍把若干 metadata 依赖检查显示为通过。虽然 required gate 最终失败，但下钻报告会让读者误以为这些字段已经评估。
 3. 显式 `--symbols-file` 已提供路径、数量、大小和 SHA-256，plan-only manifest 仍复制完整 5,200-symbol 数组，增加 artifact 体积和 Agent 上下文读取成本。
 4. 成功空结果的 stdout 只有一条很长的 `OK:` 行，`effective_empty_result`、原因和核心 artifact 路径埋在大量机器字段中；人工扫描成本高。
@@ -144,7 +144,7 @@ uv run --no-project --with pandas --with numpy --with pytdx python \
 
 ### 可验证优化建议
 
-1. 为文档和常规 Agent 路径提供明确的预装环境或可复用 `uv` 环境命令，并保留依赖缺失的显式失败。验收应分别记录冷启动和热启动，不把缓存命中解释为 provider 提速。
+1. 常规 Agent 和性能复验应优先使用 runbook 已有的共享 uv 缓存或复用 venv 路径，并保留依赖缺失的显式失败。验收应分别记录冷启动和热启动，不把缓存命中解释为 provider 提速；需要隔离依赖时必须在报告中标明独立 `UV_CACHE_DIR` 或 `--isolated`。
 2. 让成功空结果额外输出独立 `EMPTY_RESULT:` 摘要，直接列出 `empty_result_reason`、`candidates`、`diagnostics`、`summary` 和 `manifest`；保留现有机器字段和退出码。
 3. 为 universe 和 Baostock 长调用增加 login、query、filter、write 阶段的低频 stderr 进度，保持 stdout 机器摘要稳定。
 4. probe 在 `metadata_written=false` 时应把所有依赖 metadata 的检查标记为 `not_evaluated`，并确保它们不能计为通过；补 metadata 缺失、超时和普通 provider failure 回归。

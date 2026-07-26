@@ -67,6 +67,9 @@
 ```markdown
 ## Artifact 价格一致性门禁未通过
 - 候选 `close` 和 sized `signal_close` 必须等于 `prices_signal_window.csv` 的原始信号日 close。
+- `prices_signal_window.csv` 只能保留信号日及以前的数据；完整 `prices.csv` 必须保留后续观测 bar，供 artifact validator 独立复算回测。
+- `execution_model=signal_close_next_observed_open_to_close` 要求入场日期严格晚于信号日、入场价等于下一条观测 bar 的 `open`，退出价等于信号日后第 `hold_days` 条观测 bar 的 `close`；同日入场、篡改价格、收益或候选键都必须失败。
+- `prediction_sized_candidates.csv` 的 `sizing_execution_model`、下一观测开盘日期和价格、lot 倍数、预留资金、notional 与 weight 必须由完整价格链路复算；同一候选与 `prediction_backtest.csv` 的所有 sizing 字段不一致也必须失败。
 - `validate_walk_forward_artifacts.py` 返回非 0 且出现 `*_close_raw_mismatch` 或 `*_signal_close_raw_mismatch` 时，应按真实门禁失败处理。
 - `artifact_validation.json` 被写出不代表通过；必须看退出码、`errors=[]` 和 stdout 的 `errors=0`。
 - 可接受路径是修复可审计产物并重跑 validator，不能把原失败 run 改写成已通过。
@@ -97,10 +100,10 @@
 
 ```markdown
 ## Summary 未验证模型口径
-- `summarize_walk_forward_run.py` 省略 `--required-tradability-model` 或 `--required-limit-rules-model` 时，不会对对应模型口径执行严格门禁。
+- `summarize_walk_forward_run.py` 省略 `--required-tradability-model`、`--required-limit-rules-model` 或 `--required-execution-model` 时，不会对对应模型口径执行严格门禁。
 - 此时 `exit 0` 和 `quality_errors=[]` 只说明已启用的门槛通过，不能证明真实可交易性或涨跌停规则模型符合预期。
-- 必须披露 summary JSON 中实际的 `tradability_models`、`limit_rules_models` 和 `model_gates_checked`。
-- 若同一产物补传 required 参数后返回非 0，stderr 中的 `*_models=...` 才是模型口径未通过的门禁证据。
+- 必须披露 summary JSON 顶层实际的 `execution_model`、逐信号的 `tradability_models` / `limit_rules_models` / `execution_models` 和 `model_gates_checked`。
+- 若同一产物补传 required 参数后返回非 0，stderr 中的 `*_models=...` 或 `*_execution_models=...` 才是模型口径未通过的门禁证据。
 - 合规路径是用 required 参数重跑 summary，并以该严格命令的退出码、`quality_errors` 和 stderr 作为模型口径结论。
 ```
 

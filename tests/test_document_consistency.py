@@ -69,9 +69,7 @@ class DocumentConsistencyTests(unittest.TestCase):
                     threshold,
                     f"{path} reached its explicit reassessment threshold of {threshold} lines",
                 )
-        runner_reassessment = (
-            "a runner option, provider, or output artifact is added, or this file reaches 7000 lines"
-        )
+        runner_reassessment = "a runner option, provider, or output artifact is added, or this file reaches 7000 lines"
         self.assertEqual(
             runner_reassessment,
             manifest["exemptions"]["test_today_a_share_selection_runner.py"][
@@ -153,9 +151,9 @@ class DocumentConsistencyTests(unittest.TestCase):
         root = ROOT / "skills/a-share-selection-strategy"
         agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
         index = (root / "references/index.md").read_text(encoding="utf-8")
-        full_a_workflow = (
-            root / "instructions/full-a-strict-workflow.md"
-        ).read_text(encoding="utf-8")
+        full_a_workflow = (root / "instructions/full-a-strict-workflow.md").read_text(
+            encoding="utf-8"
+        )
         reviews = root / "evidence/reviews"
         archive = reviews / "archive"
         current_path = reviews / "CURRENT-REAL-SCENARIO-GATES.md"
@@ -402,7 +400,9 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("字段名归一化后精确落入常见敏感字段集合", runbook)
         self.assertIn("`[REDACTED] key`", runbook)
         self.assertIn("`tokenConfigured` 仅在真实 bool 时保留其能力状态", runbook)
-        self.assertIn("free-text command/stdout/stderr 没有 schema，必须 fail-closed", runbook)
+        self.assertIn(
+            "free-text command/stdout/stderr 没有 schema，必须 fail-closed", runbook
+        )
         self.assertIn("`tokenConfigured=true/false` 也会脱敏", runbook)
         self.assertIn("`--tokenConfigured true/false` 也会脱敏", runbook)
         self.assertIn("脱敏后重名键会保留为稳定的 distinct 字段", runbook)
@@ -466,7 +466,9 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("历史源与上一轮一致", docs)
         self.assertIn("manifest 所在目录", docs)
 
-    def test_incremental_docs_define_aggregation_and_baostock_empty_contract(self) -> None:
+    def test_incremental_docs_define_aggregation_and_baostock_empty_contract(
+        self,
+    ) -> None:
         root = ROOT / "skills/a-share-selection-strategy"
         workflow = (root / "instructions/full-a-strict-workflow.md").read_text(
             encoding="utf-8"
@@ -578,7 +580,7 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("historical leaked-key probe split", validator)
         self.assertIn('ROOT / ".github"', validator)
         self.assertIn("Local validation gates:", result.stdout)
-        self.assertIn("full unittest suite", result.stdout)
+        self.assertIn("full unittest shard suite", result.stdout)
         self.assertIn("Skill frontmatter contract", result.stdout)
         self.assertIn("YAML agent manifest parse", result.stdout)
         self.assertIn("text whitespace and conflict marker scan", result.stdout)
@@ -694,12 +696,20 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("numpy>=", requirements)
         self.assertIn("pyarrow>=", requirements)
         self.assertIn("pyyaml>=", requirements)
-        self.assertIn("-c skills/a-share-selection-strategy/constraints-ci.txt", workflow)
+        self.assertIn(
+            "-c skills/a-share-selection-strategy/constraints-ci.txt", workflow
+        )
         self.assertIn("constraints-ci.txt", workflow)
         self.assertIn("CI 直接依赖约束", docs)
         self.assertIn("--dependency-profile ci", docs)
-        self.assertIn("--dependency-profile", (ROOT / "validate_skill_changes.py").read_text(encoding="utf-8"))
-        self.assertIn("--with-requirements", (ROOT / "validate_skill_changes.py").read_text(encoding="utf-8"))
+        self.assertIn(
+            "--dependency-profile",
+            (ROOT / "validate_skill_changes.py").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "--with-requirements",
+            (ROOT / "validate_skill_changes.py").read_text(encoding="utf-8"),
+        )
         self.assertNotIn("uv run", workflow.split("Run test shard", 1)[1])
 
     def test_validation_timeouts_are_bounded_and_documented(self) -> None:

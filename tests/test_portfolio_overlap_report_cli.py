@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import json
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -20,7 +22,9 @@ import portfolio_overlap_report as overlap_report  # noqa: E402
 
 
 class PortfolioOverlapReportCliTests(unittest.TestCase):
-    def test_build_overlap_report_counts_overlap_and_missing_capital_fields(self) -> None:
+    def test_build_overlap_report_counts_overlap_and_missing_capital_fields(
+        self,
+    ) -> None:
         frame = pd.DataFrame(
             [
                 trade("000001", "2026-05-12", "2026-05-12", "2026-05-14"),
@@ -41,10 +45,72 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
         self.assertEqual(2, summary["same_symbol_overlap_rows"])
         self.assertEqual(["000001"], summary["same_symbol_overlap_symbols"])
         self.assertFalse(summary["cash_capacity_verifiable"])
-        self.assertEqual(["weight", "notional", "quantity", "cash_reserved"], summary["capital_fields_missing"])
-        self.assertEqual(["2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15"], daily["date"].tolist())
+        self.assertEqual(
+            ["weight", "notional", "quantity", "cash_reserved"],
+            summary["capital_fields_missing"],
+        )
+        self.assertEqual(
+            ["2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15"],
+            daily["date"].tolist(),
+        )
         self.assertEqual(2, len(overlaps))
         self.assertEqual(["000001"], sorted(overlaps["symbol"].unique().tolist()))
+
+    def test_overlap_context_does_not_leak_between_reports(self) -> None:
+        first = pd.DataFrame(
+            [
+                trade("000001", "2026-05-12", "2026-05-12", "2026-05-14"),
+                trade("000001", "2026-05-13", "2026-05-13", "2026-05-15"),
+            ]
+        )
+        first_daily, first_overlaps, _summary = overlap_report.build_overlap_report(
+            [first]
+        )
+        first_context = (
+            overlap_report.TradeContext("000001", "2026-05-12"),
+            overlap_report.TradeContext("000001", "2026-05-13"),
+        )
+        second = pd.DataFrame(
+            [trade("000002", "2026-05-12", "2026-05-12", "2026-05-12")]
+        )
+
+        overlap_report.build_overlap_report([second])
+        recomputed = overlap_report.same_symbol_overlaps(first_daily, first_context)
+
+        self.assertFalse(hasattr(overlap_report, "active_trade_context"))
+        pd.testing.assert_frame_equal(first_overlaps, recomputed)
+
+    def test_overlap_context_is_reentrant_for_independent_reports(self) -> None:
+        first = pd.DataFrame(
+            [
+                trade("000001", "2026-05-12", "2026-05-12", "2026-05-14"),
+                trade("000001", "2026-05-13", "2026-05-13", "2026-05-15"),
+            ]
+        )
+        second = pd.DataFrame(
+            [
+                trade("000002", "2026-05-12", "2026-05-12", "2026-05-14"),
+                trade("000003", "2026-05-13", "2026-05-13", "2026-05-15"),
+            ]
+        )
+        first_expected = overlap_report.build_overlap_report([first])
+        second_expected = overlap_report.build_overlap_report([second])
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            first_future = executor.submit(overlap_report.build_overlap_report, [first])
+            second_future = executor.submit(
+                overlap_report.build_overlap_report, [second]
+            )
+            first_recomputed = first_future.result()
+            second_recomputed = second_future.result()
+
+        for expected, actual in [
+            (first_expected, first_recomputed),
+            (second_expected, second_recomputed),
+        ]:
+            pd.testing.assert_frame_equal(expected[0], actual[0])
+            pd.testing.assert_frame_equal(expected[1], actual[1])
+            self.assertEqual(expected[2], actual[2])
 
     def test_numeric_missing_data_flag_excludes_trade(self) -> None:
         frame = pd.DataFrame(
@@ -73,7 +139,9 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
         daily, _overlaps, summary = overlap_report.build_overlap_report([frame])
 
         self.assertEqual(overlap_report.CALENDAR_MODEL, summary["calendar_model"])
-        self.assertEqual(["2026-05-01", "2026-05-04", "2026-05-05"], daily["date"].tolist())
+        self.assertEqual(
+            ["2026-05-01", "2026-05-04", "2026-05-05"], daily["date"].tolist()
+        )
 
     def test_cli_reports_real_overlap_and_writes_outputs(self) -> None:
         first = pd.DataFrame(
@@ -123,7 +191,10 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
         self.assertTrue(daily_exists)
         self.assertTrue(overlaps_exists)
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
-        self.assertIn("capital_fields_missing=weight,notional,quantity,cash_reserved", stdout.getvalue())
+        self.assertIn(
+            "capital_fields_missing=weight,notional,quantity,cash_reserved",
+            stdout.getvalue(),
+        )
         self.assertIn("capacity_gate_pass=False", stdout.getvalue())
         self.assertIn("capacity_gate_status=failed_not_pass", stdout.getvalue())
         self.assertIn("max_open_positions=4 limit=3", stderr.getvalue())
@@ -137,11 +208,52 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
         self.assertEqual(3, data["gate_limits"]["max_open_positions"])
         self.assertTrue(data["gate_limits"]["fail_on_symbol_overlap"])
 
+    def test_cli_rejects_case_only_output_aliases_before_runtime_loading(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            backtest = root / "backtest.csv"
+            daily = root / "daily.csv"
+            overlap = root / "DAILY.csv"
+            summary = root / "summary.json"
+            stdout = StringIO()
+            stderr = StringIO()
+
+            with patch.object(
+                overlap_report,
+                "ensure_runtime_dependencies",
+                side_effect=AssertionError("runtime dependencies loaded"),
+            ):
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    code = overlap_report.main(
+                        [
+                            "--backtests",
+                            str(backtest),
+                            "--daily-output",
+                            str(daily),
+                            "--overlap-output",
+                            str(overlap),
+                            "--summary-output",
+                            str(summary),
+                        ]
+                    )
+
+            self.assertEqual(2, code)
+            self.assertEqual("", stdout.getvalue())
+            self.assertFalse(daily.exists())
+            self.assertFalse(overlap.exists())
+            self.assertFalse(summary.exists())
+            self.assertIn("code=bad_input", stderr.getvalue())
+            self.assertIn("output paths must be distinct", stderr.getvalue())
+
     def test_cli_accepts_capital_fields_and_gross_weight_under_limit(self) -> None:
         frame = pd.DataFrame(
             [
-                capitalized_trade("000001", "2026-05-12", "2026-05-12", "2026-05-14", 0.4),
-                capitalized_trade("000002", "2026-05-12", "2026-05-13", "2026-05-14", 0.5),
+                capitalized_trade(
+                    "000001", "2026-05-12", "2026-05-12", "2026-05-14", 0.4
+                ),
+                capitalized_trade(
+                    "000002", "2026-05-12", "2026-05-13", "2026-05-14", 0.5
+                ),
             ]
         )
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -188,7 +300,9 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
     def test_cli_discloses_local_capacity_gate_boundary(self) -> None:
         frame = pd.DataFrame(
             [
-                capitalized_trade("000001", "2026-05-12", "2026-05-12", "2026-05-14", 0.4),
+                capitalized_trade(
+                    "000001", "2026-05-12", "2026-05-12", "2026-05-14", 0.4
+                ),
             ]
         )
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -227,8 +341,12 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
     def test_cli_fails_when_gross_weight_exceeds_limit(self) -> None:
         frame = pd.DataFrame(
             [
-                capitalized_trade("000001", "2026-05-12", "2026-05-12", "2026-05-14", 0.7),
-                capitalized_trade("000002", "2026-05-12", "2026-05-13", "2026-05-14", 0.45),
+                capitalized_trade(
+                    "000001", "2026-05-12", "2026-05-12", "2026-05-14", 0.7
+                ),
+                capitalized_trade(
+                    "000002", "2026-05-12", "2026-05-13", "2026-05-14", 0.45
+                ),
             ]
         )
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -269,7 +387,9 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
         self.assertEqual(["max_gross_weight=1.15 limit=1.0"], data["violations"])
 
     def test_cli_max_gross_weight_requires_weight_column(self) -> None:
-        frame = pd.DataFrame([trade("000001", "2026-05-12", "2026-05-12", "2026-05-14")])
+        frame = pd.DataFrame(
+            [trade("000001", "2026-05-12", "2026-05-12", "2026-05-14")]
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             backtest = Path(tmpdir) / "backtest.csv"
             daily = Path(tmpdir) / "daily.csv"
@@ -300,9 +420,70 @@ class PortfolioOverlapReportCliTests(unittest.TestCase):
 
     def test_non_numeric_or_negative_capital_fields_are_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "weight must be numeric"):
-            overlap_report.build_overlap_report([pd.DataFrame([bad_capital("weight", "bad")])])
+            overlap_report.build_overlap_report(
+                [pd.DataFrame([bad_capital("weight", "bad")])]
+            )
         with self.assertRaisesRegex(ValueError, "weight must be >= 0"):
-            overlap_report.build_overlap_report([pd.DataFrame([bad_capital("weight", -1)])])
+            overlap_report.build_overlap_report(
+                [pd.DataFrame([bad_capital("weight", -1)])]
+            )
+
+    def test_non_finite_capital_fields_are_rejected(self) -> None:
+        for field in ["weight", "notional", "quantity", "cash_reserved"]:
+            for value in (float("nan"), float("inf"), float("-inf")):
+                with self.subTest(field=field, value=value):
+                    with self.assertRaisesRegex(ValueError, f"{field} must be finite"):
+                        overlap_report.build_overlap_report(
+                            [pd.DataFrame([bad_capital(field, value)])]
+                        )
+
+    def test_gate_api_rejects_invalid_max_open_positions(self) -> None:
+        _daily, _overlaps, summary = overlap_report.build_overlap_report(
+            [pd.DataFrame([trade("000001", "2026-05-12", "2026-05-12", "2026-05-14")])]
+        )
+        for value, message in [
+            (float("nan"), "max-open-positions must be finite"),
+            (float("inf"), "max-open-positions must be finite"),
+            (float("-inf"), "max-open-positions must be finite"),
+            (1.5, "max-open-positions must be an integer"),
+            (0, "max-open-positions must be >= 1"),
+        ]:
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, message):
+                    overlap_report.gate_violations(
+                        summary,
+                        max_open_positions=value,
+                        max_gross_weight=None,
+                        max_gross_notional=None,
+                        max_cash_reserved=None,
+                        fail_on_symbol_overlap=False,
+                        require_capital_fields=False,
+                    )
+
+    def test_derived_capacity_sum_overflow_is_rejected(self) -> None:
+        frame = pd.DataFrame(
+            [
+                capitalized_trade(
+                    "000001",
+                    "2026-05-12",
+                    "2026-05-12",
+                    "2026-05-12",
+                    1e308,
+                    notional=1e308,
+                ),
+                capitalized_trade(
+                    "000002",
+                    "2026-05-12",
+                    "2026-05-12",
+                    "2026-05-12",
+                    1e308,
+                    notional=1e308,
+                ),
+            ]
+        )
+
+        with self.assertRaisesRegex(ValueError, "daily gross_weight must be finite"):
+            overlap_report.build_overlap_report([frame])
 
 
 def trade(

@@ -43,6 +43,18 @@ DEFAULT_QUICK_VALIDATE = (
 )
 DEFAULT_COMMAND_TIMEOUT_SECONDS = 900.0
 COMMAND_TIMEOUT_SECONDS = DEFAULT_COMMAND_TIMEOUT_SECONDS
+UNITTEST_SHARDS = (
+    "core",
+    "providers",
+    "gates",
+    "report",
+    "runner-core",
+    "runner-providers",
+    "runner-artifacts",
+    "runner-plan-resume",
+    "runner-universe",
+)
+UNITTEST_SHARD_SCRIPT = ROOT / "tests" / "run_unittest_shard.py"
 SKILL_FRONTMATTER_ALLOWED_FIELDS = {
     "name",
     "description",
@@ -111,7 +123,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--skip-tests",
         action="store_true",
-        help="Skip the full unittest suite; intended only for fast local iteration.",
+        help="Skip the full unittest shard suite; intended only for fast local iteration.",
     )
     parser.add_argument(
         "--list",
@@ -133,7 +145,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("latest", "ci"),
         default="latest",
         help=(
-            "Dependency environment for the full unittest subprocess: latest "
+            "Dependency environment for the full unittest shard subprocesses: latest "
             "compatible packages or the exact Python 3.11 CI constraints."
         ),
     )
@@ -171,7 +183,7 @@ def build_checks(args: argparse.Namespace) -> list[Check]:
     if not args.skip_tests:
         checks.append(
             Check(
-                f"full unittest suite ({args.dependency_profile} dependencies)",
+                f"full unittest shard suite ({args.dependency_profile} dependencies)",
                 lambda: check_unittest(args.dependency_profile),
             )
         )
@@ -197,7 +209,9 @@ def check_task_tracking() -> None:
                 raise RuntimeError(f"tasks.csv row {row_number} missing {field}")
         status = row["状态"]
         if status not in allowed_statuses:
-            raise RuntimeError(f"tasks.csv row {row_number} has invalid status: {status}")
+            raise RuntimeError(
+                f"tasks.csv row {row_number} has invalid status: {status}"
+            )
         identifiers.append(row["ID"])
         in_progress += status == "进行中"
     if len(identifiers) != len(set(identifiers)):
@@ -264,9 +278,7 @@ def validate_skill_frontmatter_data(data: object, *, source: str) -> None:
     if name != name.strip():
         raise RuntimeError(f"{source}: name must not have surrounding whitespace")
     if len(name) > SKILL_NAME_MAX_LENGTH:
-        raise RuntimeError(
-            f"{source}: name exceeds {SKILL_NAME_MAX_LENGTH} characters"
-        )
+        raise RuntimeError(f"{source}: name exceeds {SKILL_NAME_MAX_LENGTH} characters")
     if SKILL_NAME_RE.fullmatch(name) is None:
         raise RuntimeError(
             f"{source}: name must use lowercase letters, digits, and single hyphens"
@@ -280,8 +292,7 @@ def validate_skill_frontmatter_data(data: object, *, source: str) -> None:
         raise RuntimeError(f"{source}: description must not be empty")
     if len(normalized_description) > SKILL_DESCRIPTION_MAX_LENGTH:
         raise RuntimeError(
-            f"{source}: description exceeds "
-            f"{SKILL_DESCRIPTION_MAX_LENGTH} characters"
+            f"{source}: description exceeds {SKILL_DESCRIPTION_MAX_LENGTH} characters"
         )
     if "<" in normalized_description or ">" in normalized_description:
         raise RuntimeError(f"{source}: description must not contain angle brackets")
@@ -386,8 +397,7 @@ def production_complexity_excesses(
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             non_empty_lines = sum(
-                bool(line.strip())
-                for line in lines[node.lineno - 1 : node.end_lineno]
+                bool(line.strip()) for line in lines[node.lineno - 1 : node.end_lineno]
             )
             if non_empty_lines > function_line_threshold:
                 long_functions.add(f"{relative}::{node.name}")
@@ -530,10 +540,7 @@ def secret_scan_paths() -> list[Path]:
 
 
 def check_pycache_absent() -> None:
-    pycache_dirs = [
-        str(path.relative_to(ROOT))
-        for path in managed_pycache_dirs()
-    ]
+    pycache_dirs = [str(path.relative_to(ROOT)) for path in managed_pycache_dirs()]
     if pycache_dirs:
         raise RuntimeError("__pycache__ directories found:\n" + "\n".join(pycache_dirs))
 
@@ -552,17 +559,16 @@ def managed_pycache_dirs() -> list[Path]:
 def check_unittest(dependency_profile: str = "latest") -> None:
     env = os.environ.copy()
     env["PYTHONDONTWRITEBYTECODE"] = "1"
-    run_command(unittest_command(dependency_profile), env=env)
+    for command in unittest_commands(dependency_profile):
+        run_command(command, env=env)
 
 
-def unittest_command(dependency_profile: str) -> list[str]:
+def unittest_commands(dependency_profile: str) -> tuple[list[str], ...]:
     if dependency_profile not in {"latest", "ci"}:
         raise ValueError(f"unknown dependency profile: {dependency_profile}")
     command = [uv_command(), "run"]
     if dependency_profile == "latest":
-        command.extend(
-            ["--with", "pandas", "--with", "numpy", "--with", "pyarrow"]
-        )
+        command.extend(["--with", "pandas", "--with", "numpy", "--with", "pyarrow"])
     elif dependency_profile == "ci":
         command.extend(
             [
@@ -572,10 +578,8 @@ def unittest_command(dependency_profile: str) -> list[str]:
                 str(CI_CONSTRAINTS.relative_to(ROOT)),
             ]
         )
-    command.extend(
-        ["python", "-m", "unittest", "discover", "-s", "tests", "-v"]
-    )
-    return command
+    shard_script = str(UNITTEST_SHARD_SCRIPT.relative_to(ROOT))
+    return tuple([*command, "python", shard_script, shard] for shard in UNITTEST_SHARDS)
 
 
 def uv_command() -> str:
@@ -598,9 +602,7 @@ def python_module_available(module: str) -> bool:
     command = [sys.executable, "-c", f"import {module}"]
     timeout_seconds = min(COMMAND_TIMEOUT_SECONDS, 10.0)
     popen_options = process_popen_options()
-    popen_options.update(
-        {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
-    )
+    popen_options.update({"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL})
     process = subprocess.Popen(command, **popen_options)
     try:
         return process.wait(timeout=timeout_seconds) == 0
@@ -646,18 +648,24 @@ def wait_for_process(process: subprocess.Popen[object], timeout: float = 5.0) ->
     except subprocess.TimeoutExpired:
         return False
     except (ChildProcessError, OSError) as exc:
-        print(f"WARNING: validation timeout cleanup wait failed: {exc}", file=sys.stderr)
+        print(
+            f"WARNING: validation timeout cleanup wait failed: {exc}", file=sys.stderr
+        )
         return False
     return True
 
 
-def signal_process_group(process: subprocess.Popen[object], sig: signal.Signals) -> bool:
+def signal_process_group(
+    process: subprocess.Popen[object], sig: signal.Signals
+) -> bool:
     try:
         os.killpg(process.pid, sig)
     except ProcessLookupError:
         return False
     except OSError as exc:
-        print(f"WARNING: validation timeout cleanup signal failed: {exc}", file=sys.stderr)
+        print(
+            f"WARNING: validation timeout cleanup signal failed: {exc}", file=sys.stderr
+        )
         return False
     return True
 
@@ -666,14 +674,19 @@ def terminate_direct_process(process: subprocess.Popen[object]) -> None:
     try:
         process.terminate()
     except (ChildProcessError, OSError) as exc:
-        print(f"WARNING: validation timeout cleanup terminate failed: {exc}", file=sys.stderr)
+        print(
+            f"WARNING: validation timeout cleanup terminate failed: {exc}",
+            file=sys.stderr,
+        )
     else:
         if wait_for_process(process):
             return
     try:
         process.kill()
     except (ChildProcessError, OSError) as exc:
-        print(f"WARNING: validation timeout cleanup kill failed: {exc}", file=sys.stderr)
+        print(
+            f"WARNING: validation timeout cleanup kill failed: {exc}", file=sys.stderr
+        )
         return
     wait_for_process(process)
 

@@ -139,7 +139,7 @@
       "skill_route": true,
       "public_entry": true,
       "network_required": false,
-      "real_gate_boundary": "close_to_close_baseline_not_live_backtest_or_real_net_return",
+      "real_gate_boundary": "signal_close_next_observed_open_to_close_baseline_not_live_backtest_or_real_net_return",
       "primary_artifacts": [
         "trades.csv",
         "backtest_summary.json"

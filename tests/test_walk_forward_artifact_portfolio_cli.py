@@ -12,6 +12,7 @@ from tests.test_walk_forward_artifact_cli import (
     candidate_rows,
     overlap_summary,
     read_json,
+    read_strict_json,
     write_csv,
     write_json,
 )
@@ -24,14 +25,17 @@ class WalkForwardArtifactPortfolioCliTests(unittest.TestCase):
             allocation = allocation_summary()
             write_json(root / "prediction_allocation_summary.json", allocation)
             write_csv(root / "prediction_skipped_candidates.csv", skipped_rows())
-            write_csv(root / "signals/2026-05-12/prediction_raw_candidates.csv", raw_candidate_rows())
+            write_csv(
+                root / "signals/2026-05-12/prediction_raw_candidates.csv",
+                raw_candidate_rows(),
+            )
             overlap = portfolio_overlap_summary()
             write_json(root / "prediction_overlap_summary.json", overlap)
             summary = read_json(root / "prediction_run_summary.json")
             summary["allocation"] = allocation
             summary["portfolio"] = {"summary": overlap, "violations": []}
             write_json(root / "prediction_run_summary.json", summary)
-            set_capital_model(root / "signals/2026-05-12/prediction_sized_candidates.csv")
+            set_capital_model(root)
 
             code, _stdout, stderr = call_cli(
                 root,
@@ -53,7 +57,10 @@ class WalkForwardArtifactPortfolioCliTests(unittest.TestCase):
             allocation = allocation_summary()
             write_json(root / "prediction_allocation_summary.json", allocation)
             write_csv(root / "prediction_skipped_candidates.csv", skipped_rows())
-            write_csv(root / "signals/2026-05-12/prediction_raw_candidates.csv", raw_candidate_rows())
+            write_csv(
+                root / "signals/2026-05-12/prediction_raw_candidates.csv",
+                raw_candidate_rows(),
+            )
             overlap = portfolio_overlap_summary()
             overlap["max_gross_notional"] = 2200.0
             write_json(root / "prediction_overlap_summary.json", overlap)
@@ -61,7 +68,7 @@ class WalkForwardArtifactPortfolioCliTests(unittest.TestCase):
             summary["allocation"] = allocation
             summary["portfolio"] = {"summary": overlap, "violations": []}
             write_json(root / "prediction_run_summary.json", summary)
-            set_capital_model(root / "signals/2026-05-12/prediction_sized_candidates.csv")
+            set_capital_model(root)
 
             code, _stdout, stderr = call_cli(
                 root,
@@ -83,7 +90,10 @@ class WalkForwardArtifactPortfolioCliTests(unittest.TestCase):
             allocation = allocation_summary()
             write_json(root / "prediction_allocation_summary.json", allocation)
             write_csv(root / "prediction_skipped_candidates.csv", skipped_rows())
-            write_csv(root / "signals/2026-05-12/prediction_raw_candidates.csv", raw_candidate_rows())
+            write_csv(
+                root / "signals/2026-05-12/prediction_raw_candidates.csv",
+                raw_candidate_rows(),
+            )
             overlap = portfolio_overlap_summary()
             del overlap["max_cash_reserved"]
             write_json(root / "prediction_overlap_summary.json", overlap)
@@ -91,7 +101,7 @@ class WalkForwardArtifactPortfolioCliTests(unittest.TestCase):
             summary["allocation"] = allocation
             summary["portfolio"] = {"summary": overlap, "violations": []}
             write_json(root / "prediction_run_summary.json", summary)
-            set_capital_model(root / "signals/2026-05-12/prediction_sized_candidates.csv")
+            set_capital_model(root)
 
             code, _stdout, stderr = call_cli(
                 root,
@@ -121,7 +131,10 @@ class WalkForwardArtifactPortfolioCliTests(unittest.TestCase):
                 allocation["max_gross_notional"] = value
                 write_json(root / "prediction_allocation_summary.json", allocation)
                 write_csv(root / "prediction_skipped_candidates.csv", skipped_rows())
-                write_csv(root / "signals/2026-05-12/prediction_raw_candidates.csv", raw_candidate_rows())
+                write_csv(
+                    root / "signals/2026-05-12/prediction_raw_candidates.csv",
+                    raw_candidate_rows(),
+                )
                 overlap = portfolio_overlap_summary()
                 overlap["max_gross_notional"] = value
                 write_json(root / "prediction_overlap_summary.json", overlap)
@@ -129,7 +142,7 @@ class WalkForwardArtifactPortfolioCliTests(unittest.TestCase):
                 summary["allocation"] = allocation
                 summary["portfolio"] = {"summary": overlap, "violations": []}
                 write_json(root / "prediction_run_summary.json", summary)
-                set_capital_model(root / "signals/2026-05-12/prediction_sized_candidates.csv")
+                set_capital_model(root)
 
                 code, _stdout, stderr = call_cli(
                     root,
@@ -145,6 +158,42 @@ class WalkForwardArtifactPortfolioCliTests(unittest.TestCase):
             self.assertEqual(3, code)
             self.assertIn(expected_error, stderr)
 
+    def test_cli_rejects_non_object_overlap_with_portfolio_allocation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(Path(tmpdir))
+            allocation = allocation_summary()
+            write_json(root / "prediction_allocation_summary.json", allocation)
+            write_csv(root / "prediction_skipped_candidates.csv", skipped_rows())
+            write_csv(
+                root / "signals/2026-05-12/prediction_raw_candidates.csv",
+                raw_candidate_rows(),
+            )
+            write_json(root / "prediction_overlap_summary.json", ["invalid"])
+            summary = read_json(root / "prediction_run_summary.json")
+            summary["allocation"] = allocation
+            write_json(root / "prediction_run_summary.json", summary)
+            set_capital_model(root)
+            output = root / "artifact_validation.json"
+
+            code, _stdout, stderr = call_cli(
+                root,
+                output,
+                [
+                    "--required-allocation-model",
+                    "portfolio_cash_lot_floor",
+                    "--expected-portfolio-violations",
+                    "0",
+                ],
+            )
+            report = read_strict_json(output)
+
+        self.assertEqual(3, code)
+        self.assertIn("portfolio_overlap_summary_not_object", stderr)
+        self.assertIn("portfolio_overlap_summary_not_object", report["errors"])
+        self.assertFalse(report["capacity_gate_pass"])
+        self.assertEqual("failed_not_pass", report["capacity_gate_status"])
+        self.assertEqual("artifact_validation_failed", report["verdict"])
+
 
 def raw_candidate_rows() -> list[dict[str, object]]:
     return [
@@ -154,7 +203,14 @@ def raw_candidate_rows() -> list[dict[str, object]]:
 
 
 def skipped_rows() -> list[dict[str, object]]:
-    return [{"symbol": "000003", "date": "2026-05-12", "rank": 3, "skip_reason": "max_open_positions"}]
+    return [
+        {
+            "symbol": "000003",
+            "date": "2026-05-12",
+            "rank": 3,
+            "skip_reason": "max_open_positions",
+        }
+    ]
 
 
 def allocation_summary() -> dict[str, object]:
@@ -165,7 +221,14 @@ def allocation_summary() -> dict[str, object]:
         "allocated_candidates": 2,
         "skipped_candidates": 1,
         "skip_reason_counts": {"max_open_positions": 1},
-        "signals": [{"signal_date": "2026-05-12", "raw_candidates": 3, "allocated_candidates": 2, "skipped_candidates": 1}],
+        "signals": [
+            {
+                "signal_date": "2026-05-12",
+                "raw_candidates": 3,
+                "allocated_candidates": 2,
+                "skipped_candidates": 1,
+            }
+        ],
         "cash_budget": 1000000.0,
         "lot_size": 100,
         "hold_days": 5,
@@ -195,10 +258,16 @@ def portfolio_overlap_summary() -> dict[str, object]:
     return result
 
 
-def set_capital_model(path: Path) -> None:
-    rows = pd.read_csv(path, dtype={"symbol": str})
-    rows["capital_model"] = "portfolio_cash_lot_floor"
-    rows.to_csv(path, index=False)
+def set_capital_model(root: Path) -> None:
+    signal_dir = root / "signals/2026-05-12"
+    for name in ("prediction_sized_candidates.csv", "prediction_backtest.csv"):
+        path = signal_dir / name
+        rows = pd.read_csv(path, dtype={"symbol": str})
+        rows["capital_model"] = "portfolio_cash_lot_floor"
+        rows["sizing_claim_boundary"] = (
+            "local_portfolio_allocation_not_broker_or_external_cash_capacity_proof"
+        )
+        rows.to_csv(path, index=False)
 
 
 if __name__ == "__main__":

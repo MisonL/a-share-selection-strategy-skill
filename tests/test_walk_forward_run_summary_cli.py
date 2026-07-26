@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -18,6 +19,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import summarize_walk_forward_run as run_summary  # noqa: E402
 from lib.selection_core.a_share_selection_model_contracts import (  # noqa: E402
+    EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
     LIMIT_RULES_MODEL_NOT_MODELED,
     TRADABILITY_MODEL_ENTRY_EXIT,
 )
@@ -39,6 +41,8 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
                     TRADABILITY_MODEL_ENTRY_EXIT,
                     "--required-limit-rules-model",
                     LIMIT_RULES_MODEL_NOT_MODELED,
+                    "--required-execution-model",
+                    EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
                     "--max-open-positions",
                     "2",
                     "--max-gross-weight",
@@ -59,6 +63,8 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
         self.assertIn("capacity_gate_status=expected_violation_not_pass", stdout)
         self.assertIn("expected_portfolio_violations=True", stdout)
         self.assertIn("model_gates_checked=True", stdout)
+        self.assertIn("required_execution_model_checked=True", stdout)
+        self.assertNotIn("execution_model_required=", stdout)
         self.assertIn(
             "verdict=known_portfolio_violation_reproduced_not_capacity_pass", stdout
         )
@@ -77,6 +83,15 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
         )
         self.assertTrue(data["required_tradability_model_checked"])
         self.assertTrue(data["required_limit_rules_model_checked"])
+        self.assertTrue(data["required_execution_model_checked"])
+        self.assertEqual(
+            EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
+            data["execution_model"],
+        )
+        self.assertEqual(
+            [EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE],
+            data["execution_models"],
+        )
         self.assertTrue(data["model_gates_checked"])
 
     def test_cli_discloses_unchecked_model_gates(self) -> None:
@@ -95,6 +110,7 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
         self.assertIn("verdict=enabled_gates_passed_model_gates_unchecked", stdout)
         self.assertFalse(data["required_tradability_model_checked"])
         self.assertFalse(data["required_limit_rules_model_checked"])
+        self.assertFalse(data["required_execution_model_checked"])
         self.assertFalse(data["model_gates_checked"])
         self.assertEqual("enabled_gates_passed_model_gates_unchecked", data["verdict"])
 
@@ -113,6 +129,8 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
                     TRADABILITY_MODEL_ENTRY_EXIT,
                     "--required-limit-rules-model",
                     LIMIT_RULES_MODEL_NOT_MODELED,
+                    "--required-execution-model",
+                    EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
                     "--max-open-positions",
                     "5",
                     "--max-gross-weight",
@@ -125,6 +143,45 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
         self.assertEqual("", stderr)
         self.assertIn("verdict=enabled_gates_passed_not_external_proof", stdout)
         self.assertEqual("enabled_gates_passed_not_external_proof", data["verdict"])
+
+    def test_cli_allows_default_summary_inside_run_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(Path(tmpdir))
+            output = root / "prediction_run_summary.json"
+
+            code, _stdout, stderr = call_cli(root, output, [])
+
+            data = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(0, code)
+        self.assertEqual("", stderr)
+        self.assertEqual("summary_not_external_gate", data["claim_boundary"])
+
+    def test_cli_rejects_execution_model_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(Path(tmpdir))
+            backtest = root / "2026-05-12" / "prediction_backtest.csv"
+            rows = pd.read_csv(backtest, dtype={"symbol": str})
+            rows["execution_model"] = "close_to_close"
+            rows.to_csv(backtest, index=False)
+            output = Path(tmpdir) / "summary.json"
+
+            code, stdout, stderr = call_cli(
+                root,
+                output,
+                [
+                    "--required-execution-model",
+                    EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
+                ],
+            )
+            data = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(3, code)
+        self.assertIn("ERROR_SUMMARY:", stdout)
+        self.assertIn("2026-05-12_execution_models=close_to_close", stderr)
+        self.assertIn(
+            "2026-05-12_execution_models=close_to_close", data["quality_errors"]
+        )
 
     def test_cli_fails_when_prediction_skipped(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -263,6 +320,243 @@ class WalkForwardRunSummaryCliTests(unittest.TestCase):
         self.assertEqual("", stderr)
         self.assertEqual([], data["quality_errors"])
 
+    def test_cli_rejects_output_colliding_with_any_run_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(Path(tmpdir), signal_parent="signals")
+            write_json(root / "prediction_allocation_summary.json", {"rows": 2})
+            targets = [
+                root / "metadata.json",
+                root / "prediction_equity_curve.csv",
+                root / "prediction_overlap_summary.json",
+                root / "prediction_allocation_summary.json",
+                root / "signals" / "2026-05-12" / "prediction_summary.json",
+                root / "signals" / "2026-05-12" / "prediction_candidates.csv",
+                root / "signals" / "2026-05-12" / "prediction_backtest.csv",
+            ]
+            originals = {target: target.read_bytes() for target in targets}
+            dependency_loads = 0
+            original_ensure = run_summary.ensure_runtime_dependencies
+
+            def fail_if_loaded() -> None:
+                nonlocal dependency_loads
+                dependency_loads += 1
+                raise AssertionError(
+                    "runtime dependencies loaded before path preflight"
+                )
+
+            run_summary.ensure_runtime_dependencies = fail_if_loaded
+            try:
+                for target in targets:
+                    with self.subTest(target=target.name):
+                        code, stdout, stderr = call_cli(root, target, [])
+
+                        self.assertEqual(2, code)
+                        self.assertEqual("", stdout)
+                        self.assertIn(
+                            "output path must differ from input paths", stderr
+                        )
+                        self.assertEqual(originals[target], target.read_bytes())
+                self.assertEqual(0, dependency_loads)
+            finally:
+                run_summary.ensure_runtime_dependencies = original_ensure
+
+    def test_cli_rejects_relative_symlink_and_hardlink_output_aliases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(Path(tmpdir))
+            target = root / "metadata.json"
+            original = target.read_bytes()
+            relative_output = Path(os.path.relpath(target, start=Path.cwd()))
+            symlink_output = root / "metadata-link.json"
+            symlink_output.symlink_to(target)
+            hardlink_output = root / "metadata-hardlink.json"
+            os.link(target, hardlink_output)
+            dependency_loads = 0
+            original_ensure = run_summary.ensure_runtime_dependencies
+
+            def fail_if_loaded() -> None:
+                nonlocal dependency_loads
+                dependency_loads += 1
+                raise AssertionError(
+                    "runtime dependencies loaded before path preflight"
+                )
+
+            run_summary.ensure_runtime_dependencies = fail_if_loaded
+            try:
+                for output in (relative_output, symlink_output, hardlink_output):
+                    with self.subTest(output=str(output)):
+                        code, stdout, stderr = call_cli(root, output, [])
+
+                        self.assertEqual(2, code)
+                        self.assertEqual("", stdout)
+                        self.assertIn(
+                            "output path must differ from input paths", stderr
+                        )
+                        self.assertEqual(original, target.read_bytes())
+                self.assertEqual(0, dependency_loads)
+            finally:
+                run_summary.ensure_runtime_dependencies = original_ensure
+            self.assertTrue(symlink_output.is_symlink())
+            self.assertTrue(os.path.samefile(target, hardlink_output))
+
+    def test_cli_rejects_non_finite_equity_curve_values(self) -> None:
+        values = (
+            ("nan", float("nan")),
+            ("positive_infinity", float("inf")),
+            ("negative_infinity", float("-inf")),
+            ("text", "not-a-number"),
+        )
+        for column in ("equity", "drawdown"):
+            for label, value in values:
+                with self.subTest(column=column, value=label):
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        root = build_run(Path(tmpdir))
+                        curve_path = root / "prediction_equity_curve.csv"
+                        curve = pd.read_csv(curve_path)
+                        curve[column] = curve[column].astype(object)
+                        curve.loc[0, column] = value
+                        curve.to_csv(curve_path, index=False)
+                        output = Path(tmpdir) / "summary.json"
+
+                        code, _stdout, stderr = call_cli(root, output, [])
+
+                        self.assertFalse(output.exists())
+
+                    self.assertEqual(2, code)
+                    self.assertIn(f"equity curve {column}", stderr)
+
+    def test_cli_bad_input_removes_stale_summary_after_safe_preflight(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(Path(tmpdir))
+            curve_path = root / "prediction_equity_curve.csv"
+            curve = pd.read_csv(curve_path)
+            curve.loc[0, "equity"] = float("nan")
+            curve.to_csv(curve_path, index=False)
+            output = root / "prediction_run_summary.json"
+            output.write_text('{"stale": true}\n', encoding="utf-8")
+
+            code, stdout, stderr = call_cli(root, output, [])
+
+            self.assertEqual(2, code)
+            self.assertEqual("", stdout)
+            self.assertIn("equity curve equity", stderr)
+            self.assertFalse(output.exists())
+            self.assertTrue(curve_path.exists())
+
+    def test_cli_rejects_non_finite_capacity_limits_and_removes_stale_summary(
+        self,
+    ) -> None:
+        options = (
+            "--max-open-positions",
+            "--max-gross-weight",
+            "--max-gross-notional",
+            "--max-cash-reserved",
+        )
+        cases = (
+            ("nan", "must be finite"),
+            ("inf", "must be finite"),
+            ("-nan", "must be finite"),
+            ("-inf", "must be finite"),
+            ("-1", "must be >= 0"),
+            ("not-a-number", "must be numeric"),
+        )
+        for option in options:
+            name = option.removeprefix("--")
+            for value, expected_error in cases:
+                with (
+                    self.subTest(option=option, value=value),
+                    tempfile.TemporaryDirectory() as tmpdir,
+                ):
+                    root = build_run(Path(tmpdir))
+                    output = root / "prediction_run_summary.json"
+                    output.write_text('{"stale": true}\n', encoding="utf-8")
+
+                    code, stdout, stderr = call_cli(root, output, [option, value])
+
+                    self.assertEqual(2, code)
+                    self.assertEqual("", stdout)
+                    self.assertIn(f"{name} {expected_error}", stderr)
+                    self.assertFalse(output.exists())
+
+    def test_cli_rejects_fractional_max_open_positions_after_safe_preflight(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(Path(tmpdir))
+            output = root / "prediction_run_summary.json"
+            output.write_text('{"stale": true}\n', encoding="utf-8")
+
+            code, stdout, stderr = call_cli(
+                root, output, ["--max-open-positions", "1.5"]
+            )
+
+        self.assertEqual(2, code)
+        self.assertEqual("", stdout)
+        self.assertIn("max-open-positions must be an integer", stderr)
+        self.assertFalse(output.exists())
+
+    def test_cli_allows_zero_max_open_positions_as_a_capacity_cap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = build_run(Path(tmpdir))
+            output = Path(tmpdir) / "summary.json"
+
+            code, _stdout, stderr = call_cli(
+                root, output, ["--max-open-positions", "0"]
+            )
+            data = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(3, code)
+        self.assertIn("portfolio_max_open_positions=2 limit=0", stderr)
+        self.assertIn("portfolio_max_open_positions=2 limit=0", data["quality_errors"])
+
+    def test_cli_rejects_invalid_overlap_capacity_fields_and_removes_stale_summary(
+        self,
+    ) -> None:
+        fields = {
+            "max_open_positions": "max-open-positions",
+            "same_symbol_overlap_rows": "same-symbol-overlap-rows",
+            "max_gross_weight": "max-gross-weight",
+            "max_gross_notional": "max-gross-notional",
+            "max_cash_reserved": "max-cash-reserved",
+        }
+        for field, name in fields.items():
+            for label, value, expected in (
+                ("nan", float("nan"), "must be finite"),
+                ("positive_infinity", float("inf"), "must be finite"),
+                ("negative_infinity", float("-inf"), "must be finite"),
+                ("string_nan", "nan", "must be a JSON number"),
+            ):
+                with (
+                    self.subTest(field=field, value=label),
+                    tempfile.TemporaryDirectory() as tmpdir,
+                ):
+                    root = build_run(Path(tmpdir))
+                    overlap_path = root / "prediction_overlap_summary.json"
+                    overlap = json.loads(overlap_path.read_text(encoding="utf-8"))
+                    overlap[field] = value
+                    write_json(overlap_path, overlap)
+                    output = root / "prediction_run_summary.json"
+                    output.write_text('{"stale": true}\n', encoding="utf-8")
+
+                    code, stdout, stderr = call_cli(root, output, [])
+
+                    self.assertEqual(2, code)
+                    self.assertEqual("", stdout)
+                    self.assertIn(f"{name} {expected}", stderr)
+                    self.assertFalse(output.exists())
+
+    def test_write_json_rejects_non_finite_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "summary.json"
+            for label, value in (
+                ("nan", float("nan")),
+                ("positive_infinity", float("inf")),
+                ("negative_infinity", float("-inf")),
+            ):
+                with self.subTest(value=label):
+                    with self.assertRaises(ValueError):
+                        run_summary.write_json({"value": value}, output)
+                    self.assertFalse(output.exists())
+
 
 def call_cli(root: Path, output: Path, extra_args: list[str]) -> tuple[int, str, str]:
     stdout = StringIO()
@@ -342,6 +636,7 @@ def backtest_row(symbol: str, value: float) -> dict[str, object]:
         "return": value,
         "missing_data": False,
         "status": "complete",
+        "execution_model": EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
         "tradability_model": TRADABILITY_MODEL_ENTRY_EXIT,
         "limit_rules_model": LIMIT_RULES_MODEL_NOT_MODELED,
     }

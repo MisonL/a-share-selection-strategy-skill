@@ -162,6 +162,67 @@ class PortfolioEquityCurveCliTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "no complete trades"):
             equity_curve.build_equity_curve([frame], initial_equity=1.0)
 
+    def test_non_finite_equity_inputs_are_rejected(self) -> None:
+        frame = backtest_frame("2026-05-12", [0.01])
+        for value in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(initial_equity=value):
+                with self.assertRaisesRegex(
+                    ValueError, "initial-equity must be finite"
+                ):
+                    equity_curve.build_equity_curve([frame], initial_equity=value)
+            with self.subTest(min_final_equity=value):
+                with self.assertRaisesRegex(
+                    ValueError, "min-final-equity must be finite"
+                ):
+                    equity_curve.validate_gate_thresholds(value, None)
+            with self.subTest(max_drawdown_floor=value):
+                with self.assertRaisesRegex(
+                    ValueError, "max-drawdown-floor must be finite"
+                ):
+                    equity_curve.validate_gate_thresholds(None, value)
+
+    def test_cli_non_finite_initial_equity_removes_stale_output(self) -> None:
+        frame = backtest_frame("2026-05-12", [0.01])
+        for value in ["nan", "inf", "-inf"]:
+            with self.subTest(value=value):
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    root = Path(tmpdir)
+                    backtest = root / "backtest.csv"
+                    output = root / "equity.csv"
+                    frame.to_csv(backtest, index=False)
+                    output.write_text("stale result", encoding="utf-8")
+                    stderr = StringIO()
+                    with redirect_stderr(stderr):
+                        code = equity_curve.main(
+                            [
+                                "--backtests",
+                                str(backtest),
+                                "--output",
+                                str(output),
+                                "--initial-equity",
+                                value,
+                            ]
+                        )
+
+                self.assertEqual(2, code)
+                self.assertFalse(output.exists())
+                self.assertIn("initial-equity must be finite", stderr.getvalue())
+
+    def test_non_finite_complete_trade_return_is_rejected(self) -> None:
+        for value in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(value=value):
+                frame = backtest_frame("2026-05-12", [value])
+                with self.assertRaisesRegex(
+                    ValueError, "complete trade return must be finite"
+                ):
+                    equity_curve.build_equity_curve([frame], initial_equity=1.0)
+
+    def test_derived_equity_overflow_is_rejected(self) -> None:
+        frame = backtest_frame("2026-05-12", [1e308])
+
+        with self.assertRaisesRegex(ValueError, "equity must be finite"):
+            equity_curve.build_equity_curve([frame], initial_equity=1e308)
+
 
 def backtest_frame(
     signal_date: str,

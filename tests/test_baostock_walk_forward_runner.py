@@ -17,6 +17,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import run_baostock_walk_forward as runner  # noqa: E402
 from lib.selection_core.a_share_selection_model_contracts import (  # noqa: E402
+    EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
     LIMIT_RULES_MODEL_NOT_MODELED,
     TRADABILITY_MODEL_HOLDING_PERIOD,
 )
@@ -72,6 +73,10 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
         self.assertFalse(data["real_market_data_executed"])
         self.assertFalse(data["prediction_model_executed"])
         self.assertFalse(data["backtest_executed"])
+        self.assertEqual(
+            EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
+            data["execution_model"],
+        )
         self.assertEqual(
             "offline_plan_manifest_only_not_real_market_prediction_or_backtest",
             data["claim_boundary"],
@@ -181,6 +186,10 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
         self.assertIn("--expect-portfolio-violations", summary_command)
         self.assertIn("--required-limit-rules-model", summary_command)
         self.assertIn(LIMIT_RULES_MODEL_NOT_MODELED, summary_command)
+        self.assertIn("--required-execution-model", summary_command)
+        self.assertIn(
+            EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE, summary_command
+        )
 
     def test_offline_plan_fails_fast_and_records_failed_step(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -233,12 +242,18 @@ class BaostockWalkForwardRunnerTests(unittest.TestCase):
         self.assertIn("--require-tradable-bars", commands["2026-05-12:backtest"])
         self.assertIn("--expected-signal-date", commands["2026-05-12:backtest"])
         self.assertIn("2026-05-12", commands["2026-05-12:backtest"])
+        self.assertIn("--execution-model", commands["2026-05-12:backtest"])
+        self.assertIn(
+            EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
+            commands["2026-05-12:backtest"],
+        )
         self.assertNotIn(
             "--require-tradable-holding-period", commands["2026-05-12:backtest"]
         )
         self.assertIn("--fail-on-incomplete", commands["2026-05-12:backtest"])
         self.assertIn("--require-capital-fields", commands["portfolio_overlap"])
         self.assertIn("--fail-on-symbol-overlap", commands["portfolio_overlap"])
+        self.assertIn("--required-execution-model", commands["summary"])
 
     def test_run_promotes_summary_verdict_to_manifest_and_stdout(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

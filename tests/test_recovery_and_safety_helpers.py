@@ -150,7 +150,9 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
         ):
             validate_provider_merge_contract(metadata)
 
-    def test_pytdx_bucket_aggregation_preserves_fetch_metrics_and_capability(self) -> None:
+    def test_pytdx_bucket_aggregation_preserves_fetch_metrics_and_capability(
+        self,
+    ) -> None:
         items = [
             {
                 "symbols": [{"symbol": "000001", "rows": 2}],
@@ -452,11 +454,7 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
 
         self.assertEqual(
             [],
-            [
-                flag
-                for flag in sensitive_flags
-                if not classify_sensitive_flag(flag)[0]
-            ],
+            [flag for flag in sensitive_flags if not classify_sensitive_flag(flag)[0]],
         )
 
     def test_build_retry_plan_uses_failed_empty_and_truncated_symbols(self) -> None:
@@ -736,10 +734,12 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
             )
 
             self.assertNotEqual(0, result.returncode)
-            self.assertIn("output path must not overwrite input", result.stderr)
+            self.assertIn("output path must differ from input paths", result.stderr)
             self.assertEqual(selected_text, selected.read_text(encoding="utf-8"))
 
-    def test_prepare_clean_history_pool_cli_filters_empty_and_short_symbols(self) -> None:
+    def test_prepare_clean_history_pool_cli_filters_empty_and_short_symbols(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "prices.csv"
@@ -826,9 +826,7 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
 
             clean_text = output.read_text(encoding="utf-8")
             clean_metadata = json.loads(metadata_output.read_text(encoding="utf-8"))
-            alias_metadata = json.loads(
-                metadata_alias.read_text(encoding="utf-8")
-            )
+            alias_metadata = json.loads(metadata_alias.read_text(encoding="utf-8"))
             report = json.loads(report_output.read_text(encoding="utf-8"))
 
         self.assertEqual(0, result.returncode, result.stderr)
@@ -845,7 +843,9 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
             report["claim_boundary"],
         )
 
-    def test_prepare_clean_history_pool_derives_and_publishes_short_history(self) -> None:
+    def test_prepare_clean_history_pool_derives_and_publishes_short_history(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "prices.csv"
@@ -924,7 +924,9 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
         self.assertEqual(["001220"], report["reason_symbols"]["short_history"])
         self.assertEqual(["001220"], clean_metadata["clean_pool_removed_symbols"])
 
-    def test_prepare_clean_history_pool_requires_paired_short_history_options(self) -> None:
+    def test_prepare_clean_history_pool_requires_paired_short_history_options(
+        self,
+    ) -> None:
         parser = prepare_clean_history_pool.build_parser()
         base = [
             "--prices-input",
@@ -999,7 +1001,9 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
             prices = root / "prices.csv"
             metadata = root / "history_metadata.json"
             clean = root / "clean"
-            prices.write_text("symbol,date,close\n000001,2026-07-09,10.0\n", encoding="utf-8")
+            prices.write_text(
+                "symbol,date,close\n000001,2026-07-09,10.0\n", encoding="utf-8"
+            )
             metadata.write_text('{"symbols":[]}\n', encoding="utf-8")
 
             result = subprocess.run(
@@ -1026,7 +1030,7 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
             )
 
         self.assertNotEqual(0, result.returncode)
-        self.assertIn("duplicate output path", result.stderr)
+        self.assertIn("output paths must be distinct", result.stderr)
 
     def test_prepare_clean_history_pool_rejects_missing_symbol_column(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1060,7 +1064,9 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("prices input missing symbol column", result.stderr)
 
-    def test_prepare_clean_history_pool_merges_verified_incremental_history(self) -> None:
+    def test_prepare_clean_history_pool_merges_verified_incremental_history(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "prices.csv"
@@ -1192,12 +1198,16 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
         )
         self.assertEqual(1, report["incremental_merge"]["planned_symbol_count"])
 
-    def test_prepare_clean_history_pool_rejects_incomplete_incremental_args(self) -> None:
+    def test_prepare_clean_history_pool_rejects_incomplete_incremental_args(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "prices.csv"
             metadata = root / "history_metadata.json"
-            prices.write_text("symbol,date,close\n000001,2026-07-09,10.0\n", encoding="utf-8")
+            prices.write_text(
+                "symbol,date,close\n000001,2026-07-09,10.0\n", encoding="utf-8"
+            )
             metadata.write_text('{"symbols":[]}\n', encoding="utf-8")
 
             result = subprocess.run(
@@ -1226,7 +1236,9 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("--incremental-plan", result.stderr)
 
-    def test_prepare_clean_history_pool_rejects_incremental_fetch_failures(self) -> None:
+    def test_prepare_clean_history_pool_rejects_incremental_fetch_failures(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             prices = root / "prices.csv"
@@ -1235,7 +1247,9 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
             delta = root / "delta.csv"
             delta_metadata = root / "delta_metadata.json"
             clean = root / "clean"
-            prices.write_text("symbol,date,close\n600000,2026-07-08,8.0\n", encoding="utf-8")
+            prices.write_text(
+                "symbol,date,close\n600000,2026-07-08,8.0\n", encoding="utf-8"
+            )
             metadata.write_text('{"symbols":[{"symbol":"600000"}]}\n', encoding="utf-8")
             plan.write_text(
                 json.dumps(
@@ -1251,7 +1265,9 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
-            delta.write_text("symbol,date,close\n600000,2026-07-09,8.8\n", encoding="utf-8")
+            delta.write_text(
+                "symbol,date,close\n600000,2026-07-09,8.8\n", encoding="utf-8"
+            )
             delta_metadata.write_text(
                 json.dumps(
                     {
@@ -1310,9 +1326,7 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
                 encoding="utf-8",
             )
             prices.write_text(
-                "symbol,date,close\n"
-                "000001,2026-07-09,10.0\n"
-                "600000,2026-07-08,8.0\n",
+                "symbol,date,close\n000001,2026-07-09,10.0\n600000,2026-07-08,8.0\n",
                 encoding="utf-8",
             )
             metadata.write_text(
@@ -1420,7 +1434,9 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
 
         self.assertEqual(["001220"], incremental["fetch_symbols"])
         self.assertEqual(["001220"], incremental["short_history_symbols"])
-        self.assertEqual("short_history_recovery", incremental["fetch_records"][0]["reason"])
+        self.assertEqual(
+            "short_history_recovery", incremental["fetch_records"][0]["reason"]
+        )
         self.assertEqual("full", incremental["fetch_records"][0]["fetch_mode"])
         self.assertEqual(120, incremental["min_history_rows"])
 
@@ -1658,7 +1674,9 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
         self.assertEqual(2, manifest["executed_symbol_count"])
         self.assertGreaterEqual(manifest["execution_duration_seconds"], 0.0)
 
-    def test_incremental_execution_stops_and_records_invalid_bucket_output(self) -> None:
+    def test_incremental_execution_stops_and_records_invalid_bucket_output(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             plan = incremental_execution_plan()
@@ -1733,7 +1751,9 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
             manifest = execute_plan(plan, config, executor)
 
         self.assertEqual("partial", manifest["status"])
-        self.assertIn("bucket metadata rows do not match prices", manifest["buckets"][0]["error"])
+        self.assertIn(
+            "bucket metadata rows do not match prices", manifest["buckets"][0]["error"]
+        )
 
     def test_incremental_execution_cli_requires_full_start_date(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1802,7 +1822,9 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
             all(not item["executed_this_run"] for item in manifest["buckets"])
         )
 
-    def test_incremental_execution_resume_refetches_changed_bucket_artifact(self) -> None:
+    def test_incremental_execution_resume_refetches_changed_bucket_artifact(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             plan = incremental_execution_plan()
@@ -1813,7 +1835,9 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
                 return 0
 
             execute_plan(plan, config, first_executor)
-            first_bucket = config["output_dir"] / "buckets" / plan["fetch_buckets"][0]["bucket_id"]
+            first_bucket = (
+                config["output_dir"] / "buckets" / plan["fetch_buckets"][0]["bucket_id"]
+            )
             prices = first_bucket / "prices.csv"
             prices.write_text(
                 prices.read_text(encoding="utf-8").replace("10.0", "11.0"),
@@ -1952,7 +1976,9 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
             )
             run_verified_merge(args, config)
             merged = Path(args.merged_output).read_text(encoding="utf-8")
-            report = json.loads(Path(args.merge_report_output).read_text(encoding="utf-8"))
+            report = json.loads(
+                Path(args.merge_report_output).read_text(encoding="utf-8")
+            )
 
         self.assertIn("000001,2026-07-09,10.0", merged)
         self.assertIn("600000,2026-07-09,10.0", merged)
@@ -1974,9 +2000,7 @@ class RecoveryAndSafetyHelperTests(unittest.TestCase):
         )
         self.assertIn(
             "partial_result_true",
-            sources["eastmoney_spot"][
-                "full_a_recovery_or_reporting_conditions"
-            ],
+            sources["eastmoney_spot"]["full_a_recovery_or_reporting_conditions"],
         )
         self.assertNotIn(
             "partial_result_true",

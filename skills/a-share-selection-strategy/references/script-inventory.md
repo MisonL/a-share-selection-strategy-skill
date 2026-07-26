@@ -2,7 +2,7 @@
 
 本文件用于回答“为什么 `scripts/` 下还有很多 `.py`、每个脚本是否必要”。它是审计索引，不是运行时入口，不替代 `../configs/script_entrypoints.json`，也不进入 Skill 首轮读取路径。
 
-当前根层 `.py` 共 33 个，其中公开 CLI 29 个、兼容 wrapper 4 个。`scripts/lib/` 是内部实现目录，不列入本表。判断脚本是否合理时先看 `公开 CLI 是否必须兼容` 和 `internal helper 是否还能继续下沉`，不要按文件数量直接合并。当前整个 `scripts/` 树有 122 个 Python 文件；其中 89 个是按领域分层的内部实现，不是 Agent 首轮入口。
+当前根层 `.py` 共 33 个，其中公开 CLI 29 个、兼容 wrapper 4 个。`scripts/lib/` 是内部实现目录，不列入本表。判断脚本是否合理时先看 `公开 CLI 是否必须兼容` 和 `internal helper 是否还能继续下沉`，不要按文件数量直接合并。当前整个 `scripts/` 树有 126 个 Python 文件；其中 93 个是按领域分层的内部实现，不是 Agent 首轮入口。
 
 结论：
 
@@ -19,35 +19,35 @@
 | `a_share_selection_cli_guard.py` | `internal_helper` | `compatibility_wrapper` | 9 | Compatibility wrapper for the internal CLI guard helper. | 暂留: 外部 root import 兼容层；真实实现已在 `lib/`，blocker 解除后删除。 |
 | `a_share_selection_config.py` | `internal_helper` | `compatibility_wrapper` | 11 | Compatibility wrapper for configuration loading helpers. | 暂留: 外部 root import 兼容层；真实实现已在 `lib/`，blocker 解除后删除。 |
 | `a_share_selection_paths.py` | `internal_helper` | `compatibility_wrapper` | 11 | Compatibility wrapper for shared filesystem path helpers. | 暂留: 外部 root import 兼容层；真实实现已在 `lib/`，blocker 解除后删除。 |
-| `allocate_candidate_capital.py` | `gate_backtest_cli` | `gate_backtest` | 234 | Allocate traceable capital fields for candidate trades. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
-| `allocate_portfolio_candidate_capital.py` | `gate_backtest_cli` | `gate_backtest` | 113 | Allocate candidate capital with portfolio-aware capacity gates. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
-| `backtest_buy_hold.py` | `gate_backtest_cli` | `gate_backtest` | 348 | Run a minimal close-to-close buy-hold backtest from local files. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
+| `allocate_candidate_capital.py` | `gate_backtest_cli` | `gate_backtest` | 326 | Allocate traceable capital fields for candidate trades. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
+| `allocate_portfolio_candidate_capital.py` | `gate_backtest_cli` | `gate_backtest` | 156 | Allocate candidate capital with portfolio-aware capacity gates. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
+| `backtest_buy_hold.py` | `gate_backtest_cli` | `gate_backtest` | 438 | Run a next-observed-open to signal-horizon-close buy-hold backtest from local files. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
 | `create_demo_data.py` | `stable_cli` | `selection_core` | 315 | Create deterministic demo OHLCV CSV files for quick-start smoke tests. | 保留: stable public CLI，用户命令兼容路径。 |
-| `fetch_akshare_a_share.py` | `fetch_cli` | `fetch` | 378 | Fetch A-share OHLCV data through akshare and save local gate files. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
-| `fetch_akshare_hk_daily.py` | `fetch_cli` | `fetch` | 408 | Fetch Hong Kong OHLCV data through akshare stock_hk_daily. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
-| `fetch_baostock_a_share.py` | `fetch_cli` | `fetch` | 651 | Fetch A-share OHLCV data through baostock and save CSV/Parquet gate files. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
-| `fetch_baostock_a_share_universe.py` | `fetch_cli` | `fetch` | 167 | Fetch baostock A-share universe into a spot-compatible CSV snapshot. | 保留: public fetch CLI，全 A 股票池主入口，支持显式日期回看和失败重试，不能写成实时行情或实时全市场完成。 |
-| `fetch_eastmoney_a_share_spot.py` | `fetch_cli` | `fetch` | 422 | Fetch Eastmoney A-share realtime spot snapshot into local CSV metadata. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
-| `fetch_pytdx_a_share.py` | `fetch_cli` | `fetch` | 171 | Fetch A-share daily OHLCV data through pytdx and save gate files. | 保留: public fetch CLI，显式 no-token 补充源；缺换手率、可交易字段、官方授权和长期稳定证明。 |
-| `fetch_yfinance_ohlcv.py` | `fetch_cli` | `fetch` | 345 | Fetch yfinance OHLCV data and save local gate files. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
-| `fetch_zzshare_a_share.py` | `fetch_cli` | `fetch` | 411 | Fetch A-share OHLCV data through zzshare and save local gate files. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
-| `generate_lightgbm_predictions.py` | `gate_backtest_cli` | `gate_backtest` | 477 | Generate LightGBM prediction_score values from local OHLCV data. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
-| `portfolio_equity_curve.py` | `gate_backtest_cli` | `gate_backtest` | 266 | Build a simple equal-weight equity curve from backtest CSV files. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
-| `portfolio_overlap_report.py` | `gate_backtest_cli` | `gate_backtest` | 379 | Report overlap and capacity gates from backtest CSV files. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
-| `prepare_history_retry_symbols.py` | `gate_backtest_cli` | `gate_backtest` | 101 | Prepare an auditable retry symbol list from history fetch artifacts. | 保留: public gate/backtest CLI；恢复计划纯逻辑位于 `lib/runner/`，输出仍是诊断或门禁证据。 |
-| `prepare_clean_history_pool.py` | `gate_backtest_cli` | `gate_backtest` | 415 | Prepare clean prices, derived short-history audit, metadata, optional verified delta merge, or atomic clean-pool provenance from existing artifacts. | 保留: public recovery CLI，只处理既有 artifact；推导清单和 provenance 只校验 lineage，不联网、不提升最终全 A 声称。 |
-| `prepare_incremental_history_plan.py` | `gate_backtest_cli` | `gate_backtest` | 638 | Prepare a bounded, resumable incremental history fetch plan from universe and metadata. | 保留: public planning CLI，只生成增量计划，不证明抓取成功。 |
+| `fetch_akshare_a_share.py` | `fetch_cli` | `fetch` | 470 | Fetch A-share OHLCV data through akshare and save local gate files. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
+| `fetch_akshare_hk_daily.py` | `fetch_cli` | `fetch` | 423 | Fetch Hong Kong OHLCV data through akshare stock_hk_daily. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
+| `fetch_baostock_a_share.py` | `fetch_cli` | `fetch` | 673 | Fetch A-share OHLCV data through baostock and save CSV/Parquet gate files. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
+| `fetch_baostock_a_share_universe.py` | `fetch_cli` | `fetch` | 182 | Fetch baostock A-share universe into a spot-compatible CSV snapshot. | 保留: public fetch CLI，全 A 股票池主入口，支持显式日期回看和失败重试，不能写成实时行情或实时全市场完成。 |
+| `fetch_eastmoney_a_share_spot.py` | `fetch_cli` | `fetch` | 452 | Fetch Eastmoney A-share realtime spot snapshot into local CSV metadata. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
+| `fetch_pytdx_a_share.py` | `fetch_cli` | `fetch` | 190 | Fetch A-share daily OHLCV data through pytdx and save gate files. | 保留: public fetch CLI，显式 no-token 补充源；缺换手率、可交易字段、官方授权和长期稳定证明。 |
+| `fetch_yfinance_ohlcv.py` | `fetch_cli` | `fetch` | 377 | Fetch yfinance OHLCV data and save local gate files. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
+| `fetch_zzshare_a_share.py` | `fetch_cli` | `fetch` | 450 | Fetch A-share OHLCV data through zzshare and save local gate files. | 保留: public fetch CLI，网络和数据源边界由 metadata 披露。 |
+| `generate_lightgbm_predictions.py` | `gate_backtest_cli` | `gate_backtest` | 495 | Generate LightGBM prediction_score values from local OHLCV data. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
+| `portfolio_equity_curve.py` | `gate_backtest_cli` | `gate_backtest` | 323 | Build a simple equal-weight equity curve from backtest CSV files. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
+| `portfolio_overlap_report.py` | `gate_backtest_cli` | `gate_backtest` | 442 | Report overlap and capacity gates from backtest CSV files. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
+| `prepare_history_retry_symbols.py` | `gate_backtest_cli` | `gate_backtest` | 88 | Prepare an auditable retry symbol list from history fetch artifacts. | 保留: public gate/backtest CLI；恢复计划纯逻辑位于 `lib/runner/`，共享输出预检在任何 artifact 读取前拒绝 input/output 和 output/output 的直连、相对、软链接或硬链接别名。 |
+| `prepare_clean_history_pool.py` | `gate_backtest_cli` | `gate_backtest` | 418 | Prepare clean prices, derived short-history audit, metadata, optional verified delta merge, or atomic clean-pool provenance from existing artifacts. | 保留: public recovery CLI，只处理既有 artifact；共享输出预检在 artifact 读取或 pandas 加载前拒绝冲突路径，既有原子发布、推导清单和 provenance lineage 语义不变，不联网、不提升最终全 A 声称。 |
+| `prepare_incremental_history_plan.py` | `gate_backtest_cli` | `gate_backtest` | 619 | Prepare a bounded, resumable incremental history fetch plan from universe and metadata. | 保留: public planning CLI；共享输出预检在输入读取或 pandas 加载前拒绝 input/output 和 output/output 的直连、相对、软链接或硬链接别名，只生成增量计划，不证明抓取成功。 |
 | `execute_incremental_history_plan.py` | `gate_backtest_cli` | `gate_backtest` | 306 | Execute one explicit provider across bounded plan buckets and persist resumable artifacts. | 保留: public execution CLI，不自动切源，不证明全 A 完成。 |
 | `probe_baostock_limit_fields.py` | `gate_backtest_cli` | `gate_backtest` | 421 | Probe baostock field availability without modeling limit rules. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
 | `probe_external_source_stability.py` | `gate_backtest_cli` | `gate_backtest` | 783 | Run repeated external source probes through the stable fetch CLIs. | 保留: public gate/backtest CLI，输出是诊断或门禁证据；紧凑摘要和归档实现位于 `lib/gates/`，不扩大 CLI 职责。 |
-| `run_baostock_walk_forward.py` | `gate_backtest_cli` | `gate_backtest` | 692 | Run the baostock prediction-derived walk-forward gate through existing CLIs. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
+| `run_baostock_walk_forward.py` | `gate_backtest_cli` | `gate_backtest` | 700 | Run the baostock prediction-derived walk-forward gate through existing CLIs. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
 | `run_today_a_share_selection.py` | `stable_cli` | `selection_core` | 1340 | Run an auditable local A-share selection workflow through existing CLIs. | 保留: stable public CLI，用户命令兼容路径；full-A provenance 细节由 internal runner helper 实现。 |
-| `score_candidates.py` | `stable_cli` | `selection_core` | 532 | Score stock candidates from local OHLCV data. | 保留: stable public CLI，用户命令兼容路径。 |
-| `slice_prices_as_of.py` | `stable_cli` | `selection_core` | 118 | Slice local OHLCV rows to an as-of date to prevent future leakage. | 保留: stable public CLI，用户命令兼容路径。 |
-| `summarize_walk_forward_run.py` | `gate_backtest_cli` | `gate_backtest` | 417 | Summarize and gate a real walk-forward run directory. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
+| `score_candidates.py` | `stable_cli` | `selection_core` | 567 | Score stock candidates from local OHLCV data. | 保留: stable public CLI，用户命令兼容路径。 |
+| `slice_prices_as_of.py` | `stable_cli` | `selection_core` | 136 | Slice local OHLCV rows to an as-of date to prevent future leakage. | 保留: stable public CLI，用户命令兼容路径。 |
+| `summarize_walk_forward_run.py` | `gate_backtest_cli` | `gate_backtest` | 571 | Summarize and gate a real walk-forward run directory. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
 | `validate_ohlcv.py` | `stable_cli` | `selection_core` | 84 | Validate local OHLCV data for A-share selection workflows. | 保留: stable public CLI，用户命令兼容路径。 |
-| `validate_walk_forward_artifacts.py` | `gate_backtest_cli` | `gate_backtest` | 100 | Validate walk-forward artifact contents without rerunning the pipeline. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
-| `validate_walk_forward_manifest.py` | `gate_backtest_cli` | `gate_backtest` | 413 | Validate a walk-forward runner manifest without rerunning the pipeline. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
+| `validate_walk_forward_artifacts.py` | `gate_backtest_cli` | `gate_backtest` | 226 | Validate walk-forward artifact contents without rerunning the pipeline. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
+| `validate_walk_forward_manifest.py` | `gate_backtest_cli` | `gate_backtest` | 445 | Validate a walk-forward runner manifest without rerunning the pipeline. | 保留: public gate/backtest CLI，输出是诊断或门禁证据。 |
 
 ## 内部实现边界
 
@@ -64,6 +64,8 @@
 `lib/gates/incremental_history_execution.py` 只负责计划执行、resume、provider command 和 manifest 状态；`lib/gates/incremental_history_artifacts.py` 负责 bucket CSV/metadata 校验、聚合和原子发布。二者只能由公开 `execute_incremental_history_plan.py` 调用，都不是独立 CLI，也不允许隐式选择或切换数据源。
 
 `lib/gates/external_source_stability_summary.py` 是外部源探针的纯摘要投影和紧凑严格失败诊断 helper。它只从既有 result 选择字段、计算检查投影和格式化已脱敏定位信息，不运行 provider 命令、不写 artifact，也不新增 CLI。
+
+`lib/gates/a_share_selection_output_safety.py` 是公开 CLI 的输出前置和失败清理边界。`validate_output_paths` 会先拒绝未经 shell 展开的字面前导 `~`，再以大小写无关的声明路径比较，并结合解析路径和现存软硬链接别名，校验输出不与输入、彼此或声明的恢复目录冲突；受保护目录本身、内部或用户控制父级目录出现任意符号链接时会在清理前失败。macOS `/var` 到 `/private/var` 的系统临时目录映射保留为合法边界。`prepare_output_paths` 仅在校验成功后清理旧输出。两者都不读取、修改或补齐输入数据，也不提供数据源回退。
 
 `lib/gates/full_a_clean_pool_provenance.py` 是由 `prepare_clean_history_pool.py` 调用的 artifact 校验 helper。它对 universe、原始 history、clean prices/metadata/report 和可选 short-history 清单重算 symbol 集合、计数、路径和 SHA-256；至少 4,000 个 symbol 的 sample guard 还必须与完整 baostock metadata 合同、逐标 freshness 和 history-clean 全行保真同时通过，数量本身不是完整性证明。`lib/gates/full_a_clean_pool_artifacts.py` 负责前后双指纹与路径身份，`lib/gates/full_a_clean_pool_lineage.py` 负责逐标日期与 retained row/content 对账，二者都不写 artifact。三个 helper 只返回证明数据，不写入、补齐或切换任何数据源，更不能单独提升 runner 的 `full_market_claim_allowed`。
 

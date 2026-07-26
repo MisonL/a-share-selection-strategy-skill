@@ -137,9 +137,7 @@ class FetchBaostockAShareTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as tmpdir:
             names_input = Path(tmpdir) / "universe.csv"
-            names_input.write_text(
-                "symbol,name\n000001,平安银行\n", encoding="utf-8"
-            )
+            names_input.write_text("symbol,name\n000001,平安银行\n", encoding="utf-8")
             lookup = fetcher.resolve_symbol_names(
                 fake,
                 ["000001", "600000"],
@@ -149,9 +147,7 @@ class FetchBaostockAShareTests(unittest.TestCase):
 
         self.assertEqual(["sh.600000"], fake.queried_codes)
         self.assertEqual(1, lookup["query_count"])
-        self.assertEqual(
-            {"000001": "平安银行", "600000": "浦发银行"}, lookup["names"]
-        )
+        self.assertEqual({"000001": "平安银行", "600000": "浦发银行"}, lookup["names"])
 
     def test_missing_name_fail_policy_does_not_query(self) -> None:
         fake = FakeBaostockBasic({})
@@ -294,9 +290,7 @@ class FetchBaostockAShareTests(unittest.TestCase):
             with self.subTest(suffix=suffix), tempfile.TemporaryDirectory() as tmpdir:
                 output = Path(tmpdir) / f"prices{suffix}"
                 meta = Path(tmpdir) / "metadata.json"
-                frame = fetcher.pd.DataFrame(
-                    [valid_row("000001", "2026-05-20")]
-                )
+                frame = fetcher.pd.DataFrame([valid_row("000001", "2026-05-20")])
                 metadata = metadata_for(["000001"], frame)
 
                 with patch.object(
@@ -333,15 +327,19 @@ class FetchBaostockAShareTests(unittest.TestCase):
             meta.write_text('{"stale": true}\n', encoding="utf-8")
             stderr = StringIO()
 
-            with patch.object(
-                fetcher.importlib.util,
-                "find_spec",
-                return_value=None,
-            ), patch.object(
-                fetcher,
-                "fetch_prices",
-                side_effect=AssertionError("fetch must not run"),
-            ), redirect_stderr(stderr):
+            with (
+                patch.object(
+                    fetcher.importlib.util,
+                    "find_spec",
+                    return_value=None,
+                ),
+                patch.object(
+                    fetcher,
+                    "fetch_prices",
+                    side_effect=AssertionError("fetch must not run"),
+                ),
+                redirect_stderr(stderr),
+            ):
                 code = fetcher.main(
                     [
                         "--symbols",
@@ -377,11 +375,14 @@ class FetchBaostockAShareTests(unittest.TestCase):
             meta.write_text('{"stale": true}\n', encoding="utf-8")
             stderr = StringIO()
 
-            with patch.object(
-                fetcher,
-                "fetch_prices",
-                side_effect=AssertionError("fetch must not run"),
-            ), redirect_stderr(stderr):
+            with (
+                patch.object(
+                    fetcher,
+                    "fetch_prices",
+                    side_effect=AssertionError("fetch must not run"),
+                ),
+                redirect_stderr(stderr),
+            ):
                 code = fetcher.main(
                     [
                         "--symbols",
@@ -408,17 +409,22 @@ class FetchBaostockAShareTests(unittest.TestCase):
             f"source_claim_boundary={fetcher.CLAIM_BOUNDARY}", stderr.getvalue()
         )
 
-    def test_main_rejects_same_prices_and_metadata_output_before_fetch(self) -> None:
+    def test_main_rejects_same_prices_and_metadata_output_without_deleting_file(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "prices.csv"
             output.write_text("stale\n", encoding="utf-8")
             stderr = StringIO()
 
-            with patch.object(
-                fetcher,
-                "fetch_prices",
-                side_effect=AssertionError("fetch must not run"),
-            ), redirect_stderr(stderr):
+            with (
+                patch.object(
+                    fetcher,
+                    "fetch_prices",
+                    side_effect=AssertionError("fetch must not run"),
+                ),
+                redirect_stderr(stderr),
+            ):
                 code = fetcher.main(
                     [
                         "--symbols",
@@ -437,8 +443,8 @@ class FetchBaostockAShareTests(unittest.TestCase):
             output_exists = output.exists()
 
         self.assertEqual(2, code)
-        self.assertFalse(output_exists)
-        self.assertIn("prices output and metadata output must differ", stderr.getvalue())
+        self.assertTrue(output_exists)
+        self.assertIn("output paths must be distinct", stderr.getvalue())
         self.assertIn(
             f"source_claim_boundary={fetcher.CLAIM_BOUNDARY}", stderr.getvalue()
         )
@@ -535,11 +541,14 @@ class FetchBaostockAShareTests(unittest.TestCase):
             meta.write_text('{"stale": true}\n', encoding="utf-8")
             stderr = StringIO()
 
-            with patch.object(
-                fetcher,
-                "fetch_prices",
-                side_effect=RuntimeError("offline"),
-            ), redirect_stderr(stderr):
+            with (
+                patch.object(
+                    fetcher,
+                    "fetch_prices",
+                    side_effect=RuntimeError("offline"),
+                ),
+                redirect_stderr(stderr),
+            ):
                 code = fetcher.main(
                     [
                         "--symbols",

@@ -41,7 +41,9 @@ class PortfolioCapacityReportCliTests(unittest.TestCase):
         self.assertEqual(0, code)
         self.assertEqual(90000.0, summary["max_gross_notional"])
         self.assertEqual(90000.0, summary["max_cash_reserved"])
-        self.assertEqual(["2026-05-13", "2026-05-14"], summary["max_gross_notional_dates"])
+        self.assertEqual(
+            ["2026-05-13", "2026-05-14"], summary["max_gross_notional_dates"]
+        )
         self.assertEqual([40000.0, 90000.0, 90000.0], daily["gross_notional"].tolist())
         self.assertEqual([40000.0, 90000.0, 90000.0], daily["cash_reserved"].tolist())
 
@@ -69,9 +71,13 @@ class PortfolioCapacityReportCliTests(unittest.TestCase):
         notional_only = pd.DataFrame(
             [trade("000001", "2026-05-12", "2026-05-12", "2026-05-14", notional=1000.0)]
         )
-        no_amounts = pd.DataFrame([trade("000001", "2026-05-12", "2026-05-12", "2026-05-14")])
+        no_amounts = pd.DataFrame(
+            [trade("000001", "2026-05-12", "2026-05-12", "2026-05-14")]
+        )
 
-        self.assertEqual(0, run_overlap_cli(notional_only, ["--max-gross-notional", "1000"])[0])
+        self.assertEqual(
+            0, run_overlap_cli(notional_only, ["--max-gross-notional", "1000"])[0]
+        )
         self.assertIn(
             "cash_reserved_missing",
             run_overlap_cli(no_amounts, ["--max-cash-reserved", "1000"])[2],
@@ -84,9 +90,53 @@ class PortfolioCapacityReportCliTests(unittest.TestCase):
     def test_non_numeric_or_negative_amount_fields_are_rejected(self) -> None:
         for field in ["notional", "cash_reserved"]:
             with self.assertRaisesRegex(ValueError, f"{field} must be numeric"):
-                overlap_report.build_overlap_report([pd.DataFrame([bad_capital(field, "bad")])])
+                overlap_report.build_overlap_report(
+                    [pd.DataFrame([bad_capital(field, "bad")])]
+                )
             with self.assertRaisesRegex(ValueError, f"{field} must be >= 0"):
-                overlap_report.build_overlap_report([pd.DataFrame([bad_capital(field, -1)])])
+                overlap_report.build_overlap_report(
+                    [pd.DataFrame([bad_capital(field, -1)])]
+                )
+
+    def test_non_finite_capacity_limits_are_rejected_without_outputs(self) -> None:
+        frame = pd.DataFrame(
+            [capitalized_trade("000001", "2026-05-12", "2026-05-12", "2026-05-14", 0.4)]
+        )
+        for option in [
+            "--max-gross-weight",
+            "--max-gross-notional",
+            "--max-cash-reserved",
+        ]:
+            for value in ["nan", "inf", "-inf"]:
+                with self.subTest(option=option, value=value):
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        root = Path(tmpdir)
+                        backtest = root / "backtest.csv"
+                        daily = root / "daily.csv"
+                        overlaps = root / "overlap.csv"
+                        summary = root / "summary.json"
+                        frame.to_csv(backtest, index=False)
+                        stderr = StringIO()
+                        with redirect_stderr(stderr):
+                            code = overlap_report.main(
+                                [
+                                    "--backtests",
+                                    str(backtest),
+                                    "--daily-output",
+                                    str(daily),
+                                    "--overlap-output",
+                                    str(overlaps),
+                                    "--summary-output",
+                                    str(summary),
+                                    f"{option}={value}",
+                                ]
+                            )
+
+                    self.assertEqual(2, code)
+                    self.assertIn("must be finite", stderr.getvalue())
+                    self.assertFalse(daily.exists())
+                    self.assertFalse(overlaps.exists())
+                    self.assertFalse(summary.exists())
 
 
 def run_overlap_cli(

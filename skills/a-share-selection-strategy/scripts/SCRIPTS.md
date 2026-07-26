@@ -8,6 +8,8 @@
 
 根层 `.py` 路径保持兼容；部分内部 helper 的真实实现已迁入 `lib/`，根层同名文件只做 re-export 和直接执行 fail-fast。用户命令仍使用本文件列出的根层 CLI，不直接调用 `lib/`。
 
+使用公共输出路径预检的 CLI，其 input、output 和 checkpoint 路径必须传入 shell 已展开的实际路径。它们不会自行扩展字面前导 `~`：例如被引号包裹的 `"~/prices.csv"` 或 Python 调用传入 `Path("~/prices.csv")` 会在任何读取、清理或写入前失败；使用 `$HOME/prices.csv` 或由 shell 已展开的 `~/prices.csv`。这样路径校验、旧输出清理和最终文件操作始终针对同一个路径对象。
+
 新的 internal helper 不再新增到 `scripts/` 根层；默认放入 `lib/` 分层包。根层 internal helper 只是兼容预算，后续迁移只能减少或保持，不应增加。内部运行路径优先导入 `lib.*`，但 import 路径不是稳定用户 API；完整分层、复杂度豁免和迁移判断见 [../references/script-inventory.md](../references/script-inventory.md)。
 
 命令细节、依赖和字段映射仍以 [../references/script-reference.md](../references/script-reference.md) 为准；脚本边界和 helper 边界先读本文件。
@@ -22,19 +24,21 @@
 | `validate_ohlcv.py` | 校验 CSV/Parquet 行情输入 | 字段、日期、前导零、重复行、价格和历史窗口 |
 | `score_candidates.py` | 本地行情评分并输出候选 CSV；可显式写性能 profile | `effective_empty_result`、`failed_symbols`、prediction 披露字段；`--profile-output` 默认关闭 |
 | `run_today_a_share_selection.py` | 今日总控，串联取数、校验、评分、诊断和 HTML | `run_manifest.json`、`summary.json`、metadata；Baostock history 可显式输出 Parquet，默认仍为 CSV；`--score-profile` 仅增加观测产物；`--full-a-provenance` 仅显式消费已验证 lineage 并执行最终 breadth 对账 |
-| `slice_prices_as_of.py` | 按信号日切片行情 | `actual_data_date`，不能只看退出码 |
+| `slice_prices_as_of.py` | 按信号日切片行情 | `actual_data_date`，不能只看退出码；输出路径不得覆盖输入 |
 
 ## 取数入口
+
+下列双输出 fetch CLI 会在取数或依赖加载前拒绝 prices/spot 输出与 metadata 输出的直连、相对、软链接或硬链接别名；冲突时保留原文件且不调用 provider。`fetch_baostock_a_share.py` 还保护 `--symbols-file` 和 `--names-input`，`fetch_zzshare_a_share.py` 还保护 `--symbols-file` 和整个 `--checkpoint-dir` 树（包括已存在 hardlink 别名和用户控制父级目录中的符号链接）；两者的 output/metadata 不能覆盖这些输入或恢复状态。macOS `/var` 到 `/private/var` 的系统临时目录映射不视为用户 checkpoint 链接。
 
 | 脚本 | 数据源 | 边界 |
 | --- | --- | --- |
 | `fetch_eastmoney_a_share_spot.py` | 东方财富 A 股实时快照 | partial 分页不能写成全市场完成；长分页需稳定排序和 retry/page interval |
 | `fetch_baostock_a_share_universe.py` | baostock `query_all_stock` A 股 universe | 只写 symbol/name 兼容快照；支持显式日期回看和失败重试；`fetch_errors/fetch_attempts/max_attempts` 用于复盘；不是实时行情、价格、成交额或全市场完成证明 |
-| `fetch_baostock_a_share.py` | baostock A 股日线 | prices 输出按 `.csv/.parquet/.pq` 后缀显式选择，CSV 默认兼容；可复用 `symbol/name` CSV/Parquet，缺名和非交易行策略显式；检查失败、空 symbol、无效行和可交易字段 |
+| `fetch_baostock_a_share.py` | baostock A 股日线 | prices 输出按 `.csv/.parquet/.pq` 后缀显式选择，CSV 默认兼容；可复用 `symbol/name` CSV/Parquet，缺名和非交易行策略显式；output/metadata 不得覆盖 `--symbols-file` 或 `--names-input`；检查失败、空 symbol、无效行和可交易字段 |
 | `fetch_akshare_a_share.py` | akshare A 股日线 | fallback 成功不证明主接口稳定 |
 | `fetch_pytdx_a_share.py` | pytdx A 股日线 | 自适应近期窗口请求；no-token OHLCV/amount 补充源；只允许同 `symbol+date` 合并，缺换手率、可交易字段、官方授权和长期稳定证明 |
 | `fetch_akshare_hk_daily.py` | akshare 港股日线 | 不证明港交所日历或真实成交 |
-| `fetch_zzshare_a_share.py` | zzshare A 股日线 | 检查 token、截断、频率和来源边界 |
+| `fetch_zzshare_a_share.py` | zzshare A 股日线 | output/metadata 不得覆盖 `--symbols-file` 或 `--checkpoint-dir` 的恢复状态；检查 token、截断、频率和来源边界 |
 | `fetch_yfinance_ohlcv.py` | yfinance 通用 OHLCV | market 只是标签，缺换手率时必须披露假设 |
 
 ## 门禁和回测入口
@@ -42,19 +46,19 @@
 | 脚本 | 用途 | 不能外推 |
 | --- | --- | --- |
 | `generate_lightgbm_predictions.py` | 可选 LightGBM prediction 生成器 | 下游评分通过不能反推被跳过标的也通过 |
-| `allocate_candidate_capital.py` | 单候选本地 sizing | 不是真实成交、券商订单或现金容量证明 |
-| `allocate_portfolio_candidate_capital.py` | 组合级 sizing 和容量裁剪 | 裁剪后候选不能等同原始候选全通过 |
-| `backtest_buy_hold.py` | close-to-close buy-hold 基线 | 默认零成本，不是真实净收益 |
-| `portfolio_equity_curve.py` | 等权或 sizing 资金曲线 | 默认只按 complete trades 计算 |
+| `allocate_candidate_capital.py` | 按下一观测开盘价计算单候选本地 sizing | 不是真实成交、券商订单或现金容量证明 |
+| `allocate_portfolio_candidate_capital.py` | 按下一观测开盘价的组合级 sizing 和容量裁剪 | 裁剪后候选不能等同原始候选全通过 |
+| `backtest_buy_hold.py` | 信号日收盘后、下一观测 bar 开盘入场的 buy-hold 基线 | 默认零成本，不是真实净收益 |
+| `portfolio_equity_curve.py` | 按完成交易等权计算资金曲线 | 不读取 sizing 字段，不代表按权重、名义金额或预留现金计算 |
 | `portfolio_overlap_report.py` | 并发持仓、重叠和容量门禁 | 工作日日历不是交易所日历 |
 | `run_baostock_walk_forward.py` | baostock walk-forward 总控 | `--offline-plan` 不执行真实门禁 |
-| `prepare_history_retry_symbols.py` | 从 `selected_symbols.json` 和 `history_metadata.json` 汇总 failed/empty/truncated/unprocessed symbol，生成历史抓取重试清单 | 只生成 recovery plan，不证明全 A 完成 |
-| `prepare_clean_history_pool.py` | 从 history metadata 和 short-history artifact 生成 clean prices/metadata；也可从已落地 effective history 显式推导短历史清单、合并已抓取 delta，或原子写 provenance | 短历史派生不与同轮内存增量合并共用；推导清单和 provenance 都只说明 artifact lineage，不联网、不补齐、不替代最终 runner、实时行情或选股证明 |
-| `prepare_incremental_history_plan.py` | 对比当前 universe 和既有 history metadata 生成有界、可恢复的增量抓取计划 | 只生成 plan，不证明增量抓取成功；默认每 bucket 最多 200 个 symbol |
+| `prepare_history_retry_symbols.py` | 从 `selected_symbols.json` 和 `history_metadata.json` 汇总 failed/empty/truncated/unprocessed symbol，生成历史抓取重试清单 | 输出与输入或可选文本输出的直连、相对、软链接和硬链接别名会在读取前失败；只生成 recovery plan，不证明全 A 完成 |
+| `prepare_clean_history_pool.py` | 从 history metadata 和 short-history artifact 生成 clean prices/metadata；也可从已落地 effective history 显式推导短历史清单、合并已抓取 delta，或原子写 provenance | 所有输出在读取 artifact 或加载 pandas 前必须与输入及彼此分离；短历史派生不与同轮内存增量合并共用；推导清单和 provenance 都只说明 artifact lineage，不联网、不补齐、不替代最终 runner、实时行情或选股证明 |
+| `prepare_incremental_history_plan.py` | 对比当前 universe 和既有 history metadata 生成有界、可恢复的增量抓取计划 | 输出与输入或可选 symbol 清单的直连、相对、软链接和硬链接别名会在读取或加载 pandas 前失败；只生成 plan，不证明增量抓取成功；默认每 bucket 最多 200 个 symbol |
 | `execute_incremental_history_plan.py` | 按计划 bucket 调用单一显式 provider，落盘 checkpoint、聚合增量 artifact，并可选执行 verified merge | 不自动切源；执行完成也不等于全 A 或选股门禁完成 |
-| `summarize_walk_forward_run.py` | 汇总 walk-forward artifact | 未传 required model 参数时不能声称模型口径已验证 |
-| `validate_walk_forward_manifest.py` | 校验 runner manifest | 不替代 artifact 内容复验 |
-| `validate_walk_forward_artifacts.py` | 校验 walk-forward artifact 内容 | `capacity_gate_pass=false` 仍是容量门禁失败 |
+| `summarize_walk_forward_run.py` | 汇总 walk-forward artifact | 未传 required tradability、limit rules 或 execution model 参数时不能声称模型口径已验证；容量上限和 overlap 容量字段必须是有限、非负的 JSON 数值，计数字段还必须是整数；输出不得覆盖任何读取的 run artifact，bad input 不保留旧摘要 |
+| `validate_walk_forward_manifest.py` | 校验 runner manifest 和回测执行参数 | 不替代 artifact 内容复验；报告输出不得覆盖 manifest |
+| `validate_walk_forward_artifacts.py` | 用根目录 `prices.csv` 独立校验 walk-forward 回测、sizing 价格、资金公式和副本一致性 | 报告输出不得覆盖读取的 run artifact；`capacity_gate_pass=false` 仍是容量门禁失败 |
 | `probe_baostock_limit_fields.py` | baostock 涨跌停字段探测 | 字段可取不等于涨跌停规则已建模 |
 | `probe_external_source_stability.py` | 外部源稳定性观察 | 覆盖 eastmoney、baostock_universe、akshare、pytdx、yfinance、baostock、zzshare；可选紧凑归档由 `lib/gates/external_source_evidence_archive.py` 负责；短窗口通过不证明长期稳定 |
 

@@ -88,10 +88,12 @@ for manifest in manifests:
             raise RuntimeError(f"{manifest}: missing interface.{key}")
 PY
 PYTHONPYCACHEPREFIX=/tmp/a-share-selection-pycache python3 -m compileall -q skills/a-share-selection-strategy/scripts
-PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy --with pyarrow python -m unittest discover -s tests -v
+for shard in core providers gates report runner-core runner-providers runner-artifacts runner-plan-resume runner-universe; do
+  PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy --with pyarrow python tests/run_unittest_shard.py "$shard"
+done
 ```
 
-CI 会用 `tests/run_unittest_shard.py` 按职责分配普通测试文件，并将 `test_today_a_share_selection_runner.py` 按方法互斥分片；该脚本会校验全集覆盖和无重复。本地交付前仍需运行上面的完整 unittest，不能只依赖单个分片。
+CI 会用 `tests/run_unittest_shard.py` 按职责分配普通测试文件，并将 `test_today_a_share_selection_runner.py` 按方法互斥分片；该脚本会校验全集覆盖和无重复。本地交付前必须运行上面的完整分片集合，不能只依赖单个分片。
 
 CI 直接依赖约束位于 `skills/a-share-selection-strategy/constraints-ci.txt`，仅用于固定仓库测试的已验证组合；面向使用者的 `requirements*.txt` 继续保留最低版本范围，两者不能混作发布兼容性声明。
 

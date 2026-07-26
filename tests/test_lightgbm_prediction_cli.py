@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
+import os
 import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
-import json
 from pathlib import Path
 
 import numpy as np
@@ -21,7 +22,11 @@ sys.path.insert(0, str(TESTS))
 
 import generate_lightgbm_predictions as generator  # noqa: E402
 import score_candidates as scorer  # noqa: E402
-from helpers import build_frame, load_config, permissive_thresholds  # noqa: E402
+from helpers import build_frame, load_config  # noqa: E402
+from lib.selection_core.a_share_selection_model_contracts import (  # noqa: E402
+    PREDICTION_LABEL_DEFINITION,
+    PREDICTION_LABEL_EXECUTION_MODEL,
+)
 
 
 class RecordingScaler:
@@ -47,7 +52,9 @@ class RecordingClassifier:
     def fit(self, features, labels) -> None:
         type(self).last_fit_rows = len(features)
         type(self).last_labels = list(labels)
-        type(self).saw_feature_columns = list(features.columns) == generator.FEATURE_COLUMNS
+        type(self).saw_feature_columns = (
+            list(features.columns) == generator.FEATURE_COLUMNS
+        )
 
     def predict_proba(self, features):
         type(self).saw_feature_columns = (
@@ -58,6 +65,28 @@ class RecordingClassifier:
 
 
 class LightgbmPredictionCliTests(unittest.TestCase):
+    def assert_cli_path_collision(
+        self,
+        *,
+        input_path: Path,
+        output_value: str,
+        summary_value: str | None,
+        expected_error: str,
+        preserved: dict[Path, bytes],
+    ) -> None:
+        argv = ["--input", str(input_path), "--output", output_value]
+        if summary_value is not None:
+            argv.extend(["--summary-output", summary_value])
+        stderr = StringIO()
+        with redirect_stderr(stderr):
+            code = generator.main(argv)
+
+        self.assertEqual(2, code)
+        self.assertIn(expected_error, stderr.getvalue())
+        self.assertIn("output_written=false", stderr.getvalue())
+        for path, contents in preserved.items():
+            self.assertEqual(contents, path.read_bytes())
+
     def test_prediction_uses_train_split_only_and_scores_prediction_input(self) -> None:
         frame = build_frame(days=180, include_turn=True)
         deps = {"classifier": RecordingClassifier, "scaler": RecordingScaler}
@@ -74,6 +103,10 @@ class LightgbmPredictionCliTests(unittest.TestCase):
         self.assertTrue(result["prediction_score"].between(0, 1).all())
         self.assertEqual({5}, set(result["prediction_horizon_days"]))
         self.assertEqual({"lightgbm"}, set(result["prediction_model"]))
+        self.assertEqual(
+            {PREDICTION_LABEL_EXECUTION_MODEL},
+            set(result["prediction_label_execution_model"]),
+        )
         self.assertEqual(
             {"generation_audit_only"},
             set(result["prediction_model_quality_scope"]),
@@ -95,7 +128,9 @@ class LightgbmPredictionCliTests(unittest.TestCase):
         self.assertEqual(generator.FEATURE_COLUMNS, saved["feature_columns"])
         self.assertEqual("time_series_train_prefix", saved["split_method"])
         self.assertEqual("train_split_only", saved["scaler_fit_scope"])
-        self.assertEqual("latest_probability_repeated_for_scoring", saved["prediction_scope"])
+        self.assertEqual(
+            "latest_probability_repeated_for_scoring", saved["prediction_scope"]
+        )
         self.assertEqual("generation_audit_only", saved["model_quality_scope"])
         self.assertEqual("not_computed", saved["model_quality_metrics"]["holdout_auc"])
         self.assertEqual("not_computed", saved["model_quality_metrics"]["holdout_ic"])
@@ -107,7 +142,10 @@ class LightgbmPredictionCliTests(unittest.TestCase):
             "not_proven",
             saved["model_quality_metrics"]["full_market_generalization"],
         )
-        self.assertIn("close.shift(-horizon)", saved["label_definition"])
+        self.assertEqual(
+            PREDICTION_LABEL_EXECUTION_MODEL, saved["label_execution_model"]
+        )
+        self.assertEqual(PREDICTION_LABEL_DEFINITION, saved["label_definition"])
         self.assertEqual("predicted", saved["symbols"][0]["status"])
         self.assertGreater(saved["symbols"][0]["train_rows"], 0)
         self.assertGreater(saved["symbols"][0]["holdout_rows"], 0)
@@ -119,7 +157,9 @@ class LightgbmPredictionCliTests(unittest.TestCase):
             saved["symbols"][0]["train_date_min"],
             saved["symbols"][0]["train_date_max"],
         )
-        self.assertEqual(saved["symbols"][0]["date_max"], saved["symbols"][0]["latest_feature_date"])
+        self.assertEqual(
+            saved["symbols"][0]["date_max"], saved["symbols"][0]["latest_feature_date"]
+        )
         self.assertGreater(saved["symbols"][0]["target_positive_labels"], 0)
         self.assertGreater(saved["symbols"][0]["target_negative_labels"], 0)
         self.assertLessEqual(
@@ -131,9 +171,18 @@ class LightgbmPredictionCliTests(unittest.TestCase):
             saved["symbols"][0]["latest_feature_date"],
         )
         self.assertEqual("not_computable", saved["symbols"][0]["holdout_metric_status"])
-        self.assertEqual("single_class_holdout", saved["symbols"][0]["holdout_metric_reason"])
+        self.assertEqual(
+            "single_class_holdout", saved["symbols"][0]["holdout_metric_reason"]
+        )
         self.assertIsNone(saved["symbols"][0]["holdout_auc"])
-        self.assertIn("close.shift(-horizon)", saved["symbols"][0]["label_definition"])
+        self.assertEqual(
+            PREDICTION_LABEL_EXECUTION_MODEL,
+            saved["symbols"][0]["label_execution_model"],
+        )
+        self.assertEqual(
+            PREDICTION_LABEL_DEFINITION,
+            saved["symbols"][0]["label_definition"],
+        )
 
     def test_cli_rejects_rows_after_as_of_date_without_output(self) -> None:
         frame = build_frame(days=180, include_turn=True)
@@ -254,6 +303,10 @@ class LightgbmPredictionCliTests(unittest.TestCase):
             self.assertEqual({"lightgbm"}, set(frame_out["prediction_model"]))
             self.assertEqual({5}, set(frame_out["prediction_horizon_days"]))
             self.assertEqual(
+                {PREDICTION_LABEL_EXECUTION_MODEL},
+                set(frame_out["prediction_label_execution_model"]),
+            )
+            self.assertEqual(
                 {"latest_probability_repeated_for_scoring"},
                 set(frame_out["prediction_scope"]),
             )
@@ -274,11 +327,38 @@ class LightgbmPredictionCliTests(unittest.TestCase):
         self.assertTrue(pd.isna(features.loc[0, "momentum_6m"]))
         self.assertTrue(pd.isna(features.loc[0, "volatility"]))
         self.assertTrue(pd.isna(features.loc[0, "vol_ratio"]))
-        self.assertTrue(pd.isna(features.loc[0, "target_return"]))
         self.assertEqual(50, features.loc[0, "rsi"])
         self.assertTrue(pd.isna(features.loc[0, "macd"]))
         self.assertTrue(pd.isna(features.loc[0, "signal"]))
         self.assertGreater(features.loc[21, "momentum_1m"], 0)
+        trainable = features.dropna(
+            subset=[*generator.FEATURE_COLUMNS, "target_return"]
+        )
+        self.assertNotIn(0, trainable.index)
+
+    def test_feature_builder_uses_execution_aligned_label_prices(self) -> None:
+        frame = build_frame(days=180, include_turn=True)
+        frame = frame[frame["symbol"].eq("000002")].copy().reset_index(drop=True)
+        frame.loc[120, "close"] = 10.0
+        frame.loc[121, "open"] = 20.0
+        frame.loc[122, "close"] = 30.0
+        frame.loc[131, "open"] = np.nan
+        frame.loc[135, "close"] = np.nan
+        frame.loc[141, "open"] = np.inf
+
+        features = generator.build_feature_frame(frame, horizon=2)
+        trainable = features.dropna(
+            subset=[*generator.FEATURE_COLUMNS, "target_return"]
+        )
+
+        self.assertAlmostEqual(0.5, float(features.loc[120, "target_return"]))
+        self.assertTrue(pd.isna(features.loc[130, "target_return"]))
+        self.assertTrue(pd.isna(features.loc[133, "target_return"]))
+        self.assertTrue(pd.isna(features.loc[140, "target_return"]))
+        self.assertTrue(pd.isna(features.loc[len(frame) - 1, "target_return"]))
+        self.assertNotIn(130, trainable.index)
+        self.assertNotIn(133, trainable.index)
+        self.assertNotIn(140, trainable.index)
 
     def test_prediction_records_computed_holdout_auc_when_labels_vary(self) -> None:
         frame = oscillating_frame(days=180)
@@ -299,6 +379,95 @@ class LightgbmPredictionCliTests(unittest.TestCase):
         self.assertGreaterEqual(first["holdout_auc"], 0.0)
         self.assertLessEqual(first["holdout_auc"], 1.0)
 
+    def test_cli_rejects_output_path_collisions_before_loading_dependencies(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            input_path = root / "prices.csv"
+            input_contents = b"source data must remain intact\n"
+            input_path.write_bytes(input_contents)
+            linked_input_path = root / "prices-link.csv"
+            linked_input_path.symlink_to(input_path)
+            summary_input_output = root / "summary-input-predictions.csv"
+            summary_input_contents = b"stale summary-input output\n"
+            summary_input_output.write_bytes(summary_input_contents)
+            duplicate_output = root / "duplicate-output.csv"
+            duplicate_contents = b"stale duplicate output\n"
+            duplicate_output.write_bytes(duplicate_contents)
+            relative_input_path = os.path.relpath(input_path, start=Path.cwd())
+            cases = [
+                (
+                    "output_equals_input",
+                    str(input_path),
+                    None,
+                    "output path must differ from input paths",
+                    {input_path: input_contents},
+                ),
+                (
+                    "summary_output_equals_input",
+                    str(summary_input_output),
+                    str(input_path),
+                    "output path must differ from input paths",
+                    {
+                        input_path: input_contents,
+                        summary_input_output: summary_input_contents,
+                    },
+                ),
+                (
+                    "output_equals_summary_output",
+                    str(duplicate_output),
+                    str(duplicate_output),
+                    "output paths must be distinct",
+                    {
+                        input_path: input_contents,
+                        duplicate_output: duplicate_contents,
+                    },
+                ),
+                (
+                    "relative_output_alias",
+                    relative_input_path,
+                    None,
+                    "output path must differ from input paths",
+                    {input_path: input_contents},
+                ),
+                (
+                    "symlink_output_alias",
+                    str(linked_input_path),
+                    None,
+                    "output path must differ from input paths",
+                    {input_path: input_contents},
+                ),
+            ]
+            original_ensure = generator.ensure_runtime_dependencies
+            dependency_loads = 0
+
+            def record_dependency_load() -> None:
+                nonlocal dependency_loads
+                dependency_loads += 1
+
+            generator.ensure_runtime_dependencies = record_dependency_load
+            try:
+                for (
+                    name,
+                    output_value,
+                    summary_value,
+                    expected_error,
+                    preserved,
+                ) in cases:
+                    with self.subTest(name=name):
+                        self.assert_cli_path_collision(
+                            input_path=input_path,
+                            output_value=output_value,
+                            summary_value=summary_value,
+                            expected_error=expected_error,
+                            preserved=preserved,
+                        )
+            finally:
+                generator.ensure_runtime_dependencies = original_ensure
+
+            self.assertEqual(0, dependency_loads)
+
     def test_cli_reports_missing_lightgbm_dependency_without_output(self) -> None:
         frame = build_frame(days=180, include_turn=True)
         original_loader = generator.load_model_dependencies
@@ -313,6 +482,9 @@ class LightgbmPredictionCliTests(unittest.TestCase):
                 output_path = Path(tmpdir) / "predictions.csv"
                 summary_path = Path(tmpdir) / "summary.json"
                 frame.to_csv(input_path, index=False)
+                input_contents = input_path.read_bytes()
+                output_path.write_text("stale prediction rows\n", encoding="utf-8")
+                summary_path.write_text('{"stale": true}\n', encoding="utf-8")
                 stderr = StringIO()
                 with redirect_stderr(stderr):
                     code = generator.main(
@@ -325,11 +497,12 @@ class LightgbmPredictionCliTests(unittest.TestCase):
                             str(summary_path),
                         ]
                     )
-            self.assertEqual(2, code)
-            self.assertFalse(output_path.exists())
-            self.assertFalse(summary_path.exists())
-            self.assertIn("code=dependency_error", stderr.getvalue())
-            self.assertIn("lightgbm and scikit-learn", stderr.getvalue())
+                self.assertEqual(2, code)
+                self.assertFalse(output_path.exists())
+                self.assertFalse(summary_path.exists())
+                self.assertEqual(input_contents, input_path.read_bytes())
+                self.assertIn("code=dependency_error", stderr.getvalue())
+                self.assertIn("lightgbm and scikit-learn", stderr.getvalue())
         finally:
             generator.load_model_dependencies = original_loader
 
@@ -359,7 +532,9 @@ class LightgbmPredictionCliTests(unittest.TestCase):
                     )
 
             self.assertEqual(0, code, stderr.getvalue())
-            self.assertIn("model_quality_scope=generation_audit_only", stdout.getvalue())
+            self.assertIn(
+                "model_quality_scope=generation_audit_only", stdout.getvalue()
+            )
             self.assertIn("full_market_generalization=not_proven", stdout.getvalue())
         finally:
             generator.load_model_dependencies = original_loader

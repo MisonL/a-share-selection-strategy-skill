@@ -6,6 +6,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -23,6 +24,7 @@ from lib.selection_core.a_share_selection_backtest_rows import (
     completed_or_incomplete_row,
 )  # noqa: E402
 from lib.selection_core.a_share_selection_model_contracts import (  # noqa: E402
+    EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
     LIMIT_RULES_MODEL_NOT_MODELED,
     TRADABILITY_MODEL_ENTRY_EXIT,
     TRADABILITY_MODEL_HOLDING_PERIOD,
@@ -31,7 +33,7 @@ from lib.selection_core.a_share_selection_model_contracts import (  # noqa: E402
 
 
 class BuyHoldBacktestCliTests(unittest.TestCase):
-    def test_buy_hold_returns_close_to_close_result(self) -> None:
+    def test_buy_hold_uses_next_observed_open_and_signal_horizon_close(self) -> None:
         prices = build_frame(days=130)
         candidate = prices[prices["symbol"] == "000002"].iloc[[20]][["symbol", "date"]]
         result, summary = backtest.run_backtest(
@@ -42,13 +44,17 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
             slippage_bps=7.5,
         )
         history = prices[prices["symbol"] == "000002"].reset_index(drop=True)
-        gross = history.loc[25, "close"] / history.loc[20, "close"] - 1
+        gross = history.loc[25, "close"] / history.loc[21, "open"] - 1
         expected = gross - 0.002
 
         self.assertEqual(1, summary["completed_trades"])
         self.assertEqual(0, summary["incomplete_trades"])
         self.assertEqual(12.5, summary["cost_bps"])
         self.assertEqual(7.5, summary["slippage_bps"])
+        self.assertEqual(
+            EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
+            summary["execution_model"],
+        )
         self.assertAlmostEqual(gross, float(result["gross_return"].iloc[0]))
         self.assertAlmostEqual(expected, float(result["return"].iloc[0]))
         self.assertEqual(12.5, float(result["cost_bps"].iloc[0]))
@@ -58,6 +64,18 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         self.assertEqual(TRADABILITY_MODEL_NONE, result["tradability_model"].iloc[0])
         self.assertEqual(
             LIMIT_RULES_MODEL_NOT_MODELED, result["limit_rules_model"].iloc[0]
+        )
+        self.assertEqual(str(history.loc[21, "date"]), result["entry_date"].iloc[0])
+        self.assertEqual(str(history.loc[25, "date"]), result["exit_date"].iloc[0])
+        self.assertEqual(history.loc[21, "open"], result["entry_price"].iloc[0])
+        self.assertEqual(history.loc[25, "close"], result["exit_price"].iloc[0])
+        self.assertEqual("open", result["entry_price_field"].iloc[0])
+        self.assertEqual("close", result["exit_price_field"].iloc[0])
+        self.assertEqual(5, int(result["holding_observed_bars"].iloc[0]))
+        self.assertEqual(4, int(result["holding_period"].iloc[0]))
+        self.assertEqual(
+            EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
+            result["execution_model"].iloc[0],
         )
 
     def test_cli_preserves_candidate_capital_fields_for_all_rows(self) -> None:
@@ -163,10 +181,111 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "slippage-bps"):
             backtest.run_backtest(prices, candidate, hold_days=5, slippage_bps=-1)
 
-    def test_zero_entry_close_is_incomplete_not_divide_by_zero(self) -> None:
+    def test_non_finite_backtest_options_are_rejected(self) -> None:
+        prices = build_frame(days=130)
+        candidate = prices[prices["symbol"] == "000002"].iloc[[20]][["symbol", "date"]]
+        cases = [
+            ("hold_days", "hold-days"),
+            ("cost_bps", "cost-bps"),
+            ("slippage_bps", "slippage-bps"),
+        ]
+        for field, label in cases:
+            for value in (float("nan"), float("inf"), float("-inf")):
+                with self.subTest(field=field, value=value):
+                    options = {
+                        "hold_days": 5,
+                        "cost_bps": 0.0,
+                        "slippage_bps": 0.0,
+                    }
+                    options[field] = value
+                    with self.assertRaisesRegex(ValueError, f"{label} must be finite"):
+                        backtest.run_backtest(prices, candidate, **options)
+
+    def test_cli_non_finite_cost_or_slippage_removes_stale_output(self) -> None:
+        prices = build_frame(days=130)
+        candidate = prices[prices["symbol"] == "000002"].iloc[[20]][["symbol", "date"]]
+        for option in ["--cost-bps", "--slippage-bps"]:
+            for value in ["nan", "inf", "-inf"]:
+                with self.subTest(option=option, value=value):
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        root = Path(tmpdir)
+                        prices_path = root / "prices.csv"
+                        candidates_path = root / "candidates.csv"
+                        output_path = root / "backtest.csv"
+                        prices.to_csv(prices_path, index=False)
+                        candidate.to_csv(candidates_path, index=False)
+                        output_path.write_text("stale result", encoding="utf-8")
+                        stderr = StringIO()
+                        with redirect_stderr(stderr):
+                            code = backtest.main(
+                                [
+                                    "--prices",
+                                    str(prices_path),
+                                    "--candidates",
+                                    str(candidates_path),
+                                    "--output",
+                                    str(output_path),
+                                    option,
+                                    value,
+                                ]
+                            )
+
+                    self.assertEqual(2, code)
+                    self.assertFalse(output_path.exists())
+                    self.assertIn("must be finite", stderr.getvalue())
+
+    def test_cli_rejects_directory_symlink_without_removing_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices_path = root / "prices.csv"
+            candidates_path = root / "candidates.csv"
+            output_target = root / "output-directory"
+            output_path = root / "output-link"
+            prices_path.write_text(
+                "prices input must remain intact\n", encoding="utf-8"
+            )
+            candidates_path.write_text(
+                "candidates input must remain intact\n",
+                encoding="utf-8",
+            )
+            output_target.mkdir()
+            marker = output_target / "marker.txt"
+            marker.write_text("directory target must remain intact\n", encoding="utf-8")
+            output_path.symlink_to(output_target, target_is_directory=True)
+            stderr = StringIO()
+
+            with (
+                patch.object(backtest, "ensure_runtime_dependencies") as ensure,
+                redirect_stderr(stderr),
+            ):
+                code = backtest.main(
+                    [
+                        "--prices",
+                        str(prices_path),
+                        "--candidates",
+                        str(candidates_path),
+                        "--output",
+                        str(output_path),
+                    ]
+                )
+
+            self.assertEqual(2, code)
+            ensure.assert_not_called()
+            self.assertTrue(output_path.is_symlink())
+            self.assertTrue(output_target.is_dir())
+            self.assertEqual(
+                "directory target must remain intact\n",
+                marker.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "output path must be a file, not a directory",
+                stderr.getvalue(),
+            )
+
+    def test_invalid_entry_open_is_incomplete_not_divide_by_zero(self) -> None:
         prices = build_frame(days=130)
         history = prices[prices["symbol"] == "000002"].reset_index(drop=True)
-        history.loc[20, "close"] = 0.0
+        history.loc[20, "open"] = 0.0
 
         result = completed_or_incomplete_row(
             symbol="000002",
@@ -181,13 +300,91 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         )
 
         self.assertEqual("incomplete", result["status"])
-        self.assertEqual("zero_entry_close", result["missing_reason"])
+        self.assertEqual("invalid_entry_open", result["missing_reason"])
+
+    def test_non_finite_next_observed_open_is_rejected(self) -> None:
+        prices = build_frame(days=130)
+        history = prices[prices["symbol"] == "000002"].reset_index(drop=True)
+        entry_date = history.loc[21, "date"]
+        prices.loc[
+            (prices["symbol"] == "000002") & (prices["date"] == entry_date), "open"
+        ] = float("inf")
+        candidate = history.iloc[[20]][["symbol", "date"]]
+
+        with self.assertRaisesRegex(ValueError, "column open has 1 non-finite values"):
+            backtest.run_backtest(prices, candidate, hold_days=5)
+
+    def test_derived_return_overflow_is_rejected(self) -> None:
+        history = pd.DataFrame(
+            [
+                {
+                    "date": pd.Timestamp("2026-01-01"),
+                    "open": 1e-320,
+                    "close": 1.0,
+                },
+                {
+                    "date": pd.Timestamp("2026-01-02"),
+                    "open": 1e-320,
+                    "close": 1e308,
+                },
+            ]
+        )
+
+        with self.assertRaisesRegex(ValueError, "gross-return must be finite"):
+            completed_or_incomplete_row(
+                symbol="000001",
+                signal_date=pd.Timestamp("2026-01-01"),
+                history=history,
+                entry_pos=0,
+                exit_pos=1,
+                holding_days=1,
+                cost_bps=0.0,
+                slippage_bps=0.0,
+                require_tradable_bars=False,
+            )
+
+        with self.assertRaisesRegex(ValueError, "total-cost-bps must be finite"):
+            completed_or_incomplete_row(
+                symbol="000001",
+                signal_date=pd.Timestamp("2026-01-01"),
+                history=history.assign(open=[1.0, 1.0], close=[1.0, 1.0]),
+                entry_pos=0,
+                exit_pos=1,
+                holding_days=1,
+                cost_bps=1e308,
+                slippage_bps=1e308,
+                require_tradable_bars=False,
+            )
+
+    def test_missing_next_observed_open_is_rejected(self) -> None:
+        prices = build_frame(days=130)
+        history = prices[prices["symbol"] == "000002"].reset_index(drop=True)
+        entry_date = history.loc[21, "date"]
+        prices.loc[
+            (prices["symbol"] == "000002") & (prices["date"] == entry_date), "open"
+        ] = float("nan")
+        candidate = history.iloc[[20]][["symbol", "date"]]
+
+        with self.assertRaisesRegex(ValueError, "column open has 1 missing values"):
+            backtest.run_backtest(prices, candidate, hold_days=5)
+
+    def test_missing_next_observed_bar_is_incomplete(self) -> None:
+        prices = build_frame(days=130)
+        history = prices[prices["symbol"] == "000002"].reset_index(drop=True)
+        candidate = history.iloc[[-1]][["symbol", "date"]]
+
+        result, summary = backtest.run_backtest(prices, candidate, hold_days=5)
+
+        self.assertEqual(0, summary["completed_trades"])
+        self.assertEqual(1, summary["incomplete_trades"])
+        self.assertEqual("missing_next_observed_bar", result["missing_reason"].iloc[0])
 
     def test_require_tradable_bars_marks_non_tradable_entry(self) -> None:
         prices = build_frame(days=130)
         prices["tradestatus"] = "1"
+        history = prices[prices["symbol"] == "000002"].reset_index(drop=True)
         mask = (prices["symbol"] == "000002") & (
-            prices["date"] == prices.iloc[20]["date"]
+            prices["date"] == history.loc[21, "date"]
         )
         prices.loc[mask, "tradestatus"] = "0"
         candidate = prices[prices["symbol"] == "000002"].iloc[[20]][["symbol", "date"]]
@@ -319,8 +516,9 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
                         "--fail-on-incomplete",
                     ]
                 )
+            output_exists = output_path.exists()
         self.assertEqual(3, code)
-        self.assertFalse(output_path.exists())
+        self.assertFalse(output_exists)
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn("missing_reason_counts=missing_entry_price:1", stdout.getvalue())
         self.assertIn(f"tradability_model={TRADABILITY_MODEL_NONE}", stdout.getvalue())
@@ -356,8 +554,9 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
                         "--fail-on-incomplete",
                     ]
                 )
+            output_exists = output_path.exists()
         self.assertEqual(3, code)
-        self.assertFalse(output_path.exists())
+        self.assertFalse(output_exists)
         self.assertIn("ERROR_SUMMARY:", stdout.getvalue())
         self.assertIn("missing_reason_counts=missing_future_price:1", stdout.getvalue())
         self.assertIn("cost_bps=10.0", stdout.getvalue())
@@ -428,8 +627,9 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
                         str(history.loc[20, "date"]),
                     ]
                 )
+            output_exists = output_path.exists()
         self.assertEqual(2, code)
-        self.assertFalse(output_path.exists())
+        self.assertFalse(output_exists)
         self.assertEqual("", stdout.getvalue())
         self.assertIn("expected-signal-date", stderr.getvalue())
 
@@ -438,7 +638,7 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
         prices["tradestatus"] = "1"
         history = prices[prices["symbol"] == "000002"].reset_index(drop=True)
         mask = (prices["symbol"] == "000002") & (
-            prices["date"] == history.loc[20, "date"]
+            prices["date"] == history.loc[21, "date"]
         )
         prices.loc[mask, "tradestatus"] = "0"
         candidate = history.iloc[[20]][["symbol", "date"]]
@@ -463,9 +663,10 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
                         "--fail-on-incomplete",
                     ]
                 )
+            output_exists = output_path.exists()
 
         self.assertEqual(3, code)
-        self.assertFalse(output_path.exists())
+        self.assertFalse(output_exists)
         self.assertIn("tradability_required=True", stdout.getvalue())
         self.assertIn(
             f"tradability_model={TRADABILITY_MODEL_ENTRY_EXIT}", stdout.getvalue()
@@ -506,9 +707,10 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
                         "--fail-on-incomplete",
                     ]
                 )
+            output_exists = output_path.exists()
 
         self.assertEqual(3, code)
-        self.assertFalse(output_path.exists())
+        self.assertFalse(output_exists)
         self.assertIn("tradability_required=True", stdout.getvalue())
         self.assertIn(
             f"tradability_model={TRADABILITY_MODEL_HOLDING_PERIOD}", stdout.getvalue()
@@ -517,6 +719,67 @@ class BuyHoldBacktestCliTests(unittest.TestCase):
             "missing_reason_counts=non_tradable_holding_period:1", stdout.getvalue()
         )
         self.assertIn("incomplete_trades=1", stderr.getvalue())
+
+    def test_cli_strict_incomplete_removes_stale_output(self) -> None:
+        prices = build_frame(days=130)
+        candidate = pd.DataFrame([{"symbol": "000002", "date": "2025-12-31"}])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            prices_path = Path(tmpdir) / "prices.csv"
+            candidates_path = Path(tmpdir) / "candidates.csv"
+            output_path = Path(tmpdir) / "backtest.csv"
+            prices.to_csv(prices_path, index=False)
+            candidate.to_csv(candidates_path, index=False)
+            output_path.write_text("stale result", encoding="utf-8")
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = backtest.main(
+                    [
+                        "--prices",
+                        str(prices_path),
+                        "--candidates",
+                        str(candidates_path),
+                        "--output",
+                        str(output_path),
+                        "--fail-on-incomplete",
+                    ]
+                )
+            output_exists = output_path.exists()
+
+        self.assertEqual(3, code)
+        self.assertFalse(output_exists)
+        self.assertIn("output_not_written=true", stderr.getvalue())
+
+    def test_cli_rejects_output_path_that_would_overwrite_inputs(self) -> None:
+        prices = build_frame(days=130)
+        candidate = prices[prices["symbol"] == "000002"].iloc[[20]][["symbol", "date"]]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            prices_path = Path(tmpdir) / "prices.csv"
+            candidates_path = Path(tmpdir) / "candidates.csv"
+            prices.to_csv(prices_path, index=False)
+            candidate.to_csv(candidates_path, index=False)
+            for input_path in (prices_path, candidates_path):
+                with self.subTest(input=input_path.name):
+                    before = input_path.read_text(encoding="utf-8")
+                    stderr = StringIO()
+                    with redirect_stderr(stderr):
+                        code = backtest.main(
+                            [
+                                "--prices",
+                                str(prices_path),
+                                "--candidates",
+                                str(candidates_path),
+                                "--output",
+                                str(input_path),
+                            ]
+                        )
+                    after = input_path.read_text(encoding="utf-8")
+
+                    self.assertEqual(2, code)
+                    self.assertEqual(before, after)
+                    self.assertIn(
+                        "output path must differ from input paths", stderr.getvalue()
+                    )
 
 
 if __name__ == "__main__":

@@ -17,7 +17,9 @@ TESTS = ROOT / "tests"
 
 def load_cli_help_entries() -> list[str]:
     module_path = TESTS / "test_cli_help_contract_classification.py"
-    spec = importlib.util.spec_from_file_location("cli_help_contract_classification", module_path)
+    spec = importlib.util.spec_from_file_location(
+        "cli_help_contract_classification", module_path
+    )
     if spec is None or spec.loader is None:
         raise AssertionError(f"cannot load {module_path}")
     module = importlib.util.module_from_spec(spec)
@@ -30,7 +32,10 @@ def read_constant(module_path: Path, name: str) -> str:
     for node in tree.body:
         if not isinstance(node, ast.Assign):
             continue
-        if any(isinstance(target, ast.Name) and target.id == name for target in node.targets):
+        if any(
+            isinstance(target, ast.Name) and target.id == name
+            for target in node.targets
+        ):
             value = ast.literal_eval(node.value)
             if isinstance(value, str):
                 return value
@@ -129,7 +134,8 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--drop-invalid-rows",
                 "no token supplemental source",
             },
-            "fetch_yfinance_ohlcv.py": FETCH_CORE_OPTIONS | {"--market", "--timeout-seconds"},
+            "fetch_yfinance_ohlcv.py": FETCH_CORE_OPTIONS
+            | {"--market", "--timeout-seconds"},
             "execute_incremental_history_plan.py": {
                 "--plan",
                 "--provider",
@@ -355,6 +361,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--required-allocation-model",
                 "--manifest-validation",
                 "--allow-dropped-invalid-rows",
+                "must differ from all read run artifacts",
                 "checked automatically",
                 "capacity pass",
                 "known violations only, not a capacity pass",
@@ -479,7 +486,7 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
                 "--lot-size",
             ],
             "backtest_buy_hold.py": [
-                "close-to-close buy-hold backtest",
+                "enters at the next observed open after a signal close",
                 "local baseline",
                 "not a promise of future returns or real tradability",
             ],
@@ -533,7 +540,9 @@ class CliHelpWithoutDependenciesTests(unittest.TestCase):
         lightgbm_script = SKILL_ROOT / "scripts/generate_lightgbm_predictions.py"
         slice_script = SKILL_ROOT / "scripts/slice_prices_as_of.py"
         allocate_script = SKILL_ROOT / "scripts/allocate_candidate_capital.py"
-        portfolio_allocate_script = SKILL_ROOT / "scripts/allocate_portfolio_candidate_capital.py"
+        portfolio_allocate_script = (
+            SKILL_ROOT / "scripts/allocate_portfolio_candidate_capital.py"
+        )
         backtest_script = SKILL_ROOT / "scripts/backtest_buy_hold.py"
         equity_curve_script = SKILL_ROOT / "scripts/portfolio_equity_curve.py"
         overlap_report_script = SKILL_ROOT / "scripts/portfolio_overlap_report.py"

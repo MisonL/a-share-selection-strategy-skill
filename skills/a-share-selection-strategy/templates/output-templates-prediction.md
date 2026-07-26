@@ -45,8 +45,8 @@
 - 必须披露 `raw_symbols`、`predicted_symbols`、`skipped_symbols` 和 `skipped_symbol_examples`。
 - 下游 `validate_ohlcv.py` 或 `score_candidates.py` 通过，只覆盖已写出的预测文件，不能反推上游全部标的通过。
 - 完整门禁应使用 `--fail-on-skipped`，或显式确认 `raw_symbols == predicted_symbols` 且 `skipped_symbols == 0`。
-- `prediction_summary.json` 中的 `feature_columns`、`split_method`、`scaler_fit_scope`、`label_definition`、训练/holdout 日期窗口和标签分布只是本次生成链路审计字段。
-- `label_definition=target_return = close.shift(-horizon) / close - 1; class = target_return > train_mean` 只是相对训练集均值的二分类标签口径。
+- `prediction_summary.json` 中的 `feature_columns`、`split_method`、`scaler_fit_scope`、`label_execution_model`、`label_definition`、训练/holdout 日期窗口和标签分布只是本次生成链路审计字段。
+- `label_execution_model=signal_close_next_observed_open_to_close` 与 `label_definition=target_return = close.shift(-horizon) / open.shift(-1) - 1; class = target_return > train_mean` 表示信号日后下一条观测 bar 的 `open` 到信号日后第 `horizon` 条观测 bar 的 `close` 的二分类标签口径。
 - `target_positive_labels` 和 `target_negative_labels` 非空只证明训练切分内两类标签都存在，不证明标签业务合理性、概率校准、holdout IC、跨窗口稳定性或样本外泛化。
 - `holdout_auc` 只来自训练前缀之后、latest 之前的同一 symbol 时间后缀；`holdout_metric_status=not_computable` 时必须披露原因。它不是跨窗口、跨年份、分市场或全市场样本外泛化证明。
 - `prediction_scope=latest_probability_repeated_for_scoring` 不是逐日历史预测序列；它表示最新预测概率被重复写入该标的评分窗口。

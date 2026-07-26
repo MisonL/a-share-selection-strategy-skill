@@ -14,6 +14,12 @@ from unittest.mock import Mock, call, patch
 import validate_skill_changes
 
 
+TESTS_ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(TESTS_ROOT))
+
+from run_unittest_shard import SHARDS  # noqa: E402
+
+
 def exemption_record() -> dict[str, str]:
     return {
         "reason": "Cohesive declarative contract.",
@@ -186,9 +192,10 @@ class ValidateSkillChangesTests(unittest.TestCase):
         self.assertIn("Skill frontmatter contract", names)
         self.assertNotIn("skill quick_validate", names)
 
-    def test_unittest_command_latest_profile_keeps_compatibility_path(self) -> None:
+    def test_unittest_commands_latest_profile_keep_compatibility_path(self) -> None:
         with patch.object(validate_skill_changes, "uv_command", return_value="uv"):
-            command = validate_skill_changes.unittest_command("latest")
+            commands = validate_skill_changes.unittest_commands("latest")
+        command = commands[0]
         self.assertEqual(
             [
                 "uv",
@@ -202,11 +209,16 @@ class ValidateSkillChangesTests(unittest.TestCase):
             ],
             command[:8],
         )
-        self.assertEqual(["python", "-m", "unittest"], command[8:11])
+        self.assertEqual(["python", "tests/run_unittest_shard.py", "core"], command[8:])
+        self.assertEqual(
+            tuple(validate_skill_changes.UNITTEST_SHARDS),
+            tuple(command[-1] for command in commands),
+        )
 
-    def test_unittest_command_ci_profile_uses_exact_python_constraints(self) -> None:
+    def test_unittest_commands_ci_profile_use_exact_python_constraints(self) -> None:
         with patch.object(validate_skill_changes, "uv_command", return_value="uv"):
-            command = validate_skill_changes.unittest_command("ci")
+            commands = validate_skill_changes.unittest_commands("ci")
+        command = commands[0]
         self.assertEqual(
             [
                 "uv",
@@ -218,9 +230,48 @@ class ValidateSkillChangesTests(unittest.TestCase):
             ],
             command[:6],
         )
-        self.assertEqual(["python", "-m", "unittest"], command[6:9])
+        self.assertEqual(["python", "tests/run_unittest_shard.py", "core"], command[6:])
 
-    def test_unittest_command_rejects_unknown_dependency_profile(self) -> None:
+    def test_unittest_commands_match_the_ci_shard_contract(self) -> None:
+        self.assertEqual(tuple(SHARDS), validate_skill_changes.UNITTEST_SHARDS)
+
+    def test_check_unittest_runs_every_shard_with_bytecode_writes_disabled(
+        self,
+    ) -> None:
+        with (
+            patch.object(validate_skill_changes, "uv_command", return_value="uv"),
+            patch.object(validate_skill_changes, "run_command") as run_command,
+        ):
+            validate_skill_changes.check_unittest("ci")
+
+        self.assertEqual(
+            tuple(validate_skill_changes.UNITTEST_SHARDS),
+            tuple(call.args[0][-1] for call in run_command.call_args_list),
+        )
+        self.assertTrue(
+            all(
+                call.kwargs["env"]["PYTHONDONTWRITEBYTECODE"] == "1"
+                for call in run_command.call_args_list
+            )
+        )
+
+    def test_check_unittest_stops_after_a_failed_shard(self) -> None:
+        failure = subprocess.CalledProcessError(1, ["failed-shard"])
+        with (
+            patch.object(validate_skill_changes, "uv_command", return_value="uv"),
+            patch.object(
+                validate_skill_changes,
+                "run_command",
+                side_effect=failure,
+            ) as run_command,
+            self.assertRaises(subprocess.CalledProcessError),
+        ):
+            validate_skill_changes.check_unittest("ci")
+
+        self.assertEqual(1, run_command.call_count)
+        self.assertEqual("core", run_command.call_args.args[0][-1])
+
+    def test_unittest_commands_reject_unknown_dependency_profile(self) -> None:
         with (
             patch.object(
                 validate_skill_changes,
@@ -229,14 +280,17 @@ class ValidateSkillChangesTests(unittest.TestCase):
             ),
             self.assertRaisesRegex(ValueError, "unknown dependency profile"),
         ):
-            validate_skill_changes.unittest_command("unsupported")
+            validate_skill_changes.unittest_commands("unsupported")
 
     def test_positive_float_rejects_non_positive_timeout(self) -> None:
         self.assertEqual(12.5, validate_skill_changes.positive_float("12.5"))
         for value in ["0", "nan", "inf", "-inf"]:
-            with self.subTest(value=value), self.assertRaisesRegex(
-                validate_skill_changes.argparse.ArgumentTypeError,
-                "finite number greater than zero",
+            with (
+                self.subTest(value=value),
+                self.assertRaisesRegex(
+                    validate_skill_changes.argparse.ArgumentTypeError,
+                    "finite number greater than zero",
+                ),
             ):
                 validate_skill_changes.positive_float(value)
 
@@ -265,7 +319,9 @@ class ValidateSkillChangesTests(unittest.TestCase):
         )
         self.assertEqual(5, process.wait.call_args_list[1].kwargs["timeout"])
 
-    def test_run_command_starts_a_new_session_and_preserves_nonzero_failure(self) -> None:
+    def test_run_command_starts_a_new_session_and_preserves_nonzero_failure(
+        self,
+    ) -> None:
         process = Mock(pid=1234)
         process.wait.return_value = 3
         with (
@@ -291,7 +347,9 @@ class ValidateSkillChangesTests(unittest.TestCase):
                 "Popen",
                 return_value=process,
             ) as popen,
-            patch.object(validate_skill_changes, "process_group_supported", return_value=False),
+            patch.object(
+                validate_skill_changes, "process_group_supported", return_value=False
+            ),
             patch("builtins.print"),
             self.assertRaisesRegex(RuntimeError, "timed out after 900 seconds"),
         ):
@@ -300,7 +358,9 @@ class ValidateSkillChangesTests(unittest.TestCase):
         self.assertNotIn("start_new_session", popen.call_args.kwargs)
         process.terminate.assert_called_once_with()
 
-    def test_timeout_cleanup_keeps_original_error_when_kill_races_with_exit(self) -> None:
+    def test_timeout_cleanup_keeps_original_error_when_kill_races_with_exit(
+        self,
+    ) -> None:
         timeout = subprocess.TimeoutExpired(["fake-command"], 900)
         process = Mock(pid=1234)
         process.wait.side_effect = [timeout, timeout, 0]
@@ -319,7 +379,9 @@ class ValidateSkillChangesTests(unittest.TestCase):
 
         self.assertEqual(2, killpg.call_count)
 
-    def test_timeout_cleanup_attempts_kill_after_term_signal_races_with_exit(self) -> None:
+    def test_timeout_cleanup_attempts_kill_after_term_signal_races_with_exit(
+        self,
+    ) -> None:
         timeout = subprocess.TimeoutExpired(["fake-command"], 900)
         process = Mock(pid=1234)
         process.wait.side_effect = [timeout, timeout, 0]
@@ -341,7 +403,9 @@ class ValidateSkillChangesTests(unittest.TestCase):
             killpg.call_args_list,
         )
 
-    def test_non_posix_timeout_cleanup_attempts_kill_after_terminate_failure(self) -> None:
+    def test_non_posix_timeout_cleanup_attempts_kill_after_terminate_failure(
+        self,
+    ) -> None:
         timeout = subprocess.TimeoutExpired(["fake-command"], 900)
         process = Mock(pid=1234)
         process.wait.side_effect = [timeout, 0]
@@ -352,7 +416,9 @@ class ValidateSkillChangesTests(unittest.TestCase):
                 "Popen",
                 return_value=process,
             ),
-            patch.object(validate_skill_changes, "process_group_supported", return_value=False),
+            patch.object(
+                validate_skill_changes, "process_group_supported", return_value=False
+            ),
             patch("builtins.print"),
             self.assertRaisesRegex(RuntimeError, "timed out after 900 seconds"),
         ):
@@ -434,7 +500,9 @@ class ValidateSkillChangesTests(unittest.TestCase):
             # interpreters and persist the descendant PID before the timeout.
             with patch.object(validate_skill_changes, "COMMAND_TIMEOUT_SECONDS", 5.0):
                 with self.assertRaisesRegex(RuntimeError, "timed out after 5 seconds"):
-                    validate_skill_changes.run_command([sys.executable, "-c", parent_code])
+                    validate_skill_changes.run_command(
+                        [sys.executable, "-c", parent_code]
+                    )
 
             self.assertTrue(child_pid_path.is_file())
             child_pid = int(child_pid_path.read_text(encoding="utf-8"))
@@ -578,7 +646,9 @@ class ValidateSkillChangesTests(unittest.TestCase):
             root = Path(tmpdir)
             scripts = root / "scripts"
             scripts.mkdir()
-            (scripts / "small.py").write_text("def small():\n    return 1\n", encoding="utf-8")
+            (scripts / "small.py").write_text(
+                "def small():\n    return 1\n", encoding="utf-8"
+            )
             manifest = root / "production_complexity_exemptions.json"
             manifest.write_text(
                 json.dumps(
@@ -721,7 +791,9 @@ class ValidateSkillChangesTests(unittest.TestCase):
                 path.mkdir(parents=True)
 
             with patch.object(validate_skill_changes, "ROOT", root):
-                with self.assertRaisesRegex(RuntimeError, "__pycache__ directories found"):
+                with self.assertRaisesRegex(
+                    RuntimeError, "__pycache__ directories found"
+                ):
                     validate_skill_changes.check_pycache_absent()
 
             for path in managed_paths:

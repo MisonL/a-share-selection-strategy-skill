@@ -7,8 +7,9 @@
 ```markdown
 ## 严格回测未通过
 - `--fail-on-incomplete` 返回非 0 且 `output_not_written=true` 时，不能报告回测成功。
-- `missing_future_price` 表示信号日之后没有足够的未来交易行，不是可忽略 warning。
-- `missing_entry_price` 表示候选信号日没有精确入场价格；脚本不会自动顺延到下一交易日。
+- `missing_future_price` 表示从信号日开始没有覆盖到退出 bar 的未来观测行，不是可忽略 warning。
+- `missing_entry_price` 表示候选信号日没有精确价格行；脚本不会把信号自动顺延到下一交易日。
+- `missing_next_observed_bar` 表示信号日存在，但没有下一条观测 bar 的 `open` 可作为入场价。
 - 合规路径是提供覆盖持有期的价格数据，或改用更早信号日重新生成候选和 sizing。
 - 不能跳过 incomplete trades、手写空回测文件，或把候选结果解释成 5 日 buy-hold 收益。
 ```
@@ -19,7 +20,7 @@
 ## 可交易性门禁范围
 - `tradability_model=tradestatus_entry_exit_only` 只说明入场日和退出日 `tradestatus=1`。
 - `--require-tradable-bars` 不扫描中间持有期每一行；中间日期 `tradestatus=0` 时仍可能得到 `status=complete`。
-- `completed_trades>0` 和收益字段只属于 close-to-close 基线，不证明全持有期每天可交易、涨跌停可成交或券商成交约束。
+- 信号在信号日收盘后形成，入场为下一条观测 bar 的 `open`，退出为信号日后第 `hold_days` 条观测 bar 的 `close`；`completed_trades>0` 和收益字段只属于这个本地基线，不证明全持有期每天可交易、涨跌停可成交或券商成交约束。
 - 必须同时披露 `limit_rules_model=not_modeled`。
 ```
 
@@ -38,7 +39,7 @@
 ```markdown
 ## 回测收益仍是零成本基线
 - 默认未传 `--cost-bps` 和 `--slippage-bps` 时，`cost_bps=0.0`、`slippage_bps=0.0`。
-- 此时 `return` 只是 `gross_return` 扣减 0 后的 close-to-close 基线结果，不是含真实交易成本和滑点的净收益。
+- 此时 `return` 只是从下一观测 bar `open` 到信号日后第 `hold_days` 条观测 bar `close` 的 `gross_return` 扣减 0 后的本地基线结果，不是含真实交易成本和滑点的净收益。
 - `exit 0`、`status=complete`、`completed_trades>0` 或输出 CSV 存在，只证明入场/出场价格和严格 incomplete 门禁通过。
 - 必须披露 `cost_model`、`slippage_model`、`tradability_model` 和 `limit_rules_model`；`limit_rules_model=not_modeled` 仍不证明涨跌停或券商成交约束。
 - 若要声称净收益口径，需要传入可追溯成本/滑点假设，或接入真实成交与交易规则模型后重跑。

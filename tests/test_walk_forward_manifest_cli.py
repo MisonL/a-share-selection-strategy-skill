@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 import sys
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,6 +18,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import validate_walk_forward_manifest as manifest_cli  # noqa: E402
 from lib.selection_core.a_share_selection_model_contracts import (  # noqa: E402
+    EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
     LIMIT_RULES_MODEL_NOT_MODELED,
     TRADABILITY_MODEL_ENTRY_EXIT,
     TRADABILITY_MODEL_HOLDING_PERIOD,
@@ -100,6 +103,24 @@ class WalkForwardManifestCliTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertIn("2026-05-12:backtest_missing_--expected-signal-date", stderr)
 
+    def test_cli_requires_execution_model_on_backtest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest = Path(tmpdir) / "run_manifest.json"
+            data = build_manifest(["2026-05-12"])
+            backtest = next(
+                item for item in data["steps"] if item["step"] == "2026-05-12:backtest"
+            )
+            backtest["command"].remove("--execution-model")
+            backtest["command"].remove(
+                EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE
+            )
+            write_json(manifest, data)
+
+            code, _stdout, stderr = call_cli(manifest, None, [])
+
+        self.assertEqual(3, code)
+        self.assertIn("2026-05-12:backtest_missing_--execution-model", stderr)
+
     def test_cli_rejects_missing_steps_schema(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             manifest = Path(tmpdir) / "run_manifest.json"
@@ -128,6 +149,7 @@ class WalkForwardManifestCliTests(unittest.TestCase):
                 item["returncode"] = None
                 item["planned_only"] = True
             write_json(manifest, data)
+            output.write_text('{"stale": true}\n', encoding="utf-8")
 
             code, stdout, stderr = call_cli(manifest, output, [])
             report = json.loads(output.read_text(encoding="utf-8"))
@@ -137,6 +159,7 @@ class WalkForwardManifestCliTests(unittest.TestCase):
         self.assertIn("offline_plan_manifest_not_executed", stderr)
         self.assertIn("planned_only_manifest_cannot_validate_as_executed_run", stderr)
         self.assertIn("offline_plan_manifest_not_executed", report["errors"])
+        self.assertNotEqual({"stale": True}, report)
 
     def test_cli_checks_expected_max_candidates_when_requested(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -238,6 +261,82 @@ class WalkForwardManifestCliTests(unittest.TestCase):
         self.assertEqual("", stderr)
         self.assertEqual([], report["errors"])
 
+    def test_cli_rejects_output_aliases_without_overwriting_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest = Path(tmpdir) / "run_manifest.json"
+            data = build_manifest(["2026-05-12"])
+            data["execution_mode"] = "offline_plan"
+            data["commands_executed"] = False
+            for item in data["steps"]:
+                item["returncode"] = None
+                item["planned_only"] = True
+            write_json(manifest, data)
+            original = manifest.read_bytes()
+            relative_output = os.path.relpath(manifest, start=Path.cwd())
+            symlink_output = Path(tmpdir) / "manifest-link.json"
+            symlink_output.symlink_to(manifest)
+
+            with patch.object(
+                manifest_cli,
+                "load_json",
+                side_effect=AssertionError("manifest should not load"),
+            ):
+                for output in (manifest, relative_output, symlink_output):
+                    with self.subTest(output=str(output)):
+                        code, _stdout, stderr = call_cli(manifest, output, [])
+
+                        self.assertEqual(2, code)
+                        self.assertEqual(original, manifest.read_bytes())
+                        self.assertIn(
+                            "output path must differ from input paths", stderr
+                        )
+            self.assertTrue(symlink_output.is_symlink())
+
+    def test_cli_removes_stale_safe_output_after_manifest_parse_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest = Path(tmpdir) / "run_manifest.json"
+            output = Path(tmpdir) / "manifest_report.json"
+            manifest.write_text("{bad json\n", encoding="utf-8")
+            manifest_contents = manifest.read_bytes()
+            output.write_text('{"stale": true}\n', encoding="utf-8")
+
+            code, _stdout, stderr = call_cli(manifest, output, [])
+            output_exists = output.exists()
+            manifest_after = manifest.read_bytes()
+
+        self.assertEqual(2, code)
+        self.assertFalse(output_exists)
+        self.assertEqual(manifest_contents, manifest_after)
+        self.assertIn("code=bad_input", stderr)
+
+    def test_parser_rejects_unknown_required_execution_model(self) -> None:
+        parser = manifest_cli.build_parser()
+        with self.assertRaises(SystemExit) as context:
+            parser.parse_args(
+                [
+                    "--manifest",
+                    "run_manifest.json",
+                    "--signal-dates",
+                    "2026-05-12",
+                    "--expected-symbol-count",
+                    "2",
+                    "--required-tradability-model",
+                    TRADABILITY_MODEL_ENTRY_EXIT,
+                    "--required-limit-rules-model",
+                    LIMIT_RULES_MODEL_NOT_MODELED,
+                    "--required-execution-model",
+                    "close_to_close",
+                ]
+            )
+        self.assertEqual(2, context.exception.code)
+
+    def test_write_json_rejects_non_finite_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "manifest_report.json"
+            with self.assertRaises(ValueError):
+                manifest_cli.write_json({"value": float("nan")}, output)
+            self.assertFalse(output.exists())
+
 
 def call_cli(
     manifest: Path,
@@ -256,6 +355,8 @@ def call_cli(
         tradability_model,
         "--required-limit-rules-model",
         LIMIT_RULES_MODEL_NOT_MODELED,
+        "--required-execution-model",
+        EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
         *extra,
     ]
     if output:
@@ -312,6 +413,7 @@ def build_manifest(
         "signal_dates": signal_dates,
         "tradability_model": tradability_model,
         "limit_rules_model": LIMIT_RULES_MODEL_NOT_MODELED,
+        "execution_model": EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
         "max_candidates": max_candidates,
         "allocation_model": allocation_model,
         "steps": steps,
@@ -443,6 +545,8 @@ def backtest_command(
         "--require-tradable-bars",
         "--expected-signal-date",
         signal_date,
+        "--execution-model",
+        EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
         "--fail-on-incomplete",
     ]
     if tradability_model == TRADABILITY_MODEL_HOLDING_PERIOD:
@@ -463,6 +567,8 @@ def summary_command(
         tradability_model,
         "--required-limit-rules-model",
         LIMIT_RULES_MODEL_NOT_MODELED,
+        "--required-execution-model",
+        EXECUTION_MODEL_SIGNAL_CLOSE_NEXT_OBSERVED_OPEN_TO_CLOSE,
         "--fail-on-symbol-overlap",
         "--expect-portfolio-violations",
     )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -112,6 +113,7 @@ class AShareSelectionStrictCliTests(unittest.TestCase):
             output_path = Path(tmpdir) / "prediction_bad.csv"
             diagnostics_path = Path(tmpdir) / "diagnostics.csv"
             frame.to_csv(input_path, index=False)
+            input_contents = input_path.read_bytes()
             output_path.write_text("stale-candidates\n", encoding="utf-8")
             diagnostics_path.write_text("stale-diagnostics\n", encoding="utf-8")
             code, _stdout, stderr = run_score_cli(
@@ -122,10 +124,104 @@ class AShareSelectionStrictCliTests(unittest.TestCase):
             )
             output_exists = output_path.exists()
             diagnostics_exists = diagnostics_path.exists()
+            input_after = input_path.read_bytes()
         self.assertEqual(2, code)
         self.assertFalse(output_exists)
         self.assertFalse(diagnostics_exists)
+        self.assertEqual(input_contents, input_after)
         self.assertIn("output_not_written=true", stderr)
+
+    def test_cli_rejects_output_collisions_before_loading_dependencies(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            input_contents = b"prices input must remain intact\n"
+            config_contents = b"{}\n"
+            spot_contents = b"spot input must remain intact\n"
+            output_contents = b"stale candidates\n"
+            original_ensure = scorer.ensure_runtime_dependencies
+            dependency_loads = 0
+
+            def record_dependency_load() -> None:
+                nonlocal dependency_loads
+                dependency_loads += 1
+
+            scorer.ensure_runtime_dependencies = record_dependency_load
+            try:
+                for name in [
+                    "output_equals_input",
+                    "diagnostics_equals_input",
+                    "profile_equals_config",
+                    "output_equals_spot_input",
+                    "output_equals_diagnostics",
+                    "relative_output_alias",
+                    "symlink_output_alias",
+                ]:
+                    with self.subTest(name=name):
+                        case_root = root / name
+                        case_root.mkdir()
+                        input_path = case_root / "prices.csv"
+                        config_path = case_root / "config.json"
+                        spot_path = case_root / "spot.csv"
+                        output_path = case_root / "stale-candidates.csv"
+                        input_path.write_bytes(input_contents)
+                        config_path.write_bytes(config_contents)
+                        spot_path.write_bytes(spot_contents)
+                        output_path.write_bytes(output_contents)
+                        symlink_output = case_root / "prices-link.csv"
+                        symlink_output.symlink_to(input_path)
+                        relative_input = os.path.relpath(input_path, start=Path.cwd())
+                        output_value = str(output_path)
+                        diagnostics_value = None
+                        profile_value = None
+                        spot_value = None
+                        expected_error = "output path must differ from input paths"
+                        if name == "output_equals_input":
+                            output_value = str(input_path)
+                        elif name == "diagnostics_equals_input":
+                            diagnostics_value = str(input_path)
+                        elif name == "profile_equals_config":
+                            profile_value = str(config_path)
+                        elif name == "output_equals_spot_input":
+                            output_value = str(spot_path)
+                            spot_value = str(spot_path)
+                        elif name == "output_equals_diagnostics":
+                            diagnostics_value = str(output_path)
+                            expected_error = "output paths must be distinct"
+                        elif name == "relative_output_alias":
+                            output_value = relative_input
+                        else:
+                            output_value = str(symlink_output)
+                        args = [
+                            "--input",
+                            str(input_path),
+                            "--config",
+                            str(config_path),
+                            "--output",
+                            output_value,
+                        ]
+                        if diagnostics_value is not None:
+                            args.extend(["--diagnostics-output", diagnostics_value])
+                        if profile_value is not None:
+                            args.extend(["--profile-output", profile_value])
+                        if spot_value is not None:
+                            args.extend(["--spot-input", spot_value])
+                        stdout = StringIO()
+                        stderr = StringIO()
+                        with redirect_stdout(stdout), redirect_stderr(stderr):
+                            code = scorer.main(args)
+
+                        self.assertEqual(2, code)
+                        self.assertEqual("", stdout.getvalue())
+                        self.assertIn(expected_error, stderr.getvalue())
+                        self.assertIn("output_not_written=true", stderr.getvalue())
+                        self.assertEqual(input_contents, input_path.read_bytes())
+                        self.assertEqual(config_contents, config_path.read_bytes())
+                        self.assertEqual(spot_contents, spot_path.read_bytes())
+                        self.assertEqual(output_contents, output_path.read_bytes())
+            finally:
+                scorer.ensure_runtime_dependencies = original_ensure
+
+            self.assertEqual(0, dependency_loads)
 
     def test_cli_strict_empty_removes_stale_output_and_diagnostics(self) -> None:
         frame = build_frame(

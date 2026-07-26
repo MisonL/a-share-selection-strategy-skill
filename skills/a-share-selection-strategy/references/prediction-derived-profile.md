@@ -33,6 +33,7 @@
 | `prediction_model_executed_by_score_script=false` | 评分脚本没有执行预测模型 | 上游模型已经通过门禁 |
 | `prediction_input_source=external_input` | 候选或诊断产物中的预测列来自输入文件 | 当前脚本训练或生成了预测列 |
 | `prediction_scope=latest_probability_repeated_for_scoring` | 最新概率被重复写入评分窗口 | 逐日历史预测序列 |
+| `prediction_label_execution_model=signal_close_next_observed_open_to_close` | 生成预测使用的训练标签执行基准 | 真实成交、涨跌停、流动性或券商订单已验证 |
 | `holdout_auc` | 本次同一 symbol 时间后缀 AUC 可计算 | 全市场样本外泛化或概率校准 |
 
 ## 字段口径速查
@@ -83,7 +84,7 @@ prediction-derived 原策略的主趋势分是 LightGBM 输出的上涨概率 `p
 
 - 特征：`momentum_1m`、`momentum_3m`、`momentum_6m`、`volatility`、`vol_ratio`、`rsi`、`macd`、`signal`。
 - 输入少于 100 行时不训练；特征和目标清洗后少于 50 行时不训练。
-- 标签：`target = close.shift(-5) / close - 1`，分类标签为 `target > target.mean()`。
+- 标签：对信号日 `t`，`target_return = close[t + horizon] / open[t + 1] - 1`，代码表达为 `close.shift(-horizon) / open.shift(-1) - 1`；分类标签为 `target_return > train_mean`。缺少下一条观测 bar、无效 entry `open` 或 horizon `close` 的行不得进入训练。
 - 未来收益标签只能用于训练标签构造，不得泄漏到预测期特征、筛选条件或同日验证结论里。
 - 标准化：使用 `StandardScaler` 拟合训练特征。
 - 模型：`LGBMClassifier`，`n_estimators=100`、`num_leaves=31`、`min_child_samples=5`、`max_depth=5`、`learning_rate=0.1`、`random_state=42`。
@@ -96,7 +97,7 @@ prediction-derived 原策略的主趋势分是 LightGBM 输出的上涨概率 `p
 
 `prediction_summary.json` 字段完整只证明本次生成链路可审计，不证明模型质量已经通过。
 
-- 审计字段包括 `feature_columns`、`split_method`、`scaler_fit_scope`、`label_definition`、`prediction_scope`、`model_quality_scope`、`model_quality_metrics`，以及每个 symbol 的训练、holdout、标签分布和跳过原因字段。
+- 审计字段包括 `feature_columns`、`split_method`、`scaler_fit_scope`、`label_execution_model`、`label_definition`、`prediction_scope`、`model_quality_scope`、`model_quality_metrics`，以及每个 symbol 的训练、holdout、标签分布和跳过原因字段。
 - `holdout_auc` 只来自训练前缀之后、latest 之前的同一 symbol 时间后缀；`holdout_metric_status=not_computable` 时必须披露原因。
 - `model_quality_scope=generation_audit_only` 和 `model_quality_metrics` 中的 `not_computed/not_evaluated/not_proven` 是机器可读边界声明，不是质量指标通过证明。
 - 即使 `holdout_auc` 可计算，也不能写成概率校准、holdout IC、分层收益、跨窗口稳定性、跨年份或分市场样本外统计、逐信号日独立预测质量、样本外泛化或全市场策略质量已证明。
@@ -139,7 +140,7 @@ total_score =
 
 排序按 `total_score` 降序。CLI 派生视图可额外列出低价均线、超短线爆发潜力和低价爆发标的。
 
-`signal_tier` 和 `recommendation` 是展示分层，不是买卖建议。原 Web 回测只支持真实日线收盘价上的 `buy_hold` 基线；`backtest_buy_hold.py` 只支持 round-trip bps 成本和滑点扣减，不覆盖涨跌停和不可交易状态。
+`signal_tier` 和 `recommendation` 是展示分层，不是买卖建议。`backtest_buy_hold.py` 在信号日收盘后，以同一标的下一条观测 bar 的 `open` 入场，并在信号日后第 `hold_days` 条观测 bar 的 `close` 退出；`allocate_candidate_capital.py` 使用同一下一观测开盘价计算股数和预留资金，`signal_close` 仅为信号审计字段。它只支持 round-trip bps 成本和滑点扣减，不覆盖涨跌停和不可交易状态。
 
 ## 工程派生边界
 

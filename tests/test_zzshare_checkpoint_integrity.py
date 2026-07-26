@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sys
 import tempfile
 import types
@@ -118,6 +119,99 @@ class ZzshareCheckpointIntegrityTests(unittest.TestCase):
             actual = fingerprint(root / part)
 
         self.assertEqual(actual, saved["part_artifacts"][part])
+
+    def test_prepare_checkpoint_rejects_unexpanded_home_shorthand(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            home = root / "home"
+            home.mkdir()
+            literal_checkpoint = root / "~" / "checkpoint"
+            literal_checkpoint.mkdir(parents=True)
+            manifest = literal_checkpoint / "manifest.json"
+            original = b"checkpoint manifest must remain intact\n"
+            manifest.write_bytes(original)
+            previous_cwd = Path.cwd()
+            try:
+                os.chdir(root)
+                with self.assertRaisesRegex(
+                    ValueError, "path must not use unexpanded home shorthand"
+                ):
+                    checkpoint.prepare_checkpoint(
+                        checkpoint_args(Path("~") / "checkpoint")
+                    )
+            finally:
+                os.chdir(previous_cwd)
+
+            self.assertEqual(original, manifest.read_bytes())
+
+    def test_prepare_checkpoint_resets_verified_directory_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            checkpoint_dir = root / "checkpoint"
+            checkpoint_dir.mkdir()
+            old_part = checkpoint_dir / "prices_part_00001.csv"
+            old_manifest = checkpoint_dir / "manifest.json"
+            unrelated = checkpoint_dir / "notes.txt"
+            old_part.write_text("symbol\n000001\n", encoding="utf-8")
+            old_manifest.write_text('{"symbols":{}}\n', encoding="utf-8")
+            unrelated.write_text("keep\n", encoding="utf-8")
+
+            state = checkpoint.prepare_checkpoint(checkpoint_args(checkpoint_dir))
+
+            self.assertIsNotNone(state)
+            self.assertFalse(old_part.exists())
+            self.assertTrue((checkpoint_dir / "manifest.json").is_file())
+            self.assertEqual("keep\n", unrelated.read_text(encoding="utf-8"))
+
+    def test_prepare_checkpoint_rejects_symlinked_parent_before_reset(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            external = root / "external"
+            checkpoint_target = external / "checkpoint"
+            checkpoint_target.mkdir(parents=True)
+            manifest = checkpoint_target / "manifest.json"
+            part = checkpoint_target / "prices_part_00001.csv"
+            manifest_original = b"checkpoint manifest must remain intact\n"
+            part_original = b"checkpoint part must remain intact\n"
+            manifest.write_bytes(manifest_original)
+            part.write_bytes(part_original)
+            checkpoint_link = root / "checkpoint-link"
+            checkpoint_link.symlink_to(external, target_is_directory=True)
+
+            with self.assertRaisesRegex(
+                ValueError, "protected directory must not contain symlinks"
+            ):
+                checkpoint.prepare_checkpoint(
+                    checkpoint_args(checkpoint_link / checkpoint_target.name)
+                )
+
+            self.assertEqual(manifest_original, manifest.read_bytes())
+            self.assertEqual(part_original, part.read_bytes())
+
+    def test_reset_checkpoint_dir_rejects_symlinked_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            external = root / "external"
+            checkpoint_target = external / "checkpoint"
+            checkpoint_target.mkdir(parents=True)
+            manifest = checkpoint_target / "manifest.json"
+            part = checkpoint_target / "prices_part_00001.csv"
+            manifest_original = b"checkpoint manifest must remain intact\n"
+            part_original = b"checkpoint part must remain intact\n"
+            manifest.write_bytes(manifest_original)
+            part.write_bytes(part_original)
+            checkpoint_link = root / "checkpoint-link"
+            checkpoint_link.symlink_to(external, target_is_directory=True)
+
+            with self.assertRaisesRegex(
+                ValueError, "protected directory must not contain symlinks"
+            ):
+                checkpoint.reset_checkpoint_dir(
+                    checkpoint_link / checkpoint_target.name
+                )
+
+            self.assertEqual(manifest_original, manifest.read_bytes())
+            self.assertEqual(part_original, part.read_bytes())
 
 
 if __name__ == "__main__":

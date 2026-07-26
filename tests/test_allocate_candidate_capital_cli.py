@@ -22,7 +22,7 @@ from helpers import build_frame  # noqa: E402
 
 
 class AllocateCandidateCapitalCliTests(unittest.TestCase):
-    def test_allocates_equal_cash_lot_floor_from_signal_close(self) -> None:
+    def test_allocates_equal_cash_lot_floor_from_next_observed_open(self) -> None:
         prices = build_frame(days=130)
         first = prices[prices["symbol"] == "000002"].iloc[20]
         second = prices[prices["symbol"] == "600001"].iloc[20]
@@ -40,16 +40,103 @@ class AllocateCandidateCapitalCliTests(unittest.TestCase):
             lot_size=100,
         )
 
-        expected_first = int((5000 / (float(first["close"]) * 100))) * 100
-        expected_second = int((5000 / (float(second["close"]) * 100))) * 100
+        first_entry = prices[prices["symbol"] == "000002"].iloc[21]
+        second_entry = prices[prices["symbol"] == "600001"].iloc[21]
+        expected_first = int((5000 / (float(first_entry["open"]) * 100))) * 100
+        expected_second = int((5000 / (float(second_entry["open"]) * 100))) * 100
         self.assertEqual([expected_first, expected_second], result["quantity"].tolist())
         self.assertEqual(float(first["close"]), float(result["signal_close"].iloc[0]))
         self.assertEqual(float(second["close"]), float(result["signal_close"].iloc[1]))
+        self.assertEqual(
+            [str(first_entry["date"]), str(second_entry["date"])],
+            result["sizing_entry_date"].tolist(),
+        )
+        self.assertEqual(
+            [float(first_entry["open"]), float(second_entry["open"])],
+            result["sizing_entry_price"].tolist(),
+        )
+        self.assertEqual(
+            ["signal_close_next_observed_open_to_close"] * 2,
+            result["sizing_execution_model"].tolist(),
+        )
         self.assertEqual(result["notional"].tolist(), result["cash_reserved"].tolist())
+        self.assertEqual(
+            (result["quantity"] * result["sizing_entry_price"]).tolist(),
+            result["cash_reserved"].tolist(),
+        )
         self.assertLessEqual(float(result["cash_reserved"].sum()), 10000.0)
         self.assertEqual(2, summary["allocated_candidates"])
         self.assertEqual(0, summary["unallocated_candidates"])
         self.assertEqual("equal_cash_budget_lot_floor", summary["capital_model"])
+
+    def test_marks_missing_next_observed_bar_unallocated(self) -> None:
+        prices = build_frame(days=130)
+        history = prices[prices["symbol"] == "000002"].reset_index(drop=True)
+        candidate = history.iloc[[-1]][["symbol", "date"]]
+
+        result, summary = allocator.allocate_capital(
+            prices, candidate, cash_budget=10000, lot_size=100
+        )
+
+        self.assertTrue(bool(result["unallocated"].iloc[0]))
+        self.assertEqual(
+            "missing_next_observed_bar", result["sizing_skip_reason"].iloc[0]
+        )
+        self.assertEqual(0, int(result["quantity"].iloc[0]))
+        self.assertEqual(0.0, float(result["cash_reserved"].iloc[0]))
+        self.assertEqual(
+            {"missing_next_observed_bar": 1}, summary["unallocated_reason_counts"]
+        )
+
+    def test_marks_invalid_next_observed_open_unallocated(self) -> None:
+        prices = build_frame(days=130)
+        history = prices[prices["symbol"] == "000002"].reset_index(drop=True)
+        entry_date = history.loc[21, "date"]
+        prices.loc[
+            (prices["symbol"] == "000002") & (prices["date"] == entry_date), "open"
+        ] = 0.0
+        candidate = history.iloc[[20]][["symbol", "date"]]
+
+        result, _summary = allocator.allocate_capital(
+            prices, candidate, cash_budget=10000, lot_size=100
+        )
+
+        self.assertTrue(bool(result["unallocated"].iloc[0]))
+        self.assertEqual("invalid_entry_open", result["sizing_skip_reason"].iloc[0])
+
+    def test_derived_lot_quantity_overflow_is_rejected(self) -> None:
+        prices = pd.DataFrame(
+            [
+                {
+                    "symbol": "000001",
+                    "date": "2026-01-01",
+                    "open": 1e-320,
+                    "high": 1.0,
+                    "low": 1e-320,
+                    "close": 1.0,
+                    "volume": 1.0,
+                },
+                {
+                    "symbol": "000001",
+                    "date": "2026-01-02",
+                    "open": 1e-320,
+                    "high": 1.0,
+                    "low": 1e-320,
+                    "close": 1.0,
+                    "volume": 1.0,
+                },
+            ]
+        )
+        candidates = pd.DataFrame(
+            [{"symbol": "000001", "date": "2026-01-01", "close": 1.0}]
+        )
+
+        with self.assertRaisesRegex(
+            ValueError, "lot quantity calculation must be finite"
+        ):
+            allocator.allocate_capital(
+                prices, candidates, cash_budget=1e308, lot_size=1
+            )
 
     def test_cli_strict_unallocated_returns_error_without_output(self) -> None:
         prices = build_frame(days=130)
@@ -235,7 +322,9 @@ class AllocateCandidateCapitalCliTests(unittest.TestCase):
 
     def test_duplicate_candidate_signal_is_rejected(self) -> None:
         prices = build_frame(days=130)
-        candidate = prices[prices["symbol"] == "000002"].iloc[[20, 20]][["symbol", "date"]]
+        candidate = prices[prices["symbol"] == "000002"].iloc[[20, 20]][
+            ["symbol", "date"]
+        ]
 
         with self.assertRaisesRegex(ValueError, "duplicate symbol/date"):
             allocator.allocate_capital(prices, candidate, cash_budget=10000)
@@ -249,7 +338,61 @@ class AllocateCandidateCapitalCliTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "lot-size"):
             allocator.allocate_capital(prices, candidate, cash_budget=10000, lot_size=0)
         with self.assertRaisesRegex(ValueError, "close-tolerance"):
-            allocator.allocate_capital(prices, candidate, cash_budget=10000, close_tolerance=-1)
+            allocator.allocate_capital(
+                prices, candidate, cash_budget=10000, close_tolerance=-1
+            )
+
+    def test_non_finite_sizing_options_are_rejected(self) -> None:
+        prices = build_frame(days=130)
+        candidate = prices[prices["symbol"] == "000002"].iloc[[20]][["symbol", "date"]]
+        cases = [
+            ("cash_budget", "cash-budget"),
+            ("lot_size", "lot-size"),
+            ("close_tolerance", "close-tolerance"),
+        ]
+        for field, label in cases:
+            for value in (float("nan"), float("inf"), float("-inf")):
+                with self.subTest(field=field, value=value):
+                    options = {
+                        "cash_budget": 10000,
+                        "lot_size": 100,
+                        "close_tolerance": 0.000001,
+                    }
+                    options[field] = value
+                    with self.assertRaisesRegex(ValueError, f"{label} must be finite"):
+                        allocator.allocate_capital(prices, candidate, **options)
+
+    def test_cli_non_finite_budget_removes_stale_output(self) -> None:
+        prices = build_frame(days=130)
+        candidate = prices[prices["symbol"] == "000002"].iloc[[20]][["symbol", "date"]]
+        for value in ["nan", "inf", "-inf"]:
+            with self.subTest(value=value):
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    root = Path(tmpdir)
+                    prices_path = root / "prices.csv"
+                    candidates_path = root / "candidates.csv"
+                    output_path = root / "allocated.csv"
+                    prices.to_csv(prices_path, index=False)
+                    candidate.to_csv(candidates_path, index=False)
+                    output_path.write_text("stale result", encoding="utf-8")
+                    stderr = StringIO()
+                    with redirect_stderr(stderr):
+                        code = allocator.main(
+                            [
+                                "--prices",
+                                str(prices_path),
+                                "--candidates",
+                                str(candidates_path),
+                                "--output",
+                                str(output_path),
+                                "--cash-budget",
+                                value,
+                            ]
+                        )
+
+                self.assertEqual(2, code)
+                self.assertFalse(output_path.exists())
+                self.assertIn("cash-budget must be finite", stderr.getvalue())
 
 
 if __name__ == "__main__":

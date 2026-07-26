@@ -25,6 +25,7 @@ ARTIFACT_LAYERS = {
     "gates/incremental_history_artifacts.py",
     "gates/incremental_history_execution.py",
     "gates/lightgbm_prediction_summary.py",
+    "gates/a_share_selection_output_safety.py",
     "report_html/a_share_selection_html_report.py",
     "runner/run_today_a_share_selection_helpers.py",
     "runner/run_today_a_share_selection_full_a_provenance.py",
@@ -185,7 +186,9 @@ class SkillEntrypointContractTests(unittest.TestCase):
         self.assertIn("人类和 Agent 的解释层", scripts_doc)
         self.assertIn("default_entry", scripts_doc)
 
-    def test_inventory_covers_every_root_script_without_promoting_lib_files(self) -> None:
+    def test_inventory_covers_every_root_script_without_promoting_lib_files(
+        self,
+    ) -> None:
         inventory = (SKILL_ROOT / "references/script-inventory.md").read_text(
             encoding="utf-8"
         )
@@ -220,8 +223,7 @@ class SkillEntrypointContractTests(unittest.TestCase):
         all_scripts = sorted(SCRIPTS_ROOT.rglob("*.py"))
         lib_scripts = sorted((SCRIPTS_ROOT / "lib").rglob("*.py"))
         public_count = sum(
-            bool(metadata["public_entry"])
-            for metadata in registry["entries"].values()
+            bool(metadata["public_entry"]) for metadata in registry["entries"].values()
         )
         wrapper_count = sum(
             metadata["domain"] == "compatibility_wrapper"
@@ -243,7 +245,9 @@ class SkillEntrypointContractTests(unittest.TestCase):
                 self.assertEqual(metadata["category"], markdown_code_value(row[1]))
                 self.assertEqual(metadata["domain"], markdown_code_value(row[2]))
                 self.assertEqual(
-                    len((SCRIPTS_ROOT / script).read_text(encoding="utf-8").splitlines()),
+                    len(
+                        (SCRIPTS_ROOT / script).read_text(encoding="utf-8").splitlines()
+                    ),
                     int(row[3]),
                 )
                 self.assertTrue(row[4])
@@ -260,7 +264,9 @@ class SkillEntrypointContractTests(unittest.TestCase):
         for path in (SCRIPTS_ROOT / "lib").glob("*.py"):
             self.assertNotIn(f"| `lib/{path.name}` |", inventory)
 
-    def test_registry_schema_keeps_default_entry_separate_from_path_routing(self) -> None:
+    def test_registry_schema_keeps_default_entry_separate_from_path_routing(
+        self,
+    ) -> None:
         registry = load_registry()
         scripts_index = (SCRIPTS_ROOT / "SCRIPTS.md").read_text(encoding="utf-8")
         docs = "\n".join(
@@ -283,7 +289,12 @@ class SkillEntrypointContractTests(unittest.TestCase):
             set(registry["axes"]),
         )
         self.assertEqual({"true", "false"}, set(registry["axes"]["default_entry"]))
-        for text in ["script_entrypoints.json", "不做运行时 dispatch", "skill_route", "default_entry"]:
+        for text in [
+            "script_entrypoints.json",
+            "不做运行时 dispatch",
+            "skill_route",
+            "default_entry",
+        ]:
             self.assertIn(text, docs)
 
         allowed_categories = {
@@ -308,7 +319,13 @@ class SkillEntrypointContractTests(unittest.TestCase):
         category_axes = {
             "stable_cli": ("public", "cli", "stable", "selection_core", True),
             "fetch_cli": ("public", "cli", "stable_external", "fetch", True),
-            "gate_backtest_cli": ("public", "cli", "stable_gate", "gate_backtest", True),
+            "gate_backtest_cli": (
+                "public",
+                "cli",
+                "stable_gate",
+                "gate_backtest",
+                True,
+            ),
             "internal_helper": ("internal", "helper", "internal", None, False),
         }
         wrapper_extra_keys = {"migration_target", "deletion_blocker"}
@@ -319,7 +336,9 @@ class SkillEntrypointContractTests(unittest.TestCase):
                 expected_keys = set(base_entry_keys)
                 if metadata["domain"] == "compatibility_wrapper":
                     expected_keys.update(wrapper_extra_keys)
-                self.assertEqual(set(), set(metadata) - expected_keys - optional_entry_keys)
+                self.assertEqual(
+                    set(), set(metadata) - expected_keys - optional_entry_keys
+                )
                 self.assertLessEqual(expected_keys, set(metadata))
                 self.assertTrue((SCRIPTS_ROOT / script).is_file())
                 self.assertEqual(script, Path(script).name)
@@ -353,7 +372,9 @@ class SkillEntrypointContractTests(unittest.TestCase):
                     self.assertTrue(metadata["skill_route"])
                     self.assertEqual("stable_cli", metadata["category"])
                 if metadata["domain"] == "compatibility_wrapper":
-                    self.assertTrue((SCRIPTS_ROOT / metadata["migration_target"]).is_file())
+                    self.assertTrue(
+                        (SCRIPTS_ROOT / metadata["migration_target"]).is_file()
+                    )
                     self.assertTrue(metadata["deletion_blocker"])
 
     def test_registry_keeps_expected_public_surface(self) -> None:
@@ -384,11 +405,15 @@ class SkillEntrypointContractTests(unittest.TestCase):
             },
             by_category["fetch_cli"],
         )
-        self.assertNotIn("a_share_selection_html_sections.py", by_category["internal_helper"])
+        self.assertNotIn(
+            "a_share_selection_html_sections.py", by_category["internal_helper"]
+        )
         self.assertNotIn(
             "run_today_a_share_selection_helpers.py", by_category["internal_helper"]
         )
-        self.assertTrue(registry["entries"]["fetch_zzshare_a_share.py"]["network_required"])
+        self.assertTrue(
+            registry["entries"]["fetch_zzshare_a_share.py"]["network_required"]
+        )
         self.assertFalse(registry["entries"]["score_candidates.py"]["network_required"])
         self.assertIn(
             "prices.parquet",
@@ -452,7 +477,9 @@ class SkillEntrypointContractTests(unittest.TestCase):
         self.assertEqual(4, domain_counts["compatibility_wrapper"])
         self.assertEqual(
             sorted(root_helpers),
-            sorted(markdown_code_bullets_after_heading(scripts_index, "## 内部 helper")),
+            sorted(
+                markdown_code_bullets_after_heading(scripts_index, "## 内部 helper")
+            ),
         )
         self.assertIn("`lib/a_share_selection_run_state.py`", scripts_index)
         self.assertIn("不在 `scripts/` 根层", scripts_index)
@@ -471,7 +498,9 @@ class SkillEntrypointContractTests(unittest.TestCase):
             self.assertIn(text, docs)
         self.assertIn("公开 CLI 保留", inventory)
 
-    def test_large_internal_files_and_function_exemptions_stay_in_inventory(self) -> None:
+    def test_large_internal_files_and_function_exemptions_stay_in_inventory(
+        self,
+    ) -> None:
         scripts_index = (SCRIPTS_ROOT / "SCRIPTS.md").read_text(encoding="utf-8")
         inventory = (SKILL_ROOT / "references/script-inventory.md").read_text(
             encoding="utf-8"
@@ -556,8 +585,12 @@ class SkillEntrypointContractTests(unittest.TestCase):
     def test_today_runner_reuses_internal_retry_plan_contract(self) -> None:
         runner = SCRIPTS_ROOT / "run_today_a_share_selection.py"
         retry_cli = SCRIPTS_ROOT / "prepare_history_retry_symbols.py"
-        retry_helper = SCRIPTS_ROOT / "lib/runner/run_today_a_share_selection_retry_plan.py"
-        runner_tree = ast.parse(runner.read_text(encoding="utf-8"), filename=str(runner))
+        retry_helper = (
+            SCRIPTS_ROOT / "lib/runner/run_today_a_share_selection_retry_plan.py"
+        )
+        runner_tree = ast.parse(
+            runner.read_text(encoding="utf-8"), filename=str(runner)
+        )
         retry_cli_tree = ast.parse(
             retry_cli.read_text(encoding="utf-8"), filename=str(retry_cli)
         )
@@ -572,7 +605,9 @@ class SkillEntrypointContractTests(unittest.TestCase):
             if isinstance(node, ast.ImportFrom) and node.module
         }
         self.assertTrue(retry_helper.is_file())
-        self.assertIn("lib.runner.run_today_a_share_selection_retry_plan", runner_from_imports)
+        self.assertIn(
+            "lib.runner.run_today_a_share_selection_retry_plan", runner_from_imports
+        )
         self.assertNotIn(
             "prepare_history_retry_symbols",
             {
@@ -581,7 +616,9 @@ class SkillEntrypointContractTests(unittest.TestCase):
                 for module in imported_top_level_modules(node)
             },
         )
-        self.assertIn("lib.runner.run_today_a_share_selection_retry_plan", retry_cli_imports)
+        self.assertIn(
+            "lib.runner.run_today_a_share_selection_retry_plan", retry_cli_imports
+        )
 
     def test_lib_helpers_keep_parser_and_artifact_side_effects_explicit(self) -> None:
         registry = load_registry()
@@ -602,12 +639,16 @@ class SkillEntrypointContractTests(unittest.TestCase):
             imported_modules = set()
             for node in ast.walk(tree):
                 imported_modules.update(imported_top_level_modules(node))
-                if isinstance(node, ast.Import) and any(
-                    alias.name == "argparse" for alias in node.names
-                ) and relative_path not in PARSER_LAYERS:
+                if (
+                    isinstance(node, ast.Import)
+                    and any(alias.name == "argparse" for alias in node.names)
+                    and relative_path not in PARSER_LAYERS
+                ):
                     violations.append((path.name, "argparse"))
-                if isinstance(node, ast.ImportFrom) and node.module == "argparse" and (
-                    relative_path not in PARSER_LAYERS
+                if (
+                    isinstance(node, ast.ImportFrom)
+                    and node.module == "argparse"
+                    and (relative_path not in PARSER_LAYERS)
                 ):
                     violations.append((path.name, "argparse"))
                 if calls_module_attribute(node, "argparse", "ArgumentParser") and (
@@ -624,14 +665,19 @@ class SkillEntrypointContractTests(unittest.TestCase):
                         relative_path not in ARTIFACT_LAYERS
                     ):
                         violations.append((path.name, f"{module}.{attribute}"))
-                if isinstance(node, ast.Attribute) and node.attr in {
-                    "to_csv",
-                    "to_json",
-                    "write_text",
-                    "write_bytes",
-                    "mkdir",
-                    "unlink",
-                } and relative_path not in ARTIFACT_LAYERS:
+                if (
+                    isinstance(node, ast.Attribute)
+                    and node.attr
+                    in {
+                        "to_csv",
+                        "to_json",
+                        "write_text",
+                        "write_bytes",
+                        "mkdir",
+                        "unlink",
+                    }
+                    and relative_path not in ARTIFACT_LAYERS
+                ):
                     violations.append((path.name, node.attr))
             for module in sorted(imported_modules & public_modules):
                 violations.append((path.name, f"public_import:{module}"))
@@ -654,8 +700,7 @@ class SkillEntrypointContractTests(unittest.TestCase):
         ]:
             self.assertIn(text, inventory)
         public_count = sum(
-            bool(metadata["public_entry"])
-            for metadata in registry["entries"].values()
+            bool(metadata["public_entry"]) for metadata in registry["entries"].values()
         )
         self.assertIn(
             "`skill_route=true` 表示 public CLI 可在路径命中后引用", scripts_index
@@ -664,7 +709,9 @@ class SkillEntrypointContractTests(unittest.TestCase):
         self.assertIn("`default_entry=true` 只标记", skill)
         self.assertNotIn(f"{public_count} 个 public CLI 都是默认入口", skill)
 
-    def test_html_display_layer_details_are_not_in_the_first_read_script_page(self) -> None:
+    def test_html_display_layer_details_are_not_in_the_first_read_script_page(
+        self,
+    ) -> None:
         scripts_index = (SCRIPTS_ROOT / "SCRIPTS.md").read_text(encoding="utf-8")
         inventory = (SKILL_ROOT / "references/script-inventory.md").read_text(
             encoding="utf-8"

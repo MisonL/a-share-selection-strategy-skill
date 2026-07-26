@@ -138,8 +138,8 @@ class AShareSelectionScriptTests(unittest.TestCase):
         )
 
     def test_validated_prepare_fast_path_matches_general_path(self) -> None:
-        frame = build_frame(days=4).sort_values(["symbol", "date"]).reset_index(
-            drop=True
+        frame = (
+            build_frame(days=4).sort_values(["symbol", "date"]).reset_index(drop=True)
         )
         frame["date"] = pd.to_datetime(frame["date"])
         expected = prepare_frame(frame, pd.to_datetime)
@@ -147,8 +147,8 @@ class AShareSelectionScriptTests(unittest.TestCase):
         pd.testing.assert_frame_equal(expected, actual)
 
     def test_validated_prepare_fast_path_strips_symbol_whitespace(self) -> None:
-        frame = build_frame(days=4).sort_values(["symbol", "date"]).reset_index(
-            drop=True
+        frame = (
+            build_frame(days=4).sort_values(["symbol", "date"]).reset_index(drop=True)
         )
         frame["date"] = pd.to_datetime(frame["date"])
         frame.loc[0, "symbol"] = f" {frame.loc[0, 'symbol']} "
@@ -159,8 +159,8 @@ class AShareSelectionScriptTests(unittest.TestCase):
         self.assertFalse(prepared["symbol"].str.endswith(" ").any())
 
     def test_validated_prepare_fast_path_accepts_object_text_symbols(self) -> None:
-        frame = build_frame(days=4).sort_values(["symbol", "date"]).reset_index(
-            drop=True
+        frame = (
+            build_frame(days=4).sort_values(["symbol", "date"]).reset_index(drop=True)
         )
         frame["symbol"] = frame["symbol"].astype(object)
         frame["date"] = pd.to_datetime(frame["date"])
@@ -261,9 +261,7 @@ class AShareSelectionScriptTests(unittest.TestCase):
         self.assertEqual([True, True], latest["one_word_bar"].tolist())
 
     def test_preferred_input_symbol_map_preserves_first_alias_per_key(self) -> None:
-        frame = pd.DataFrame(
-            {"symbol": ["SH.600000", "600000.SH", "000001", "000001"]}
-        )
+        frame = pd.DataFrame({"symbol": ["SH.600000", "600000.SH", "000001", "000001"]})
 
         preferred = preferred_input_symbol_map(frame)
 
@@ -320,6 +318,19 @@ class AShareSelectionScriptTests(unittest.TestCase):
         self.assertIn("close=0", joined)
         self.assertIn("column volume has 1 negative values", joined)
         self.assertIn("volume=-1", joined)
+
+    def test_validate_rejects_non_finite_ohlcv_values(self) -> None:
+        for column in ["open", "high", "low", "close", "volume"]:
+            for value in (float("nan"), float("inf"), float("-inf")):
+                with self.subTest(column=column, value=value):
+                    frame = build_frame()
+                    frame[column] = frame[column].astype(float)
+                    frame.loc[0, column] = value
+
+                    errors = validate_ohlcv.validate_frame(frame, min_history_rows=120)
+
+                    self.assertTrue(errors)
+                    self.assertIn(f"column {column}", "; ".join(errors))
 
     def test_validate_date_and_duplicate_errors_include_examples(self) -> None:
         frame = build_frame()
@@ -460,7 +471,9 @@ class AShareSelectionScriptTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicate symbol/date rows"):
             scorer.score_candidates(frame, config)
 
-    def test_score_rejects_duplicate_symbol_after_whitespace_normalization(self) -> None:
+    def test_score_rejects_duplicate_symbol_after_whitespace_normalization(
+        self,
+    ) -> None:
         config = load_config("example_config.json")
         frame = build_frame()
         duplicate = frame.iloc[[0]].copy()

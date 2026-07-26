@@ -213,11 +213,14 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
 - `feature_columns`
 - `split_method`
 - `scaler_fit_scope`
+- `label_execution_model`
 - `label_definition`
 - `prediction_scope`
 - 每个 symbol 的训练窗口、标签分布、`skipped_reason`
 
 `prediction_scope=latest_probability_repeated_for_scoring` 表示最新预测概率被重复写入该标的所有行，供评分脚本消费当前概率；不是逐日历史预测序列。
+
+`label_execution_model=signal_close_next_observed_open_to_close` 表示训练标签以信号日后下一条观测 bar 的 `open` 作为 entry，并以信号日后第 `horizon` 条观测 bar 的 `close` 作为 exit；`label_definition` 必须为 `target_return = close.shift(-horizon) / open.shift(-1) - 1; class = target_return > train_mean`。缺少下一条观测 bar、无效 entry open 或缺少 horizon close 的行不得进入训练集。
 
 ## 今日 A 股总控 CLI
 
@@ -318,7 +321,7 @@ uv run --with pandas --with numpy --with baostock python skills/a-share-selectio
 
 `--output` 通过后缀显式选择 `.csv`、`.parquet` 或 `.pq`；现有命令和 runner 默认继续使用 CSV。需要反复执行大文件 clean/provenance 时可显式写 Parquet，metadata 会记录 `output_format/output_path`。runner 对应参数为 `--history-output-format parquet`，命令环境必须提供 `pyarrow` 或 `fastparquet`。不支持的后缀、缺少 Parquet 引擎或数据/metadata 路径冲突都会在联网前失败并清理陈旧输出；格式变化不改变数据源、字段、严格门禁或全 A 声明边界。
 
-直接调用 Baostock 历史入口时，`--symbols` 与 `--symbols-file` 二选一；文件支持 UTF-8 或 UTF-8-BOM、逗号或换行分隔，缺失、目录、空内容和无效编码都会在联网前失败。runner 对 Baostock 和 ZZShare 的实际 symbol 列表同样会传 `--symbols-file`：显式输入沿用原文件，内部生成列表写入运行目录 `history_symbols.txt`，执行与 `--plan-only` 都记录路径、来源、符号数量、大小和 SHA-256。`<derived_from_spot_snapshot>` 计划占位符保持内联，不能把未执行的 spot 派生写成真实列表。
+直接调用 Baostock 历史入口时，`--symbols` 与 `--symbols-file` 二选一；文件支持 UTF-8 或 UTF-8-BOM、逗号或换行分隔，缺失、目录、空内容和无效编码都会在联网前失败。`--output` 和 `--metadata-output` 必须彼此不同，且不得与 `--symbols-file` 或 `--names-input` 直连、相对、软链接或硬链接指向同一文件；路径冲突会在读取文件、加载依赖或联网前失败并保留既有文件。路径参数必须使用 shell 已展开的实际路径，公共 CLI 会拒绝字面前导 `~`，避免预检与清理操作解释为不同位置。runner 对 Baostock 和 ZZShare 的实际 symbol 列表同样会传 `--symbols-file`：显式输入沿用原文件，内部生成列表写入运行目录 `history_symbols.txt`，执行与 `--plan-only` 都记录路径、来源、符号数量、大小和 SHA-256。`<derived_from_spot_snapshot>` 计划占位符保持内联，不能把未执行的 spot 派生写成真实列表。
 
 门禁不能只看退出码，还要检查 metadata：
 
@@ -392,7 +395,7 @@ uv run --with pandas --with numpy python skills/a-share-selection-strategy/scrip
   --diagnostics-output /tmp/a-share-selection-zzshare/score_diagnostics.csv
 ```
 
-zzshare 入口默认使用 `daily(fields=all)`，并把 `source_scope=zzshare_history_fetch`、`real_market_data=true`、`partial_result`、`token_configured`、`request_interval_seconds`、`limit`、`max_pages`、`possibly_truncated_symbols`、`unprocessed_symbols`、`rate_limit_budget_exhausted`、`rate_limit_exhaustion_reason`、`source_claim_boundary` 写入 metadata。无 token 可用不等于无限频率或长期稳定；直接调用 `fetch_zzshare_a_share.py` 时可用 `--symbols` 或 `--symbols-file`，两者互斥。`--non-trading-policy` 默认是 `fail`，基础门禁会强制检查 `invalid_rows == dropped_invalid_rows`、`non_trading_rows == 0`、`tradestatus_missing_rows == 0` 和限流预算未耗尽；加 `--fail-on-fetch-error` 后还会检查 `failed_symbols == []`、`empty_symbols == []`、`possibly_truncated_symbols == []`、`symbol_count == requested_symbols` 和实际 `date_min/date_max`。任何 `unprocessed_symbols` 都会导致请求数对账失败，不能当成空结果或成功抓取。
+zzshare 入口默认使用 `daily(fields=all)`，并把 `source_scope=zzshare_history_fetch`、`real_market_data=true`、`partial_result`、`token_configured`、`request_interval_seconds`、`limit`、`max_pages`、`possibly_truncated_symbols`、`unprocessed_symbols`、`rate_limit_budget_exhausted`、`rate_limit_exhaustion_reason`、`source_claim_boundary` 写入 metadata。无 token 可用不等于无限频率或长期稳定；直接调用 `fetch_zzshare_a_share.py` 时可用 `--symbols` 或 `--symbols-file`，两者互斥。`--output` 和 `--metadata-output` 必须彼此不同，且不得与 `--symbols-file` 或 `--checkpoint-dir` 的任何恢复文件重合，也不得写入 checkpoint 目录；直连、相对、软链接和既有硬链接别名会在读取输入、初始化 checkpoint 或调用 provider 前失败并保留原文件。未展开的字面前导 `~` 同样在预检前失败；checkpoint 自身、内部或用户控制的父级目录均不得为符号链接，避免恢复文件写入外部位置。macOS `/var` 到 `/private/var` 的系统临时目录映射保持合法。`--non-trading-policy` 默认是 `fail`，基础门禁会强制检查 `invalid_rows == dropped_invalid_rows`、`non_trading_rows == 0`、`tradestatus_missing_rows == 0` 和限流预算未耗尽；加 `--fail-on-fetch-error` 后还会检查 `failed_symbols == []`、`empty_symbols == []`、`possibly_truncated_symbols == []`、`symbol_count == requested_symbols` 和实际 `date_min/date_max`。任何 `unprocessed_symbols` 都会导致请求数对账失败，不能当成空结果或成功抓取。
 
 `run_today_a_share_selection.py --history-source zzshare` 会透传 `--history-http-url`、`--history-timeout-seconds`、`--history-request-interval-seconds`、`--history-max-concurrent-symbol-requests`、`--history-max-rate-limit-sleep-seconds`、`--history-max-429-events`、`--history-max-runtime-seconds`、`--history-limit`、`--history-max-pages`、`--history-non-trading-policy`、`--history-checkpoint-batch-size`、`--history-resume-from-checkpoint` 和 `--history-progress-interval` 到 zzshare fetcher，并固定使用 `fields=all`。runner 未显式传值时，zzshare 默认使用 `history_non_trading_policy=drop`、`history_max_concurrent_symbol_requests=1`、`history_checkpoint_batch_size=100`、`history_progress_interval=100`；三项限流预算未传时沿用 fetcher 的 120 秒累计 429 sleep、3 次 429 和 900 秒总运行时间默认值。显式值会进入 `run_manifest.json`、`summary.json`、`history_metadata.json` 和候选/诊断 CSV provenance。runner 会实时透出 zzshare fetcher 的 `PROGRESS:` stderr 行，同时完整捕获 stdout/stderr 写入 `run_manifest.json`。zzshare token 只能通过 `ZZSHARE_TOKEN` 环境变量提供；不要把 token 放进 runner CLI 参数，因为 runner 会把 step command 写入 `run_manifest.json`。对 Baostock 与 zzshare 的实际 symbol 列表，runner 都会传 `--symbols-file`；显式文件沿用用户路径，内部生成列表写入 `history_symbols.txt`，计划占位符除外。
 
@@ -576,7 +579,8 @@ python3 skills/a-share-selection-strategy/scripts/validate_walk_forward_manifest
   --signal-dates "${SIGNAL_DATES[@]}" \
   --expected-symbol-count 40 \
   --required-tradability-model tradestatus_entry_exit_only \
-  --required-limit-rules-model not_modeled
+  --required-limit-rules-model not_modeled \
+  --required-execution-model signal_close_next_observed_open_to_close
 ```
 
 artifact validator 的期望值必须从刚生成的 artifact 提取：
@@ -614,6 +618,7 @@ python3 skills/a-share-selection-strategy/scripts/validate_walk_forward_artifact
   --required-allocation-model portfolio_cash_lot_floor \
   --required-tradability-model tradestatus_entry_exit_only \
   --required-limit-rules-model not_modeled \
+  --required-execution-model signal_close_next_observed_open_to_close \
   --manifest-validation "$RUN_DIR/run_manifest_validation.json" \
   --cash-budget 3000000 \
   --allow-dropped-invalid-rows
@@ -626,6 +631,8 @@ python3 skills/a-share-selection-strategy/scripts/validate_walk_forward_artifact
 - artifact validator 未传 `--manifest-validation` 但 run 目录存在 `run_manifest_validation.json` 时会自动校验该报告；`manifest_checked=false` 时不能说 manifest 门禁已纳入 artifact 复验。
 - `calendar_model=business_day_closed_interval` 不是交易所日历。
 - `tradestatus_holding_period_bars` 只覆盖价格表内已观测 bar，不补足缺失交易日、节假日或涨跌停规则。
+- `signal_close_next_observed_open_to_close` 表示信号日收盘后在下一条观测 bar 的 `open` 入场，并在信号日后第 `hold_days` 条观测 bar 的 `close` 退出；artifact validator 会从完整 `prices.csv` 独立复算这个链路，不能只依赖截断的 signal window。
+- `prediction_sized_candidates.csv` 的 `sizing_entry_date`、`sizing_entry_price`、`quantity`、`cash_reserved`、`notional` 和 `weight` 也会按同一执行基准独立验算，并必须与同一 `symbol` 的 `prediction_backtest.csv` 全部 sizing 字段一致。`signal_close` 只保留信号审计用途，不能作为资金占用或成交价格。
 
 ## 单信号日定位链路
 
@@ -637,10 +644,10 @@ uv run --with-requirements skills/a-share-selection-strategy/requirements-ml.txt
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/validate_ohlcv.py --input predictions_signal_window.csv --config skills/a-share-selection-strategy/configs/prediction_profile_config.json
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/score_candidates.py --input predictions_signal_window.csv --config skills/a-share-selection-strategy/configs/prediction_profile_config.json --output prediction_candidates.csv --fail-on-skipped --fail-on-empty-result
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/allocate_candidate_capital.py --prices prices.csv --candidates prediction_candidates.csv --output prediction_sized_candidates.csv --cash-budget 1000000 --lot-size 100 --fail-on-unallocated
-uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/backtest_buy_hold.py --prices prices.csv --candidates prediction_sized_candidates.csv --output prediction_backtest.csv --hold-days 5 --fail-on-incomplete
+uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/backtest_buy_hold.py --prices prices.csv --candidates prediction_sized_candidates.csv --output prediction_backtest.csv --hold-days 5 --execution-model signal_close_next_observed_open_to_close --fail-on-incomplete
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/portfolio_equity_curve.py --backtests prediction_backtest.csv --output prediction_equity_curve.csv
 uv run --with pandas --with numpy python skills/a-share-selection-strategy/scripts/portfolio_overlap_report.py --backtests prediction_backtest.csv --daily-output prediction_daily_positions.csv --overlap-output prediction_overlap.csv --summary-output prediction_overlap_summary.json --max-gross-weight 1.0 --max-gross-notional 1000000 --max-cash-reserved 1000000 --require-capital-fields
-uv run --with pandas python skills/a-share-selection-strategy/scripts/summarize_walk_forward_run.py --run-dir RUN_DIR --output RUN_DIR/prediction_run_summary.json --expected-symbol-count N --required-tradability-model tradestatus_entry_exit_only --required-limit-rules-model not_modeled
+uv run --with pandas python skills/a-share-selection-strategy/scripts/summarize_walk_forward_run.py --run-dir RUN_DIR --output RUN_DIR/prediction_run_summary.json --expected-symbol-count N --required-tradability-model tradestatus_entry_exit_only --required-limit-rules-model not_modeled --required-execution-model signal_close_next_observed_open_to_close
 ```
 
 `slice_prices_as_of.py` 的输出 CSV 会保留 `requested_as_of_date`、`actual_data_date` 和 `as_of_date_observed`。如果请求日不是实际交易行，后续候选、诊断和 HTML 报告必须按 `actual_data_date` 或候选 `date` 解释真实信号日。
@@ -657,13 +664,13 @@ python3 validate_skill_changes.py
 
 常规验证子进程默认超时 900 秒。只有明确需要更长或更短的本地观察窗口时才传 `--command-timeout-seconds N`；Python 模块可用性探针使用 `min(N, 10)` 秒，自定义小于 10 秒的值仍会收紧探针。任何超时都会显式失败、打印对应命令；在 POSIX 上验证器会以 `SIGTERM` 后 `SIGKILL` 回收其创建的新会话进程组，即使主进程先退出也不跳过同组后台子进程清理。GitHub Actions 每个分片 job 的总超时为 15 分钟，该值是防止无限等待的控制上限，不是性能 SLA。
 
-默认 `--dependency-profile latest` 会使用当前可解析的最新兼容 `pandas/numpy/pyarrow` 运行完整测试。提交前或排查 CI 差异时，使用以下命令精确复现 Python 3.11 和 `constraints-ci.txt` 中的直接依赖组合：
+默认 `--dependency-profile latest` 会使用当前可解析的最新兼容 `pandas/numpy/pyarrow` 逐片运行完整测试集合。提交前或排查 CI 差异时，使用以下命令精确复现 Python 3.11 和 `constraints-ci.txt` 中的直接依赖组合：
 
 ```bash
 python3 validate_skill_changes.py --dependency-profile ci
 ```
 
-`ci` profile 直接创建完整 unittest 子进程，不从当前虚拟环境继承同名 Python 包。GitHub Actions 已在 job 安装阶段通过同一 constraints 固定依赖，随后直接运行测试分片，不再嵌套 uv。
+`ci` profile 为每个完整职责分片分别创建 unittest 子进程，不从当前虚拟环境继承同名 Python 包。每个子进程沿用 900 秒 fail-closed 超时，完整集合不依赖单一串行 discover 子进程。GitHub Actions 已在 job 安装阶段通过同一 constraints 固定依赖，随后直接运行相同测试分片，不再嵌套 uv。
 
 统一入口始终执行仓库自有的 `SKILL.md` frontmatter 合同，覆盖 YAML mapping、允许字段、必需 `name/description`、名称格式和 description 边界。`--skip-skill-validate` 只跳过本机 `quick_validate.py` 附加兼容检查，不会跳过该仓库门禁。
 
@@ -708,7 +715,9 @@ for manifest in manifests:
             raise RuntimeError(f"{manifest}: missing interface.{key}")
 PY
 PYTHONPYCACHEPREFIX=/tmp/a-share-selection-pycache python3 -m compileall -q skills/a-share-selection-strategy/scripts
-PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy --with pyarrow python -m unittest discover -s tests -v
+for shard in core providers gates report runner-core runner-providers runner-artifacts runner-plan-resume runner-universe; do
+  PYTHONDONTWRITEBYTECODE=1 uv run --with pandas --with numpy --with pyarrow python tests/run_unittest_shard.py "$shard"
+done
 ```
 
 Skill 结构校验器来自本机 skill-creator，不随本仓库发布：

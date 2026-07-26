@@ -149,13 +149,13 @@ python3 validate_skill_changes.py
 python3 validate_skill_changes.py --dependency-profile ci
 ```
 
-`ci` profile 直接从 `constraints-ci.txt` 创建完整 unittest 子进程，不依赖调用者当前 Python 环境中的同名包。
+`ci` profile 直接从 `constraints-ci.txt` 创建完整测试分片子进程，不依赖调用者当前 Python 环境中的同名包。
 
 统一入口始终执行仓库自有的 `SKILL.md` frontmatter 合同，校验 YAML mapping、允许字段、必需字段、名称格式和 description 边界。`--skip-skill-validate` 只跳过本机 `quick_validate.py` 附加兼容检查，不会跳过该仓库门禁；因此 GitHub CI 不依赖本机 skill-creator 脚本也能拒绝非法 frontmatter。
 
 该入口只覆盖本地仓库门禁，不证明真实行情、真实 prediction、券商订单或真实回测门禁通过。需要拆开执行或替换本机 `quick_validate.py` 时，使用 [runbook 验证命令](skills/a-share-selection-strategy/instructions/runbook.md#验证命令)。
 
-CI 使用 `tests/run_unittest_shard.py` 按职责分配普通测试文件，并对 `test_today_a_share_selection_runner.py` 做方法级互斥分片；本地统一门禁仍以完整 `python -m unittest discover -s tests -v` 为准。分片脚本会校验覆盖全集、无重复，并在测试文件或 runner 方法变化时拒绝静默漏测。
+CI 使用 `tests/run_unittest_shard.py` 按职责分配普通测试文件，并对 `test_today_a_share_selection_runner.py` 做方法级互斥分片；本地统一门禁按同一完整分片集合逐片执行。分片脚本会校验覆盖全集、无重复，并在测试文件或 runner 方法变化时拒绝静默漏测；单个分片只用于迭代反馈，不能替代完整集合。
 
 迭代单个职责分片时可运行以下命令缩短本地反馈；它只用于开发反馈，交付前仍必须运行完整 `python3 validate_skill_changes.py --dependency-profile ci`：
 

@@ -38,6 +38,10 @@ class PortfolioCandidateAllocationCliTests(unittest.TestCase):
         self.assertEqual(["max_open_positions"], skipped["skip_reason"].tolist())
         self.assertEqual({"max_open_positions": 1}, summary["skip_reason_counts"])
         self.assertEqual("portfolio_cash_lot_floor", sized[0]["capital_model"].iloc[0])
+        self.assertEqual(
+            "local_portfolio_allocation_not_broker_or_external_cash_capacity_proof",
+            sized[0]["sizing_claim_boundary"].iloc[0],
+        )
         self.assertEqual(10000.0, summary["cash_budget"])
         self.assertEqual(5, summary["hold_days"])
         self.assertIn("max_gross_weight", summary)
@@ -72,6 +76,46 @@ class PortfolioCandidateAllocationCliTests(unittest.TestCase):
         self.assertEqual(["insufficient_cash_slot"], skipped["skip_reason"].tolist())
         self.assertEqual(0, summary["allocated_candidates"])
         self.assertEqual(0.0, summary["max_gross_weight"])
+
+    def test_sizes_and_starts_capacity_at_next_observed_open(self) -> None:
+        prices = build_frame(days=40)
+        signal = signal_date(prices, 20)
+        history = prices[prices["symbol"] == "000002"].reset_index(drop=True)
+        entry_date = history.loc[21, "date"]
+        entry_open = float(history.loc[20, "close"]) * 2
+        prices.loc[
+            (prices["symbol"] == "000002") & (prices["date"] == entry_date), "open"
+        ] = entry_open
+        frame = candidates(prices, signal, ["000002"])
+
+        selected, sized, _skipped, _summary = allocate(
+            prices, [frame], cash_budget=10000.0, max_open_positions=1
+        )
+        prepared = allocation.prepare_prices(prices)
+        raw = allocation.prepare_candidates([frame]).iloc[0].to_dict()
+        decision = allocation.allocation_decision(
+            raw,
+            prepared,
+            {},
+            cash_budget=10000.0,
+            lot_size=100,
+            hold_days=5,
+            max_open_positions=1,
+            max_gross_weight=1.0,
+            max_gross_notional=10000.0,
+            max_cash_reserved=10000.0,
+            fail_on_symbol_overlap=False,
+        )
+
+        row = sized[0].iloc[0]
+        expected_quantity = int(10000.0 / (entry_open * 100)) * 100
+        self.assertEqual(1, len(selected[0]))
+        self.assertEqual(expected_quantity, int(row["quantity"]))
+        self.assertEqual(entry_open, float(row["sizing_entry_price"]))
+        self.assertEqual(str(entry_date), row["sizing_entry_date"])
+        self.assertEqual(expected_quantity * entry_open, float(row["cash_reserved"]))
+        self.assertEqual(str(entry_date), decision["active_dates"][0])
+        self.assertGreater(str(entry_date), signal)
 
     def test_expected_signal_dates_reject_mixed_candidate_file_dates(self) -> None:
         prices = build_frame(days=40)
@@ -183,6 +227,107 @@ class PortfolioCandidateAllocationCliTests(unittest.TestCase):
         self.assertIn("already contain sizing fields", stderr.getvalue())
         self.assertIn("capital_model", stderr.getvalue())
         self.assertTrue(all(not path.exists() for path in output_paths))
+
+    def test_non_finite_allocation_options_are_rejected(self) -> None:
+        prices = build_frame(days=40)
+        date = signal_date(prices, 20)
+        frame = candidates(prices, date, ["000002"])
+        base = {
+            "cash_budget": 10000.0,
+            "lot_size": 100,
+            "hold_days": 5,
+            "max_open_positions": 10,
+            "max_gross_weight": 1.0,
+            "max_gross_notional": 10000.0,
+            "max_cash_reserved": 10000.0,
+            "close_tolerance": 0.000001,
+            "fail_on_symbol_overlap": False,
+        }
+        cases = [
+            ("cash_budget", "cash-budget"),
+            ("lot_size", "lot-size"),
+            ("hold_days", "hold-days"),
+            ("max_open_positions", "max-open-positions"),
+            ("max_gross_weight", "max-gross-weight"),
+            ("max_gross_notional", "max-gross-notional"),
+            ("max_cash_reserved", "max-cash-reserved"),
+            ("close_tolerance", "close-tolerance"),
+        ]
+        for field, label in cases:
+            for value in (float("nan"), float("inf"), float("-inf")):
+                with self.subTest(field=field, value=value):
+                    options = {**base, field: value}
+                    with self.assertRaisesRegex(ValueError, f"{label} must be finite"):
+                        allocation.allocate_portfolio(prices, [frame], **options)
+
+    def test_derived_lot_quantity_overflow_is_rejected(self) -> None:
+        prices = pd.DataFrame(
+            [
+                {
+                    "symbol": "000001",
+                    "date": "2026-01-01",
+                    "open": 1e-320,
+                    "high": 1.0,
+                    "low": 1e-320,
+                    "close": 1.0,
+                    "volume": 1.0,
+                },
+                {
+                    "symbol": "000001",
+                    "date": "2026-01-02",
+                    "open": 1e-320,
+                    "high": 1.0,
+                    "low": 1e-320,
+                    "close": 1.0,
+                    "volume": 1.0,
+                },
+            ]
+        )
+        frame = pd.DataFrame([{"symbol": "000001", "date": "2026-01-01", "close": 1.0}])
+
+        with self.assertRaisesRegex(
+            ValueError, "lot quantity calculation must be finite"
+        ):
+            allocation.allocate_portfolio(
+                prices,
+                [frame],
+                cash_budget=1e308,
+                lot_size=1,
+                hold_days=1,
+                max_open_positions=1,
+                max_gross_weight=1.0,
+                max_gross_notional=1e308,
+                max_cash_reserved=1e308,
+                fail_on_symbol_overlap=False,
+            )
+
+    def test_cli_non_finite_limit_removes_stale_outputs(self) -> None:
+        prices = build_frame(days=40)
+        date = signal_date(prices, 20)
+        frame = candidates(prices, date, ["000002"])
+        for value in ["nan", "inf", "-inf"]:
+            with self.subTest(value=value):
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    root = Path(tmpdir)
+                    paths = write_inputs(root, prices, frame)
+                    outputs = [
+                        root / "candidates.csv",
+                        root / "sized.csv",
+                        root / "skipped.csv",
+                        root / "allocation_summary.json",
+                    ]
+                    for output in outputs:
+                        output.write_text("stale result", encoding="utf-8")
+                    stderr = StringIO()
+                    with redirect_stderr(stderr):
+                        code = cli.main(
+                            cli_args(root, paths, max_open_positions=1)
+                            + ["--max-gross-weight", value]
+                        )
+
+                self.assertEqual(2, code)
+                self.assertTrue(all(not output.exists() for output in outputs))
+                self.assertIn("max-gross-weight must be finite", stderr.getvalue())
 
 
 def allocate(

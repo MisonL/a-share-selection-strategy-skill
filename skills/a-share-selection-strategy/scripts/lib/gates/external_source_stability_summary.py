@@ -9,6 +9,30 @@ from typing import Any
 from lib.selection_core.a_share_selection_command_safety import sanitize_text
 
 
+def check(name: str, passed: bool, *, required: bool = True) -> dict[str, Any]:
+    status = "passed" if passed else "failed"
+    return {
+        "name": name,
+        "status": status,
+        "passed": status == "passed",
+        "required": bool(required),
+    }
+
+
+def defer_metadata_checks(
+    checks: list[dict[str, Any]],
+    metadata: dict[str, Any],
+) -> list[dict[str, Any]]:
+    if metadata:
+        return checks
+    return [
+        item
+        if item.get("name") == "metadata_written"
+        else {**item, "status": "not_evaluated", "passed": None}
+        for item in checks
+    ]
+
+
 def command_elapsed_seconds(started: float, finished: float) -> float:
     elapsed = finished - started
     if not math.isfinite(elapsed):
@@ -49,6 +73,7 @@ def source_summary(items: list[dict[str, Any]]) -> dict[str, Any]:
         "passed_runs": sum(1 for item in items if item["passed"]),
         "all_passed": all(item["passed"] for item in items),
         "observation_failed_checks": observation_failures(items),
+        "not_evaluated_checks": not_evaluated_checks(items),
         **latest_source_projection(latest),
     }
 
@@ -111,11 +136,29 @@ def observation_failures(items: list[dict[str, Any]]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for item in items:
         for check_item in item["checks"]:
-            if check_item.get("required", True) or check_item["passed"]:
+            if check_item.get("required", True) or check_status(check_item) != "failed":
                 continue
             name = str(check_item["name"])
             counts[name] = counts.get(name, 0) + 1
     return dict(sorted(counts.items()))
+
+
+def not_evaluated_checks(items: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in items:
+        for check_item in item["checks"]:
+            if check_status(check_item) != "not_evaluated":
+                continue
+            name = str(check_item["name"])
+            counts[name] = counts.get(name, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def check_status(check_item: dict[str, Any]) -> str:
+    status = check_item.get("status")
+    if status in {"passed", "failed", "not_evaluated"}:
+        return str(status)
+    return "passed" if check_item.get("passed") is True else "failed"
 
 
 def strict_errors(summary: dict[str, Any]) -> list[str]:

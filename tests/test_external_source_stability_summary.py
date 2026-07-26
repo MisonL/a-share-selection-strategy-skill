@@ -95,6 +95,18 @@ class ExternalSourceStabilitySummaryTests(unittest.TestCase):
         self.assertEqual(0, yfinance["latest_source_returncode"])
         self.assertEqual("metadata_written", yfinance["latest_first_required_failure"])
         self.assertTrue(yfinance["latest_stderr_nonempty"])
+        self.assertEqual(
+            {
+                "close_adjustment_recorded": 1,
+                "empty_symbols_empty": 1,
+                "failed_symbols_empty": 1,
+                "rows_positive": 1,
+                "symbol_count_matches_requested": 1,
+                "timeout_seconds_recorded": 1,
+            },
+            yfinance["not_evaluated_checks"],
+        )
+        self.assertEqual({}, yfinance["observation_failed_checks"])
         self.assertNotIn("probe-secret-path", yfinance["latest_metadata_output"])
         self.assertIn("ERROR: strict gate failed;", error_output)
         self.assertIn("source=yfinance", error_output)
@@ -354,6 +366,8 @@ class ExternalSourceStabilitySummaryTests(unittest.TestCase):
         self.assertIn("完整审计", runbook)
         self.assertIn("`results[]`", runbook)
         self.assertIn("不复制原始 stderr", runbook)
+        self.assertIn("`status=passed|failed|not_evaluated`", runbook)
+        self.assertIn("`not_evaluated_checks`", runbook)
 
     def test_archive_rejects_recorded_metadata_symlink(self) -> None:
         if os.name != "posix":

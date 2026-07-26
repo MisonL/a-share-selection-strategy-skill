@@ -240,7 +240,35 @@ class ExternalSourceStabilityProbeTests(unittest.TestCase):
         self.assertEqual(124, yfinance["returncode"])
         self.assertIn("timed out", yfinance["stderr"])
         self.assertEqual(False, yfinance["passed"])
+        checks = {item["name"]: item for item in yfinance["checks"]}
+        self.assertEqual("failed", checks["metadata_written"]["status"])
+        self.assertEqual(False, checks["metadata_written"]["passed"])
+        self.assertEqual("not_evaluated", checks["rows_positive"]["status"])
+        self.assertIsNone(checks["rows_positive"]["passed"])
+        self.assertEqual(
+            6,
+            len(manifest["summary"]["sources"]["yfinance"]["not_evaluated_checks"]),
+        )
         self.assertEqual(["yfinance_passed_runs=0 runs=1"], probe.strict_errors(manifest))
+
+    def test_missing_metadata_does_not_report_dependent_checks_as_passed(self) -> None:
+        for source in [
+            "eastmoney_spot",
+            "baostock_universe",
+            "akshare",
+            "pytdx",
+            "yfinance",
+            "baostock",
+            "zzshare",
+        ]:
+            with self.subTest(source=source):
+                checks = probe.source_checks(source, {})
+                self.assertEqual("failed", checks[0]["status"])
+                self.assertEqual(False, checks[0]["passed"])
+                self.assertTrue(
+                    all(item["status"] == "not_evaluated" for item in checks[1:])
+                )
+                self.assertTrue(all(item["passed"] is None for item in checks[1:]))
 
     def test_parser_rejects_non_finite_timeout_and_interval_values(self) -> None:
         parser = probe.build_parser()

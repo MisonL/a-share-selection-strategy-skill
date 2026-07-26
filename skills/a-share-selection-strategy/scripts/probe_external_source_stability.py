@@ -22,7 +22,9 @@ from lib.gates.external_source_evidence_archive import (
 )
 from lib.gates.external_source_stability_summary import (
     build_summary as build_probe_summary,
+    check,
     command_elapsed_seconds,
+    defer_metadata_checks,
     strict_errors as summary_strict_errors,
     strict_failure_diagnostics as summary_strict_failure_diagnostics,
 )
@@ -556,7 +558,9 @@ def source_record(
     command_timed_out: bool = False,
 ) -> dict[str, Any]:
     checks = source_checks(spec.name, metadata, spec.command)
-    passed = result.returncode == 0 and all(item["passed"] for item in required_checks(checks))
+    passed = result.returncode == 0 and all(
+        item["status"] == "passed" for item in required_checks(checks)
+    )
     metadata_output_is_symlink = spec.metadata_path.is_symlink()
     metadata_output_is_file = (
         not metadata_output_is_symlink and spec.metadata_path.is_file()
@@ -628,9 +632,9 @@ def unique_persisted_mapping_key(key: str, existing: dict[str, Any]) -> str:
 
 def source_checks(source: str, metadata: dict[str, Any], command: list[str] | None = None) -> list[dict[str, Any]]:
     if source == "eastmoney_spot":
-        return spot_snapshot_checks(metadata, source="eastmoney")
+        return defer_metadata_checks(spot_snapshot_checks(metadata, source="eastmoney"), metadata)
     if source == "baostock_universe":
-        return spot_snapshot_checks(metadata, source="baostock") + [
+        checks = spot_snapshot_checks(metadata, source="baostock") + [
             check(
                 "resolved_snapshot_date_recorded",
                 bool(metadata.get("resolved_snapshot_date")),
@@ -643,18 +647,20 @@ def source_checks(source: str, metadata: dict[str, Any], command: list[str] | No
                 ),
             ),
         ]
+        return defer_metadata_checks(checks, metadata)
     common = history_checks(metadata)
     if source == "akshare":
-        return common + [
+        checks = common + [
             check(
                 "invalid_rows_accounted",
                 int(metadata.get("invalid_rows", 0)) == int(metadata.get("dropped_invalid_rows", 0)),
             ),
             check("hist_provider_clean", not metadata.get("fallback_errors"), required=False),
         ]
+        return defer_metadata_checks(checks, metadata)
     if source == "pytdx":
         missing = set(metadata.get("missing_provider_fields", []))
-        return common + [
+        checks = common + [
             check(
                 "invalid_rows_accounted",
                 int(metadata.get("invalid_rows", 0)) == int(metadata.get("dropped_invalid_rows", 0)),
@@ -671,20 +677,23 @@ def source_checks(source: str, metadata: dict[str, Any], command: list[str] | No
                 bool(metadata.get("license_claim_boundary")),
             ),
         ]
+        return defer_metadata_checks(checks, metadata)
     if source == "yfinance":
-        return common + [
+        checks = common + [
             check("timeout_seconds_recorded", float(metadata.get("timeout_seconds", 0.0)) > 0),
             check("close_adjustment_recorded", metadata.get("adjustment") == "auto_adjust_false_close"),
         ]
+        return defer_metadata_checks(checks, metadata)
     if source == "baostock":
-        return common + [
+        checks = common + [
             check("invalid_rows_accounted", int(metadata.get("invalid_rows", 0)) == int(metadata.get("dropped_invalid_rows", 0))),
             check("non_trading_rows_zero", int(metadata.get("non_trading_rows", 0)) == 0),
             check("tradestatus_missing_rows_zero", int(metadata.get("tradestatus_missing_rows", 0)) == 0),
             check("adjustflag_matches_request", str(metadata.get("adjustflag", "")) == requested_value(command, "--adjust")),
         ]
+        return defer_metadata_checks(checks, metadata)
     if source == "zzshare":
-        return common + [
+        checks = common + [
             check("invalid_rows_accounted", int(metadata.get("invalid_rows", 0)) == int(metadata.get("dropped_invalid_rows", 0))),
             check("non_trading_rows_zero", int(metadata.get("non_trading_rows", 0)) == 0),
             check("tradestatus_missing_rows_zero", int(metadata.get("tradestatus_missing_rows", 0)) == 0),
@@ -693,7 +702,8 @@ def source_checks(source: str, metadata: dict[str, Any], command: list[str] | No
             check("limit_matches_request", str(metadata.get("limit", "")) == requested_value(command, "--limit")),
             check("max_pages_matches_request", str(metadata.get("max_pages", "")) == requested_value(command, "--max-pages")),
         ]
-    return common
+        return defer_metadata_checks(checks, metadata)
+    return defer_metadata_checks(common, metadata)
 
 
 def spot_snapshot_checks(metadata: dict[str, Any], *, source: str) -> list[dict[str, Any]]:
@@ -729,10 +739,6 @@ def requested_value(command: list[str] | None, option: str) -> str:
 
 def required_checks(checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [item for item in checks if item.get("required", True)]
-
-
-def check(name: str, passed: bool, *, required: bool = True) -> dict[str, Any]:
-    return {"name": name, "passed": bool(passed), "required": bool(required)}
 
 
 def build_summary(manifest: dict[str, Any]) -> dict[str, Any]:

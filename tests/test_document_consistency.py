@@ -486,6 +486,10 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("需要复用时必须本轮显式传 `--history-http-url`", docs)
         self.assertIn("历史源与上一轮一致", docs)
         self.assertIn("manifest 所在目录", docs)
+        self.assertIn("history_symbols_representation=file_reference", docs)
+        self.assertIn("100 个", docs)
+        self.assertIn("`selected_symbols.json`", docs)
+        self.assertIn("`history_symbols_file_symbol_count`", docs)
 
     def test_incremental_docs_define_aggregation_and_baostock_empty_contract(
         self,

@@ -22,6 +22,9 @@ from typing import Any
 
 from lib.a_share_selection_config import load_config
 from lib.a_share_selection_paths import SCRIPTS_DIR, resolve_config_path
+from lib.runner.run_today_a_share_selection_history import (
+    MANIFEST_HISTORY_SYMBOL_INLINE_LIMIT,
+)
 from lib.selection_core.a_share_selection_command_safety import sanitize_text
 
 
@@ -469,6 +472,8 @@ def manifest_history_fields(args: Any) -> dict[str, Any]:
         "history_symbols_file_symbol_count": 0,
         "history_symbols_file_sha256": "",
         "history_symbols_file_size_bytes": 0,
+        "history_symbols_representation": "inline",
+        "history_symbols_inline_limit": MANIFEST_HISTORY_SYMBOL_INLINE_LIMIT,
         "max_history_symbols": int(args.max_history_symbols),
         "max_history_symbols_supplied": bool(
             getattr(args, "max_history_symbols_supplied", False)

@@ -37,6 +37,7 @@ from lib.selection_core.a_share_selection_symbols import (
 
 
 DEFAULT_HISTORY_SYMBOL_LIMIT = 50
+MANIFEST_HISTORY_SYMBOL_INLINE_LIMIT = 100
 AKSHARE_HK_DAILY_SOURCE = "akshare_hk_daily"
 SYMBOL_COLUMN_ALIASES = ["symbol", "code", "code_id", "stock_code", "ticker", "Ticker"]
 ZZSHARE_ONLY_HISTORY_OPTIONS = [
@@ -228,6 +229,49 @@ def history_symbols(
     if spot is None:
         raise ValueError("--derive-symbols-from-spot requires a spot snapshot")
     return derive_symbols_from_spot(args, spot, output, config)
+
+
+def history_symbols_manifest_fields(
+    symbols: list[str], manifest: dict[str, Any]
+) -> dict[str, Any]:
+    fields: dict[str, Any] = {
+        "history_symbols": list(symbols),
+        "history_symbols_representation": "inline",
+    }
+    if len(symbols) <= MANIFEST_HISTORY_SYMBOL_INLINE_LIMIT:
+        return fields
+    if not bool(manifest.get("history_symbols_file_exists", False)):
+        return fields
+    validate_history_symbols_file_reference(manifest, len(symbols))
+    return {
+        "history_symbols": [],
+        "history_symbols_representation": "file_reference",
+        "symbols": "",
+    }
+
+
+def validate_history_symbols_file_reference(
+    manifest: dict[str, Any], expected_symbol_count: int
+) -> None:
+    path = str(manifest.get("history_symbols_file", "") or "").strip()
+    symbol_count = int(manifest.get("history_symbols_file_symbol_count", 0) or 0)
+    size_bytes = int(manifest.get("history_symbols_file_size_bytes", 0) or 0)
+    digest = str(manifest.get("history_symbols_file_sha256", "") or "").strip()
+    digest_valid = len(digest) == 64
+    if digest_valid:
+        try:
+            int(digest, 16)
+        except ValueError:
+            digest_valid = False
+    if (
+        not path
+        or symbol_count != expected_symbol_count
+        or size_bytes <= 0
+        or not digest_valid
+    ):
+        raise ValueError(
+            "large history symbol list requires a complete file reference contract"
+        )
 
 
 def parse_history_symbols(args: Any) -> list[str]:

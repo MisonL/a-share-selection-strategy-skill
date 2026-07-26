@@ -13,9 +13,134 @@ TESTS = ROOT / "tests"
 sys.path.insert(0, str(TESTS))
 
 import test_today_a_share_selection_runner as runner_suite  # noqa: E402
+from lib.runner.run_today_a_share_selection_history import (  # noqa: E402
+    MANIFEST_HISTORY_SYMBOL_INLINE_LIMIT,
+    history_symbols_manifest_fields,
+)
 
 
 class TodayAShareSelectionRunnerArtifactTests(unittest.TestCase):
+    def test_history_symbols_manifest_keeps_inline_list_at_limit(self) -> None:
+        symbols = [f"{600000 + index:06d}" for index in range(100)]
+
+        fields = history_symbols_manifest_fields(
+            symbols,
+            {
+                "history_symbols_file": "/tmp/symbols.txt",
+                "history_symbols_file_exists": True,
+                "history_symbols_file_symbol_count": len(symbols),
+                "history_symbols_file_sha256": "0" * 64,
+                "history_symbols_file_size_bytes": 1,
+            },
+        )
+
+        self.assertEqual(100, MANIFEST_HISTORY_SYMBOL_INLINE_LIMIT)
+        self.assertEqual("inline", fields["history_symbols_representation"])
+        self.assertEqual(symbols, fields["history_symbols"])
+        self.assertNotIn("symbols", fields)
+
+    def test_history_symbols_manifest_rejects_incomplete_large_reference(self) -> None:
+        symbols = [f"{600000 + index:06d}" for index in range(101)]
+
+        with self.assertRaisesRegex(ValueError, "complete file reference contract"):
+            history_symbols_manifest_fields(
+                symbols,
+                {
+                    "history_symbols_file": "/tmp/symbols.txt",
+                    "history_symbols_file_exists": True,
+                    "history_symbols_file_symbol_count": len(symbols),
+                    "history_symbols_file_sha256": "",
+                    "history_symbols_file_size_bytes": 1,
+                },
+            )
+
+    def test_history_symbols_manifest_keeps_large_list_inline_without_file(
+        self,
+    ) -> None:
+        symbols = [f"{600000 + index:06d}" for index in range(101)]
+
+        fields = history_symbols_manifest_fields(
+            symbols,
+            {"history_symbols_file_exists": False},
+        )
+
+        self.assertEqual("inline", fields["history_symbols_representation"])
+        self.assertEqual(symbols, fields["history_symbols"])
+        self.assertNotIn("symbols", fields)
+
+    def test_summary_accepts_legacy_inline_history_symbols_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "run"
+            output.mkdir()
+            args = runner_suite.parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "baostock",
+                    "--symbols",
+                    "000001,600000",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--plan-only",
+                    "--no-html-report",
+                ]
+            )
+            manifest = runner_suite.runner.initial_manifest(args)
+            manifest["run_outputs_initialized"] = True
+            manifest["history_symbols"] = ["000001", "600000"]
+            manifest.pop("history_symbols_representation")
+            manifest.pop("history_symbols_inline_limit")
+
+            summary = runner_suite.summary_view(manifest, "planned")
+
+        self.assertEqual("inline", summary["history_symbols_representation"])
+        self.assertEqual(0, summary["history_symbols_inline_limit"])
+        self.assertEqual(2, summary["history_symbol_count"])
+        self.assertEqual(2, summary["history_selection"]["selected_symbol_count"])
+
+    def test_summary_preserves_explicit_empty_selected_symbols_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "run"
+            output.mkdir()
+            (output / "selected_symbols.json").write_text(
+                json.dumps({"symbols": []}) + "\n",
+                encoding="utf-8",
+            )
+            args = runner_suite.parsed_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "baostock",
+                    "--symbols-file",
+                    str(output / "input_symbols.txt"),
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--plan-only",
+                    "--no-html-report",
+                ]
+            )
+            manifest = runner_suite.runner.initial_manifest(args)
+            manifest.update(
+                {
+                    "run_outputs_initialized": True,
+                    "history_symbols": [],
+                    "history_symbols_representation": "file_reference",
+                    "history_symbols_file_exists": True,
+                    "history_symbols_file_symbol_count": 5200,
+                }
+            )
+
+            summary = runner_suite.summary_view(manifest, "planned")
+
+        self.assertEqual(0, summary["history_symbol_count"])
+        self.assertEqual(0, summary["history_selection"]["selected_symbol_count"])
+
     def test_runner_copies_local_spot_companion_metadata_for_execution(self) -> None:
         frame = runner_suite.build_frame(include_turn=True, include_tradability=True)
         frame[["open", "high", "low", "close"]] = (
@@ -313,6 +438,8 @@ class TodayAShareSelectionRunnerArtifactTests(unittest.TestCase):
         )
         self.assertTrue(manifest["history_symbols_file_output_written"])
         self.assertEqual(2, manifest["history_symbols_file_symbol_count"])
+        self.assertEqual("inline", manifest["history_symbols_representation"])
+        self.assertEqual(["000001", "600000"], manifest["history_symbols"])
         self.assertEqual(
             hashlib.sha256(generated_text.encode("utf-8")).hexdigest(),
             manifest["history_symbols_file_sha256"],
@@ -360,6 +487,8 @@ class TodayAShareSelectionRunnerArtifactTests(unittest.TestCase):
         self.assertTrue(manifest["history_symbols_file_exists"])
         self.assertFalse(manifest["history_symbols_file_output_written"])
         self.assertEqual(2, manifest["history_symbols_file_symbol_count"])
+        self.assertEqual("inline", manifest["history_symbols_representation"])
+        self.assertEqual(["000001", "600000"], manifest["history_symbols"])
         self.assertEqual(expected_sha256, manifest["history_symbols_file_sha256"])
 
     def test_runner_baostock_plan_only_writes_large_symbols_file(self) -> None:
@@ -387,6 +516,9 @@ class TodayAShareSelectionRunnerArtifactTests(unittest.TestCase):
                 (output / "run_manifest.json").read_text(encoding="utf-8")
             )
             summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            selected = json.loads(
+                (output / "selected_symbols.json").read_text(encoding="utf-8")
+            )
             symbols_path = output / "history_symbols.txt"
             symbols_text = symbols_path.read_text(encoding="utf-8")
             fetch_history = next(
@@ -396,6 +528,13 @@ class TodayAShareSelectionRunnerArtifactTests(unittest.TestCase):
         self.assertEqual(0, code, stderr)
         self.assertFalse(manifest["commands_executed"])
         self.assertTrue(manifest["plan_only"])
+        self.assertEqual([], manifest["history_symbols"])
+        self.assertEqual("", manifest["symbols"])
+        self.assertEqual(
+            "file_reference", manifest["history_symbols_representation"]
+        )
+        self.assertEqual(100, manifest["history_symbols_inline_limit"])
+        self.assertEqual(symbols, selected["symbols"])
         self.assertIn("--symbols-file", fetch_history["command"])
         self.assertIn(str(symbols_path), fetch_history["command"])
         self.assertNotIn(",".join(symbols), fetch_history["command"])
@@ -410,9 +549,77 @@ class TodayAShareSelectionRunnerArtifactTests(unittest.TestCase):
         self.assertEqual(str(symbols_path), summary["history_symbols_file"])
         self.assertTrue(summary["history_symbols_file_output_written"])
         self.assertEqual(5200, summary["history_symbols_file_symbol_count"])
+        self.assertEqual("file_reference", summary["history_symbols_representation"])
+        self.assertEqual(5200, summary["history_symbol_count"])
+        self.assertEqual(5200, summary["history_selection"]["selected_symbol_count"])
         self.assertEqual(
             manifest["history_symbols_file_sha256"],
             summary["history_symbols_file_sha256"],
+        )
+
+    def test_runner_baostock_plan_only_references_large_explicit_symbols_file(
+        self,
+    ) -> None:
+        symbols = [f"{600000 + index:06d}" for index in range(5200)]
+        symbols_text = "\n".join(symbols) + "\n"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output = root / "run"
+            symbols_path = root / "full_a_symbols.txt"
+            symbols_path.write_text(symbols_text, encoding="utf-8")
+
+            code, _stdout, stderr = runner_suite.call_runner(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--history-source",
+                    "baostock",
+                    "--symbols-file",
+                    str(symbols_path),
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2026-01-01",
+                    "--plan-only",
+                    "--no-html-report",
+                ]
+            )
+            manifest = json.loads(
+                (output / "run_manifest.json").read_text(encoding="utf-8")
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            selected_path = output / "selected_symbols.json"
+            selected = json.loads(selected_path.read_text(encoding="utf-8"))
+            selected_path.unlink()
+            summary_without_selected_artifact = runner_suite.summary_view(
+                manifest,
+                "planned",
+            )
+            preserved_symbols_text = symbols_path.read_text(encoding="utf-8")
+            generated_symbols_file_exists = (output / "history_symbols.txt").exists()
+
+        self.assertEqual(0, code, stderr)
+        self.assertEqual([], manifest["history_symbols"])
+        self.assertEqual("", manifest["symbols"])
+        self.assertEqual("file_reference", manifest["history_symbols_representation"])
+        self.assertEqual(str(symbols_path), manifest["history_symbols_file"])
+        self.assertEqual("explicit_symbols_file", manifest["history_symbols_file_origin"])
+        self.assertFalse(manifest["history_symbols_file_output_written"])
+        self.assertEqual(5200, manifest["history_symbols_file_symbol_count"])
+        self.assertEqual(symbols, selected["symbols"])
+        self.assertEqual(symbols_text, preserved_symbols_text)
+        self.assertFalse(generated_symbols_file_exists)
+        self.assertEqual("file_reference", summary["history_symbols_representation"])
+        self.assertEqual(5200, summary["history_symbol_count"])
+        self.assertEqual(
+            5200,
+            summary_without_selected_artifact["history_symbol_count"],
+        )
+        self.assertEqual(
+            5200,
+            summary_without_selected_artifact["history_selection"][
+                "selected_symbol_count"
+            ],
         )
 
     def test_runner_placeholder_does_not_write_history_symbols_file(self) -> None:
@@ -446,6 +653,7 @@ class TodayAShareSelectionRunnerArtifactTests(unittest.TestCase):
         self.assertEqual(0, code, stderr)
         self.assertFalse(manifest["commands_executed"])
         self.assertEqual(["<derived_from_spot_snapshot>"], manifest["history_symbols"])
+        self.assertEqual("inline", manifest["history_symbols_representation"])
         self.assertEqual("", manifest["history_symbols_file"])
         self.assertEqual("not_applicable", manifest["history_symbols_file_origin"])
         self.assertFalse((output / "history_symbols.txt").exists())

@@ -3877,6 +3877,9 @@ class TodayAShareSelectionRunnerTests(unittest.TestCase):
                         "output_dir": str(previous),
                         "history_source": "baostock",
                         "history_output_format": "parquet",
+                        "history_symbols": [],
+                        "history_symbols_representation": "file_reference",
+                        "history_symbols_file_symbol_count": 4,
                         "start_date": "2025-01-01",
                         "end_date": "2026-01-01",
                     }

@@ -226,6 +226,12 @@ def history_request_fields(manifest: dict[str, Any]) -> dict[str, Any]:
         "history_symbols_file_size_bytes": int(
             manifest.get("history_symbols_file_size_bytes", 0) or 0
         ),
+        "history_symbols_representation": str(
+            manifest.get("history_symbols_representation", "inline") or "inline"
+        ),
+        "history_symbols_inline_limit": int(
+            manifest.get("history_symbols_inline_limit", 0) or 0
+        ),
         "history_limit": manifest.get("history_limit", ""),
         "history_max_pages": manifest.get("history_max_pages", ""),
         "history_max_concurrent_symbol_requests": manifest.get(
@@ -760,7 +766,11 @@ def history_selection_source_fields(
         ),
         "raw_spot_rows": selected_data.get("raw_spot_rows"),
         "filtered_spot_rows": selected_data.get("filtered_spot_rows"),
-        "selected_symbol_count": selected_symbol_count(selected_data, selected_symbols),
+        "selected_symbol_count": selected_symbol_count(
+            selected_data,
+            selected_symbols,
+            manifest,
+        ),
         "max_history_symbols": history_limit_value(selected_data, manifest),
         "history_symbol_limit_source": history_limit_source(selected_data, manifest),
         "allow_partial_history": bool(manifest.get("allow_partial_history", False)),
@@ -974,6 +984,7 @@ def history_selection_available(
         selected_path.is_file()
         or metadata_path.is_file()
         or bool(manifest.get("history_symbols"))
+        or history_symbols_file_reference_count(manifest) > 0
     )
 
 
@@ -996,12 +1007,19 @@ def selected_symbol_values(
 
 
 def selected_symbol_count(
-    selected_data: dict[str, Any], selected_symbols: list[Any]
+    selected_data: dict[str, Any],
+    selected_symbols: list[Any],
+    manifest: dict[str, Any],
 ) -> int:
     value = selected_data.get("selected_symbol_count")
-    if value is None:
+    if value is not None:
+        return int(value)
+    if any(
+        isinstance(selected_data.get(key), list)
+        for key in ("selected_symbols", "symbols")
+    ):
         return len(selected_symbols)
-    return int(value)
+    return len(selected_symbols) or history_symbols_file_reference_count(manifest)
 
 
 def history_limit_value(selected_data: dict[str, Any], manifest: dict[str, Any]) -> Any:
@@ -1113,7 +1131,17 @@ def history_symbol_count(
     if "selected_symbol_count" in history_selection:
         return int(history_selection["selected_symbol_count"])
     symbols = manifest.get("history_symbols", [])
-    return len(symbols) if isinstance(symbols, list) else 0
+    if isinstance(symbols, list) and symbols:
+        return len(symbols)
+    return history_symbols_file_reference_count(manifest)
+
+
+def history_symbols_file_reference_count(manifest: dict[str, Any]) -> int:
+    if manifest.get("history_symbols_representation", "inline") != "file_reference":
+        return 0
+    if not bool(manifest.get("history_symbols_file_exists", False)):
+        return 0
+    return int(manifest.get("history_symbols_file_symbol_count", 0) or 0)
 
 
 def history_symbol_count_label(manifest: dict[str, Any], count: int) -> str:

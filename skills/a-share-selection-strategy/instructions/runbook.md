@@ -321,7 +321,7 @@ uv run --with pandas --with numpy --with baostock python skills/a-share-selectio
 
 `--output` 通过后缀显式选择 `.csv`、`.parquet` 或 `.pq`；现有命令和 runner 默认继续使用 CSV。需要反复执行大文件 clean/provenance 时可显式写 Parquet，metadata 会记录 `output_format/output_path`。runner 对应参数为 `--history-output-format parquet`，命令环境必须提供 `pyarrow` 或 `fastparquet`。不支持的后缀、缺少 Parquet 引擎或数据/metadata 路径冲突都会在联网前失败并清理陈旧输出；格式变化不改变数据源、字段、严格门禁或全 A 声明边界。
 
-直接调用 Baostock 历史入口时，`--symbols` 与 `--symbols-file` 二选一；文件支持 UTF-8 或 UTF-8-BOM、逗号或换行分隔，缺失、目录、空内容和无效编码都会在联网前失败。`--output` 和 `--metadata-output` 必须彼此不同，且不得与 `--symbols-file` 或 `--names-input` 直连、相对、软链接或硬链接指向同一文件；路径冲突会在读取文件、加载依赖或联网前失败并保留既有文件。路径参数必须使用 shell 已展开的实际路径，公共 CLI 会拒绝字面前导 `~`，避免预检与清理操作解释为不同位置。runner 对 Baostock 和 ZZShare 的实际 symbol 列表同样会传 `--symbols-file`：显式输入沿用原文件，内部生成列表写入运行目录 `history_symbols.txt`，执行与 `--plan-only` 都记录路径、来源、符号数量、大小和 SHA-256。`<derived_from_spot_snapshot>` 计划占位符保持内联，不能把未执行的 spot 派生写成真实列表。
+直接调用 Baostock 历史入口时，`--symbols` 与 `--symbols-file` 二选一；文件支持 UTF-8 或 UTF-8-BOM、逗号或换行分隔，缺失、目录、空内容和无效编码都会在联网前失败。`--output` 和 `--metadata-output` 必须彼此不同，且不得与 `--symbols-file` 或 `--names-input` 直连、相对、软链接或硬链接指向同一文件；路径冲突会在读取文件、加载依赖或联网前失败并保留既有文件。路径参数必须使用 shell 已展开的实际路径，公共 CLI 会拒绝字面前导 `~`，避免预检与清理操作解释为不同位置。runner 对 Baostock 和 ZZShare 的实际 symbol 列表同样会传 `--symbols-file`：显式输入沿用原文件，内部生成列表写入运行目录 `history_symbols.txt`，执行与 `--plan-only` 都记录路径、来源、符号数量、大小和 SHA-256。为避免全 A 清单在 manifest 中重复占用空间，实际列表超过 100 个且文件引用契约完整时，`history_symbols=[]`、`symbols=""` 且 `history_symbols_representation=file_reference`；`selected_symbols.json` 仍保留完整规范化清单，summary 在该文件缺失时只从 `history_symbols_file_symbol_count` 恢复数量。100 个以内和 `<derived_from_spot_snapshot>` 计划占位符保持 `inline`，不能把未执行的 spot 派生写成真实列表。
 
 门禁不能只看退出码，还要检查 metadata：
 

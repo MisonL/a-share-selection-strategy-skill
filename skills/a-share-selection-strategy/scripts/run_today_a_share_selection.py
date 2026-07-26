@@ -35,6 +35,7 @@ from lib.runner.run_today_a_share_selection_commands import (
 )
 from lib.runner.run_today_a_share_selection_history import (
     history_symbols,
+    history_symbols_manifest_fields,
     validate_history_inputs,
 )
 from lib.runner.run_today_a_share_selection_input_metadata import (
@@ -260,8 +261,10 @@ def run_pipeline(context: RunContext) -> None:
         context.manifest["symbol_derivation_duration_seconds"] = round(
             max(time.monotonic() - symbol_derivation_started, 0.0), 6
         )
-        context.manifest["history_symbols"] = symbols
         prepare_history_symbols_file(context.args, context.manifest, symbols)
+        context.manifest.update(
+            history_symbols_manifest_fields(symbols, context.manifest)
+        )
         run_step(
             context,
             Step("fetch_history", fetch_history_command(context.args, prices, symbols)),
@@ -326,8 +329,10 @@ def run_plan(context: RunContext) -> None:
             )
     if not context.args.prices_input:
         symbols = planned_history_symbols(context.args, spot)
-        context.manifest["history_symbols"] = symbols
         prepare_history_symbols_file(context.args, context.manifest, symbols)
+        context.manifest.update(
+            history_symbols_manifest_fields(symbols, context.manifest)
+        )
         plan_step(
             context,
             Step("fetch_history", fetch_history_command(context.args, prices, symbols)),

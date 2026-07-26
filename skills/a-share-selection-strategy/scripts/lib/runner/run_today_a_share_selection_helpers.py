@@ -312,6 +312,7 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
     from lib.runner.run_today_a_share_selection_outputs import (
         html_report_error_stdout,
         html_report_stdout_value,
+        print_empty_result_summary,
     )
 
     view = summary_view(manifest, str(manifest.get("status", "completed")))
@@ -379,6 +380,7 @@ def print_summary(manifest: dict[str, Any], output: Path) -> None:
         f"{field_coverage} "
         f"{paths} html_report={html_report}{html_error}"
     )
+    print_empty_result_summary(manifest, view, output)
 
 
 def runner_full_a_provenance_stdout(manifest: dict[str, Any]) -> str:

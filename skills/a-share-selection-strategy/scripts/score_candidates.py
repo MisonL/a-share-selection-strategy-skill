@@ -171,7 +171,12 @@ def main(argv: list[str] | None = None) -> int:
         write_score_outputs(args, paths, profile, candidates, summary)
     except Exception as exc:  # noqa: BLE001
         return handle_score_error(exc, paths, output_prepared=output_prepared)
-    print_summary(summary, args.output)
+    print_summary(
+        summary,
+        args.output,
+        diagnostics_output=args.diagnostics_output,
+        profile_output=args.profile_output,
+    )
     return 0
 
 

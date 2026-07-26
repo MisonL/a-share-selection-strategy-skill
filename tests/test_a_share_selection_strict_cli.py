@@ -102,8 +102,82 @@ class AShareSelectionStrictCliTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertFalse(output_path.exists())
         self.assertIn("ERROR_SUMMARY:", stdout)
+        self.assertNotIn("EMPTY_RESULT:", stdout)
         self.assertIn("effective_empty_result=true", stderr)
         self.assertIn("empty_result_reason=threshold_filtered_all", stderr)
+
+    def test_cli_successful_empty_result_reports_artifact_paths(self) -> None:
+        frame = build_frame(
+            include_prediction=True,
+            prediction_value=0.1,
+            include_turn=True,
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            input_path = root / "prices.csv"
+            output_path = root / "prediction_empty.csv"
+            diagnostics_path = root / "diagnostics.csv"
+            profile_path = root / "profile.json"
+            frame.to_csv(input_path, index=False)
+            code, stdout, stderr = run_score_cli(
+                input_path,
+                output_path,
+                ["--profile-output", str(profile_path)],
+                diagnostics_output=diagnostics_path,
+            )
+            output_exists = output_path.exists()
+            diagnostics_exists = diagnostics_path.exists()
+            profile_exists = profile_path.exists()
+
+        self.assertEqual(0, code, stderr)
+        self.assertTrue(output_exists)
+        self.assertTrue(diagnostics_exists)
+        self.assertTrue(profile_exists)
+        empty_result_lines = [
+            line for line in stdout.splitlines() if line.startswith("EMPTY_RESULT: ")
+        ]
+        self.assertEqual(1, len(empty_result_lines))
+        empty_result = empty_result_lines[0]
+        self.assertIn("candidates=0", empty_result)
+        self.assertIn("effective_empty_result=true", empty_result)
+        self.assertIn("empty_result_reason=threshold_filtered_all", empty_result)
+        self.assertIn(f"candidates_output={output_path}", empty_result)
+        self.assertIn(f"diagnostics_output={diagnostics_path}", empty_result)
+        self.assertIn(f"profile_output={profile_path}", empty_result)
+
+    def test_cli_empty_result_marks_unrequested_optional_outputs(self) -> None:
+        frame = build_frame(
+            include_prediction=True,
+            prediction_value=0.1,
+            include_turn=True,
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            input_path = root / "prices.csv"
+            output_path = root / "prediction_empty.csv"
+            frame.to_csv(input_path, index=False)
+            code, stdout, stderr = run_score_cli(input_path, output_path, [])
+
+        self.assertEqual(0, code, stderr)
+        empty_result = next(
+            line for line in stdout.splitlines() if line.startswith("EMPTY_RESULT: ")
+        )
+        self.assertIn("diagnostics_output=not_requested", empty_result)
+        self.assertIn("profile_output=not_requested", empty_result)
+
+    def test_cli_nonempty_success_does_not_report_empty_result(self) -> None:
+        frame = build_frame(include_prediction=True, include_turn=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            input_path = root / "prices.csv"
+            output_path = root / "prediction.csv"
+            frame.to_csv(input_path, index=False)
+            code, stdout, stderr = run_score_cli(input_path, output_path, [])
+            output_exists = output_path.exists()
+
+        self.assertEqual(0, code, stderr)
+        self.assertTrue(output_exists)
+        self.assertNotIn("EMPTY_RESULT:", stdout)
 
     def test_cli_bad_input_removes_stale_output_and_diagnostics(self) -> None:
         frame = build_frame(include_prediction=True, include_turn=True)
@@ -116,7 +190,7 @@ class AShareSelectionStrictCliTests(unittest.TestCase):
             input_contents = input_path.read_bytes()
             output_path.write_text("stale-candidates\n", encoding="utf-8")
             diagnostics_path.write_text("stale-diagnostics\n", encoding="utf-8")
-            code, _stdout, stderr = run_score_cli(
+            code, stdout, stderr = run_score_cli(
                 input_path,
                 output_path,
                 [],
@@ -129,6 +203,7 @@ class AShareSelectionStrictCliTests(unittest.TestCase):
         self.assertFalse(output_exists)
         self.assertFalse(diagnostics_exists)
         self.assertEqual(input_contents, input_after)
+        self.assertNotIn("EMPTY_RESULT:", stdout)
         self.assertIn("output_not_written=true", stderr)
 
     def test_cli_rejects_output_collisions_before_loading_dependencies(self) -> None:

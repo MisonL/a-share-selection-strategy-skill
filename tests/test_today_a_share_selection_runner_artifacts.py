@@ -20,6 +20,110 @@ from lib.runner.run_today_a_share_selection_history import (  # noqa: E402
 
 
 class TodayAShareSelectionRunnerArtifactTests(unittest.TestCase):
+    def test_runner_successful_empty_result_reports_artifact_paths(self) -> None:
+        frame = runner_suite.build_frame(
+            include_turn=True,
+            include_tradability=True,
+        )
+        config = runner_suite.load_config("example_config.json")
+        config["thresholds"]["min_total_score"] = 999.0
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            config_path = root / "config.json"
+            output = root / "run"
+            frame.to_csv(prices, index=False)
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+
+            code, stdout, stderr = runner_suite.call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--config",
+                    str(config_path),
+                    "--output-dir",
+                    str(output),
+                    "--no-html-report",
+                ]
+            )
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            strict_output = root / "strict"
+            strict_code, strict_stdout, strict_stderr = runner_suite.call_runner(
+                [
+                    "--prices-input",
+                    str(prices),
+                    "--config",
+                    str(config_path),
+                    "--output-dir",
+                    str(strict_output),
+                    "--fail-on-empty-result",
+                    "--no-html-report",
+                ]
+            )
+            strict_manifest = json.loads(
+                (strict_output / "run_manifest.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(0, code, stderr)
+        empty_result_lines = [
+            line for line in stdout.splitlines() if line.startswith("EMPTY_RESULT: ")
+        ]
+        self.assertEqual(1, len(empty_result_lines))
+        empty_result = empty_result_lines[0]
+        self.assertIn("candidate_rows=0", empty_result)
+        self.assertIn("effective_empty_result=true", empty_result)
+        self.assertIn("empty_result_reason=threshold_filtered_all", empty_result)
+        self.assertIn(f"candidates_output={output / 'candidates.csv'}", empty_result)
+        self.assertIn(
+            f"diagnostics_output={output / 'diagnostics.csv'}",
+            empty_result,
+        )
+        self.assertIn(f"summary_output={output / 'summary.json'}", empty_result)
+        self.assertIn(
+            f"manifest_output={output / 'run_manifest.json'}",
+            empty_result,
+        )
+        self.assertEqual("completed", summary["status"])
+        self.assertEqual(0, summary["candidate_rows"])
+        self.assertTrue(summary["score"]["effective_empty_result"])
+        self.assertEqual(3, strict_code, strict_stderr)
+        self.assertNotIn("EMPTY_RESULT:", strict_stdout)
+        self.assertIn("ERROR_SUMMARY:", strict_manifest["steps"][-1]["stdout"])
+
+    def test_runner_nonempty_and_plan_only_do_not_report_empty_result(self) -> None:
+        frame = runner_suite.build_frame(
+            include_turn=True,
+            include_tradability=True,
+        )
+        frame[["open", "high", "low", "close"]] = (
+            frame[["open", "high", "low", "close"]] * 0.75
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            prices = root / "input.csv"
+            frame.to_csv(prices, index=False)
+            outputs = []
+            for name, extra_args in [
+                ("execute", []),
+                ("plan", ["--plan-only"]),
+            ]:
+                code, stdout, stderr = runner_suite.call_runner(
+                    [
+                        "--prices-input",
+                        str(prices),
+                        "--output-dir",
+                        str(root / name),
+                        "--no-html-report",
+                        *extra_args,
+                    ]
+                )
+                outputs.append((name, code, stdout, stderr))
+
+        for name, code, stdout, stderr in outputs:
+            with self.subTest(name=name):
+                self.assertEqual(0, code, stderr)
+                self.assertNotIn("EMPTY_RESULT:", stdout)
+
     def test_history_symbols_manifest_keeps_inline_list_at_limit(self) -> None:
         symbols = [f"{600000 + index:06d}" for index in range(100)]
 

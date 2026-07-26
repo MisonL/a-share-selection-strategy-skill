@@ -278,6 +278,27 @@ class DocumentConsistencyTests(unittest.TestCase):
         self.assertIn("无 `uv` 时创建临时虚拟环境", runbook)
         self.assertIn("后续命令可把 `uv run", runbook)
 
+    def test_docs_describe_successful_empty_result_stdout_contract(self) -> None:
+        root = ROOT / "skills/a-share-selection-strategy"
+        templates = (root / "templates/output-templates.md").read_text(encoding="utf-8")
+        runbook = (root / "instructions/runbook.md").read_text(encoding="utf-8")
+
+        for document in [templates, runbook]:
+            for value in [
+                "`EMPTY_RESULT:`",
+                "`effective_empty_result=true`",
+                "`empty_result_reason`",
+                "`candidates_output`",
+                "`diagnostics_output`",
+                "严格空结果仍使用 `ERROR_SUMMARY:`",
+                "plan-only",
+            ]:
+                with self.subTest(document=document, value=value):
+                    self.assertIn(value, document)
+        self.assertIn("`profile_output`", templates)
+        self.assertIn("`summary_output`", runbook)
+        self.assertIn("`manifest_output`", runbook)
+
     def test_skill_markdown_links_resolve_to_existing_files(self) -> None:
         skill_root = ROOT / "skills/a-share-selection-strategy"
         for document in sorted(skill_root.rglob("*.md")):

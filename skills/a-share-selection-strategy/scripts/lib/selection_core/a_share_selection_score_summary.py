@@ -22,7 +22,14 @@ from typing import Any
 from lib.selection_core.a_share_selection_provenance import PROVENANCE_COLUMNS
 
 
-def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> None:
+def print_summary(
+    summary: dict[str, Any],
+    output: str,
+    prefix: str = "OK",
+    *,
+    diagnostics_output: str | None = None,
+    profile_output: str | None = None,
+) -> None:
     parts = [
         f"raw_symbols={summary['raw_symbols']}",
         f"input_symbols={summary['input_symbols']}",
@@ -60,7 +67,37 @@ def print_summary(summary: dict[str, Any], output: str, prefix: str = "OK") -> N
         parts.append(f"spot_matched_symbols={summary['spot_matched_symbols']}")
     parts.append(f"output={output}")
     print(f"{prefix}: " + " ".join(parts))
+    print_empty_result_summary(
+        summary,
+        output,
+        prefix,
+        diagnostics_output=diagnostics_output,
+        profile_output=profile_output,
+    )
     print_detail_lines(summary)
+
+
+def print_empty_result_summary(
+    summary: dict[str, Any],
+    output: str,
+    prefix: str,
+    *,
+    diagnostics_output: str | None,
+    profile_output: str | None,
+) -> None:
+    if prefix != "OK":
+        return
+    if summary.get("effective_empty_result") is not True:
+        return
+    if summary.get("candidates") != 0:
+        return
+    print(
+        "EMPTY_RESULT: candidates=0 effective_empty_result=true "
+        f"empty_result_reason={summary.get('empty_result_reason', 'unknown')} "
+        f"candidates_output={output} "
+        f"diagnostics_output={diagnostics_output or 'not_requested'} "
+        f"profile_output={profile_output or 'not_requested'}"
+    )
 
 
 def print_detail_lines(summary: dict[str, Any]) -> None:

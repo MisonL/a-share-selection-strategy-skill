@@ -93,6 +93,12 @@ generic 技术评分不消费输入中的 `prediction` 或 `prediction_score` �
 
 `score_candidates.py` 的 CLI 摘要会输出 `input`、`input_symbols`、股票池过滤、历史不足、单股失败、阈值过滤、`turnover_assumption`、`effective_empty_result`、`empty_result_reason` 和 `candidates`。直接调用 Python API 时，`input` 字段由调用方记录或注入。
 
+成功且候选数为 0 时，CLI 会在原有 `OK:` 后追加一行便于扫描的 `EMPTY_RESULT:`，但不会删除或缩短原有摘要：
+
+- `score_candidates.py` 输出 `candidates=0`、`effective_empty_result=true`、`empty_result_reason`、`candidates_output`、`diagnostics_output` 和 `profile_output`；未请求的可选输出写为 `not_requested`。
+- `run_today_a_share_selection.py` 输出 `candidate_rows=0`、`effective_empty_result=true`、`empty_result_reason`、`candidates_output`、`diagnostics_output`、`summary_output` 和 `manifest_output`。
+- `EMPTY_RESULT:` 只表示退出码为 0 且成功产出 0 候选，不是第二个门禁结论，也不证明策略有效。严格空结果仍使用 `ERROR_SUMMARY:` 和非 0 退出，不输出 `EMPTY_RESULT:`；输入失败、普通非空成功和 plan-only 同样不输出该行。
+
 | 字段 | 含义 | 不能外推 |
 | --- | --- | --- |
 | `effective_empty_result=true` | 成功运行但没有候选 | 策略有效或候选生成通过 |

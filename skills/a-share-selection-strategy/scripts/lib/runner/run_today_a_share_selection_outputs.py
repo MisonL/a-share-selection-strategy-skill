@@ -312,6 +312,29 @@ def html_report_error_stdout(manifest: dict[str, Any]) -> str:
     return f" html_report_error_type={error_type}" if error_type else ""
 
 
+def print_empty_result_summary(
+    manifest: dict[str, Any],
+    view: dict[str, Any],
+    output: Path,
+) -> None:
+    if manifest.get("plan_only"):
+        return
+    if view.get("status") != "completed":
+        return
+    if view.get("effective_empty_result") is not True:
+        return
+    if view.get("candidate_rows") != 0:
+        return
+    print(
+        "EMPTY_RESULT: candidate_rows=0 effective_empty_result=true "
+        f"empty_result_reason={view.get('empty_result_reason', 'unknown')} "
+        f"candidates_output={output / 'candidates.csv'} "
+        f"diagnostics_output={output / 'diagnostics.csv'} "
+        f"summary_output={output / 'summary.json'} "
+        f"manifest_output={output / 'run_manifest.json'}"
+    )
+
+
 STALE_RUN_OUTPUTS = (
     "candidates.csv",
     "diagnostics.csv",

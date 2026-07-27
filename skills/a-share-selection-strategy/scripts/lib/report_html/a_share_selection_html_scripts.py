@@ -85,6 +85,48 @@ JS = """
     };
     window.requestAnimationFrame(() => window.requestAnimationFrame(scheduleIdle));
   }
+  const compactOverviewQuery = window.matchMedia('(max-width: 640px)');
+  const stackedOverviewQuery = window.matchMedia('(max-width: 1280px)');
+  let overviewLayout = '';
+  function syncOverviewOrder() {
+    const layout = compactOverviewQuery.matches
+      ? 'compact'
+      : stackedOverviewQuery.matches
+        ? 'stacked'
+        : 'desktop';
+    if (layout === overviewLayout) {
+      return;
+    }
+    const orders = {
+      desktop: ['lead', 'facts', 'preview', 'flow', 'open'],
+      stacked: ['lead', 'facts', 'flow', 'preview', 'open'],
+      compact: ['lead', 'preview', 'open', 'facts', 'flow'],
+    };
+    document.querySelectorAll('[data-overview-shell]').forEach(shell => {
+      const parts = new Map(
+        Array.from(shell.children).map(part => [part.dataset.overviewPart, part])
+      );
+      orders[layout].forEach(name => {
+        const part = parts.get(name);
+        if (part) {
+          shell.appendChild(part);
+        }
+      });
+    });
+    overviewLayout = layout;
+  }
+  function listenOverviewQuery(query) {
+    if (typeof query.addEventListener === 'function') {
+      query.addEventListener('change', syncOverviewOrder);
+      return;
+    }
+    if (typeof query.addListener === 'function') {
+      query.addListener(syncOverviewOrder);
+    }
+  }
+  listenOverviewQuery(compactOverviewQuery);
+  listenOverviewQuery(stackedOverviewQuery);
+  syncOverviewOrder();
   let bodyLockCount = 0;
   function setBodyLocked(locked) {
     bodyLockCount = Math.max(0, bodyLockCount + (locked ? 1 : -1));

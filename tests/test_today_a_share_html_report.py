@@ -2071,6 +2071,20 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             report,
         )
         self.assertIn(
+            '.overview-shell{grid-template-areas:"lead" "preview" "open" "facts" "flow"}',
+            report,
+        )
+        self.assertIn('class="overview-shell" data-overview-shell', report)
+        self.assertIn('class="overview-lead" data-overview-part="lead"', report)
+        self.assertIn('class="overview-facts" data-overview-part="facts"', report)
+        self.assertIn('class="overview-preview" data-overview-part="preview"', report)
+        self.assertIn('class="overview-flow" data-overview-part="flow"', report)
+        self.assertIn('class="overview-open" data-overview-part="open"', report)
+        self.assertIn(
+            '.hero-copy h1{font-family:Georgia,"Times New Roman","Songti SC",serif;font-size:44px;line-height:.96;letter-spacing:0;color:#101b2d}',
+            report,
+        )
+        self.assertIn(
             ".hero-copy,.overview-lead,.overview-title,.overview-facts,.overview-metrics,.overview-flow,.overview-preview,.overview-open{min-width:0}",
             report,
         )
@@ -2093,6 +2107,15 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         )
         self.assertIn(
             ".hero-fact-card span,.hero-fact-card strong{min-width:0;overflow-wrap:anywhere}",
+            report,
+        )
+        self.assertIn(
+            '.candidate-open-banner{grid-template-columns:minmax(0,1fr);grid-template-areas:"title" "body" "button" "foot";gap:8px;padding:14px 16px}',
+            report,
+        )
+        self.assertIn(".candidate-open-title{white-space:normal}", report)
+        self.assertIn(
+            ".candidate-open-button{min-height:44px;justify-self:stretch;width:100%}",
             report,
         )
         self.assertIn("overflow-x:auto", report)
@@ -2286,6 +2309,16 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             "kind.textContent = localizedDataset(trigger, 'insightKind');", report
         )
         self.assertIn("report-language-change", report)
+        self.assertIn("function syncOverviewOrder()", report)
+        self.assertIn("const compactOverviewQuery = window.matchMedia('(max-width: 640px)');", report)
+        self.assertIn("const stackedOverviewQuery = window.matchMedia('(max-width: 1280px)');", report)
+        self.assertIn("function listenOverviewQuery(query)", report)
+        self.assertIn("query.addEventListener('change', syncOverviewOrder);", report)
+        self.assertIn("typeof query.addListener === 'function'", report)
+        self.assertIn("query.addListener(syncOverviewOrder);", report)
+        self.assertIn("compact: ['lead', 'preview', 'open', 'facts', 'flow']", report)
+        self.assertIn("stacked: ['lead', 'facts', 'flow', 'preview', 'open']", report)
+        self.assertIn("desktop: ['lead', 'facts', 'preview', 'flow', 'open']", report)
         self.assertIn("renderFacts(localizedDataset(trigger, 'insightFacts'))", report)
         self.assertIn("updateTechnicalIndicators(candles);", report)
         self.assertIn("const technical = indicatorsForRows(rows);", report)

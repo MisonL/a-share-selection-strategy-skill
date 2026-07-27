@@ -614,8 +614,8 @@ def report_overview(
         f'<div class="candidate-open-slot">{open_html}</div>' if open_html else ""
     )
     return (
-        '<div class="overview-shell">'
-        '<div class="overview-lead">'
+        '<div class="overview-shell" data-overview-shell>'
+        '<div class="overview-lead" data-overview-part="lead">'
         '<div class="overview-title">'
         f"{hero_copy(title, badges, note)}"
         "</div>"
@@ -623,17 +623,17 @@ def report_overview(
         f"{pipeline_metric_cards(summary, language)}"
         "</div>"
         "</div>"
-        '<div class="overview-facts">'
+        '<div class="overview-facts" data-overview-part="facts">'
         f"{hero_fact_card(summary, language)}"
         f"{hero_machine_note(summary, language)}"
         "</div>"
-        '<div class="overview-flow">'
+        '<div class="overview-flow" data-overview-part="flow">'
         f"{selection_flow_card(summary, language)}"
         "</div>"
-        '<div class="overview-preview">'
+        '<div class="overview-preview" data-overview-part="preview">'
         f"{preview_html}"
         "</div>"
-        '<div class="overview-open">'
+        '<div class="overview-open" data-overview-part="open">'
         f"{open_slot}"
         "</div></div>"
     )

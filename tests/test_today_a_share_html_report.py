@@ -2067,11 +2067,11 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
             report,
         )
         self.assertIn(
-            '.overview-shell{grid-template-areas:"lead" "facts" "flow" "preview" "open"}',
+            '.overview-shell{grid-template-areas:"lead" "preview" "open" "facts" "flow"}',
             report,
         )
         self.assertIn(
-            '.overview-shell{grid-template-areas:"lead" "preview" "open" "facts" "flow"}',
+            '.overview-shell{grid-template-areas:"lead" "open" "preview" "facts" "flow"}',
             report,
         )
         self.assertIn('class="overview-shell" data-overview-shell', report)
@@ -2316,8 +2316,8 @@ class TodayAShareHtmlReportTests(unittest.TestCase):
         self.assertIn("query.addEventListener('change', syncOverviewOrder);", report)
         self.assertIn("typeof query.addListener === 'function'", report)
         self.assertIn("query.addListener(syncOverviewOrder);", report)
-        self.assertIn("compact: ['lead', 'preview', 'open', 'facts', 'flow']", report)
-        self.assertIn("stacked: ['lead', 'facts', 'flow', 'preview', 'open']", report)
+        self.assertIn("compact: ['lead', 'open', 'preview', 'facts', 'flow']", report)
+        self.assertIn("stacked: ['lead', 'preview', 'open', 'facts', 'flow']", report)
         self.assertIn("desktop: ['lead', 'facts', 'preview', 'flow', 'open']", report)
         self.assertIn("renderFacts(localizedDataset(trigger, 'insightFacts'))", report)
         self.assertIn("updateTechnicalIndicators(candles);", report)

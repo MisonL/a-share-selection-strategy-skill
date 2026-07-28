@@ -99,8 +99,8 @@ JS = """
     }
     const orders = {
       desktop: ['lead', 'facts', 'preview', 'flow', 'open'],
-      stacked: ['lead', 'facts', 'flow', 'preview', 'open'],
-      compact: ['lead', 'preview', 'open', 'facts', 'flow'],
+      stacked: ['lead', 'preview', 'open', 'facts', 'flow'],
+      compact: ['lead', 'open', 'preview', 'facts', 'flow'],
     };
     document.querySelectorAll('[data-overview-shell]').forEach(shell => {
       const parts = new Map(

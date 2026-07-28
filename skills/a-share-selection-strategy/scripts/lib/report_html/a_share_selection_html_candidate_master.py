@@ -115,11 +115,11 @@ def candidate_master_detail(
         f"{note_html}</div>"
         f"{candidate_file_chip(csv_path, language)}</div>"
         f"{candidate_field_notice(rows, field_coverage, language)}"
-        f"{candidate_field_coverage_panel(field_coverage, language)}"
         '<div class="master-detail-grid">'
         f"{candidate_master_table(rows, language)}"
         f"{candidate_detail_panel(rows[0], language)}"
         "</div>"
+        f"{candidate_field_coverage_panel(field_coverage, language)}"
         f"{candidate_stock_dialog(language)}"
         f"{candidate_candle_data_script(candle_rows)}"
         "</section>"
@@ -275,7 +275,9 @@ def level_filter_options(rows: list[dict[str, Any]], language: str) -> str:
 def candidate_master_table(rows: list[dict[str, Any]], language: str) -> str:
     columns = candidate_master_columns(rows)
     head = "".join(
-        f"<th>{candidate_master_header(column, language)}</th>" for column in columns
+        f'<th data-master-column="{esc(column)}">'
+        f"{candidate_master_header(column, language)}</th>"
+        for column in columns
     )
     body = "".join(
         candidate_master_row(row, index, language, columns=columns)
@@ -508,34 +510,35 @@ def candidate_master_cell(
     row: dict[str, Any],
     state: dict[str, str],
 ) -> str:
+    column_attr = f' data-master-column="{esc(column)}"'
     if column == "rank":
         return (
-            '<td class="rank-cell">'
+            f'<td class="rank-cell"{column_attr}>'
             f'<span class="rank-number"><span class="row-check" aria-hidden="true"></span> {esc(state["rank"])}</span>'
             "</td>"
         )
     if column == "symbol":
-        return f'<td><span class="symbol-cell">{esc(state["symbol"])}</span></td>'
+        return f'<td{column_attr}><span class="symbol-cell">{esc(state["symbol"])}</span></td>'
     if column == "name":
-        return f'<td><strong class="name-cell{state["name_missing_class"]}">{esc(state["name"])}</strong></td>'
+        return f'<td{column_attr}><strong class="name-cell{state["name_missing_class"]}">{esc(state["name"])}</strong></td>'
     if column == "board":
-        return f"<td>{esc(state['board'])}</td>"
+        return f"<td{column_attr}>{esc(state['board'])}</td>"
     if column == "industry":
-        return f"<td>{esc(candidate_industry(row))}</td>"
+        return f"<td{column_attr}>{esc(candidate_industry(row))}</td>"
     if column == "score":
-        return f"<td><strong>{esc(state['score'] or '-')}</strong></td>"
+        return f"<td{column_attr}><strong>{esc(state['score'] or '-')}</strong></td>"
     if column == "level":
-        return f"<td>{level_badge(state['level'], css_class=state['level_key'])}</td>"
+        return f"<td{column_attr}>{level_badge(state['level'], css_class=state['level_key'])}</td>"
     if column == "one_year_pct_chg":
         return (
-            f"<td>{esc(candidate_field(row, ONE_YEAR_FIELD_KEYS, percent=True))}</td>"
+            f"<td{column_attr}>{esc(candidate_field(row, ONE_YEAR_FIELD_KEYS, percent=True))}</td>"
         )
     if column == "market_cap":
-        return f"<td>{esc(candidate_field(row, MARKET_CAP_FIELD_KEYS))}</td>"
+        return f"<td{column_attr}>{esc(candidate_field(row, MARKET_CAP_FIELD_KEYS))}</td>"
     if column == "pe_ttm":
-        return f"<td>{esc(candidate_field(row, PE_FIELD_KEYS))}</td>"
+        return f"<td{column_attr}>{esc(candidate_field(row, PE_FIELD_KEYS))}</td>"
     if column == "pb_lf":
-        return f"<td>{esc(candidate_field(row, PB_FIELD_KEYS))}</td>"
+        return f"<td{column_attr}>{esc(candidate_field(row, PB_FIELD_KEYS))}</td>"
     raise ValueError(f"unknown candidate master column: {column}")
 
 

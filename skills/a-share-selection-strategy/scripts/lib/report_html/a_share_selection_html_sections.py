@@ -687,9 +687,9 @@ def pipeline_metric_cards(summary: dict[str, Any], language: str) -> str:
             metric_insight(summary, "passed", language),
         ),
         (
-            bilingual("View details", "查看详情", language),
+            bilingual("Watchlist", "观察名单", language),
             candidate_total,
-            bilingual("view details before action", "进入观察名单", language),
+            bilingual("view details before action", "行动前查看详情", language),
             "watch",
             metric_insight(summary, "watch", language),
         ),

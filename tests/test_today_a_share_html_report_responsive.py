@@ -131,6 +131,28 @@ class ResponsiveHtmlReportTests(unittest.TestCase):
             '.master-table [data-master-column="board"],.master-table [data-master-column="industry"],.master-table [data-master-column="one_year_pct_chg"],.master-table [data-master-column="market_cap"],.master-table [data-master-column="pe_ttm"],.master-table [data-master-column="pb_lf"]{display:none}',
             report,
         )
+        mobile_core_column_widths = {
+            "rank": "15%",
+            "symbol": "20%",
+            "name": "25%",
+            "score": "16%",
+            "level": "24%",
+        }
+        for column, width in mobile_core_column_widths.items():
+            self.assertIn(
+                f'.master-table:not(.has-wide-table) th[data-master-column="{column}"],'
+                f'.master-table:not(.has-wide-table) td[data-master-column="{column}"],'
+                f'.master-table.has-wide-table [data-master-column="{column}"]{{width:{width}}}',
+                report,
+            )
+        self.assertIn(
+            ".master-table .rank-cell{display:table-cell;white-space:nowrap}",
+            report,
+        )
+        self.assertIn(
+            '.master-table [data-master-column="level"] .level-badge{white-space:normal;overflow-wrap:normal;word-break:normal}',
+            report,
+        )
         self.assertIn(
             ".field-coverage-grid{grid-template-columns:repeat(2,minmax(0,1fr))}",
             report,
